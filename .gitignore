@@ -35,3 +35,8 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### 에이전트 관련 ###
+AGENTS.md
+CLUADE.md
+GEMINI.md
