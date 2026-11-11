@@ -61,3 +61,27 @@ tasks.withType<Test> {
         exceptionFormat = TestExceptionFormat.FULL  // 실패 시 원인 전체 출력
     }
 }
+
+// ./gradlew test → 단위 테스트만 (Docker 불필요)
+tasks.test {
+    useJUnitPlatform {
+        excludeTags("integration")
+    }
+}
+
+// ./gradlew integrationTest → 통합 테스트만 (Docker 필요)
+val integrationTest by tasks.registering(Test::class) {
+    description = "통합 테스트"
+    group = "verification"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform {
+        includeTags("integration")
+    }
+    shouldRunAfter(tasks.test)
+}
+
+// ./gradlew build → 둘 다 실행
+tasks.check {
+    dependsOn(integrationTest)
+}
