@@ -18,3 +18,8 @@ __pycache__/
 
 # Experiment A: source-resolution campus sprites from scripts/assets/process.py --raw (comparison only, not committed)
 public/campus-raw/
+
+# Wireframe draft outputs (wireframe/scripts capture.mjs → build.mjs → pdf.mjs). Kept local, not pushed.
+wireframe/shots/
+wireframe/*.html
+wireframe/*.pdf

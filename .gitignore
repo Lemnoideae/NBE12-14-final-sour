@@ -36,6 +36,9 @@ out/
 ### VS Code ###
 .vscode/
 
+### 와이어프레임 ###
+frontend/wireframe/
+
 ### 에이전트 관련 ###
 AGENTS.md
 CLUADE.md
