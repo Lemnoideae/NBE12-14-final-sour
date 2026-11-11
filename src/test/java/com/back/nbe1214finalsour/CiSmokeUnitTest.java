@@ -26,9 +26,9 @@ class CiSmokeUnitTest {
         assertThat(supplier.get()).isEqualTo("ok");
     }
 
-    @Test
-    @DisplayName("실패하기 실험")
-    void t1(){
-        assertThat(1).isEqualTo(2);
-    }
+//    @Test
+//    @DisplayName("실패하기 실험")
+//    void t1(){
+//        assertThat(1).isEqualTo(2);
+//    }
 }
