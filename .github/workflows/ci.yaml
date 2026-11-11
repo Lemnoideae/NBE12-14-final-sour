@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ main, dev ]
+  push:
+    branches: [ dev ]
+  workflow_call:  # 나중에 CD 워크플로에서 호출하기 위한 자리
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: 단위 테스트
+        id: unit-test
+        run: ./gradlew test
+
+      - name: 통합 테스트
+        if: success() || steps.unit-test.outcome == 'failure'
+        run: ./gradlew integrationTest
+
+      - name: 테스트 리포트 업로드 (실패 시)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-reports
+          path: |
+            build/reports/tests/
+            build/test-results/

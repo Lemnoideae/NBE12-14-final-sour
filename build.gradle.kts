@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+
 plugins {
     java
     id("org.springframework.boot") version "4.1.2"
@@ -52,5 +54,47 @@ dependencies {
 }
 
 tasks.withType<Test> {
-    useJUnitPlatform()
+    testLogging {
+        events("failed")                            // 실패 시 원인(스택트레이스)만 Gradle이 출력
+        exceptionFormat = TestExceptionFormat.FULL
+    }
+
+    addTestListener(object : TestListener {
+        override fun beforeSuite(suite: TestDescriptor) {}
+        override fun afterSuite(suite: TestDescriptor, result: TestResult) {}
+        override fun beforeTest(testDescriptor: TestDescriptor) {}
+
+        override fun afterTest(testDescriptor: TestDescriptor, result: TestResult) {
+            val (color, label) = when (result.resultType) {
+                TestResult.ResultType.SUCCESS -> "\u001B[32m" to "PASSED"   // 초록
+                TestResult.ResultType.FAILURE -> "\u001B[31m" to "FAILED"   // 빨강
+                else -> "\u001B[33m" to "SKIPPED"                           // 노랑
+            }
+            println("$color$label\u001B[0m ${testDescriptor.className} > ${testDescriptor.displayName}")
+        }
+    })
+}
+
+// ./gradlew test → 단위 테스트만 (Docker 불필요)
+tasks.test {
+    useJUnitPlatform {
+        excludeTags("integration")
+    }
+}
+
+// ./gradlew integrationTest → 통합 테스트만 (Docker 필요)
+val integrationTest by tasks.registering(Test::class) {
+    description = "통합 테스트"
+    group = "verification"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform {
+        includeTags("integration")
+    }
+    shouldRunAfter(tasks.test)
+}
+
+// ./gradlew build → 둘 다 실행
+tasks.check {
+    dependsOn(integrationTest)
 }
