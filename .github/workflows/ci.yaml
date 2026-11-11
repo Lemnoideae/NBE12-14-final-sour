@@ -29,9 +29,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: 단위 테스트
+        id: unit-test
         run: ./gradlew test
 
       - name: 통합 테스트
+        if: success() || steps.unit-test.outcome == 'failure'
         run: ./gradlew integrationTest
 
       - name: 테스트 리포트 업로드 (실패 시)
