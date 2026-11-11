@@ -1,0 +1,472 @@
+@import "tailwindcss";
+
+/* Maplestory Font (Light 400, Bold 700/800/900) */
+@font-face {
+  font-family: 'Maplestory';
+  src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_20-04@2.1/MaplestoryOTFLight.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Maplestory';
+  src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_20-04@2.1/MaplestoryOTFBold.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Maplestory';
+  src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_20-04@2.1/MaplestoryOTFBold.woff') format('woff');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Maplestory';
+  src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_20-04@2.1/MaplestoryOTFBold.woff') format('woff');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --pixel-font: 'Maplestory', 'Galmuri11', 'Press Start 2P', sans-serif;
+  }
+  
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  img, canvas, svg, .pixel-art {
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+  }
+}
+
+.font-pixel {
+  font-family: 'Maplestory', 'Galmuri11', 'Press Start 2P', sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.font-maple {
+  font-family: 'Maplestory', sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.font-press-start {
+  font-family: 'Press Start 2P', 'Maplestory', 'Galmuri11', monospace;
+}
+
+/* 16-bit Cozy Farming-Sim Palette Colors:
+   Sky Blue: #60a5fa / #38bdf8
+   Fresh Grass: #38a134 / #48bb3c / #237820
+   Warm Wood: #8b5327 / #613615 / #381e09
+   Cream Parchment: #fdf6e2 / #faecc7 / #ebd7a3
+   Sunflower Yellow: #facc15 / #eab308
+   Soft Coral: #fb7185 / #e11d48
+   Dark Outline: #261608
+*/
+
+/* Retro RPG Dialog Box: Chunky rectangular panel with thick dark outline, 2px inner white border, and hard 1-step shadow */
+.rpg-box {
+  background-color: #fdf5df;
+  border: 3px solid #261608;
+  box-shadow: 
+    inset 0 0 0 2px #ffffff,
+    inset 0 0 0 4px #edd9b0,
+    3px 3px 0px 0px #261608;
+}
+
+.rpg-box-wood {
+  background-color: #8b5327;
+  border: 3px solid #261608;
+  box-shadow: 
+    inset 0 0 0 2px #b87842,
+    inset 0 0 0 4px #5a3012,
+    3px 3px 0px 0px #261608;
+  color: #fffbeb;
+}
+
+.rpg-box-grass {
+  background-color: #3ca834;
+  border: 3px solid #261608;
+  box-shadow: 
+    inset 0 0 0 2px #6ee755,
+    inset 0 0 0 4px #23721e,
+    3px 3px 0px 0px #261608;
+  color: #ffffff;
+}
+
+.rpg-box-sky {
+  background-color: #4da6ff;
+  border: 3px solid #261608;
+  box-shadow: 
+    inset 0 0 0 2px #a3d4ff,
+    inset 0 0 0 4px #267ecc,
+    3px 3px 0px 0px #261608;
+  color: #ffffff;
+}
+
+/* Pressable Wooden / Parchment Pixel Plaques */
+.pixel-plaque {
+  border: 3px solid #261608;
+  box-shadow: 
+    inset 0 0 0 2px #ffffff,
+    3px 3px 0px 0px #261608;
+  transition: transform 0.06s ease, box-shadow 0.06s ease;
+  user-select: none;
+}
+
+.pixel-plaque:active {
+  transform: translate(2px, 2px);
+  box-shadow: 
+    inset 0 0 0 2px #ffffff,
+    1px 1px 0px 0px #261608;
+}
+
+.plaque-wood {
+  background-color: #9c5c2d;
+  color: #fef3c7;
+  box-shadow: 
+    inset 0 0 0 2px #cf8852,
+    inset 0 0 0 4px #5e3212,
+    3px 3px 0px 0px #261608;
+}
+
+.plaque-wood:active {
+  transform: translate(2px, 2px);
+  box-shadow: 
+    inset 0 0 0 2px #cf8852,
+    inset 0 0 0 4px #5e3212,
+    1px 1px 0px 0px #261608;
+}
+
+.plaque-parchment {
+  background-color: #faecc7;
+  color: #261608;
+  box-shadow: 
+    inset 0 0 0 2px #ffffff,
+    inset 0 0 0 4px #e5cca1,
+    3px 3px 0px 0px #261608;
+}
+
+.plaque-yellow {
+  background-color: #facc15;
+  color: #261608;
+  box-shadow: 
+    inset 0 0 0 2px #fef08a,
+    inset 0 0 0 4px #ca8a04,
+    3px 3px 0px 0px #261608;
+}
+
+.plaque-coral {
+  background-color: #fb7185;
+  color: #ffffff;
+  box-shadow: 
+    inset 0 0 0 2px #fecdd3,
+    inset 0 0 0 4px #be123c,
+    3px 3px 0px 0px #261608;
+}
+
+.plaque-green {
+  background-color: #22c55e;
+  color: #ffffff;
+  box-shadow: 
+    inset 0 0 0 2px #86efac,
+    inset 0 0 0 4px #15803d,
+    3px 3px 0px 0px #261608;
+}
+
+.plaque-green:active {
+  transform: translate(2px, 2px);
+  box-shadow: 
+    inset 0 0 0 2px #86efac,
+    inset 0 0 0 4px #15803d,
+    1px 1px 0px 0px #261608;
+}
+
+/* Pixel Dither Background patterns (no gradients) */
+.dither-wood {
+  background-color: #8b5327;
+  background-image: 
+    radial-gradient(#6c3e1b 1px, transparent 1px),
+    radial-gradient(#a36433 1px, transparent 1px);
+  background-size: 4px 4px;
+  background-position: 0 0, 2px 2px;
+}
+
+.dither-parchment {
+  background-color: #fdf5df;
+  background-image: 
+    radial-gradient(#eeddb6 1px, transparent 1px);
+  background-size: 4px 4px;
+}
+
+/* Speech bubble with hard 1-step shadow and pixel outline */
+.rpg-speech-bubble {
+  position: relative;
+  background-color: #ffffff;
+  border: 3px solid #261608;
+  box-shadow: 
+    inset 0 0 0 2px #fef9c3,
+    3px 3px 0px 0px #261608;
+}
+
+.rpg-speech-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -9px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 7px solid #ffffff;
+  z-index: 2;
+}
+
+.rpg-speech-bubble::before {
+  content: '';
+  position: absolute;
+  bottom: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 10px solid #261608;
+  z-index: 1;
+}
+
+/* 임시 목업 캠퍼스 광원: 상위 요소의 opacity가 설정 상한을 적용한다. */
+@keyframes campus-sun-sway {
+  0%, 100% { transform: translateX(-2%); }
+ 50% { transform: translateX(2%); }
+}
+@keyframes campus-window-twinkle {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+.campus-sun-sway { animation: campus-sun-sway 18s ease-in-out infinite; }
+.campus-window-twinkle { animation: campus-window-twinkle 4s ease-in-out infinite; }
+/* Lv.10 code-drawn effects in CampusScene (plan 4-5). */
+@keyframes campus-firework {
+  0% { opacity: 0; transform: scale(0.2); }
+  15% { opacity: 1; }
+  60% { opacity: 0.9; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.15); }
+}
+@keyframes campus-festival-glow { 0%, 100% { opacity: 0.2; } 50% { opacity: 0.36; } }
+.campus-firework { animation: campus-firework 2.8s ease-out infinite; opacity: 0; }
+.campus-festival-glow { animation: campus-festival-glow 3s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .campus-sun-sway, .campus-window-twinkle, .campus-festival-glow { animation: none; }
+  .campus-firework { animation: none; opacity: 0.85; }
+}
+
+/* 타 사용자 목업 클릭: 점수 효과와 다른 원형 빛. */
+.other-click-particle { display: flex; align-items: center; gap: 2px; }
+.other-click-orb { display: block; width: 9px; height: 9px; border-radius: 50%; background: currentColor; border: 1px solid white; box-shadow: 0 0 7px currentColor; }
+.other-click-weight { color: white; background: #26334b; font-size: 9px; line-height: 1; padding: 1px 2px; border-radius: 3px; }
+@keyframes other-click-rise {
+  0% { opacity: 0; transform: translateY(4px) scale(0.7); }
+  20% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-16px) scale(0.8); }
+}
+.other-click-animate { animation-name: other-click-rise; animation-timing-function: ease-out; animation-fill-mode: forwards; }
+@media (prefers-reduced-motion: reduce) { .other-click-animate { animation: none; } }
+
+/* Animations */
+@keyframes float-number {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 0);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -10px);
+  }
+  75% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--drift, 0px)), -32px);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--drift, 0px) * 1.4), -48px);
+  }
+}
+
+.animate-float-number {
+  animation: float-number 0.85s steps(8, end) forwards;
+}
+
+@keyframes hand-tap-step {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(-4px, 4px);
+  }
+}
+
+.animate-hand-tap {
+  animation: hand-tap-step 0.9s steps(3, end) infinite;
+}
+
+@keyframes pixel-blink {
+  0%, 49% {
+    opacity: 1;
+  }
+  50%, 100% {
+    opacity: 0.3;
+  }
+}
+
+.animate-pixel-blink {
+  animation: pixel-blink 1s steps(1) infinite;
+}
+
+@keyframes logo-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.animate-logo-bounce {
+  animation: logo-bounce 1.4s steps(4, end) infinite;
+}
+
+/* Onboarding title (docs/261110-0837-onboarding_title_screen_plan.md): school badges flow in one loop.
+   The list is drawn twice and every badge carries its own right margin, so -50% lands exactly on the copy. */
+.school-belt-track { animation: school-belt 120s linear infinite; }
+@keyframes school-belt { to { transform: translateX(-50%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-logo-bounce, .school-belt-track { animation: none; }
+}
+
+/* Map layers (T7, docs/261110-1005-mockup_remaining_tasks_plan.md §10-1; src/components/MapArt.tsx).
+   Sea: two glint frames and a dark one, in steps, while the glints creep east 3px every 2s.
+   Clouds: each row crosses the map west to east at its own speed and re-enters from the west. */
+.map-sea-glint { animation: map-sea-glint 2.4s steps(1, end) infinite, map-sea-flow 32s steps(16, end) infinite; }
+.map-sea-glint-late { animation-delay: -1.6s, -16s; }
+@keyframes map-sea-glint { 0% { opacity: 1; } 33.333%, 100% { opacity: 0; } }
+@keyframes map-sea-flow { from { background-position: 0 0; } to { background-position: 48px 0; } }
+.map-cloud-drift { animation-name: map-cloud-drift; animation-timing-function: linear; animation-iteration-count: infinite; will-change: transform; }
+@keyframes map-cloud-drift { from { transform: translateX(var(--drift-from)); } to { transform: translateX(var(--drift-to)); } }
+@media (prefers-reduced-motion: reduce) {
+  .map-sea-glint, .map-cloud-drift { animation: none; }
+}
+
+@keyframes cloud-drift {
+  0% {
+    transform: translateX(-10%);
+  }
+  50% {
+    transform: translateX(10%);
+  }
+  100% {
+    transform: translateX(-10%);
+  }
+}
+
+.animate-cloud-drift {
+  animation: cloud-drift 12s linear infinite;
+}
+
+
+
+/* T2 (docs/261110-1005-mockup_remaining_tasks_plan.md §5): on a phone, service screens fill the visible
+   viewport. 100dvh follows the browser toolbars, so the bottom nav stays above them; 100vh is the fallback.
+   --shell-offset is the mock menu bar above the shell (App). The safe-area insets need viewport-fit=cover
+   (index.html). Landscape keeps a minimum height and scrolls the page (M6 approval). */
+.phone-shell-full {
+  height: calc(100vh - var(--shell-offset, 0px));
+  height: calc(100dvh - var(--shell-offset, 0px));
+  min-height: 480px;
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.device-full { --shell-offset: calc(28px + env(safe-area-inset-top)); }
+.mock-menu-bar {
+  height: var(--shell-offset);
+  padding: env(safe-area-inset-top) calc(8px + env(safe-area-inset-right)) 0 calc(8px + env(safe-area-inset-left));
+}
+
+/* M6: keep portrait mock frames scrollable on the page, but fit service modals to
+   the actual viewport (including short landscape windows). No orientation lock. */
+.bottom-sheet-dialog {
+  position: fixed;
+  inset: auto 0 8px;
+  margin: 0 auto;
+  padding: 0;
+  border: 2px solid #261608;
+  width: min(390px, calc(100% - 16px));
+  max-width: none;
+  height: min(634px, calc(100vh - 16px));
+  height: min(634px, calc(100dvh - 16px));
+  max-height: none;
+  overflow: hidden;
+  background: #fdf5df;
+  color: #261608;
+}
+.bottom-sheet-dialog[open] { display: flex; flex-direction: column; }
+.bottom-sheet-dialog::backdrop { background: rgb(26 15 5 / 75%); }
+/* At extremely short heights, allow the whole sheet body to scroll too. */
+.bottom-sheet-dialog > div > div { min-height: 240px; }
+
+/* 긴 텍스트 왕복 표시(MarqueeText): 넘칠 때만 양 끝 페이드 + 좌우 왕복. */
+.marquee-box { display: block; min-width: 0; overflow: hidden; white-space: nowrap; }
+.marquee-track { display: inline-block; }
+.marquee-label { display: inline-block; }
+.marquee-box[data-overflowing='true'] {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--marquee-fade), #000 calc(100% - var(--marquee-fade)), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 var(--marquee-fade), #000 calc(100% - var(--marquee-fade)), transparent 100%);
+}
+.marquee-box[data-overflowing='true'] .marquee-track {
+  padding-inline: var(--marquee-fade);
+  animation: marquee-pingpong var(--marquee-duration) ease-in-out infinite alternate;
+}
+/* 양 끝에서 각각 15%씩 멈춤. alternate로 왕복하므로 끝마다 30% 머문다(MarqueeText HOLD_RATIO). */
+@keyframes marquee-pingpong {
+  0%, 15% { transform: translateX(0); }
+  85%, 100% { transform: translateX(var(--marquee-distance)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-box[data-overflowing='true'] { -webkit-mask-image: none; mask-image: none; }
+  .marquee-box[data-overflowing='true'] .marquee-track { display: block; padding-inline: 0; animation: none; overflow: hidden; text-overflow: ellipsis; }
+  .marquee-box[data-overflowing='true'] .marquee-label { display: inline; }
+}
+
+/* 터치 영역 44px (사용자 지시 2026-11-09, docs/261109-1357-school_values_touch44_plan.md §3).
+ * 서비스 화면에서 보이는 모양은 그대로 두고, 조작 요소마다 보이지 않는 ::after로 최소 44×44px를 받는다.
+ * base 층에 두어 요소의 위치 유틸리티(absolute 등)가 이긴다. 입력란은 가상 요소를 쓸 수 없어 높이를 키운다.
+ * 제외: data-no-touch44(지도 마커·군집, [시연] 버튼). 센서: tests/e2e/touch-targets.mjs */
+@layer base {
+  [data-touch-area='44'] :is(button, a[href], [role='button'], [role='tab'], label:has(> input[type='checkbox'])):not([data-no-touch44], [data-no-touch44] *) {
+    position: relative;
+  }
+  [data-touch-area='44'] :is(button, a[href], [role='button'], [role='tab'], label:has(> input[type='checkbox'])):not([data-no-touch44], [data-no-touch44] *)::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+  [data-touch-area='44'] :is(input:not([type='checkbox'], [type='radio'], [type='hidden']), select, textarea):not([data-no-touch44], [data-no-touch44] *) {
+    min-height: 44px;
+  }
+}
