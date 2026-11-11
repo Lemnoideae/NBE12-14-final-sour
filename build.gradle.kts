@@ -54,12 +54,25 @@ dependencies {
 }
 
 tasks.withType<Test> {
-    useJUnitPlatform()
-
     testLogging {
-        events("passed", "skipped", "failed")       // 테스트마다 결과 출력
-        exceptionFormat = TestExceptionFormat.FULL  // 실패 시 원인 전체 출력
+        events("failed")                            // 실패 시 원인(스택트레이스)만 Gradle이 출력
+        exceptionFormat = TestExceptionFormat.FULL
     }
+
+    addTestListener(object : TestListener {
+        override fun beforeSuite(suite: TestDescriptor) {}
+        override fun afterSuite(suite: TestDescriptor, result: TestResult) {}
+        override fun beforeTest(testDescriptor: TestDescriptor) {}
+
+        override fun afterTest(testDescriptor: TestDescriptor, result: TestResult) {
+            val (color, label) = when (result.resultType) {
+                TestResult.ResultType.SUCCESS -> "\u001B[32m" to "PASSED"   // 초록
+                TestResult.ResultType.FAILURE -> "\u001B[31m" to "FAILED"   // 빨강
+                else -> "\u001B[33m" to "SKIPPED"                           // 노랑
+            }
+            println("$color$label\u001B[0m ${testDescriptor.className} > ${testDescriptor.displayName}")
+        }
+    })
 }
 
 // ./gradlew test → 단위 테스트만 (Docker 불필요)
