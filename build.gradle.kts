@@ -10,7 +10,7 @@ description = "NBE12-14-final-sour"
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
