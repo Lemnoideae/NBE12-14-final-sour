@@ -4,7 +4,7 @@ import org.springframework.boot.SpringApplication;
 
 public class TestNbe1214FinalSourApplication {
 
-    public static void main(String[] args) {
+    static void main(String[] args) {
         SpringApplication.from(Nbe1214FinalSourApplication::main).with(TestcontainersConfiguration.class).run(args);
     }
 
