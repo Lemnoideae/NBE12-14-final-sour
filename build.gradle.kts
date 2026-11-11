@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+
 plugins {
     java
     id("org.springframework.boot") version "4.1.2"
@@ -53,4 +55,9 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+
+    testLogging {
+        events("passed", "skipped", "failed")       // 테스트마다 결과 출력
+        exceptionFormat = TestExceptionFormat.FULL  // 실패 시 원인 전체 출력
+    }
 }
