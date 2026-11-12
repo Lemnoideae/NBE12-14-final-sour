@@ -1,0 +1,4 @@
+# 테스트 전용 설정. classpath:/config/는 메인 application.yaml을 가리지 않고 그 위에 덧씌워진다.
+# 실제 값은 환경 변수로 넣는다. 여기 값을 배포에 쓰지 않는다.
+jwt:
+  secret: test-only-jwt-secret-not-for-production-0123456789
