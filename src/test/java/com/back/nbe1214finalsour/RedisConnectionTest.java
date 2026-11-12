@@ -1,34 +1,34 @@
 package com.back.nbe1214finalsour;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 @IntegrationTest
 class RedisConnectionTest {
 
     @Autowired
-    private StringRedisTemplate redisTemplate;
+    private StringRedisTemplate stringRedisTemplate;
 
     @Test
     @DisplayName("Redis에 값을 쓰고 읽을 수 있다")
     void writeAndRead() {
-        redisTemplate.opsForValue().set("ci:test", "ok");
+        stringRedisTemplate.opsForValue().set("ci:test", "ok");
 
-        assertThat(redisTemplate.opsForValue().get("ci:test")).isEqualTo("ok");
+        assertThat(stringRedisTemplate.opsForValue().get("ci:test")).isEqualTo("ok");
     }
 
     @Test
     @DisplayName("INCRBY로 값이 누적된다")
     void incrementBy() {
-        redisTemplate.delete("ci:counter");
+        stringRedisTemplate.delete("ci:counter");
 
-        redisTemplate.opsForValue().increment("ci:counter", 3);
-        redisTemplate.opsForValue().increment("ci:counter", 5);
+        stringRedisTemplate.opsForValue().increment("ci:counter", 3);
+        stringRedisTemplate.opsForValue().increment("ci:counter", 5);
 
-        assertThat(redisTemplate.opsForValue().get("ci:counter")).isEqualTo("8");
+        assertThat(stringRedisTemplate.opsForValue().get("ci:counter")).isEqualTo("8");
     }
 }
