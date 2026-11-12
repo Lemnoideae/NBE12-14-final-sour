@@ -51,6 +51,7 @@ public enum ErrorCode {
     // ===== CLICKER / ITEM / PAY (4번) =====
     PAY_ALREADY_PROCESSED(HttpStatus.CONFLICT, "PAY_ALREADY_PROCESSED", "이미 처리된 결제입니다."),
     CLICKER_MAX_LEVEL(HttpStatus.CONFLICT, "CLICKER_MAX_LEVEL", "이미 최고 레벨입니다."),
+    CLICKER_NOT_ENOUGH_SCORE(HttpStatus.BAD_REQUEST, "CLICKER_NOT_ENOUGH_SCORE", "업그레이드에 필요한 기여도가 부족합니다."),
     ;
 
     private final HttpStatus status;
