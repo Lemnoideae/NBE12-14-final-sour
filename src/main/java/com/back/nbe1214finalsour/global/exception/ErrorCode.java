@@ -3,6 +3,7 @@ package com.back.nbe1214finalsour.global.exception;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 
 /**
  * 모든 API 오류 코드.
@@ -45,4 +46,20 @@ public enum ErrorCode {
     private final HttpStatus status;
     private final String code;
     private final String message;
+
+    /**
+     * 프레임워크가 정한 HTTP 상태(404, 405 등)를 공통 오류 코드로 바꾼다.
+     * 전용 코드가 없는 4xx는 {@link #COMMON_INVALID_INPUT}, 5xx는 {@link #COMMON_INTERNAL_ERROR}다.
+     * 응답의 HTTP 상태는 바꾸지 않고 원래 상태를 그대로 쓴다.
+     */
+    public static ErrorCode commonFor(HttpStatusCode status) {
+        return switch (status.value()) {
+            case 401 -> COMMON_UNAUTHORIZED;
+            case 403 -> COMMON_FORBIDDEN;
+            case 404 -> COMMON_NOT_FOUND;
+            case 405 -> COMMON_METHOD_NOT_ALLOWED;
+            case 415 -> COMMON_UNSUPPORTED_MEDIA_TYPE;
+            default -> status.is4xxClientError() ? COMMON_INVALID_INPUT : COMMON_INTERNAL_ERROR;
+        };
+    }
 }
