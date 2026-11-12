@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { useAlliance } from '../hooks/useMockAlliance.tsx';
 import { useBattle } from '../hooks/useMockBattle.tsx';
-import { getSchoolInfo } from '../data/allianceModel.ts';
+import { ALLIANCE_SIZE, getSchoolInfo } from '../data/allianceModel.ts';
 import {
   getEffectiveBattleStatus,
   getBattleResultLabel,
@@ -37,8 +37,10 @@ export const BattleStatusScreenPhone: React.FC<BattleStatusScreenPhoneProps> = (
   const { state: allianceState } = useAlliance();
   const {
     state,
+    config,
     effectiveNow,
     demoCancelConfirmedRequest,
+    clockOffsetMs,
     fastForwardClock,
     resetClock,
     toggleSimulateLoadFailure,
@@ -48,7 +50,7 @@ export const BattleStatusScreenPhone: React.FC<BattleStatusScreenPhoneProps> = (
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'pending' | 'finished'>('all');
 
   const filteredBattles = state.battles.filter((b) => {
-    const effStatus = getEffectiveBattleStatus(b, effectiveNow);
+    const effStatus = getEffectiveBattleStatus(b, effectiveNow, config);
     if (activeTab === 'all') return true;
     if (activeTab === 'active') return effStatus === 'active' || effStatus === 'scheduled';
     if (activeTab === 'pending') return effStatus === 'pending';
@@ -154,8 +156,8 @@ export const BattleStatusScreenPhone: React.FC<BattleStatusScreenPhoneProps> = (
           filteredBattles.map((b) => {
             const reqA = allianceState.alliances.find((a) => a.id === b.requesterAllianceId);
             const recA = allianceState.alliances.find((a) => a.id === b.recipientAllianceId);
-            const effStatus = getEffectiveBattleStatus(b, effectiveNow);
-            const remainingText = formatBattleRemainingTime(b, effectiveNow);
+            const effStatus = getEffectiveBattleStatus(b, effectiveNow, config);
+            const remainingText = formatBattleRemainingTime(b, effectiveNow, config);
 
             const reqScore = b.scores?.requesterScore ?? 0;
             const recScore = b.scores?.recipientScore ?? 0;
@@ -170,7 +172,7 @@ export const BattleStatusScreenPhone: React.FC<BattleStatusScreenPhoneProps> = (
                 <div className="flex items-center justify-between border-b pb-1.5 border-[#261608]/20">
                   <div className="flex items-center gap-1.5">
                     <span className="font-pixel text-[10px] font-bold px-1.5 py-0.5 bg-[#fef08a] border border-[#261608] text-[#261608]">
-                      {b.format}:{b.format} (연합별 {b.format}개교)
+                      {ALLIANCE_SIZE}:{ALLIANCE_SIZE} (연합별 {ALLIANCE_SIZE}개교)
                     </span>
                     <span className="font-pixel text-[9px] text-[#8b5327] font-mono">{b.durationHours}h 경기</span>
                   </div>
@@ -196,6 +198,8 @@ export const BattleStatusScreenPhone: React.FC<BattleStatusScreenPhoneProps> = (
                       ? '종료됨'
                       : effStatus === 'cancelled'
                       ? '취소됨'
+                      : effStatus === 'expired'
+                      ? '만료됨'
                       : '거절됨'}
                   </span>
                 </div>
@@ -345,7 +349,7 @@ export const BattleStatusScreenPhone: React.FC<BattleStatusScreenPhoneProps> = (
           {/* Virtual Clock Controls */}
           <div className="flex items-center justify-between text-[10px] font-pixel">
             <span className="text-[#261608]">
-              가상 시계 (+{Math.round(state.demoClockOffsetMs / 3600_000)}h 경과):
+              가상 시계 (+{Math.round(clockOffsetMs / 3600_000)}h 경과):
             </span>
             <div className="flex items-center gap-1">
               <button
@@ -392,7 +396,7 @@ export const BattleStatusScreenPhone: React.FC<BattleStatusScreenPhoneProps> = (
 
           {/* P3-1: Demo Cancel for Scheduled or Active Battles */}
           {state.battles.filter((b) => {
-            const s = getEffectiveBattleStatus(b, effectiveNow);
+            const s = getEffectiveBattleStatus(b, effectiveNow, config);
             return s === 'scheduled' || s === 'active';
           }).length > 0 && (
             <div className="border-t border-[#b45309]/30 pt-1.5 flex flex-col gap-1">
@@ -401,13 +405,13 @@ export const BattleStatusScreenPhone: React.FC<BattleStatusScreenPhoneProps> = (
               </span>
               {state.battles
                 .filter((b) => {
-                  const s = getEffectiveBattleStatus(b, effectiveNow);
+                  const s = getEffectiveBattleStatus(b, effectiveNow, config);
                   return s === 'scheduled' || s === 'active';
                 })
                 .map((b) => {
                   const reqA = allianceState.alliances.find((a) => a.id === b.requesterAllianceId);
                   const recA = allianceState.alliances.find((a) => a.id === b.recipientAllianceId);
-                  const eff = getEffectiveBattleStatus(b, effectiveNow);
+                  const eff = getEffectiveBattleStatus(b, effectiveNow, config);
                   return (
                     <div
                       key={b.id}

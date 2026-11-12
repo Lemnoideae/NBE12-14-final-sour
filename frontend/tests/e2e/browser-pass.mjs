@@ -621,6 +621,10 @@ async function run() {
     await clickByText('button', '부산대학교', 'Select 부산대학교 candidate');
     await delay(300);
 
+    // 연합 기간 72시간: 아래 대결 진행·종료를 위해 시계를 앞당겨도 연합이 만료되지 않게 한다 (기본 24시간)
+    await clickByText('button', '72h', 'Select 72h alliance duration');
+    await delay(300);
+
     // Send application
     await clickByText('button', '연합 신청 보내기', 'Submit alliance application');
     await delay(500);
@@ -689,14 +693,15 @@ async function run() {
     }
 
     // Advance clock +1h until our battle is "진행 중".
-    // 기본 시작은 현재+60분 이후의 09–22시(KST) 정각이라 실행 시각에 따라 최대 약 34시간 뒤다.
+    // 기본 시작은 현재+60분 이후의 09–22시(KST) 첫 슬롯이라 실행 시각에 따라 최대 약 12시간 뒤다.
+    // 대결은 두 연합 중 빠른 만료(수도권 동맹 +22h) 전에 끝나야 하므로 그 안에서만 신청된다.
     const activeStateCheck = await advanceClockUntilOurBattle('진행 중', '+1h', 36);
     console.log('Our battle card (active) check:', activeStateCheck);
     if (!activeStateCheck.text.includes('시작:') || !activeStateCheck.text.includes('종료:') || !activeStateCheck.text.includes('종료까지')) {
       throw new Error(`Expected our battle "진행 중" with start/end time and "종료까지" countdown: ${JSON.stringify(activeStateCheck)}`);
     }
 
-    // Advance clock +24h -> "종료됨" (기본 경기 24시간), 수락 시 0:0 → 무승부
+    // Advance clock +24h -> "종료됨" (기본 경기 3시간, 최대 24시간), 수락 시 0:0 → 무승부
     const finishedStateCheck = await advanceClockUntilOurBattle('종료됨', '+24h', 2);
     const drawResultFound = finishedStateCheck.text.includes('무승부 (DRAW)');
     console.log(`Our battle "종료됨": true, result "무승부 (DRAW)": ${drawResultFound}`);

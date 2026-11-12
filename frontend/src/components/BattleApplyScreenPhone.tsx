@@ -7,15 +7,26 @@ import {
   AlertCircle,
   Shield,
   CheckCircle2,
-  Clock,
   BarChart3,
   FastForward,
 } from 'lucide-react';
 import { useAlliance } from '../hooks/useMockAlliance.tsx';
 import { useBattle } from '../hooks/useMockBattle.tsx';
-import { getSchoolInfo } from '../data/allianceModel.ts';
-import { getEffectiveBattleStatus, isAllianceOccupied, formatBattleTimestamp, formatKstDateTimeLocal, parseKstDateTimeLocal, getDefaultRequestedStartTime, validateRequestedStartTime } from '../data/battleModel.ts';
+import { ALLIANCE_SIZE, getSchoolInfo, isAllianceActive } from '../data/allianceModel.ts';
+import {
+  getEffectiveBattleStatus,
+  isAllianceOccupied,
+  formatBattleTimestamp,
+  formatKstDateTimeLocal,
+  parseKstDateTimeLocal,
+  getDefaultRequestedStartTime,
+  validateRequestedStartTime,
+  getBattleLatestEnd,
+  getMaxBattleDurationHours,
+  getBattleAllianceWindowError,
+} from '../data/battleModel.ts';
 import { SharedImage } from './SharedImage.tsx';
+import { DurationPicker, formatDurationHours } from './DurationPicker.tsx';
 import { soundManager } from '../utils/sound.ts';
 
 interface BattleApplyScreenPhoneProps {
@@ -42,36 +53,63 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
     isMyAllianceOccupied,
     applyRequest,
     cancelRequest,
+    acceptRequest,
+    rejectRequest,
     demoAcceptRequest,
     demoRejectRequest,
+    demoReceiveRequest,
     demoCancelConfirmedRequest,
+    clockOffsetMs,
     fastForwardClock,
     resetClock,
     toggleSimulateRequestFailure,
   } = useBattle();
 
-  const [selectedFormat, setSelectedFormat] = useState(
-    config.schoolCounts[0] ?? 2,
-  );
   const [selectedOpponentAllianceId, setSelectedOpponentAllianceId] = useState<string | null>(null);
   const [durationHours, setDurationHours] = useState(
     config.durationHours.default,
   );
-  const [startInput, setStartInput] = useState(() => formatKstDateTimeLocal(getDefaultRequestedStartTime(effectiveNow, config)));
+  // 기본 시작: 내 연합 만료 전에 기본 기간으로 끝낼 수 있는 가장 빠른 슬롯 (없으면 빈 값)
+  const [startInput, setStartInput] = useState(() =>
+    formatKstDateTimeLocal(getDefaultRequestedStartTime(effectiveNow, config, currentAlliance?.expiresAt, config.durationHours.default)),
+  );
   const requestedStartTime = parseKstDateTimeLocal(startInput);
   const timeValidation = validateRequestedStartTime(requestedStartTime, effectiveNow, config);
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Candidate opponent alliances:
-  // Must not be own alliance, must not share any school with own alliance
+  // Must be active, must not be own alliance, must not share any school with own alliance
   const candidateOpponents = allianceState.alliances.filter((a) => {
     if (!currentAlliance) return false;
     if (a.id === currentAlliance.id) return false;
+    if (!isAllianceActive(a, effectiveNow)) return false;
     const hasOverlap = a.schoolIds.some((id) => currentAlliance.schoolIds.includes(id));
     return !hasOverlap;
   });
 
   const selectedOpponent = candidateOpponents.find((a) => a.id === selectedOpponentAllianceId);
+
+  // 대결은 두 연합 중 빠른 만료 전에 끝나야 한다. 상대를 고르기 전에는 내 연합 만료만 상한으로 쓴다.
+  const latestEnd = currentAlliance
+    ? selectedOpponent
+      ? getBattleLatestEnd(currentAlliance, selectedOpponent)
+      : currentAlliance.expiresAt
+    : undefined;
+  const maxDurationForStart =
+    latestEnd != null && timeValidation.success
+      ? getMaxBattleDurationHours(requestedStartTime, latestEnd, config)
+      : config.durationHours.max;
+  const durationPickerMax = Math.max(config.durationHours.min, maxDurationForStart);
+  const latestStartInputMax = Math.min(
+    effectiveNow + config.startTime.maxLeadDays * 24 * 3600_000,
+    latestEnd != null ? latestEnd - durationHours * 3600_000 : Infinity,
+  );
+  const windowError =
+    currentAlliance && selectedOpponent && timeValidation.success
+      ? getBattleAllianceWindowError(currentAlliance, selectedOpponent, requestedStartTime, durationHours, effectiveNow)
+      : undefined;
+  const opponentHasNoSlot = (opponentLatestEnd: number) =>
+    !Number.isFinite(getDefaultRequestedStartTime(effectiveNow, config, opponentLatestEnd, config.durationHours.min));
 
   const handleSelectOpponent = (allianceId: string) => {
     soundManager.playTabSound();
@@ -85,7 +123,7 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
       return;
     }
     soundManager.playBuySound();
-    const result = applyRequest(selectedOpponentAllianceId, selectedFormat, durationHours, requestedStartTime);
+    const result = applyRequest(selectedOpponentAllianceId, durationHours, requestedStartTime);
     if (result.success) {
       setFeedbackMessage({
         type: 'success',
@@ -117,6 +155,37 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
       });
     } else {
       setFeedbackMessage({ type: 'error', text: result.error ?? '수락에 실패했습니다.' });
+    }
+  };
+
+  const handleAcceptReceived = (battleId: string, opponentName: string) => {
+    soundManager.playLevelUpSound();
+    const result = acceptRequest(battleId);
+    setFeedbackMessage(
+      result.success
+        ? { type: 'success', text: `${opponentName}의 대결 신청을 수락했습니다. 대결이 확정되었습니다!` }
+        : { type: 'error', text: result.error ?? '수락에 실패했습니다.' },
+    );
+  };
+
+  const handleRejectReceived = (battleId: string, opponentName: string) => {
+    soundManager.playTabSound();
+    const result = rejectRequest(battleId);
+    setFeedbackMessage(
+      result.success
+        ? { type: 'success', text: `${opponentName}의 대결 신청을 거절했습니다.` }
+        : { type: 'error', text: result.error ?? '거절에 실패했습니다.' },
+    );
+  };
+
+  const handleDemoReceive = () => {
+    soundManager.playTabSound();
+    const result = demoReceiveRequest();
+    if (result.success && result.battle) {
+      const from = allianceState.alliances.find((a) => a.id === result.battle!.requesterAllianceId);
+      setFeedbackMessage({ type: 'success', text: `[시연] ${from?.name ?? '다른 연합'}에서 대결 신청이 도착했습니다.` });
+    } else {
+      setFeedbackMessage({ type: 'error', text: result.error ?? '시연 신청 생성에 실패했습니다.' });
     }
   };
 
@@ -215,7 +284,7 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
               <div className="flex items-center justify-between border-b pb-1.5 border-[#261608]/20">
                 <span className="font-pixel text-xs font-bold text-[#8b5327]">신청 주체 (내 연합)</span>
                 <span className="font-pixel text-[10px] font-bold text-[#261608] bg-[#fef08a] px-1.5 py-0.5 border border-[#261608]">
-                  {currentAlliance.schoolIds.length}개교 연합
+                  {ALLIANCE_SIZE}:{ALLIANCE_SIZE} 대결
                 </span>
               </div>
 
@@ -265,52 +334,12 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
               )}
             </div>
 
-            {/* Section 2: Battle Format Selector */}
-            <div className="rpg-box p-2.5 bg-[#ffffff] border-2 border-[#261608] flex flex-col gap-2">
-              <label className="font-pixel text-xs font-bold text-[#261608] flex items-center gap-1">
-                <Swords className="w-3.5 h-3.5 text-[#8b5327]" />
-                <span>대결 형식 선택 (연합별 학교 수 기준)</span>
-              </label>
-
-              <div className="grid grid-cols-2 gap-2">
-                {config.schoolCounts.map((count) => {
-                  const isSelected = selectedFormat === count;
-                  const isMatch = currentAlliance.schoolIds.length === count;
-                  return (
-                    <button
-                      key={count}
-                      type="button"
-                      onClick={() => {
-                        soundManager.playTabSound();
-                        setSelectedFormat(count);
-                      }}
-                      className={`p-2 border-2 text-center font-pixel text-xs font-bold flex flex-col items-center gap-0.5 cursor-pointer transition-colors ${
-                        isSelected
-                          ? 'bg-[#fef08a] border-[#261608] shadow-[2px_2px_0px_#261608]'
-                          : 'bg-[#ffffff] border-[#261608]/40 hover:bg-[#fffbeb]'
-                      }`}
-                    >
-                      <span className="text-xs font-black">{count}:{count} 대결</span>
-                      <span className="text-[9px] text-[#8b5327]">연합별 {count}개교 vs {count}개교</span>
-                      {!isMatch && (
-                        <span className="text-[8px] text-[#dc2626]">내 연합({currentAlliance.schoolIds.length}교)과 불일치</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <p className="font-pixel text-[9px] text-[#8b5327]">
-                ※ 기획서 기준: 2:2는 연합당 2개교 대 2개교, 3:3은 3개교 대 3개교 대결입니다.
-              </p>
-            </div>
-
             {/* Section 3: Opponent Alliance Selection */}
             <div className="rpg-box p-2.5 bg-[#ffffff] border-2 border-[#261608] flex flex-col gap-2">
               <label className="font-pixel text-xs font-bold text-[#261608] flex items-center justify-between">
                 <span>상대 연합 선택</span>
                 <span className="text-[9px] text-[#8b5327] font-normal">
-                  (형식: {selectedFormat}:{selectedFormat} 매칭 연합)
+                  ({ALLIANCE_SIZE}개교 연합끼리 {ALLIANCE_SIZE}:{ALLIANCE_SIZE} 대결)
                 </span>
               </label>
 
@@ -322,9 +351,10 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
                 ) : (
                   candidateOpponents.map((opponent) => {
                     const isSelected = selectedOpponentAllianceId === opponent.id;
-                    const isSizeMatch = opponent.schoolIds.length === selectedFormat;
                     const isOccupied = isAllianceOccupied(state.battles, opponent.id, effectiveNow);
-                    const disabled = !isSizeMatch || isOccupied;
+                    // 두 연합 중 빠른 만료 전에 최소 기간으로도 끝낼 슬롯이 없으면 대결 불가
+                    const isExpiringSoon = !isOccupied && opponentHasNoSlot(getBattleLatestEnd(currentAlliance, opponent));
+                    const disabled = isOccupied || isExpiringSoon;
 
                     return (
                       <button
@@ -359,9 +389,9 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
                             <span className="font-pixel text-[8px] px-1 py-0.2 bg-[#fecaca] text-[#991b1b] border border-[#dc2626]">
                               대결 진행 중
                             </span>
-                          ) : !isSizeMatch ? (
-                            <span className="font-pixel text-[8px] px-1 py-0.2 bg-stone-200 text-stone-600 border border-stone-400">
-                              규모 불일치
+                          ) : isExpiringSoon ? (
+                            <span className="font-pixel text-[8px] px-1 py-0.2 bg-[#ffedd5] text-[#9a3412] border border-[#ea580c]">
+                              만료 임박 (대결 불가)
                             </span>
                           ) : (
                             <span className="font-pixel text-[8px] px-1 py-0.2 bg-[#dcfce7] text-[#15803d] border border-[#16a34a]">
@@ -377,40 +407,31 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
             </div>
 
             {/* Section 4: Duration Selector (Config Injected) */}
-            <div className="rpg-box p-2.5 bg-[#ffffff] border-2 border-[#261608] flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <label className="font-pixel text-xs font-bold text-[#261608] flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-[#8b5327]" />
-                  <span>경기 진행 기간</span>
-                </label>
-                <span className="font-pixel text-[10px] text-[#8b5327]">
-                  허용: {config.durationHours.min}h ~ {config.durationHours.max}h
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={config.durationHours.min}
-                  max={config.durationHours.max}
-                  value={durationHours}
-                  onChange={(e) => setDurationHours(Number(e.target.value))}
-                  aria-label="경기 진행 기간"
-                  className="w-20 px-2 py-1 text-xs font-pixel font-bold border-2 border-[#261608] bg-[#fdf5df] focus:bg-white outline-none"
-                />
-                <span className="font-pixel text-xs font-bold text-[#261608] shrink-0">시간</span>
-              </div>
-            </div>
+            <DurationPicker
+              label="경기 진행 기간"
+              value={durationHours}
+              min={config.durationHours.min}
+              max={durationPickerMax}
+              presets={config.durationHours.presets}
+              onChange={setDurationHours}
+            />
+            {latestEnd != null && (
+              <p className="font-pixel text-[10px] text-[#8b5327] -mt-1 leading-tight">
+                ※ 대결은 {selectedOpponent ? '두 연합 중 빠른 만료' : '내 연합 만료'}({formatBattleTimestamp(latestEnd)} KST) 전에 끝나야 합니다.
+                {timeValidation.success && maxDurationForStart >= config.durationHours.min && ` 선택한 시작 시각 기준 최대 ${maxDurationForStart}시간.`}
+              </p>
+            )}
 
             <div className="rpg-box p-2.5 bg-white border-2 border-[#261608] flex flex-col gap-2 min-w-0">
               <label htmlFor="battle-start" className="font-pixel text-xs font-bold">시작 일시 (KST)</label>
               <input id="battle-start" type="datetime-local" value={startInput}
                 min={formatKstDateTimeLocal(Math.ceil((effectiveNow + config.startTime.minLeadMinutes * 60_000 + 9 * 3600_000) / (config.startTime.stepMinutes * 60_000)) * config.startTime.stepMinutes * 60_000 - 9 * 3600_000)}
-                max={formatKstDateTimeLocal(effectiveNow + config.startTime.maxLeadDays * 24 * 3600_000)}
+                max={formatKstDateTimeLocal(latestStartInputMax)}
                 step={config.startTime.stepMinutes * 60} onChange={(e) => setStartInput(e.target.value)}
                 className="w-full min-w-0 max-w-full px-2 py-1 text-xs border-2 border-[#261608]" />
               <p className="font-pixel text-[10px] text-[#8b5327]">{String(config.startTime.allowedStartHoursKst.from).padStart(2, '0')}:00~{String(config.startTime.allowedStartHoursKst.to).padStart(2, '0')}:00 시작 · {config.startTime.stepMinutes}분 단위 · 최소 {config.startTime.minLeadMinutes}분 후 ~ 최대 {config.startTime.maxLeadDays}일 이내 (목업 값)</p>
-              {!timeValidation.success && <p role="alert" className="text-xs text-red-700">{timeValidation.error}</p>}
+              {!timeValidation.success && <p role="alert" className="text-xs text-red-700">{startInput ? timeValidation.error : '선택 가능한 시작 시각이 없습니다 (연합 만료가 가깝습니다).'}</p>}
+              {windowError && <p role="alert" className="text-xs text-red-700">{windowError}</p>}
             </div>
 
             {/* Section 5: Condition Summary & Dispatch */}
@@ -420,14 +441,20 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
                 <div className="font-pixel text-[10px] text-[#8b5327] flex flex-col gap-0.5">
                   <div>• 신청: {currentAlliance.name} ({currentAlliance.schoolIds.length}개교)</div>
                   <div>• 상대: {selectedOpponent.name} ({selectedOpponent.schoolIds.length}개교)</div>
-                  <div>• 형식: {selectedFormat}:{selectedFormat} (연합당 {selectedFormat}개교)</div>
+                  <div>• 형식: {ALLIANCE_SIZE}:{ALLIANCE_SIZE} (연합당 {ALLIANCE_SIZE}개교)</div>
                   <div>• 일정: {formatBattleTimestamp(requestedStartTime)} 시작 · {durationHours}시간 진행 · {formatBattleTimestamp(requestedStartTime + durationHours * 3600_000)} 종료</div>
+                  {latestEnd != null && timeValidation.success && !windowError && (
+                    <div>
+                      • 연합 만료: {formatBattleTimestamp(latestEnd)} (종료 후 여유{' '}
+                      {formatDurationHours(Math.floor((latestEnd - requestedStartTime - durationHours * 3600_000) / 3600_000))})
+                    </div>
+                  )}
                   <div>• 규칙: 단일 동시 상대 원칙 (경기 확정 시 종료 전까지 양측 모두 타 대결 불가)</div>
                 </div>
 
                 <button
                   onClick={handleSendBattleApplication}
-                  disabled={!timeValidation.success}
+                  disabled={!timeValidation.success || !!windowError}
                   className="pixel-plaque plaque-yellow py-2 text-center font-pixel text-xs font-bold flex items-center justify-center gap-1 cursor-pointer hover:bg-[#fef08a]"
                 >
                   <Swords className="w-3.5 h-3.5 text-[#b45309]" />
@@ -451,7 +478,8 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
                   const isSentByMe = b.requesterAllianceId === myAllianceId;
                   const oppId = isSentByMe ? b.recipientAllianceId : b.requesterAllianceId;
                   const oppAlliance = allianceState.alliances.find((a) => a.id === oppId);
-                  const effStatus = getEffectiveBattleStatus(b, effectiveNow);
+                  const effStatus = getEffectiveBattleStatus(b, effectiveNow, config);
+                  const oppName = oppAlliance?.name ?? '상대 연합';
 
                   return (
                     <div
@@ -483,13 +511,15 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
                             ? '종료됨'
                             : effStatus === 'cancelled'
                             ? '취소됨'
+                            : effStatus === 'expired'
+                            ? '만료됨'
                             : '거절됨'}
                         </span>
                       </div>
 
                       <div className="text-[9px] font-pixel text-[#8b5327]">{effStatus === 'pending' ? '희망 시작' : '시작'}: {formatBattleTimestamp(b.scheduledStartTime ?? b.requestedStartTime)} KST</div>
                       <div className="text-[9px] font-pixel text-[#8b5327] flex items-center justify-between">
-                        <span>형식: {b.format}:{b.format} | 기간: {b.durationHours}h</span>
+                        <span>형식: {ALLIANCE_SIZE}:{ALLIANCE_SIZE} | 기간: {b.durationHours}h</span>
                         {effStatus === 'pending' && isSentByMe && (
                           <button
                             onClick={() => handleCancelRequest(b.id)}
@@ -499,6 +529,27 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
                           </button>
                         )}
                       </div>
+                      {/* 받은 신청: 리더가 없으므로 우리 연합 학생 누구든 수락·거절할 수 있다 */}
+                      {effStatus === 'pending' && !isSentByMe && (
+                        <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => handleAcceptReceived(b.id, oppName)}
+                            aria-label={`${oppName}의 대결 신청 수락`}
+                            className="pixel-plaque plaque-yellow py-1 font-pixel text-xs font-black cursor-pointer"
+                          >
+                            수락
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRejectReceived(b.id, oppName)}
+                            aria-label={`${oppName}의 대결 신청 거절`}
+                            className="pixel-plaque plaque-wood py-1 font-pixel text-xs font-bold cursor-pointer"
+                          >
+                            거절
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })
@@ -514,15 +565,23 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
                 </span>
               </div>
               <p className="font-pixel text-[9px] text-[#8b5327]">
-                ※ 일반 사용자는 본인 신청 취소만 가능합니다. 아래 기능은 모의 검증을 위한 상태 제어입니다.
+                ※ 받은 신청은 우리 연합 학생 누구나 위 목록에서 수락·거절할 수 있습니다. 아래는 상대 연합의 수락·거절과 신청을 흉내 내는 시연용 제어입니다.
               </p>
 
+              <button
+                type="button"
+                onClick={handleDemoReceive}
+                className="py-1 bg-white border border-[#0e7490] text-[#0e7490] font-pixel font-bold text-[9px] hover:bg-[#ecfeff] cursor-pointer"
+              >
+                [시연] 다른 연합의 대결 신청 받기
+              </button>
+
               {/* Demo Accept / Reject for Pending Battles */}
-              {state.battles.filter((b) => b.status === 'pending').length === 0 ? (
+              {state.battles.filter((b) => getEffectiveBattleStatus(b, effectiveNow, config) === 'pending').length === 0 ? (
                 <div className="text-[9px] font-pixel text-[#8b5327]">대기 중인 신청이 없습니다.</div>
               ) : (
                 state.battles
-                  .filter((b) => b.status === 'pending')
+                  .filter((b) => getEffectiveBattleStatus(b, effectiveNow, config) === 'pending')
                   .map((b) => {
                     const reqA = allianceState.alliances.find((a) => a.id === b.requesterAllianceId);
                     const recA = allianceState.alliances.find((a) => a.id === b.recipientAllianceId);
@@ -532,7 +591,7 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
                         className="p-1.5 bg-white border border-[#261608]/40 flex flex-col gap-1 text-[9px] font-pixel"
                       >
                         <div className="font-bold text-[#261608]">
-                          {reqA?.name} → {recA?.name} ({b.format}:{b.format}, {b.durationHours}h) · 희망 시작 {formatBattleTimestamp(b.requestedStartTime)} KST
+                          {reqA?.name} → {recA?.name} ({b.durationHours}h) · 희망 시작 {formatBattleTimestamp(b.requestedStartTime)} KST
                         </div>
                         <div className="flex items-center gap-1">
                           <button
@@ -607,7 +666,7 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
                   <span>시연용 가상 시계 (종료·남은 시간 검증)</span>
                 </span>
                 <div className="flex items-center gap-1 text-[9px] font-pixel">
-                  <span>오프셋: +{Math.round(state.demoClockOffsetMs / 3600_000)}h</span>
+                  <span>오프셋: +{Math.round(clockOffsetMs / 3600_000)}h</span>
                   <button
                     onClick={() => fastForwardClock(1)}
                     className="px-1.5 py-0.5 bg-white border border-[#261608] text-[8px] font-pixel cursor-pointer hover:bg-stone-100"

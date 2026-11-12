@@ -190,6 +190,11 @@ test('A. 크로스 화면 통합 시나리오 (Gameplay -> Shop -> Alliance -> B
     fireEvent.click(pusanCandidateBtn);
   });
 
+  // 연합 기간 72시간 선택: 아래에서 가상 시계를 최대 약 58시간 앞당겨도 연합이 만료되지 않게 한다
+  act(() => {
+    fireEvent.click(screen.getByRole('button', { name: '72h' }));
+  });
+
   // 연합 신청 보내기
   const sendAllianceBtn = screen.getByRole('button', { name: '연합 신청 보내기' });
   act(() => {
@@ -225,7 +230,7 @@ test('A. 크로스 화면 통합 시나리오 (Gameplay -> Shop -> Alliance -> B
   assert.ok(screen.getByRole('heading', { name: '대결 신청' }));
   assert.ok(screen.getByText('한양대·부산대 연합'));
 
-  // 2:2 형식에서 대결 가능한 상대 연합(수도권 동맹) 선택
+  // 대결 가능한 상대 연합(수도권 동맹) 선택 (2개교 연합끼리 2:2 고정, 형식 선택 없음)
   const capitalOpponentBtn = screen.getByRole('button', { name: /수도권 동맹/ });
   act(() => {
     fireEvent.click(capitalOpponentBtn);
@@ -258,7 +263,7 @@ test('A. 크로스 화면 통합 시나리오 (Gameplay -> Shop -> Alliance -> B
   // 기본 시작은 현재+60분 이후의 09–22시(KST) 정각이므로 최대 다음 날 09시, 즉 약 34시간 이내다.
   fastForwardUntilOurBattle('진행 중', '+1h', 36);
 
-  // 가상 시계를 +24h 전진 -> 우리 대결 '종료됨' (finished) 전환 및 점수 기반 결과 확인 (기본 경기 24시간)
+  // 가상 시계를 +24h 전진 -> 우리 대결 '종료됨' (finished) 전환 및 점수 기반 결과 확인 (기본 경기 3시간, 최대 24시간)
   fastForwardUntilOurBattle('종료됨', '+24h', 2);
   const finishedCard = getOurBattleCard().card;
   assert.match(finishedCard.textContent ?? '', /무승부 \(DRAW\)/, '수락 시 점수 0:0으로 시작해 무승부');

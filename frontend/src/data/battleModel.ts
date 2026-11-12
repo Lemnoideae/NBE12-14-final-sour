@@ -1,11 +1,12 @@
 // 대결 상태 모델 및 순수 전이 함수 (N4 대결 신청 및 현황)
 // 기획서 4-2, 6장, 10·11장 및 팀장 범위 갱신 계획 5절 기반
 import { MOCK_SHOP_CONFIG, type MockBattleConfig } from './mockShopConfig.ts';
-import type { Alliance } from './allianceModel.ts';
+import { ALLIANCE_SIZE, isAllianceActive, type Alliance } from './allianceModel.ts';
 
 export type BattleConfig = MockBattleConfig;
 
-export type BattleStatus = 'pending' | 'scheduled' | 'active' | 'finished' | 'rejected' | 'cancelled';
+/** 'expired': 저장 상태가 아닌 실효 상태. 대기 신청이 수락 기한(희망 시작 − 최소 리드)을 넘긴 경우 */
+export type BattleStatus = 'pending' | 'scheduled' | 'active' | 'finished' | 'rejected' | 'cancelled' | 'expired';
 
 export interface BattleScore {
   readonly requesterScore: number;
@@ -14,7 +15,6 @@ export interface BattleScore {
 
 export interface Battle {
   readonly id: string;
-  readonly format: number; // 연합별 학교 수 (2: 2개교 vs 2개교, 3: 3개교 vs 3개교)
   readonly requesterAllianceId: string;
   readonly recipientAllianceId: string;
   readonly requesterSchoolIds: readonly string[]; // 참여 학교 ID 스냅샷
@@ -38,15 +38,24 @@ export interface BattleActionResult {
 
 export interface BattleState {
   readonly battles: readonly Battle[];
-  readonly demoClockOffsetMs: number;
   readonly simulateRequestFailure: boolean;
   readonly simulateLoadFailure: boolean;
   readonly config: BattleConfig;
 }
 
+/** 대기 신청을 수락할 수 있는 마지막 시각. 이 시각이 지나면 실효 상태가 'expired'다. */
+export function getBattleAcceptDeadline(battle: Battle, config: BattleConfig = MOCK_SHOP_CONFIG.battle): number {
+  return battle.requestedStartTime - config.startTime.minLeadMinutes * 60_000;
+}
+
 // 고정 시계 및 기간 경과에 따른 실효적 상태 계산
 // 종료 시각이 지난 경기는 어떤 경우에도 active로 표시되지 않고 finished로 판정된다.
-export function getEffectiveBattleStatus(battle: Battle, now: number): BattleStatus {
+// 수락 기한이 지난 대기 신청은 expired로 판정된다. 연합 만료는 따로 보지 않는다: 신청·수락 때
+// '종료 ≤ 양측 연합 만료'를 검증하므로, 연합이 만료됐다면 그 대기 신청의 수락 기한도 이미 지났다.
+export function getEffectiveBattleStatus(battle: Battle, now: number, config: BattleConfig = MOCK_SHOP_CONFIG.battle): BattleStatus {
+  if (battle.status === 'pending') {
+    return now > getBattleAcceptDeadline(battle, config) ? 'expired' : 'pending';
+  }
   if (battle.status === 'scheduled') {
     if (battle.scheduledEndTime != null && now >= battle.scheduledEndTime) {
       return 'finished';
@@ -104,7 +113,18 @@ export function validateRequestedStartTime(time: number, now: number, config: Ba
   return { success: true };
 }
 
-export function getDefaultRequestedStartTime(now: number, config: BattleConfig): number {
+/**
+ * 기본 희망 시작 시각: 허용 시간대의 가장 빠른 슬롯. latestEnd(두 연합 중 빠른 만료)를 주면
+ * 그 슬롯에서 durationHours만큼 진행해도 latestEnd 안에 끝나야 한다. 더 늦은 슬롯은 더 늦게 끝나므로
+ * 첫 슬롯이 넘치면 가능한 슬롯이 없다(NaN).
+ */
+export function getDefaultRequestedStartTime(now: number, config: BattleConfig, latestEnd?: number, durationHours?: number): number {
+  const first = getFirstRequestedStartSlot(now, config);
+  if (latestEnd != null && Number.isFinite(first) && first + (durationHours ?? config.durationHours.min) * HOUR_MS > latestEnd) return NaN;
+  return first;
+}
+
+function getFirstRequestedStartSlot(now: number, config: BattleConfig): number {
   const earliest = now + config.startTime.minLeadMinutes * 60_000;
   const localDay = Math.floor((earliest + KST_OFFSET) / DAY_MS) * DAY_MS - KST_OFFSET;
   const step = config.startTime.stepMinutes * 60_000;
@@ -120,9 +140,39 @@ export function getDefaultRequestedStartTime(now: number, config: BattleConfig):
   return NaN;
 }
 
+const HOUR_MS = 3600_000;
+
+/** 대결은 두 연합 중 빠른 만료 시각 전에 끝나야 한다. */
+export function getBattleLatestEnd(a: Alliance, b: Alliance): number {
+  return Math.min(a.expiresAt, b.expiresAt);
+}
+
+/** 시작 시각과 연합 만료 상한으로 정해지는 최대 대결 기간(시간). config.min보다 작으면 이 시작 시각으로는 신청할 수 없다. */
+export function getMaxBattleDurationHours(startTime: number, latestEnd: number, config: BattleConfig): number {
+  return Math.min(config.durationHours.max, Math.floor((latestEnd - startTime) / HOUR_MS));
+}
+
+/** 신청·수락 공통: 양측 연합이 활성이고, 대결이 빠른 만료 전에 끝나는지 검사한다. */
+export function getBattleAllianceWindowError(
+  reqAlliance: Alliance,
+  recAlliance: Alliance,
+  startTime: number,
+  durationHours: number,
+  now: number,
+): string | undefined {
+  if (!isAllianceActive(reqAlliance, now)) return `만료된 연합: 신청 연합(${reqAlliance.name})의 기간이 끝났습니다.`;
+  if (!isAllianceActive(recAlliance, now)) return `만료된 연합: 상대 연합(${recAlliance.name})의 기간이 끝났습니다.`;
+  const latestEnd = getBattleLatestEnd(reqAlliance, recAlliance);
+  const end = startTime + durationHours * HOUR_MS;
+  if (end > latestEnd) {
+    return `연합 만료 초과: 대결 종료(${formatBattleTimestamp(end)})가 두 연합 중 빠른 만료(${formatBattleTimestamp(latestEnd)}) KST보다 늦습니다.`;
+  }
+  return undefined;
+}
+
 // P4-2: 실효적 상태에 따른 남은 시간/일정 안내 레이블 순수 함수
-export function formatBattleRemainingTime(battle: Battle, now: number): string {
-  const effStatus = getEffectiveBattleStatus(battle, now);
+export function formatBattleRemainingTime(battle: Battle, now: number, config: BattleConfig = MOCK_SHOP_CONFIG.battle): string {
+  const effStatus = getEffectiveBattleStatus(battle, now, config);
   if (effStatus === 'finished') {
     return '종료됨';
   }
@@ -146,6 +196,9 @@ export function formatBattleRemainingTime(battle: Battle, now: number): string {
   }
   if (effStatus === 'pending') {
     return '수락 대기 중';
+  }
+  if (effStatus === 'expired') {
+    return '수락 기한 만료';
   }
   if (effStatus === 'cancelled') {
     return '취소됨';
@@ -208,49 +261,47 @@ export function getOccupiedBattleForAlliance(
 }
 
 // P3-3: 기준 시각(baseTime)에 비례한 초기 모의 대결 시드 생성 (실제 시계 기준 active 상태 보장)
+// 모든 대결은 양측 연합 수명(createInitialMockAlliances의 시각표) 안에서 신청·진행·종료된다 (계획서 §4).
 export function createInitialMockBattles(baseTime: number = Date.now(), config: BattleConfig = MOCK_SHOP_CONFIG.battle): readonly Battle[] {
   return Object.freeze([
-    // 샘플 1: 2:2 종료된 경기 (연고 vs 수도권, 연고 승리)
+    // 샘플 1: 종료된 경기 (연고 vs 수도권, 연고 승리)
     Object.freeze({
       id: 'battle-sample-finished-2v2',
-      format: 2,
       requesterAllianceId: 'alliance-sky',
       recipientAllianceId: 'alliance-capital',
       requesterSchoolIds: Object.freeze(['yonsei', 'korea']),
       recipientSchoolIds: Object.freeze(['snu', 'skku']),
       durationHours: 24,
       status: 'finished' as const,
-      createdAt: baseTime - 48 * 3600_000,
-      requestedStartTime: baseTime - 48 * 3600_000,
-      scheduledStartTime: baseTime - 48 * 3600_000,
-      scheduledEndTime: baseTime - 24 * 3600_000,
+      createdAt: baseTime - 42 * 3600_000,
+      requestedStartTime: baseTime - 40 * 3600_000,
+      scheduledStartTime: baseTime - 40 * 3600_000,
+      scheduledEndTime: baseTime - 16 * 3600_000,
       scores: Object.freeze({ requesterScore: 18400, recipientScore: 16920 }),
       winnerAllianceId: 'alliance-sky',
-      updatedAt: baseTime - 24 * 3600_000,
+      updatedAt: baseTime - 16 * 3600_000,
     }),
-    // 샘플 2: 3:3 종료된 무승부 경기 (과기원 vs 서울삼각, 무승부)
+    // 샘플 2: 종료된 무승부 경기 (과기원 vs 서울 중앙, 무승부)
     Object.freeze({
-      id: 'battle-sample-draw-3v3',
-      format: 3,
+      id: 'battle-sample-draw-2v2',
       requesterAllianceId: 'alliance-tech',
       recipientAllianceId: 'alliance-korea-central',
-      requesterSchoolIds: Object.freeze(['kaist', 'postech', 'unist']),
-      recipientSchoolIds: Object.freeze(['cau', 'khu', 'hufs']),
-      durationHours: 24,
+      requesterSchoolIds: Object.freeze(['kaist', 'postech']),
+      recipientSchoolIds: Object.freeze(['cau', 'khu']),
+      durationHours: 12,
       status: 'finished' as const,
-      createdAt: baseTime - 36 * 3600_000,
-      requestedStartTime: baseTime - 36 * 3600_000,
-      scheduledStartTime: baseTime - 36 * 3600_000,
-      scheduledEndTime: baseTime - 12 * 3600_000,
+      createdAt: baseTime - 29.5 * 3600_000,
+      requestedStartTime: baseTime - 28 * 3600_000,
+      scheduledStartTime: baseTime - 28 * 3600_000,
+      scheduledEndTime: baseTime - 16 * 3600_000,
       scores: Object.freeze({ requesterScore: 25000, recipientScore: 25000 }),
       winnerAllianceId: 'draw' as const,
-      updatedAt: baseTime - 12 * 3600_000,
+      updatedAt: baseTime - 16 * 3600_000,
     }),
-    // 샘플 3: 2:2 진행 중인 경기 (경인 vs 신촌, 경인 리드 중)
+    // 샘플 3: 진행 중인 경기 (경인 vs 신촌, 경인 리드 중)
     // 시작: 과거 2시간 전, 종료: 미래 22시간 후 -> baseTime 시점에 정확히 active 상태
     Object.freeze({
       id: 'battle-sample-active-2v2',
-      format: 2,
       requesterAllianceId: 'alliance-metro',
       recipientAllianceId: 'alliance-sinchon',
       requesterSchoolIds: Object.freeze(['inha', 'ajou']),
@@ -264,16 +315,15 @@ export function createInitialMockBattles(baseTime: number = Date.now(), config: 
       scores: Object.freeze({ requesterScore: 12450, recipientScore: 11800 }),
       updatedAt: baseTime - 2 * 3600_000,
     }),
-    // 샘플 4: 3:3 대기 중인 경기 신청 (호남 -> 과기원)
+    // 샘플 4: 대기 중인 경기 신청 (호남 -> 과기원). 빠른 만료는 과기원 +42h
     Object.freeze({
-      requestedStartTime: getDefaultRequestedStartTime(baseTime, config),
-      id: 'battle-sample-pending-3v3',
-      format: 3,
+      requestedStartTime: getDefaultRequestedStartTime(baseTime, config, baseTime + 42 * 3600_000, 3),
+      id: 'battle-sample-pending-2v2',
       requesterAllianceId: 'alliance-honam',
       recipientAllianceId: 'alliance-tech',
-      requesterSchoolIds: Object.freeze(['chonnam', 'jbnu', 'gist']),
-      recipientSchoolIds: Object.freeze(['kaist', 'postech', 'unist']),
-      durationHours: 24,
+      requesterSchoolIds: Object.freeze(['chonnam', 'jbnu']),
+      recipientSchoolIds: Object.freeze(['kaist', 'postech']),
+      durationHours: 3,
       status: 'pending' as const,
       createdAt: baseTime - 1800_000,
       updatedAt: baseTime - 1800_000,
@@ -289,7 +339,6 @@ export function createInitialBattleState(
 ): BattleState {
   return Object.freeze({
     battles: createInitialMockBattles(baseTime, config),
-    demoClockOffsetMs: 0,
     simulateRequestFailure: false,
     simulateLoadFailure: false,
     config,
@@ -298,12 +347,19 @@ export function createInitialBattleState(
 
 export const INITIAL_BATTLE_STATE: BattleState = createInitialBattleState(Date.now(), MOCK_SHOP_CONFIG.battle);
 
+// 대결은 연합끼리, 그리고 2개교 연합끼리(2:2)만 가능하다. 연합 없는 1:1 대결은 없다.
+function getAllianceSizeError(reqAlliance: Alliance, recAlliance: Alliance): string | undefined {
+  if (reqAlliance.schoolIds.length !== ALLIANCE_SIZE || recAlliance.schoolIds.length !== ALLIANCE_SIZE) {
+    return `연합 규모 오류: 대결은 ${ALLIANCE_SIZE}개교 연합끼리만 가능합니다 (신청: ${reqAlliance.schoolIds.length}개교, 대상: ${recAlliance.schoolIds.length}개교).`;
+  }
+  return undefined;
+}
+
 export function applyBattleRequest(
   state: BattleState,
   alliances: readonly Alliance[],
   requesterAllianceId: string,
   recipientAllianceId: string,
-  format: number,
   durationHours: number,
   requestedStartTime: number,
   now: number = Date.now(),
@@ -348,27 +404,15 @@ export function applyBattleRequest(
     };
   }
 
-  // 형식 및 학교 수 검사 (설정 기반 동적 검사)
-  if (!config.schoolCounts.includes(format)) {
-    return {
-      nextState: state,
-      result: { success: false, error: `지원하지 않는 대결 형식입니다 (${format}:${format}).` },
-    };
-  }
-
-  if (reqAlliance.schoolIds.length !== format || recAlliance.schoolIds.length !== format) {
-    return {
-      nextState: state,
-      result: {
-        success: false,
-        error: `학교 수 불일치: 선택된 대결 형식(${format}:${format})과 연합의 실제 학교 수(신청: ${reqAlliance.schoolIds.length}개교, 대상: ${recAlliance.schoolIds.length}개교)가 일치하지 않습니다.`,
-      },
-    };
+  // 연합 규모 검사: 대결은 2개교 연합끼리(2:2)만 가능하다
+  const sizeError = getAllianceSizeError(reqAlliance, recAlliance);
+  if (sizeError) {
+    return { nextState: state, result: { success: false, error: sizeError } };
   }
 
   // 기간 검사 (주입된 config.durationHours 동적 반영)
   const { min, max } = config.durationHours;
-  if (durationHours < min || durationHours > max) {
+  if (!Number.isInteger(durationHours) || durationHours < min || durationHours > max) {
     return {
       nextState: state,
       result: {
@@ -402,7 +446,7 @@ export function applyBattleRequest(
   // 동일 연합 간 중복 pending 요청 검사
   const hasPending = state.battles.some(
     (b) =>
-      b.status === 'pending' &&
+      getEffectiveBattleStatus(b, now, config) === 'pending' &&
       ((b.requesterAllianceId === requesterAllianceId && b.recipientAllianceId === recipientAllianceId) ||
         (b.requesterAllianceId === recipientAllianceId && b.recipientAllianceId === requesterAllianceId)),
   );
@@ -416,9 +460,11 @@ export function applyBattleRequest(
   const validation = validateRequestedStartTime(requestedStartTime, now, config);
   if (!validation.success) return { nextState: state, result: validation };
 
+  const windowError = getBattleAllianceWindowError(reqAlliance, recAlliance, requestedStartTime, durationHours, now);
+  if (windowError) return { nextState: state, result: { success: false, error: windowError } };
+
   const newBattle: Battle = Object.freeze({
     id: `battle-${requesterAllianceId}-${recipientAllianceId}-${now}`,
-    format,
     requesterAllianceId,
     recipientAllianceId,
     requesterSchoolIds: Object.freeze([...reqAlliance.schoolIds]),
@@ -439,14 +485,20 @@ export function applyBattleRequest(
   };
 }
 
+const EXPIRED_REQUEST_ERROR = '수락 기한이 지나 만료된 대결 신청입니다.';
+
 export function cancelBattleRequest(
   state: BattleState,
   battleId: string,
   now: number = Date.now(),
+  config: BattleConfig = state.config ?? MOCK_SHOP_CONFIG.battle,
 ): { nextState: BattleState; result: BattleActionResult } {
   const target = state.battles.find((b) => b.id === battleId);
   if (!target) {
     return { nextState: state, result: { success: false, error: '존재하지 않는 대결 요청입니다.' } };
+  }
+  if (getEffectiveBattleStatus(target, now, config) === 'expired') {
+    return { nextState: state, result: { success: false, error: EXPIRED_REQUEST_ERROR } };
   }
 
   if (target.status !== 'pending') {
@@ -471,7 +523,8 @@ export function cancelBattleRequest(
   };
 }
 
-export function demoAcceptBattleRequest(
+/** 받은 쪽 연합의 수락. 리더가 없으므로 그 연합 소속 학교 학생 누구든 1명이 수락하면 확정된다. */
+export function acceptBattleRequest(
   state: BattleState,
   alliances: readonly Alliance[],
   battleId: string,
@@ -494,15 +547,16 @@ export function demoAcceptBattleRequest(
     return { nextState: state, result: { success: false, error: '연합 정보를 확인할 수 없습니다.' } };
   }
 
-  // 수락 시점 학교 수 재검증
-  if (reqAlliance.schoolIds.length !== target.format || recAlliance.schoolIds.length !== target.format) {
-    return {
-      nextState: state,
-      result: {
-        success: false,
-        error: `학교 수 불일치: 대결 형식(${target.format}:${target.format})과 현재 연합 학교 수가 맞지 않습니다.`,
-      },
-    };
+  // 수락 시점 연합 규모 재검증
+  const sizeError = getAllianceSizeError(reqAlliance, recAlliance);
+  if (sizeError) {
+    return { nextState: state, result: { success: false, error: sizeError } };
+  }
+
+  // 수락 시점 연합 기간 재검증 (만료됐거나 종료가 빠른 만료를 넘으면 거절)
+  const windowError = getBattleAllianceWindowError(reqAlliance, recAlliance, target.requestedStartTime, target.durationHours, now);
+  if (windowError) {
+    return { nextState: state, result: { success: false, error: `수락 불가: ${windowError}` } };
   }
 
   // 동시 상대 제한 재검증: 수락 직전 양측 연합이 다른 경기에 점유되었는지 검사
@@ -550,14 +604,18 @@ export function demoAcceptBattleRequest(
   };
 }
 
-export function demoRejectBattleRequest(
+export function rejectBattleRequest(
   state: BattleState,
   battleId: string,
   now: number = Date.now(),
+  config: BattleConfig = state.config ?? MOCK_SHOP_CONFIG.battle,
 ): { nextState: BattleState; result: BattleActionResult } {
   const target = state.battles.find((b) => b.id === battleId);
   if (!target) {
     return { nextState: state, result: { success: false, error: '존재하지 않는 대결 요청입니다.' } };
+  }
+  if (getEffectiveBattleStatus(target, now, config) === 'expired') {
+    return { nextState: state, result: { success: false, error: EXPIRED_REQUEST_ERROR } };
   }
 
   if (target.status !== 'pending') {
@@ -615,4 +673,44 @@ export function demoCancelConfirmedBattle(
     }),
     result: { success: true, battle: cancelledBattle },
   };
+}
+
+/**
+ * 시연용: 다른 연합이 내 연합에 대결을 신청한 상황을 만든다. 활성이고, 학교가 겹치지 않고, 예정·진행 중인
+ * 대결이 없고, 내 연합과 대기 신청이 없는 연합을 목록 순서대로 고른다(결정적). 기간은 기본값과 연합 만료 상한 중
+ * 작은 값, 시작은 그 기간으로 끝낼 수 있는 가장 빠른 슬롯이다.
+ */
+export function demoReceiveBattleRequest(
+  state: BattleState,
+  alliances: readonly Alliance[],
+  myAllianceId: string,
+  now: number = Date.now(),
+  config: BattleConfig = state.config ?? MOCK_SHOP_CONFIG.battle,
+): { nextState: BattleState; result: BattleActionResult } {
+  const mine = alliances.find((a) => a.id === myAllianceId);
+  if (!mine || !isAllianceActive(mine, now)) {
+    return { nextState: state, result: { success: false, error: '소속된 활성 연합이 없습니다.' } };
+  }
+  if (isAllianceOccupied(state.battles, myAllianceId, now)) {
+    return { nextState: state, result: { success: false, error: '내 연합은 이미 진행 중이거나 예정된 대결이 있습니다.' } };
+  }
+  const hasPendingWithMe = (allianceId: string) =>
+    state.battles.some(
+      (b) =>
+        getEffectiveBattleStatus(b, now, config) === 'pending' &&
+        [b.requesterAllianceId, b.recipientAllianceId].includes(allianceId) &&
+        [b.requesterAllianceId, b.recipientAllianceId].includes(myAllianceId),
+    );
+
+  for (const opponent of alliances) {
+    if (opponent.id === myAllianceId || !isAllianceActive(opponent, now)) continue;
+    if (opponent.schoolIds.some((id) => mine.schoolIds.includes(id))) continue;
+    if (isAllianceOccupied(state.battles, opponent.id, now) || hasPendingWithMe(opponent.id)) continue;
+    const latestEnd = getBattleLatestEnd(mine, opponent);
+    const firstSlot = getDefaultRequestedStartTime(now, config, latestEnd, config.durationHours.min);
+    if (!Number.isFinite(firstSlot)) continue;
+    const durationHours = Math.min(config.durationHours.default, getMaxBattleDurationHours(firstSlot, latestEnd, config));
+    return applyBattleRequest({ ...state, simulateRequestFailure: false }, alliances, opponent.id, myAllianceId, durationHours, firstSlot, now, config);
+  }
+  return { nextState: state, result: { success: false, error: '대결을 신청할 수 있는 다른 연합이 없습니다.' } };
 }
