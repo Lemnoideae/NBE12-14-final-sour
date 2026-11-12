@@ -102,4 +102,22 @@ public class ClickerUpgradeServiceTest {
         verify(userClickerLevelStore).changeLevel(USER_ID, 1L, 2L);
         verify(contributionWallet, never()).restore(anyLong(), anyLong());
     }
+
+    @Test
+    @DisplayName("레벨 변경이 충돌로 실패 시 차감한 기여도 복구 후 CLICKER_UPGRADE_CONFLICT 예외")
+    void upgrade_conflict() {
+        // given: 1 레벨 유저가 300 차감 성공이지만 이미 다른 요청이 레벨을 올렸을 시 변경 실패
+        given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
+        given(userClickerLevelStore.findLevel(USER_ID)).willReturn(1L);
+        given(contributionWallet.tryDeduct(USER_ID, 300L)).willReturn(OptionalLong.of(700L));
+        given(userClickerLevelStore.changeLevel(USER_ID, 1L, 2L)).willReturn(false);
+
+        // when & then
+        assertThatThrownBy(() -> clickerUpgradeService.upgrade(USER_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.CLICKER_UPGRADE_CONFLICT);
+
+        verify(contributionWallet).restore(USER_ID, 300L);
+    }
 }
