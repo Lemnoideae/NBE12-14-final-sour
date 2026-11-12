@@ -14,6 +14,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
+import java.sql.SQLException;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -21,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
@@ -186,6 +189,48 @@ class GlobalExceptionHandlerTest {
                 .isInstanceOf(AccessDeniedException.class);
     }
 
+    @Nested
+    @DisplayName("DB 제약 위반 (API 명세서 §1 DB 제약 → 에러 코드)")
+    class DbConstraint {
+
+        @Test
+        @DisplayName("표에 있는 유니크 제약은 정해진 코드로 응답하고 SQL 정보를 노출하지 않는다")
+        void mappedUnique() throws Exception {
+            mockMvc.perform(get("/test/constraint/uk_users_nickname_ci"))
+                    .andExpect(status().isConflict())
+                    .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$.code").value("USER_NICKNAME_DUPLICATED"))
+                    .andExpect(jsonPath("$.data").isEmpty())
+                    .andExpect(content().string(not(containsString("uk_users_nickname_ci"))))
+                    .andExpect(content().string(not(containsString("insert into"))));
+        }
+
+        @Test
+        @DisplayName("표에 있는 외래키 제약은 표의 상태(400)로 응답한다")
+        void mappedForeignKey() throws Exception {
+            mockMvc.perform(get("/test/constraint/fk_users_department"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("USER_DEPARTMENT_MISMATCH"));
+        }
+
+        @Test
+        @DisplayName("표에 없는 제약은 버그로 보고 500 COMMON_INTERNAL_ERROR로 응답한다")
+        void unmapped() throws Exception {
+            mockMvc.perform(get("/test/constraint/ck_users_total_contrib_score"))
+                    .andExpect(status().isInternalServerError())
+                    .andExpect(jsonPath("$.code").value("COMMON_INTERNAL_ERROR"))
+                    .andExpect(content().string(not(containsString("ck_users_total_contrib_score"))));
+        }
+
+        @Test
+        @DisplayName("제약 이름을 알 수 없으면 500 COMMON_INTERNAL_ERROR로 응답한다")
+        void withoutConstraintName() throws Exception {
+            mockMvc.perform(get("/test/integrity"))
+                    .andExpect(status().isInternalServerError())
+                    .andExpect(jsonPath("$.code").value("COMMON_INTERNAL_ERROR"));
+        }
+    }
+
     record SampleRequest(@NotBlank(message = "닉네임은 필수입니다.") String nickname) {
     }
 
@@ -231,6 +276,21 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/access-denied")
         String accessDenied() {
             throw new AccessDeniedException("denied");
+        }
+
+        /** Spring Data JPA 저장 중 제약 위반이 났을 때와 같은 예외 체인을 만든다. */
+        @GetMapping("/constraint/{constraintName}")
+        String constraint(@PathVariable String constraintName) {
+            SQLException sqlException = new SQLException(
+                    "ERROR: violates constraint \"" + constraintName + "\"", "23505");
+            throw new DataIntegrityViolationException(
+                    "could not execute statement [insert into users ...]",
+                    new ConstraintViolationException("could not execute statement", sqlException, constraintName));
+        }
+
+        @GetMapping("/integrity")
+        String integrity() {
+            throw new DataIntegrityViolationException("constraint violated");
         }
     }
 }
