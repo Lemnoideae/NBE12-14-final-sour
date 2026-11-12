@@ -4,3 +4,9 @@ spring:
   jackson:
     # API 명세서 §1: 시각은 KST 오프셋을 포함한 ISO-8601로 응답한다 (예: 2026-11-11T14:30:00+09:00)
     time-zone: Asia/Seoul
+
+jwt:
+  # HS256 서명 키, UTF-8로 32바이트 이상 (예: openssl rand -base64 48). 저장소에 커밋하지 않는다
+  secret: ${JWT_SECRET}
+  access-token-ttl: 60m
+  refresh-token-ttl: 30d
