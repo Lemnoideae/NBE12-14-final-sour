@@ -1,5 +1,7 @@
-package com.back.nbe1214finalsour.clicker.clickerService;
+package com.back.nbe1214finalsour.domain.clicker.service;
 
+import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
+import com.back.nbe1214finalsour.domain.clicker.repository.ClickerRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,8 +31,8 @@ public class ClickerServiceTest {
         // given: DB에 레벨 1, 2가 저장되어 있다고 가정
         given(clickerRepository.findAllByOrderByIdAsc()).willReturn(
                 List.of(
-                        Clicker.create(1L, 10, 0L),
-                        Clicker.create(2L, 20, 300L)
+                        new Clicker(1L, 10, 0L),
+                        new Clicker(2L, 20, 300L)
                 )
         );
 
