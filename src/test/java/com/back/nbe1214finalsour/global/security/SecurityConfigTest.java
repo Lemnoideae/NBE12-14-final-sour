@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.back.nbe1214finalsour.global.exception.GlobalExceptionHandler;
 import com.back.nbe1214finalsour.global.response.ApiResponse;
+import com.back.nbe1214finalsour.global.security.jwt.JwtProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -31,6 +32,8 @@ import org.springframework.web.bind.annotation.RestController;
 @Import({
         SecurityConfigTest.TestController.class,
         SecurityConfig.class,
+        CorsConfig.class,
+        JwtProvider.class,
         ApiAuthenticationEntryPoint.class,
         ApiAccessDeniedHandler.class,
         ApiResponseWriter.class,

@@ -24,6 +24,10 @@ dependencies {
     annotationProcessor("org.projectlombok:lombok")
     compileOnly("org.projectlombok:lombok")
     developmentOnly("org.springframework.boot:spring-boot-docker-compose")
+    implementation("io.jsonwebtoken:jjwt-api:0.13.0")
+    runtimeOnly("io.jsonwebtoken:jjwt-impl:0.13.0")
+    // jjwt-jackson은 Jackson 2(com.fasterxml)를 끌어온다. 프로젝트는 Jackson 3이므로 Gson 모듈을 쓴다
+    runtimeOnly("io.jsonwebtoken:jjwt-gson:0.13.0")
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
