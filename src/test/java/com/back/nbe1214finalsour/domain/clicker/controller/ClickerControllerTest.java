@@ -2,31 +2,64 @@ package com.back.nbe1214finalsour.domain.clicker.controller;
 
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
 import com.back.nbe1214finalsour.domain.clicker.service.ClickerService;
+import com.back.nbe1214finalsour.domain.clicker.service.ClickerUpgradeResult;
+import com.back.nbe1214finalsour.domain.clicker.service.ClickerUpgradeService;
+import com.back.nbe1214finalsour.global.exception.BusinessException;
+import com.back.nbe1214finalsour.global.exception.ErrorCode;
+import com.back.nbe1214finalsour.global.exception.GlobalExceptionHandler;
+import com.back.nbe1214finalsour.global.security.ApiAccessDeniedHandler;
+import com.back.nbe1214finalsour.global.security.ApiAuthenticationEntryPoint;
+import com.back.nbe1214finalsour.global.security.ApiResponseWriter;
+import com.back.nbe1214finalsour.global.security.AuthUser;
+import com.back.nbe1214finalsour.global.security.CorsConfig;
+import com.back.nbe1214finalsour.global.security.Role;
+import com.back.nbe1214finalsour.global.security.SecurityConfig;
+import com.back.nbe1214finalsour.global.security.jwt.JwtProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-
 @WebMvcTest(ClickerController.class)
-@AutoConfigureMockMvc(addFilters = false) // 응답 형식만 검증. 인증·인가 규칙은 SecurityConfigTest에서 검증
+@Import({
+        SecurityConfig.class,
+        CorsConfig.class,
+        JwtProvider.class,
+        ApiAuthenticationEntryPoint.class,
+        ApiAccessDeniedHandler.class,
+        ApiResponseWriter.class,
+        GlobalExceptionHandler.class
+})
 public class ClickerControllerTest {
+
+    private static final AuthUser USER = new AuthUser(1L, 7L, Role.USER);
 
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private JwtProvider jwtProvider;
+
     @MockitoBean
     private ClickerService clickerService;
+
+    @MockitoBean
+    private ClickerUpgradeService clickerUpgradeService;
 
     @Test
     @DisplayName("[GET] /api/v1/clickers는 레벨표를 200으로 응답")
@@ -49,5 +82,25 @@ public class ClickerControllerTest {
                 .andExpect(jsonPath("$.data[1].level").value(2))
                 .andExpect(jsonPath("$.data[1].clickPower").value(20))
                 .andExpect(jsonPath("$.data[1].requiredScore").value(300));
+    }
+
+    @Test
+    @DisplayName("[POST] /api/v1/clickers/upgrade는 로그인 유저의 클리커를 업그레이드하고 결과를 200으로 응답")
+    void upgrade() throws Exception {
+        // given: 2레벨로 업그레이드, 다음 레벨 비용 1000, 남은 기여도 700
+        given(clickerUpgradeService.upgrade(USER.userId())).willReturn(
+                new ClickerUpgradeResult(new Clicker(2L, 20, 300L), 1000L, 700L));
+
+        // when & then
+        mockMvc.perform(post("/api/v1/clickers/upgrade")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtProvider.createAccessToken(USER)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.level").value(2))
+                .andExpect(jsonPath("$.data.clickPower").value(20))
+                .andExpect(jsonPath("$.data.nextLevelRequiredScore").value(1000))
+                .andExpect(jsonPath("$.data.myContribScore").value(700));
+
+        verify(clickerUpgradeService).upgrade(USER.userId());
     }
 }
