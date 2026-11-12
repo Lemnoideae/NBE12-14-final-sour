@@ -7,3 +7,8 @@ jwt:
 logging:
   level:
     org.springframework.test.context.cache: DEBUG
+email-crypto:
+  # Base64("test-only-email-encryption-key!!"), 32바이트
+  encryption-key: dGVzdC1vbmx5LWVtYWlsLWVuY3J5cHRpb24ta2V5ISE=
+  # Base64("test-only-email-hash-key-not-for-prod"), 37바이트
+  hash-key: dGVzdC1vbmx5LWVtYWlsLWhhc2gta2V5LW5vdC1mb3ItcHJvZA==
