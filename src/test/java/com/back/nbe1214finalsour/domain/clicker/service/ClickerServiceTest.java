@@ -14,6 +14,8 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 public class ClickerServiceTest {
@@ -45,8 +47,22 @@ public class ClickerServiceTest {
                         tuple(1L, 10, 0L),
                         tuple(2L, 20, 300L)
                 );
+    }
 
+    @Test
+    @DisplayName("레벨표를 두 번 조회 해도 DB는 한 번만 조회 (캐시 테스트)")
+    void getLevelTable_cached() {
+        // given
+        given(clickerRepository.findAllByOrderByIdAsc()).willReturn(
+                List.of(new Clicker(1L, 10, 0L))
+        );
 
+        // when: 레벨표를 두 번 조회 요청 시
+        clickerService.getLevelTable();
+        clickerService.getLevelTable();
+
+        // then: ClickerRepository는 한번만 호출 (DB에 요청 X)
+        verify(clickerRepository, times(1)).findAllByOrderByIdAsc();
     }
 
 
