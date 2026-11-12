@@ -8,5 +8,5 @@ public interface ContributionWallet {
     OptionalLong tryDeduct(Long userId, long amount);
 
     // 이미 차감한 기여도를 되돌림
-    void refund(Long userId, long amount);
+    void restore(Long userId, long amount);
 }
