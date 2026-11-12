@@ -3,8 +3,6 @@ name: CI
 on:
   pull_request:
     branches: [ main, dev ]
-  push:
-    branches: [ dev ]
   workflow_call:  # 나중에 CD 워크플로에서 호출하기 위한 자리
 
 permissions:
