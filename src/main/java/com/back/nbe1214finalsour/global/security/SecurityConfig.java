@@ -42,7 +42,9 @@ public class SecurityConfig {
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
+
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/v1/clickers/upgrade").authenticated()    // 클리커 업그레이드 API
                         .requestMatchers("/error", "/actuator/health").permitAll()
                         // TODO(SCRUM-68): API 명세서의 인증 표기(필요·선택·불필요·관리자)대로 바꾼다.
                         // 그전까지 팀원이 로컬에서 API를 호출할 수 있도록 임시로 모두 허용한다.
