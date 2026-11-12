@@ -16,12 +16,15 @@ import {
   type BattleState,
 } from '../data/battleModel.ts';
 import { MOCK_SHOP_CONFIG } from '../data/mockShopConfig.ts';
+import { useDemoClock } from './useDemoClock.tsx';
 import { useAlliance } from './useMockAlliance.tsx';
 
 interface BattleContextValue {
   state: BattleState;
   config: BattleConfig;
   effectiveNow: number;
+  /** 공용 가상 시계 오프셋(ms). 연합 만료와 같은 시계다. */
+  clockOffsetMs: number;
   myAllianceId: string | null;
   myAllianceBattles: readonly Battle[];
   pendingBattles: readonly Battle[];
@@ -54,6 +57,7 @@ export function BattleProvider({
 }) {
   const { currentAlliance, state: allianceState } = useAlliance();
   const myAllianceId = currentAlliance?.id ?? null;
+  const { offsetMs: clockOffsetMs, now: clockNow, fastForward: fastForwardClock, reset: resetClock } = useDemoClock();
 
   const [state, setState] = useState<BattleState>(() => {
     if (initialState) {
@@ -67,7 +71,7 @@ export function BattleProvider({
   const stateRef = useRef<BattleState>(state);
   stateRef.current = state;
 
-  const effectiveNow = Date.now() + state.demoClockOffsetMs;
+  const effectiveNow = Date.now() + clockOffsetMs;
 
   // 동기식 원자적 커밋 함수 (P2와 동일한 stateRef 패턴으로 동일 틱 레이스 차단)
   const commit = useCallback(
@@ -88,7 +92,7 @@ export function BattleProvider({
       if (!myAllianceId) {
         return { success: false, error: '소속된 연합이 없습니다. 먼저 연합을 결성해 주세요.' };
       }
-      const now = Date.now() + stateRef.current.demoClockOffsetMs;
+      const now = clockNow();
       return commit((current) =>
         applyBattleRequest(
           current,
@@ -102,55 +106,42 @@ export function BattleProvider({
         ),
       );
     },
-    [commit, myAllianceId, allianceState.alliances],
+    [commit, clockNow, myAllianceId, allianceState.alliances],
   );
 
   const cancelRequest = useCallback(
     (battleId: string): BattleActionResult => {
-      const now = Date.now() + stateRef.current.demoClockOffsetMs;
+      const now = clockNow();
       return commit((current) => cancelBattleRequest(current, battleId, now));
     },
-    [commit],
+    [commit, clockNow],
   );
 
   const demoAcceptRequest = useCallback(
     (battleId: string): BattleActionResult => {
-      const now = Date.now() + stateRef.current.demoClockOffsetMs;
+      const now = clockNow();
       return commit((current) =>
         demoAcceptBattleRequest(current, allianceState.alliances, battleId, now, current.config),
       );
     },
-    [commit, allianceState.alliances],
+    [commit, clockNow, allianceState.alliances],
   );
 
   const demoRejectRequest = useCallback(
     (battleId: string): BattleActionResult => {
-      const now = Date.now() + stateRef.current.demoClockOffsetMs;
+      const now = clockNow();
       return commit((current) => demoRejectBattleRequest(current, battleId, now));
     },
-    [commit],
+    [commit, clockNow],
   );
 
   const demoCancelConfirmedRequest = useCallback(
     (battleId: string): BattleActionResult => {
-      const now = Date.now() + stateRef.current.demoClockOffsetMs;
+      const now = clockNow();
       return commit((current) => demoCancelConfirmedBattle(current, battleId, now));
     },
-    [commit],
+    [commit, clockNow],
   );
-
-  const fastForwardClock = useCallback((hours: number) => {
-    const nextOffset = stateRef.current.demoClockOffsetMs + hours * 3600_000;
-    const nextState = { ...stateRef.current, demoClockOffsetMs: nextOffset };
-    stateRef.current = nextState;
-    setState(nextState);
-  }, []);
-
-  const resetClock = useCallback(() => {
-    const nextState = { ...stateRef.current, demoClockOffsetMs: 0 };
-    stateRef.current = nextState;
-    setState(nextState);
-  }, []);
 
   const toggleSimulateRequestFailure = useCallback(() => {
     const nextState = { ...stateRef.current, simulateRequestFailure: !stateRef.current.simulateRequestFailure };
@@ -207,6 +198,7 @@ export function BattleProvider({
       state,
       config: state.config,
       effectiveNow,
+      clockOffsetMs,
       myAllianceId,
       myAllianceBattles,
       pendingBattles,
@@ -228,6 +220,7 @@ export function BattleProvider({
   }, [
     state,
     effectiveNow,
+    clockOffsetMs,
     myAllianceId,
     myAllianceBattles,
     pendingBattles,

@@ -45,6 +45,7 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
     demoAcceptRequest,
     demoRejectRequest,
     demoCancelConfirmedRequest,
+    clockOffsetMs,
     fastForwardClock,
     resetClock,
     toggleSimulateRequestFailure,
@@ -543,7 +544,7 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
                   <span>시연용 가상 시계 (종료·남은 시간 검증)</span>
                 </span>
                 <div className="flex items-center gap-1 text-[9px] font-pixel">
-                  <span>오프셋: +{Math.round(state.demoClockOffsetMs / 3600_000)}h</span>
+                  <span>오프셋: +{Math.round(clockOffsetMs / 3600_000)}h</span>
                   <button
                     onClick={() => fastForwardClock(1)}
                     className="px-1.5 py-0.5 bg-white border border-[#261608] text-[8px] font-pixel cursor-pointer hover:bg-stone-100"

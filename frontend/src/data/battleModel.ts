@@ -37,7 +37,6 @@ export interface BattleActionResult {
 
 export interface BattleState {
   readonly battles: readonly Battle[];
-  readonly demoClockOffsetMs: number;
   readonly simulateRequestFailure: boolean;
   readonly simulateLoadFailure: boolean;
   readonly config: BattleConfig;
@@ -284,7 +283,6 @@ export function createInitialBattleState(
 ): BattleState {
   return Object.freeze({
     battles: createInitialMockBattles(baseTime, config),
-    demoClockOffsetMs: 0,
     simulateRequestFailure: false,
     simulateLoadFailure: false,
     config,

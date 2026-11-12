@@ -39,6 +39,7 @@ export const BattleStatusScreenPhone: React.FC<BattleStatusScreenPhoneProps> = (
     state,
     effectiveNow,
     demoCancelConfirmedRequest,
+    clockOffsetMs,
     fastForwardClock,
     resetClock,
     toggleSimulateLoadFailure,
@@ -345,7 +346,7 @@ export const BattleStatusScreenPhone: React.FC<BattleStatusScreenPhoneProps> = (
           {/* Virtual Clock Controls */}
           <div className="flex items-center justify-between text-[10px] font-pixel">
             <span className="text-[#261608]">
-              가상 시계 (+{Math.round(state.demoClockOffsetMs / 3600_000)}h 경과):
+              가상 시계 (+{Math.round(clockOffsetMs / 3600_000)}h 경과):
             </span>
             <div className="flex items-center gap-1">
               <button

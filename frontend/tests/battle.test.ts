@@ -125,7 +125,7 @@ test('2. 2개교 연합끼리만(2:2) 대결 가능, 전이(pending→accept→a
   const alliances = INITIAL_MOCK_ALLIANCES;
 
   // (a) 2개교가 아닌 연합은 신청·수락 모두 거절 (3개교 연합은 구현하지 않으며, 방어 검증만 남긴다)
-  const oversized = { id: 'alliance-oversized', name: '3개교 연합(비정상)', schoolIds: ['kaist', 'postech', 'unist'], createdAt: 0 };
+  const oversized = { id: 'alliance-oversized', name: '3개교 연합(비정상)', schoolIds: ['kaist', 'postech', 'unist'], createdAt: 0, durationHours: 72, expiresAt: Date.now() + 72 * 3600_000 };
   const withOversized = [...alliances.filter((a) => a.id !== 'alliance-tech'), oversized];
   const mismatchRes = applyBattleRequest(state, withOversized, 'alliance-oversized', 'alliance-capital', 24, getDefaultRequestedStartTime(1000, state.config), 1000);
   assert.equal(mismatchRes.result.success, false);
@@ -461,7 +461,7 @@ test('8. P3-2: 대결 설정 주입 가능성: 대체 설정 반영, 범위 밖 
 
   // (d) UI: 주입한 범위와 프리셋을 쓰고, 범위 밖 프리셋(6h)은 숨긴다
   cleanup();
-  const allianceState = { ...INITIAL_ALLIANCE_STATE, alliances: [...INITIAL_ALLIANCE_STATE.alliances, { id: 'alliance-hanyang-pusan', name: '한양대·부산대 연합', schoolIds: ['hanyang', 'pusan'], createdAt: 1000 }] };
+  const allianceState = { ...INITIAL_ALLIANCE_STATE, alliances: [...INITIAL_ALLIANCE_STATE.alliances, { id: 'alliance-hanyang-pusan', name: '한양대·부산대 연합', schoolIds: ['hanyang', 'pusan'], createdAt: 1000, durationHours: 72, expiresAt: Date.now() + 72 * 3600_000 }] };
   render(
     React.createElement(
       MockGameProvider,
@@ -491,7 +491,7 @@ test('2:2 고정 불변식: 대결 시드는 양측 2개교·기간 1~24h이고,
   }
 
   cleanup();
-  const allianceState = { ...INITIAL_ALLIANCE_STATE, alliances: [...INITIAL_ALLIANCE_STATE.alliances, { id: 'alliance-hanyang-pusan', name: '한양대·부산대 연합', schoolIds: ['hanyang', 'pusan'], createdAt: 1000 }] };
+  const allianceState = { ...INITIAL_ALLIANCE_STATE, alliances: [...INITIAL_ALLIANCE_STATE.alliances, { id: 'alliance-hanyang-pusan', name: '한양대·부산대 연합', schoolIds: ['hanyang', 'pusan'], createdAt: 1000, durationHours: 72, expiresAt: Date.now() + 72 * 3600_000 }] };
   let battleValue: ReturnType<typeof useBattle>;
   function Probe() { battleValue = useBattle(); return null; }
   render(React.createElement(MockGameProvider, null, React.createElement(AllianceProvider, { initialState: allianceState } as any, React.createElement(BattleProvider, null, React.createElement(Probe), React.createElement(BattleApplyScreenPhone)))));
@@ -674,10 +674,8 @@ test('P4-2: BattleStatusScreenPhone 화면에서 시작/종료 시각 및 예정
 
   // 2. baseTime + 2시간 경과: 진행 중 상태
   cleanup();
-  const activeState = {
-    ...customState,
-    demoClockOffsetMs: 2 * 3600_000, // now = baseTime + 2h (scheduledStart + 1h)
-  };
+  // 공용 가상 시계(연합 만료와 같은 시계)를 2시간 앞당긴다: now = baseTime + 2h (scheduledStart + 1h)
+  const activeState = customState;
 
   render(
     React.createElement(
@@ -685,7 +683,7 @@ test('P4-2: BattleStatusScreenPhone 화면에서 시작/종료 시각 및 예정
       null,
       React.createElement(
         AllianceProvider,
-        null,
+        { initialClockOffsetMs: 2 * 3600_000 },
         React.createElement(
           BattleProvider,
           { initialState: activeState },
@@ -704,7 +702,7 @@ test('P4-2: BattleStatusScreenPhone 화면에서 시작/종료 시각 및 예정
 test('대결 신청 UI의 시간 경계와 유효하지 않은 입력 및 정상 신청', (t) => {
   const now = Date.UTC(2026, 10, 7, 0);
   t.mock.method(Date, 'now', () => now);
-  const allianceState = { ...INITIAL_ALLIANCE_STATE, alliances: [...INITIAL_ALLIANCE_STATE.alliances, { id: 'alliance-hanyang-pusan', name: '한양대·부산대 연합', schoolIds: ['hanyang', 'pusan'], createdAt: now }] };
+  const allianceState = { ...INITIAL_ALLIANCE_STATE, alliances: [...INITIAL_ALLIANCE_STATE.alliances, { id: 'alliance-hanyang-pusan', name: '한양대·부산대 연합', schoolIds: ['hanyang', 'pusan'], createdAt: now, durationHours: 72, expiresAt: now + 72 * 3600_000 }] };
   let battleValue: ReturnType<typeof useBattle>;
   function Probe() { battleValue = useBattle(); return null; }
   render(React.createElement(MockGameProvider, null, React.createElement(AllianceProvider, { initialState: allianceState } as any, React.createElement(BattleProvider, null, React.createElement(Probe), React.createElement(BattleApplyScreenPhone)))));
@@ -769,6 +767,8 @@ test('P4-3: BattleApplyScreenPhone 설정 기반 시작 대기 및 진행 기간
         name: '한양대·부산대 연합',
         schoolIds: ['hanyang', 'pusan'],
         createdAt: 1000,
+        durationHours: 72,
+        expiresAt: Date.now() + 72 * 3600_000,
       },
     ],
   };

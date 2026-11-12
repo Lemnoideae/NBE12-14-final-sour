@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { PhoneShell } from './PhoneShell';
 import { BottomNavFooter, type NavTab } from './BottomNav';
 import { ChevronLeft, Shield, AlertCircle, RefreshCw, UserPlus, Swords, BarChart3, Clock } from 'lucide-react';
 import { useMockAlliance } from '../hooks/useMockAlliance.tsx';
-import { getSchoolInfo, type AllianceRequest } from '../data/allianceModel.ts';
+import { formatAllianceRemainingTime, getSchoolInfo, type AllianceRequest } from '../data/allianceModel.ts';
+import { formatBattleTimestamp } from '../data/battleModel.ts';
+import { formatDurationHours } from './DurationPicker.tsx';
+import { ReceivedAllianceProposals } from './ReceivedAllianceProposals.tsx';
 import { SharedImage } from './SharedImage.tsx';
 import { soundManager } from '../utils/sound.ts';
 
@@ -25,15 +28,23 @@ export const CurrentAllianceScreenPhone: React.FC<CurrentAllianceScreenPhoneProp
 }) => {
   const {
     mySchoolId,
+    effectiveNow,
+    clockOffsetMs,
     currentAlliance,
+    latestExpiredAlliance,
     pendingRequests,
     cancelRequest,
     simulateLoadFailure,
     toggleSimulateLoadFailure,
     retryLoad,
+    fastForwardClock,
+    resetClock,
   } = useMockAlliance();
 
   const mySchool = getSchoolInfo(mySchoolId);
+  const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // 받은 제안은 ReceivedAllianceProposals가 수락·거절 버튼과 함께 보여 주므로 여기서는 보낸 제안만 다룬다
+  const sentPendingRequests = pendingRequests.filter((r) => r.requesterSchoolId === mySchoolId);
 
   return (
     <PhoneShell>
@@ -73,6 +84,18 @@ export const CurrentAllianceScreenPhone: React.FC<CurrentAllianceScreenPhoneProp
 
       {/* 3. Main Content Container */}
       <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
+        {feedbackMessage && (
+          <div
+            role="status"
+            className={`p-2 border-2 border-[#261608] text-xs font-pixel font-bold flex items-start gap-1.5 shadow-[2px_2px_0px_#261608] ${
+              feedbackMessage.type === 'success' ? 'bg-[#dcfce7] text-[#166534]' : 'bg-[#fee2e2] text-[#991b1b]'
+            }`}
+          >
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span className="flex-1">{feedbackMessage.text}</span>
+          </div>
+        )}
+
         {/* State: LOAD FAILURE SIMULATION */}
         {simulateLoadFailure ? (
           <div
@@ -107,6 +130,20 @@ export const CurrentAllianceScreenPhone: React.FC<CurrentAllianceScreenPhoneProp
                 </div>
                 <span className="font-pixel text-[9px] px-1.5 py-0.5 bg-[#22c55e] text-white border border-[#261608] font-bold shadow-[1px_1px_0px_#261608]">
                   결성 완료 (활성)
+                </span>
+              </div>
+
+              {/* 연합 기간: 수락 시각부터 정해진 시간이 지나면 만료된다 */}
+              <div
+                aria-label="연합 기간"
+                className="flex items-center justify-between gap-2 bg-white border border-[#261608] px-2 py-1.5 font-pixel"
+              >
+                <span className="flex items-center gap-1 text-[11px] font-black text-[#b45309]">
+                  <Clock className="w-3 h-3" />
+                  {formatAllianceRemainingTime(currentAlliance, effectiveNow)}
+                </span>
+                <span className="text-[9px] text-[#8b5327] text-right">
+                  {formatDurationHours(currentAlliance.durationHours)} · {formatBattleTimestamp(currentAlliance.expiresAt)} 만료 (KST)
                 </span>
               </div>
 
@@ -156,11 +193,11 @@ export const CurrentAllianceScreenPhone: React.FC<CurrentAllianceScreenPhoneProp
               </div>
             </div>
 
-            {/* Placeholder Entry Points to Battle (N4 Context) */}
+            {/* Entry Points to Battle */}
             <div className="rpg-box p-3 bg-white border-2 border-[#261608] shadow-[2px_2px_0px_#261608] flex flex-col gap-2">
-              <span className="font-pixel text-xs font-black text-[#261608]">대결 경기 (N4)</span>
+              <span className="font-pixel text-xs font-black text-[#261608]">대결 경기</span>
               <p className="font-pixel text-[10px] text-[#8b5327]">
-                ※ 대결 신청 및 현황 기능은 다음 단계(N4)에서 지원됩니다.
+                ※ 대결은 연합끼리 2:2로만 신청할 수 있습니다.
               </p>
 
               <div className="grid grid-cols-2 gap-2 pt-1">
@@ -203,6 +240,11 @@ export const CurrentAllianceScreenPhone: React.FC<CurrentAllianceScreenPhoneProp
               <p className="font-pixel text-xs text-[#8b5327] max-w-[240px]">
                 현재 {mySchool.name}는 소속된 연합이 없습니다. 다른 학교와 연합을 맺고 대항전에 참가해보세요!
               </p>
+              {latestExpiredAlliance && (
+                <p role="note" className="font-pixel text-[10px] font-bold text-[#7c2d12] bg-[#ffedd5] border border-[#7c2d12] px-2 py-1">
+                  {latestExpiredAlliance.name}은 {formatBattleTimestamp(latestExpiredAlliance.expiresAt)}(KST)에 만료되었습니다.
+                </p>
+              )}
 
               <button
                 onClick={() => {
@@ -216,18 +258,17 @@ export const CurrentAllianceScreenPhone: React.FC<CurrentAllianceScreenPhoneProp
               </button>
             </div>
 
-            {/* Pending requests if any */}
-            {pendingRequests.length > 0 && (
+            {/* Sent pending requests if any */}
+            {sentPendingRequests.length > 0 && (
               <div className="rpg-box p-2.5 bg-[#fefce8] border-2 border-[#261608] flex flex-col gap-2">
                 <span className="font-pixel text-xs font-black text-[#b45309] flex items-center gap-1">
                   <Clock className="w-3 h-3" />
-                  <span>진행 중인 연합 신청 ({pendingRequests.length}건)</span>
+                  <span>보낸 연합 제안 ({sentPendingRequests.length}건)</span>
                 </span>
 
                 <div className="flex flex-col gap-1.5">
-                  {pendingRequests.map((req: AllianceRequest) => {
-                    const isRequester = req.requesterSchoolId === mySchoolId;
-                    const partnerId = isRequester ? req.recipientSchoolId : req.requesterSchoolId;
+                  {sentPendingRequests.map((req: AllianceRequest) => {
+                    const partnerId = req.recipientSchoolId;
                     const partnerSchool = getSchoolInfo(partnerId);
 
                     return (
@@ -245,17 +286,15 @@ export const CurrentAllianceScreenPhone: React.FC<CurrentAllianceScreenPhoneProp
                             />
                           </div>
                           <span className="font-bold text-[#261608]">{partnerSchool.name}</span>
-                          <span className="text-[9px] text-[#8b5327]">{isRequester ? '(보냄)' : '(받음)'}</span>
+                          <span className="text-[9px] text-[#8b5327]">({formatDurationHours(req.durationHours)})</span>
                         </div>
 
-                        {isRequester && (
-                          <button
-                            onClick={() => cancelRequest(req.id)}
-                            className="px-1.5 py-0.5 bg-stone-100 border border-[#261608] text-[9px] font-bold hover:bg-stone-200 cursor-pointer"
-                          >
-                            취소
-                          </button>
-                        )}
+                        <button
+                          onClick={() => cancelRequest(req.id)}
+                          className="px-1.5 py-0.5 bg-stone-100 border border-[#261608] text-[9px] font-bold hover:bg-stone-200 cursor-pointer"
+                        >
+                          취소
+                        </button>
                       </div>
                     );
                   })}
@@ -264,6 +303,8 @@ export const CurrentAllianceScreenPhone: React.FC<CurrentAllianceScreenPhoneProp
             )}
           </div>
         )}
+
+        {!simulateLoadFailure && <ReceivedAllianceProposals onResult={setFeedbackMessage} />}
 
         {/* DEMO CONTROLS (Clearly separated) */}
         <div
@@ -283,6 +324,31 @@ export const CurrentAllianceScreenPhone: React.FC<CurrentAllianceScreenPhoneProp
             >
               {simulateLoadFailure ? '오류 강제 활성화 중' : '정상 동작 중'}
             </button>
+          </div>
+          {/* 공용 가상 시계: 연합 만료와 대결 진행이 같은 시계를 쓴다 */}
+          <div className="pt-1 border-t border-[#fca5a5] flex items-center justify-between gap-1 flex-wrap">
+            <span className="font-pixel text-[10px] text-[#7f1d1d] font-bold">
+              가상 시계 (+{Math.round(clockOffsetMs / 3600_000)}h 경과):
+            </span>
+            <div className="flex items-center gap-1">
+              {[1, 12, 24].map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  onClick={() => fastForwardClock(h)}
+                  className="px-1.5 py-0.5 bg-white border border-[#261608] text-[9px] font-pixel font-bold text-[#7f1d1d] cursor-pointer"
+                >
+                  +{h}h
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={resetClock}
+                className="px-1.5 py-0.5 bg-white border border-[#261608] text-[9px] font-pixel font-bold text-[#7f1d1d] cursor-pointer"
+              >
+                리셋
+              </button>
+            </div>
           </div>
         </div>
       </div>

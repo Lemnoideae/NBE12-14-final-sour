@@ -190,6 +190,11 @@ test('A. 크로스 화면 통합 시나리오 (Gameplay -> Shop -> Alliance -> B
     fireEvent.click(pusanCandidateBtn);
   });
 
+  // 연합 기간 72시간 선택: 아래에서 가상 시계를 최대 약 58시간 앞당겨도 연합이 만료되지 않게 한다
+  act(() => {
+    fireEvent.click(screen.getByRole('button', { name: '72h' }));
+  });
+
   // 연합 신청 보내기
   const sendAllianceBtn = screen.getByRole('button', { name: '연합 신청 보내기' });
   act(() => {
