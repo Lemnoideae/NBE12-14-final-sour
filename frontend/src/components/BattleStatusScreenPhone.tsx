@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { useAlliance } from '../hooks/useMockAlliance.tsx';
 import { useBattle } from '../hooks/useMockBattle.tsx';
-import { getSchoolInfo } from '../data/allianceModel.ts';
+import { ALLIANCE_SIZE, getSchoolInfo } from '../data/allianceModel.ts';
 import {
   getEffectiveBattleStatus,
   getBattleResultLabel,
@@ -170,7 +170,7 @@ export const BattleStatusScreenPhone: React.FC<BattleStatusScreenPhoneProps> = (
                 <div className="flex items-center justify-between border-b pb-1.5 border-[#261608]/20">
                   <div className="flex items-center gap-1.5">
                     <span className="font-pixel text-[10px] font-bold px-1.5 py-0.5 bg-[#fef08a] border border-[#261608] text-[#261608]">
-                      {b.format}:{b.format} (연합별 {b.format}개교)
+                      {ALLIANCE_SIZE}:{ALLIANCE_SIZE} (연합별 {ALLIANCE_SIZE}개교)
                     </span>
                     <span className="font-pixel text-[9px] text-[#8b5327] font-mono">{b.durationHours}h 경기</span>
                   </div>

@@ -116,5 +116,5 @@ test('앱: 한양대(연합 없음)는 연합 채팅 빈 상태와 비활성 입
   const alliance = getAllianceForSchool(INITIAL_MOCK_ALLIANCES, 'kaist')!;
   const expected = getUnionChatSamples({ schools, mySchoolId: 'kaist', myNickname: '넙죽러', myDepartment: '전산학부' }, alliance.schoolIds)!;
   for (const message of expected) assert.ok(dialog.textContent!.includes(message.text), message.text);
-  for (const id of ['postech', 'unist']) assert.ok(dialog.textContent!.includes(schools.find((entry) => entry.id === id)!.shortName), id);
+  for (const id of ['postech']) assert.ok(dialog.textContent!.includes(schools.find((entry) => entry.id === id)!.shortName), id);
 });

@@ -7,15 +7,15 @@ import {
   AlertCircle,
   Shield,
   CheckCircle2,
-  Clock,
   BarChart3,
   FastForward,
 } from 'lucide-react';
 import { useAlliance } from '../hooks/useMockAlliance.tsx';
 import { useBattle } from '../hooks/useMockBattle.tsx';
-import { getSchoolInfo } from '../data/allianceModel.ts';
+import { ALLIANCE_SIZE, getSchoolInfo } from '../data/allianceModel.ts';
 import { getEffectiveBattleStatus, isAllianceOccupied, formatBattleTimestamp, formatKstDateTimeLocal, parseKstDateTimeLocal, getDefaultRequestedStartTime, validateRequestedStartTime } from '../data/battleModel.ts';
 import { SharedImage } from './SharedImage.tsx';
+import { DurationPicker } from './DurationPicker.tsx';
 import { soundManager } from '../utils/sound.ts';
 
 interface BattleApplyScreenPhoneProps {
@@ -50,9 +50,6 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
     toggleSimulateRequestFailure,
   } = useBattle();
 
-  const [selectedFormat, setSelectedFormat] = useState(
-    config.schoolCounts[0] ?? 2,
-  );
   const [selectedOpponentAllianceId, setSelectedOpponentAllianceId] = useState<string | null>(null);
   const [durationHours, setDurationHours] = useState(
     config.durationHours.default,
@@ -85,7 +82,7 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
       return;
     }
     soundManager.playBuySound();
-    const result = applyRequest(selectedOpponentAllianceId, selectedFormat, durationHours, requestedStartTime);
+    const result = applyRequest(selectedOpponentAllianceId, durationHours, requestedStartTime);
     if (result.success) {
       setFeedbackMessage({
         type: 'success',
@@ -215,7 +212,7 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
               <div className="flex items-center justify-between border-b pb-1.5 border-[#261608]/20">
                 <span className="font-pixel text-xs font-bold text-[#8b5327]">신청 주체 (내 연합)</span>
                 <span className="font-pixel text-[10px] font-bold text-[#261608] bg-[#fef08a] px-1.5 py-0.5 border border-[#261608]">
-                  {currentAlliance.schoolIds.length}개교 연합
+                  {ALLIANCE_SIZE}:{ALLIANCE_SIZE} 대결
                 </span>
               </div>
 
@@ -265,52 +262,12 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
               )}
             </div>
 
-            {/* Section 2: Battle Format Selector */}
-            <div className="rpg-box p-2.5 bg-[#ffffff] border-2 border-[#261608] flex flex-col gap-2">
-              <label className="font-pixel text-xs font-bold text-[#261608] flex items-center gap-1">
-                <Swords className="w-3.5 h-3.5 text-[#8b5327]" />
-                <span>대결 형식 선택 (연합별 학교 수 기준)</span>
-              </label>
-
-              <div className="grid grid-cols-2 gap-2">
-                {config.schoolCounts.map((count) => {
-                  const isSelected = selectedFormat === count;
-                  const isMatch = currentAlliance.schoolIds.length === count;
-                  return (
-                    <button
-                      key={count}
-                      type="button"
-                      onClick={() => {
-                        soundManager.playTabSound();
-                        setSelectedFormat(count);
-                      }}
-                      className={`p-2 border-2 text-center font-pixel text-xs font-bold flex flex-col items-center gap-0.5 cursor-pointer transition-colors ${
-                        isSelected
-                          ? 'bg-[#fef08a] border-[#261608] shadow-[2px_2px_0px_#261608]'
-                          : 'bg-[#ffffff] border-[#261608]/40 hover:bg-[#fffbeb]'
-                      }`}
-                    >
-                      <span className="text-xs font-black">{count}:{count} 대결</span>
-                      <span className="text-[9px] text-[#8b5327]">연합별 {count}개교 vs {count}개교</span>
-                      {!isMatch && (
-                        <span className="text-[8px] text-[#dc2626]">내 연합({currentAlliance.schoolIds.length}교)과 불일치</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <p className="font-pixel text-[9px] text-[#8b5327]">
-                ※ 기획서 기준: 2:2는 연합당 2개교 대 2개교, 3:3은 3개교 대 3개교 대결입니다.
-              </p>
-            </div>
-
             {/* Section 3: Opponent Alliance Selection */}
             <div className="rpg-box p-2.5 bg-[#ffffff] border-2 border-[#261608] flex flex-col gap-2">
               <label className="font-pixel text-xs font-bold text-[#261608] flex items-center justify-between">
                 <span>상대 연합 선택</span>
                 <span className="text-[9px] text-[#8b5327] font-normal">
-                  (형식: {selectedFormat}:{selectedFormat} 매칭 연합)
+                  ({ALLIANCE_SIZE}개교 연합끼리 {ALLIANCE_SIZE}:{ALLIANCE_SIZE} 대결)
                 </span>
               </label>
 
@@ -322,9 +279,8 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
                 ) : (
                   candidateOpponents.map((opponent) => {
                     const isSelected = selectedOpponentAllianceId === opponent.id;
-                    const isSizeMatch = opponent.schoolIds.length === selectedFormat;
                     const isOccupied = isAllianceOccupied(state.battles, opponent.id, effectiveNow);
-                    const disabled = !isSizeMatch || isOccupied;
+                    const disabled = isOccupied;
 
                     return (
                       <button
@@ -359,10 +315,6 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
                             <span className="font-pixel text-[8px] px-1 py-0.2 bg-[#fecaca] text-[#991b1b] border border-[#dc2626]">
                               대결 진행 중
                             </span>
-                          ) : !isSizeMatch ? (
-                            <span className="font-pixel text-[8px] px-1 py-0.2 bg-stone-200 text-stone-600 border border-stone-400">
-                              규모 불일치
-                            </span>
                           ) : (
                             <span className="font-pixel text-[8px] px-1 py-0.2 bg-[#dcfce7] text-[#15803d] border border-[#16a34a]">
                               선택 가능
@@ -377,30 +329,14 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
             </div>
 
             {/* Section 4: Duration Selector (Config Injected) */}
-            <div className="rpg-box p-2.5 bg-[#ffffff] border-2 border-[#261608] flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <label className="font-pixel text-xs font-bold text-[#261608] flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-[#8b5327]" />
-                  <span>경기 진행 기간</span>
-                </label>
-                <span className="font-pixel text-[10px] text-[#8b5327]">
-                  허용: {config.durationHours.min}h ~ {config.durationHours.max}h
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={config.durationHours.min}
-                  max={config.durationHours.max}
-                  value={durationHours}
-                  onChange={(e) => setDurationHours(Number(e.target.value))}
-                  aria-label="경기 진행 기간"
-                  className="w-20 px-2 py-1 text-xs font-pixel font-bold border-2 border-[#261608] bg-[#fdf5df] focus:bg-white outline-none"
-                />
-                <span className="font-pixel text-xs font-bold text-[#261608] shrink-0">시간</span>
-              </div>
-            </div>
+            <DurationPicker
+              label="경기 진행 기간"
+              value={durationHours}
+              min={config.durationHours.min}
+              max={config.durationHours.max}
+              presets={config.durationHours.presets}
+              onChange={setDurationHours}
+            />
 
             <div className="rpg-box p-2.5 bg-white border-2 border-[#261608] flex flex-col gap-2 min-w-0">
               <label htmlFor="battle-start" className="font-pixel text-xs font-bold">시작 일시 (KST)</label>
@@ -420,7 +356,7 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
                 <div className="font-pixel text-[10px] text-[#8b5327] flex flex-col gap-0.5">
                   <div>• 신청: {currentAlliance.name} ({currentAlliance.schoolIds.length}개교)</div>
                   <div>• 상대: {selectedOpponent.name} ({selectedOpponent.schoolIds.length}개교)</div>
-                  <div>• 형식: {selectedFormat}:{selectedFormat} (연합당 {selectedFormat}개교)</div>
+                  <div>• 형식: {ALLIANCE_SIZE}:{ALLIANCE_SIZE} (연합당 {ALLIANCE_SIZE}개교)</div>
                   <div>• 일정: {formatBattleTimestamp(requestedStartTime)} 시작 · {durationHours}시간 진행 · {formatBattleTimestamp(requestedStartTime + durationHours * 3600_000)} 종료</div>
                   <div>• 규칙: 단일 동시 상대 원칙 (경기 확정 시 종료 전까지 양측 모두 타 대결 불가)</div>
                 </div>
@@ -489,7 +425,7 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
 
                       <div className="text-[9px] font-pixel text-[#8b5327]">{effStatus === 'pending' ? '희망 시작' : '시작'}: {formatBattleTimestamp(b.scheduledStartTime ?? b.requestedStartTime)} KST</div>
                       <div className="text-[9px] font-pixel text-[#8b5327] flex items-center justify-between">
-                        <span>형식: {b.format}:{b.format} | 기간: {b.durationHours}h</span>
+                        <span>형식: {ALLIANCE_SIZE}:{ALLIANCE_SIZE} | 기간: {b.durationHours}h</span>
                         {effStatus === 'pending' && isSentByMe && (
                           <button
                             onClick={() => handleCancelRequest(b.id)}
@@ -532,7 +468,7 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
                         className="p-1.5 bg-white border border-[#261608]/40 flex flex-col gap-1 text-[9px] font-pixel"
                       >
                         <div className="font-bold text-[#261608]">
-                          {reqA?.name} → {recA?.name} ({b.format}:{b.format}, {b.durationHours}h) · 희망 시작 {formatBattleTimestamp(b.requestedStartTime)} KST
+                          {reqA?.name} → {recA?.name} ({b.durationHours}h) · 희망 시작 {formatBattleTimestamp(b.requestedStartTime)} KST
                         </div>
                         <div className="flex items-center gap-1">
                           <button

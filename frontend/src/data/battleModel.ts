@@ -1,7 +1,7 @@
 // 대결 상태 모델 및 순수 전이 함수 (N4 대결 신청 및 현황)
 // 기획서 4-2, 6장, 10·11장 및 팀장 범위 갱신 계획 5절 기반
 import { MOCK_SHOP_CONFIG, type MockBattleConfig } from './mockShopConfig.ts';
-import type { Alliance } from './allianceModel.ts';
+import { ALLIANCE_SIZE, type Alliance } from './allianceModel.ts';
 
 export type BattleConfig = MockBattleConfig;
 
@@ -14,7 +14,6 @@ export interface BattleScore {
 
 export interface Battle {
   readonly id: string;
-  readonly format: number; // 연합별 학교 수 (2: 2개교 vs 2개교, 3: 3개교 vs 3개교)
   readonly requesterAllianceId: string;
   readonly recipientAllianceId: string;
   readonly requesterSchoolIds: readonly string[]; // 참여 학교 ID 스냅샷
@@ -210,10 +209,9 @@ export function getOccupiedBattleForAlliance(
 // P3-3: 기준 시각(baseTime)에 비례한 초기 모의 대결 시드 생성 (실제 시계 기준 active 상태 보장)
 export function createInitialMockBattles(baseTime: number = Date.now(), config: BattleConfig = MOCK_SHOP_CONFIG.battle): readonly Battle[] {
   return Object.freeze([
-    // 샘플 1: 2:2 종료된 경기 (연고 vs 수도권, 연고 승리)
+    // 샘플 1: 종료된 경기 (연고 vs 수도권, 연고 승리)
     Object.freeze({
       id: 'battle-sample-finished-2v2',
-      format: 2,
       requesterAllianceId: 'alliance-sky',
       recipientAllianceId: 'alliance-capital',
       requesterSchoolIds: Object.freeze(['yonsei', 'korea']),
@@ -228,14 +226,13 @@ export function createInitialMockBattles(baseTime: number = Date.now(), config: 
       winnerAllianceId: 'alliance-sky',
       updatedAt: baseTime - 24 * 3600_000,
     }),
-    // 샘플 2: 3:3 종료된 무승부 경기 (과기원 vs 서울삼각, 무승부)
+    // 샘플 2: 종료된 무승부 경기 (과기원 vs 서울 중앙, 무승부)
     Object.freeze({
-      id: 'battle-sample-draw-3v3',
-      format: 3,
+      id: 'battle-sample-draw-2v2',
       requesterAllianceId: 'alliance-tech',
       recipientAllianceId: 'alliance-korea-central',
-      requesterSchoolIds: Object.freeze(['kaist', 'postech', 'unist']),
-      recipientSchoolIds: Object.freeze(['cau', 'khu', 'hufs']),
+      requesterSchoolIds: Object.freeze(['kaist', 'postech']),
+      recipientSchoolIds: Object.freeze(['cau', 'khu']),
       durationHours: 24,
       status: 'finished' as const,
       createdAt: baseTime - 36 * 3600_000,
@@ -246,11 +243,10 @@ export function createInitialMockBattles(baseTime: number = Date.now(), config: 
       winnerAllianceId: 'draw' as const,
       updatedAt: baseTime - 12 * 3600_000,
     }),
-    // 샘플 3: 2:2 진행 중인 경기 (경인 vs 신촌, 경인 리드 중)
+    // 샘플 3: 진행 중인 경기 (경인 vs 신촌, 경인 리드 중)
     // 시작: 과거 2시간 전, 종료: 미래 22시간 후 -> baseTime 시점에 정확히 active 상태
     Object.freeze({
       id: 'battle-sample-active-2v2',
-      format: 2,
       requesterAllianceId: 'alliance-metro',
       recipientAllianceId: 'alliance-sinchon',
       requesterSchoolIds: Object.freeze(['inha', 'ajou']),
@@ -264,16 +260,15 @@ export function createInitialMockBattles(baseTime: number = Date.now(), config: 
       scores: Object.freeze({ requesterScore: 12450, recipientScore: 11800 }),
       updatedAt: baseTime - 2 * 3600_000,
     }),
-    // 샘플 4: 3:3 대기 중인 경기 신청 (호남 -> 과기원)
+    // 샘플 4: 대기 중인 경기 신청 (호남 -> 과기원)
     Object.freeze({
       requestedStartTime: getDefaultRequestedStartTime(baseTime, config),
-      id: 'battle-sample-pending-3v3',
-      format: 3,
+      id: 'battle-sample-pending-2v2',
       requesterAllianceId: 'alliance-honam',
       recipientAllianceId: 'alliance-tech',
-      requesterSchoolIds: Object.freeze(['chonnam', 'jbnu', 'gist']),
-      recipientSchoolIds: Object.freeze(['kaist', 'postech', 'unist']),
-      durationHours: 24,
+      requesterSchoolIds: Object.freeze(['chonnam', 'jbnu']),
+      recipientSchoolIds: Object.freeze(['kaist', 'postech']),
+      durationHours: 3,
       status: 'pending' as const,
       createdAt: baseTime - 1800_000,
       updatedAt: baseTime - 1800_000,
@@ -298,12 +293,19 @@ export function createInitialBattleState(
 
 export const INITIAL_BATTLE_STATE: BattleState = createInitialBattleState(Date.now(), MOCK_SHOP_CONFIG.battle);
 
+// 대결은 연합끼리, 그리고 2개교 연합끼리(2:2)만 가능하다. 연합 없는 1:1 대결은 없다.
+function getAllianceSizeError(reqAlliance: Alliance, recAlliance: Alliance): string | undefined {
+  if (reqAlliance.schoolIds.length !== ALLIANCE_SIZE || recAlliance.schoolIds.length !== ALLIANCE_SIZE) {
+    return `연합 규모 오류: 대결은 ${ALLIANCE_SIZE}개교 연합끼리만 가능합니다 (신청: ${reqAlliance.schoolIds.length}개교, 대상: ${recAlliance.schoolIds.length}개교).`;
+  }
+  return undefined;
+}
+
 export function applyBattleRequest(
   state: BattleState,
   alliances: readonly Alliance[],
   requesterAllianceId: string,
   recipientAllianceId: string,
-  format: number,
   durationHours: number,
   requestedStartTime: number,
   now: number = Date.now(),
@@ -348,22 +350,10 @@ export function applyBattleRequest(
     };
   }
 
-  // 형식 및 학교 수 검사 (설정 기반 동적 검사)
-  if (!config.schoolCounts.includes(format)) {
-    return {
-      nextState: state,
-      result: { success: false, error: `지원하지 않는 대결 형식입니다 (${format}:${format}).` },
-    };
-  }
-
-  if (reqAlliance.schoolIds.length !== format || recAlliance.schoolIds.length !== format) {
-    return {
-      nextState: state,
-      result: {
-        success: false,
-        error: `학교 수 불일치: 선택된 대결 형식(${format}:${format})과 연합의 실제 학교 수(신청: ${reqAlliance.schoolIds.length}개교, 대상: ${recAlliance.schoolIds.length}개교)가 일치하지 않습니다.`,
-      },
-    };
+  // 연합 규모 검사: 대결은 2개교 연합끼리(2:2)만 가능하다
+  const sizeError = getAllianceSizeError(reqAlliance, recAlliance);
+  if (sizeError) {
+    return { nextState: state, result: { success: false, error: sizeError } };
   }
 
   // 기간 검사 (주입된 config.durationHours 동적 반영)
@@ -418,7 +408,6 @@ export function applyBattleRequest(
 
   const newBattle: Battle = Object.freeze({
     id: `battle-${requesterAllianceId}-${recipientAllianceId}-${now}`,
-    format,
     requesterAllianceId,
     recipientAllianceId,
     requesterSchoolIds: Object.freeze([...reqAlliance.schoolIds]),
@@ -494,15 +483,10 @@ export function demoAcceptBattleRequest(
     return { nextState: state, result: { success: false, error: '연합 정보를 확인할 수 없습니다.' } };
   }
 
-  // 수락 시점 학교 수 재검증
-  if (reqAlliance.schoolIds.length !== target.format || recAlliance.schoolIds.length !== target.format) {
-    return {
-      nextState: state,
-      result: {
-        success: false,
-        error: `학교 수 불일치: 대결 형식(${target.format}:${target.format})과 현재 연합 학교 수가 맞지 않습니다.`,
-      },
-    };
+  // 수락 시점 연합 규모 재검증
+  const sizeError = getAllianceSizeError(reqAlliance, recAlliance);
+  if (sizeError) {
+    return { nextState: state, result: { success: false, error: sizeError } };
   }
 
   // 동시 상대 제한 재검증: 수락 직전 양측 연합이 다른 경기에 점유되었는지 검사

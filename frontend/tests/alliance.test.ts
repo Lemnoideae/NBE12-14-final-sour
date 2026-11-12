@@ -33,6 +33,7 @@ dom.window.HTMLElement.prototype.scrollIntoView = function () {};
 
 const { render, screen, fireEvent, act, cleanup } = await import('@testing-library/react');
 const {
+  ALLIANCE_SIZE,
   applyAllianceRequest,
   cancelAllianceRequest,
   demoAcceptAllianceRequest,
@@ -481,6 +482,24 @@ test('P2-2 (b): 초기 시드 연합(INITIAL_MOCK_ALLIANCES) 내 모든 학교�
   }
 
   assert.equal(getAllianceForSchool(INITIAL_MOCK_ALLIANCES, 'hanyang'), undefined);
+});
+
+test('연합 정원 불변식: 연합은 정확히 2개교다 (시드와 수락으로 만든 연합 모두, 3개교 이상 없음)', () => {
+  assert.equal(ALLIANCE_SIZE, 2);
+  for (const a of INITIAL_MOCK_ALLIANCES) {
+    assert.equal(a.schoolIds.length, ALLIANCE_SIZE, `${a.id}는 ${a.schoolIds.length}개교`);
+  }
+
+  const applied = applyAllianceRequest(INITIAL_ALLIANCE_STATE, 'hanyang', 'pusan', 1000);
+  assert.equal(applied.result.success, true);
+  const accepted = demoAcceptAllianceRequest(applied.nextState, applied.result.request!.id, 2000);
+  assert.equal(accepted.result.success, true);
+  assert.deepEqual(accepted.result.alliance!.schoolIds, ['hanyang', 'pusan']);
+
+  // 성립한 연합에 3번째 학교는 들어갈 수 없다
+  const third = applyAllianceRequest(accepted.nextState, 'gachon', 'hanyang', 3000);
+  assert.equal(third.result.success, false);
+  for (const a of accepted.nextState.alliances) assert.equal(a.schoolIds.length, ALLIANCE_SIZE);
 });
 
 test('P2-3 (a): 동일 틱(same tick / 단일 act) 내 동일 학교 쌍 중복 신청 시 정확히 1건만 성공하고 2번째는 거절된다', () => {

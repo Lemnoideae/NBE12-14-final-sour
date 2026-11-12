@@ -29,7 +29,7 @@ interface BattleContextValue {
   finishedBattles: readonly Battle[];
   isMyAllianceOccupied: boolean;
   myOccupiedBattle: Battle | undefined;
-  applyRequest: (targetAllianceId: string, format: number, durationHours: number, requestedStartTime: number) => BattleActionResult;
+  applyRequest: (targetAllianceId: string, durationHours: number, requestedStartTime: number) => BattleActionResult;
   cancelRequest: (battleId: string) => BattleActionResult;
   demoAcceptRequest: (battleId: string) => BattleActionResult;
   demoRejectRequest: (battleId: string) => BattleActionResult;
@@ -84,7 +84,7 @@ export function BattleProvider({
   );
 
   const applyRequest = useCallback(
-    (targetAllianceId: string, format: number, durationHours: number, requestedStartTime: number): BattleActionResult => {
+    (targetAllianceId: string, durationHours: number, requestedStartTime: number): BattleActionResult => {
       if (!myAllianceId) {
         return { success: false, error: '소속된 연합이 없습니다. 먼저 연합을 결성해 주세요.' };
       }
@@ -95,7 +95,6 @@ export function BattleProvider({
           allianceState.alliances,
           myAllianceId,
           targetAllianceId,
-          format,
           durationHours,
           requestedStartTime,
           now,

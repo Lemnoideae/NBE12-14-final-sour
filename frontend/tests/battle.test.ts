@@ -3,6 +3,7 @@ import { after, afterEach, test } from 'node:test';
 import { registerHooks } from 'node:module';
 import React from 'react';
 import { JSDOM } from 'jsdom';
+import { assertAbsent } from './helpers/domAssert';
 import type { BattleState } from '../src/data/battleModel.ts';
 
 // DOM 통합 테스트용 자산 로더
@@ -87,7 +88,7 @@ test('1. 대결 신청 및 현황 화면 진입·복귀와 네비게이션 간 �
   });
   assert.ok(screen.getByRole('heading', { name: '대결 현황' }));
   assert.ok(screen.getAllByText(/연합별 2개교/).length > 0);
-  assert.ok(screen.getAllByText(/연합별 3개교/).length > 0);
+  assert.equal(screen.queryAllByText(/연합별 3개교/).length, 0, '3:3 대결은 없다');
 
   // 3. '🛡️ 현재 연합 (Current Alliance)' 런처 버튼으로 현재 연합 화면 이동
   const launcherCurAllianceBtn = screen.getByRole('button', { name: '🛡️ 현재 연합 (Current Alliance)' });
@@ -119,33 +120,29 @@ test('1. 대결 신청 및 현황 화면 진입·복귀와 네비게이션 간 �
   assert.ok(screen.getByRole('heading', { name: '대결 신청' }));
 });
 
-test('2. 2:2 및 3:3 학교 수 검증, 전이(pending→accept→active→finished), 무승부 샘플, 오류 재시도', () => {
+test('2. 2개교 연합끼리만(2:2) 대결 가능, 전이(pending→accept→active→finished), 무승부 샘플, 오류 재시도', () => {
   const state = INITIAL_BATTLE_STATE;
   const alliances = INITIAL_MOCK_ALLIANCES;
 
-  // 2:2 연합 (sky: 2교, capital: 2교)
-  // 3:3 연합 (tech: 3교, central: 3교)
-
-  // (a) 학교 수 불일치 거절: 2:2 형식에 3개교 연합을 대입
-  const mismatchRes = applyBattleRequest(
-    state,
-    alliances,
-    'alliance-tech', // 3개교
-    'alliance-capital', // 2개교
-    2, // 2:2 형식
-    24,
-    getDefaultRequestedStartTime(1000, state.config),
-    1000,
-  );
+  // (a) 2개교가 아닌 연합은 신청·수락 모두 거절 (3개교 연합은 구현하지 않으며, 방어 검증만 남긴다)
+  const oversized = { id: 'alliance-oversized', name: '3개교 연합(비정상)', schoolIds: ['kaist', 'postech', 'unist'], createdAt: 0 };
+  const withOversized = [...alliances.filter((a) => a.id !== 'alliance-tech'), oversized];
+  const mismatchRes = applyBattleRequest(state, withOversized, 'alliance-oversized', 'alliance-capital', 24, getDefaultRequestedStartTime(1000, state.config), 1000);
   assert.equal(mismatchRes.result.success, false);
-  assert.match(mismatchRes.result.error!, /학교 수 불일치/);
+  assert.match(mismatchRes.result.error!, /연합 규모 오류: 대결은 2개교 연합끼리만/);
+
+  const seedPending = state.battles.find((b) => b.id === 'battle-sample-pending-2v2')!;
+  const acceptOversized = demoAcceptBattleRequest(state, withOversized.map((a) => (a.id === 'alliance-oversized' ? { ...a, id: 'alliance-tech' } : a)), seedPending.id, seedPending.createdAt);
+  assert.equal(acceptOversized.result.success, false);
+  assert.match(acceptOversized.result.error!, /연합 규모 오류/);
 
   // (b) 정상 신청 (sky -> capital, 2:2, 24h)
-  const applyRes = applyBattleRequest(state, alliances, 'alliance-sky', 'alliance-capital', 2, 24, getDefaultRequestedStartTime(2000, state.config), 2000);
+  const applyRes = applyBattleRequest(state, alliances, 'alliance-sky', 'alliance-capital', 24, getDefaultRequestedStartTime(2000, state.config), 2000);
   assert.equal(applyRes.result.success, true);
   const pendingBattle = applyRes.result.battle!;
   assert.equal(pendingBattle.status, 'pending');
-  assert.equal(pendingBattle.format, 2);
+  assert.equal(pendingBattle.requesterSchoolIds.length, 2);
+  assert.equal(pendingBattle.recipientSchoolIds.length, 2);
 
   // (c) 시연 수락 -> 예정(scheduled) 및 고정 시계 경과에 따른 진행(active) 전이 (P3-1)
   const acceptRes = demoAcceptBattleRequest(applyRes.nextState, alliances, pendingBattle.id, 2100);
@@ -169,22 +166,23 @@ test('2. 2:2 및 3:3 학교 수 검증, 전이(pending→accept→active→finis
   // (e) 시드에 무승부 및 종료 샘플 존재 검증
   const drawSample = INITIAL_MOCK_BATTLES.find((b) => b.winnerAllianceId === 'draw');
   assert.ok(drawSample);
-  assert.equal(drawSample.format, 3);
+  assert.equal(drawSample.requesterSchoolIds.length, 2);
+  assert.equal(drawSample.recipientSchoolIds.length, 2);
   assert.equal(drawSample.scores?.requesterScore, drawSample.scores?.recipientScore);
 
   // (f) 네트워크 오류 시뮬레이션 및 복구
   const failState = { ...state, simulateRequestFailure: true };
-  const failRes = applyBattleRequest(failState, alliances, 'alliance-sky', 'alliance-capital', 2, 24, getDefaultRequestedStartTime(3000, failState.config), 3000);
+  const failRes = applyBattleRequest(failState, alliances, 'alliance-sky', 'alliance-capital', 24, getDefaultRequestedStartTime(3000, failState.config), 3000);
   assert.equal(failRes.result.success, false);
   assert.match(failRes.result.error!, /네트워크 연결 오류/);
 
   // (g) 취소 및 거절 전이 검증
-  const cancelTestApp = applyBattleRequest(state, alliances, 'alliance-sky', 'alliance-capital', 2, 24, getDefaultRequestedStartTime(4000, state.config), 4000);
+  const cancelTestApp = applyBattleRequest(state, alliances, 'alliance-sky', 'alliance-capital', 24, getDefaultRequestedStartTime(4000, state.config), 4000);
   const cancelRes = cancelBattleRequest(cancelTestApp.nextState, cancelTestApp.result.battle!.id, 4100);
   assert.equal(cancelRes.result.success, true);
   assert.equal(cancelRes.result.battle!.status, 'cancelled');
 
-  const rejectTestApp = applyBattleRequest(state, alliances, 'alliance-sky', 'alliance-capital', 2, 24, getDefaultRequestedStartTime(5000, state.config), 5000);
+  const rejectTestApp = applyBattleRequest(state, alliances, 'alliance-sky', 'alliance-capital', 24, getDefaultRequestedStartTime(5000, state.config), 5000);
   const rejectRes = demoRejectBattleRequest(rejectTestApp.nextState, rejectTestApp.result.battle!.id, 5100);
   assert.equal(rejectRes.result.success, true);
   assert.equal(rejectRes.result.battle!.status, 'rejected');
@@ -196,17 +194,17 @@ test('4. 기간 설정(min, max, 범위 밖 거절), 남은 시간 계산 및 �
   const state = INITIAL_BATTLE_STATE;
 
   // 최소 미만 거절
-  const underMin = applyBattleRequest(state, alliances, 'alliance-sky', 'alliance-capital', 2, min - 1, getDefaultRequestedStartTime(1000, state.config), 1000);
+  const underMin = applyBattleRequest(state, alliances, 'alliance-sky', 'alliance-capital', min - 1, getDefaultRequestedStartTime(1000, state.config), 1000);
   assert.equal(underMin.result.success, false);
   assert.match(underMin.result.error!, /유효하지 않은 대결 기간/);
 
   // 최대 초과 거절
-  const overMax = applyBattleRequest(state, alliances, 'alliance-sky', 'alliance-capital', 2, max + 1, getDefaultRequestedStartTime(1000, state.config), 1000);
+  const overMax = applyBattleRequest(state, alliances, 'alliance-sky', 'alliance-capital', max + 1, getDefaultRequestedStartTime(1000, state.config), 1000);
   assert.equal(overMax.result.success, false);
   assert.match(overMax.result.error!, /유효하지 않은 대결 기간/);
 
   // 경계값(min, max)은 성공
-  const atMin = applyBattleRequest(state, alliances, 'alliance-sky', 'alliance-capital', 2, min, getDefaultRequestedStartTime(1000, state.config), 1000);
+  const atMin = applyBattleRequest(state, alliances, 'alliance-sky', 'alliance-capital', min, getDefaultRequestedStartTime(1000, state.config), 1000);
   assert.equal(atMin.result.success, true);
 
   // 종료 시각 이후 effective status는 결코 active가 아닌 finished
@@ -305,7 +303,7 @@ test('6. 대결 시연 및 상태 조작은 실제 기여도, 학교/학과 점�
 
   // 대결 수락 및 가상 시계 조작 실행
   act(() => {
-    battleValue.demoAcceptRequest('battle-sample-pending-3v3');
+    battleValue.demoAcceptRequest('battle-sample-pending-2v2');
     battleValue.fastForwardClock(48);
   });
 
@@ -322,13 +320,13 @@ test('3. 단일 동시 상대 제한: A-B 예정·진행 중에는 A-C/B-D 신�
   const now = 20000;
 
   // Stale request 사전 생성: A(sky)와 C(metro) 간의 pending 요청
-  const staleApp = applyBattleRequest(s, alliances, 'alliance-sky', 'alliance-metro', 2, 24, getDefaultRequestedStartTime(now, s.config), now);
+  const staleApp = applyBattleRequest(s, alliances, 'alliance-sky', 'alliance-metro', 24, getDefaultRequestedStartTime(now, s.config), now);
   assert.equal(staleApp.result.success, true);
   s = staleApp.nextState;
   const staleReqId = staleApp.result.battle!.id;
 
   // A-B 신청 및 수락
-  const abApp = applyBattleRequest(s, alliances, 'alliance-sky', 'alliance-capital', 2, 24, getDefaultRequestedStartTime(now + 10, s.config), now + 10);
+  const abApp = applyBattleRequest(s, alliances, 'alliance-sky', 'alliance-capital', 24, getDefaultRequestedStartTime(now + 10, s.config), now + 10);
   assert.equal(abApp.result.success, true);
   s = abApp.nextState;
 
@@ -346,11 +344,11 @@ test('3. 단일 동시 상대 제한: A-B 예정·진행 중에는 A-C/B-D 신�
   assert.equal(isAllianceOccupied(s.battles, 'alliance-capital', now + 20), true);
 
   // 3. 예정 상태에서 신규 A-C 및 B-D 신청 거절
-  const acAppScheduled = applyBattleRequest(s, alliances, 'alliance-sky', 'alliance-metro', 2, 24, getDefaultRequestedStartTime(now + 30, s.config), now + 30);
+  const acAppScheduled = applyBattleRequest(s, alliances, 'alliance-sky', 'alliance-metro', 24, getDefaultRequestedStartTime(now + 30, s.config), now + 30);
   assert.equal(acAppScheduled.result.success, false);
   assert.match(acAppScheduled.result.error!, /단일 동시 상대 제한/);
 
-  const bdAppScheduled = applyBattleRequest(s, alliances, 'alliance-sinchon', 'alliance-capital', 2, 24, getDefaultRequestedStartTime(now + 30, s.config), now + 30);
+  const bdAppScheduled = applyBattleRequest(s, alliances, 'alliance-sinchon', 'alliance-capital', 24, getDefaultRequestedStartTime(now + 30, s.config), now + 30);
   assert.equal(bdAppScheduled.result.success, false);
   assert.match(bdAppScheduled.result.error!, /단일 동시 상대 제한/);
 
@@ -366,11 +364,11 @@ test('3. 단일 동시 상대 제한: A-B 예정·진행 중에는 A-C/B-D 신�
   assert.equal(isAllianceOccupied(s.battles, 'alliance-capital', activeTime), true);
 
   // 5-1. 진행(active) 상태에서도 신규 A-C 및 B-D 신청과 stale A-C 수락을 거절
-  const acAppActive = applyBattleRequest(s, alliances, 'alliance-sky', 'alliance-metro', 2, 24, getDefaultRequestedStartTime(activeTime, s.config), activeTime);
+  const acAppActive = applyBattleRequest(s, alliances, 'alliance-sky', 'alliance-metro', 24, getDefaultRequestedStartTime(activeTime, s.config), activeTime);
   assert.equal(acAppActive.result.success, false);
   assert.match(acAppActive.result.error!, /단일 동시 상대 제한/);
 
-  const bdAppActive = applyBattleRequest(s, alliances, 'alliance-sinchon', 'alliance-capital', 2, 24, getDefaultRequestedStartTime(activeTime, s.config), activeTime);
+  const bdAppActive = applyBattleRequest(s, alliances, 'alliance-sinchon', 'alliance-capital', 24, getDefaultRequestedStartTime(activeTime, s.config), activeTime);
   assert.equal(bdAppActive.result.success, false);
   assert.match(bdAppActive.result.error!, /단일 동시 상대 제한/);
 
@@ -384,7 +382,7 @@ test('3. 단일 동시 상대 제한: A-B 예정·진행 중에는 A-C/B-D 신�
   assert.equal(isAllianceOccupied(s.battles, 'alliance-sky', afterEnd), false);
   assert.equal(isAllianceOccupied(s.battles, 'alliance-capital', afterEnd), false);
   const finishedState = cancelBattleRequest(s, staleReqId, afterEnd).nextState;
-  const acAppAfterFinish = applyBattleRequest(finishedState, alliances, 'alliance-sky', 'alliance-metro', 2, 24, getDefaultRequestedStartTime(afterEnd + 10, finishedState.config), afterEnd + 10);
+  const acAppAfterFinish = applyBattleRequest(finishedState, alliances, 'alliance-sky', 'alliance-metro', 24, getDefaultRequestedStartTime(afterEnd + 10, finishedState.config), afterEnd + 10);
   assert.equal(acAppAfterFinish.result.success, true);
 
   // 6. 시연용 확정 대결 취소(demoCancelConfirmedBattle)로 점유 해제
@@ -399,7 +397,7 @@ test('3. 단일 동시 상대 제한: A-B 예정·진행 중에는 A-C/B-D 신�
 
   // 8. 점유 해제 후 stale 요청 취소 및 신규 A-C 신청 성공
   s = cancelBattleRequest(s, staleReqId, activeTime).nextState;
-  const acAppAfterCancel = applyBattleRequest(s, alliances, 'alliance-sky', 'alliance-metro', 2, 24, getDefaultRequestedStartTime(activeTime + 10, s.config), activeTime + 10);
+  const acAppAfterCancel = applyBattleRequest(s, alliances, 'alliance-sky', 'alliance-metro', 24, getDefaultRequestedStartTime(activeTime + 10, s.config), activeTime + 10);
   assert.equal(acAppAfterCancel.result.success, true);
 });
 
@@ -423,7 +421,7 @@ test('3-1. 같은 tick에 같은 대결 요청을 두 번 수락하면 정확히
     ),
   );
 
-  const pendingId = 'battle-sample-pending-3v3';
+  const pendingId = 'battle-sample-pending-2v2';
   let acc1: any;
   let acc2: any;
   act(() => {
@@ -439,91 +437,78 @@ test('3-1. 같은 tick에 같은 대결 요청을 두 번 수락하면 정확히
 test('8. P3-2: 대결 설정 주입 가능성: 대체 설정 반영, 범위 밖 거절, UI 동적 반영', () => {
   const alliances = INITIAL_MOCK_ALLIANCES;
   const customConfig = {
-    durationHours: { min: 1, max: 5, default: 2 },
-    schoolCounts: [2, 4],
+    durationHours: { min: 1, max: 5, default: 2, presets: [1, 3, 6] },
     startTime: { ...MOCK_SHOP_CONFIG.battle.startTime, allowedStartHoursKst: { from: 10, to: 20 }, stepMinutes: 60 },
   };
   const customState = createInitialBattleState(10000, customConfig);
+  const start = getDefaultRequestedStartTime(10000, customConfig);
 
-  // (a) 모델 함수에 customConfig 전달: 6시간은 기본 설정에서는 허용되나 customConfig(max 5)에서는 거절
-  const overCustomMax = applyBattleRequest(
-    customState,
-    alliances,
-    'alliance-sky',
-    'alliance-capital',
-    2,
-    6,
-    getDefaultRequestedStartTime(10000, customConfig),
-    10000,
-    customConfig,
-  );
+  // (a) 6시간은 기본 설정(1~24h)에서는 허용되나 customConfig(max 5)에서는 거절
+  const overCustomMax = applyBattleRequest(customState, alliances, 'alliance-sky', 'alliance-capital', 6, start, 10000, customConfig);
   assert.equal(overCustomMax.result.success, false);
   assert.match(overCustomMax.result.error!, /1시간 ~ 5시간 허용/);
 
-  // (b) 1시간은 customConfig(min 1)에서 정상 수락
-  const atCustomMin = applyBattleRequest(
-    customState,
-    alliances,
-    'alliance-sky',
-    'alliance-capital',
-    2,
-    1,
-    getDefaultRequestedStartTime(10000, customConfig),
-    10000,
-    customConfig,
-  );
+  // (b) 1시간은 customConfig(min 1)에서 정상 신청
+  const atCustomMin = applyBattleRequest(customState, alliances, 'alliance-sky', 'alliance-capital', 1, start, 10000, customConfig);
   assert.equal(atCustomMin.result.success, true);
 
-  // (c) 형식 검증: 3:3은 customConfig.schoolCounts [2, 4]에 없으므로 거절
-  const unsupported3v3 = applyBattleRequest(
-    customState,
-    alliances,
-    'alliance-tech',
-    'alliance-korea-central',
-    3,
-    2,
-    getDefaultRequestedStartTime(10000, customConfig),
-    10000,
-    customConfig,
-  );
-  assert.equal(unsupported3v3.result.success, false);
-  assert.match(unsupported3v3.result.error!, /지원하지 않는 대결 형식/);
-
-  // (d) 희망 시작 시각이 그대로 확정되는지 검증
-  const acceptedCustom = demoAcceptBattleRequest(
-    atCustomMin.nextState,
-    alliances,
-    atCustomMin.result.battle!.id,
-    10000,
-    customConfig,
-  );
+  // (c) 희망 시작 시각이 그대로 확정되는지 검증
+  const acceptedCustom = demoAcceptBattleRequest(atCustomMin.nextState, alliances, atCustomMin.result.battle!.id, 10000, customConfig);
   assert.equal(acceptedCustom.result.success, true);
   const cb = acceptedCustom.result.battle!;
   assert.equal(cb.scheduledStartTime, atCustomMin.result.battle!.requestedStartTime);
   assert.equal(cb.scheduledEndTime, cb.scheduledStartTime! + 3600_000);
 
-  // (e) UI 컴포넌트 마운트 시 customConfig 반영 검증
+  // (d) UI: 주입한 범위와 프리셋을 쓰고, 범위 밖 프리셋(6h)은 숨긴다
   cleanup();
+  const allianceState = { ...INITIAL_ALLIANCE_STATE, alliances: [...INITIAL_ALLIANCE_STATE.alliances, { id: 'alliance-hanyang-pusan', name: '한양대·부산대 연합', schoolIds: ['hanyang', 'pusan'], createdAt: 1000 }] };
   render(
     React.createElement(
       MockGameProvider,
       null,
       React.createElement(
         AllianceProvider,
-        null,
-        React.createElement(
-          BattleProvider,
-          { config: customConfig },
-          React.createElement(BattleApplyScreenPhone),
-        ),
+        { initialState: allianceState } as any,
+        React.createElement(BattleProvider, { config: customConfig }, React.createElement(BattleApplyScreenPhone)),
       ),
     ),
   );
+  assert.ok(screen.getByText(/허용: 1h ~ 5h/));
+  assert.ok(screen.getByRole('button', { name: '1h' }));
+  assert.ok(screen.getByRole('button', { name: '3h' }));
+  assertAbsent(screen.queryByRole('button', { name: '6h' }));
+  assert.equal(screen.getByRole('status', { name: '경기 진행 기간 선택값' }).textContent, '2시간');
+});
 
-  // duration 허용 텍스트 및 포맷 버튼 확인
-  // customConfig: min 1, max 5 -> '허용: 1h ~ 5h'
-  // schoolCounts: [2, 4] -> '2:2 대결', '4:4 대결' (3:3 대결 버튼 없음)
-  // (소속 연합 결성 후 화면 진입 상태에서 확인 가능)
+test('2:2 고정 불변식: 대결 시드는 양측 2개교·기간 1~24h이고, 신청 화면에 형식 선택이 없으며 프리셋 기간으로 신청된다', () => {
+  const { min, max } = MOCK_SHOP_CONFIG.battle.durationHours;
+  assert.deepEqual([min, max], [1, 24]);
+  for (const b of INITIAL_MOCK_BATTLES) {
+    assert.equal(b.requesterSchoolIds.length, 2, b.id);
+    assert.equal(b.recipientSchoolIds.length, 2, b.id);
+    assert.ok(b.durationHours >= min && b.durationHours <= max, `${b.id}: ${b.durationHours}h`);
+    assert.equal('format' in b, false, `${b.id}에 format 필드가 남아 있음`);
+  }
+
+  cleanup();
+  const allianceState = { ...INITIAL_ALLIANCE_STATE, alliances: [...INITIAL_ALLIANCE_STATE.alliances, { id: 'alliance-hanyang-pusan', name: '한양대·부산대 연합', schoolIds: ['hanyang', 'pusan'], createdAt: 1000 }] };
+  let battleValue: ReturnType<typeof useBattle>;
+  function Probe() { battleValue = useBattle(); return null; }
+  render(React.createElement(MockGameProvider, null, React.createElement(AllianceProvider, { initialState: allianceState } as any, React.createElement(BattleProvider, null, React.createElement(Probe), React.createElement(BattleApplyScreenPhone)))));
+
+  assertAbsent(screen.queryByText(/대결 형식 선택/));
+  assertAbsent(screen.queryByRole('button', { name: /3:3 대결/ }));
+  assertAbsent(screen.queryByRole('spinbutton', { name: '경기 진행 기간' }));
+  assert.ok(screen.getByRole('group', { name: '경기 진행 기간' }));
+
+  fireEvent.click(screen.getByRole('button', { name: /연고 메이저 연합/ }));
+  fireEvent.click(screen.getByRole('button', { name: '12h' }));
+  fireEvent.click(screen.getByRole('button', { name: '경기 진행 기간 1시간 늘리기' }));
+  assert.match(screen.getByText(/• 형식:/).textContent ?? '', /2:2 \(연합당 2개교\)/);
+  const before = battleValue!.state.battles.length;
+  fireEvent.click(screen.getByRole('button', { name: '대결 신청 보내기' }));
+  assert.equal(battleValue!.state.battles.length, before + 1);
+  assert.equal(battleValue!.state.battles[0].durationHours, 13);
 });
 
 test('9. P3-3: 시계에 의해 종료된 대결 및 무승부/리드 결과 판정, 상대 연합 승리 오표기 방지, 실제 시계 기준 시드 active 검증', () => {
@@ -648,7 +633,6 @@ test('P4-2: BattleStatusScreenPhone 화면에서 시작/종료 시각 및 예정
     battles: [
       {
         id: 'test-scheduled-card',
-        format: 2,
         requesterAllianceId: 'alliance-seoul-univs',
         recipientAllianceId: 'alliance-gyeongin',
         requesterSchoolIds: ['hanyang', 'pusan'],
@@ -762,7 +746,7 @@ test('희망 시작 시각 KST 경계, 기본값, 설정 주입 및 만료 수�
   assert.equal(formatKstDateTimeLocal(getDefaultRequestedStartTime(now, alternate)), '2026-11-07T10:00');
   const state = { ...createInitialBattleState(now), battles: [] };
   const start = at('2026-11-07T10:00');
-  const applied = applyBattleRequest(state, INITIAL_MOCK_ALLIANCES, 'alliance-sky', 'alliance-capital', 2, 24, start, now);
+  const applied = applyBattleRequest(state, INITIAL_MOCK_ALLIANCES, 'alliance-sky', 'alliance-capital', 24, start, now);
   assert.equal(applied.result.success, true);
   const late = demoAcceptBattleRequest(applied.nextState, INITIAL_MOCK_ALLIANCES, applied.result.battle!.id, start - 60 * 60_000 + 1);
   assert.equal(late.result.success, false);
@@ -810,7 +794,7 @@ test('P4-3: BattleApplyScreenPhone 설정 기반 시작 대기 및 진행 기간
   const alternateBattleConfig = {
     ...MOCK_SHOP_CONFIG.battle,
     startTime: { ...MOCK_SHOP_CONFIG.battle.startTime, allowedStartHoursKst: { from: 10, to: 20 }, stepMinutes: 60 },
-    durationHours: { min: 2, max: 48, default: 12 },
+    durationHours: { min: 2, max: 20, default: 12, presets: [2, 12, 20] },
   };
 
   render(

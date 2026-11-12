@@ -1,4 +1,3 @@
-import { MOCK_SHOP_CONFIG } from './mockShopConfig.ts';
 import { REAL_UNIVERSITIES } from './universitiesData.ts';
 
 export type AllianceRequestStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled';
@@ -34,57 +33,53 @@ export function getSchoolInfo(schoolId: string) {
   return { id: schoolId, name: schoolId, shortName: schoolId, firstSyllable: schoolId[0] ?? '?', badgeColor: '#888888', region: '기타' };
 }
 
-// 2:2, 3:3 규격은 MOCK_SHOP_CONFIG.battle.schoolCounts에서 동적으로 파생 (하드코딩 금지)
-const [formatSize2 = 2, formatSize3 = 3] = MOCK_SHOP_CONFIG.battle.schoolCounts;
+/**
+ * 연합은 정확히 2개교로 구성된다 (3개교 이상 연합은 구현하지 않음). 대결도 2:2만 가능하다.
+ * 근거: ERD 결정 18 (.agents/261111-1356-project_plan_reference.md), 사용자 지시 2026-11-12.
+ */
+export const ALLIANCE_SIZE = 2;
 
 export const INITIAL_MOCK_ALLIANCES: readonly Alliance[] = Object.freeze([
-  // 2:2 형식 연합 샘플 (크기 formatSize2)
   Object.freeze({
     id: 'alliance-sky',
     name: '연고 메이저 연합',
-    schoolIds: Object.freeze(['yonsei', 'korea'].slice(0, formatSize2)),
+    schoolIds: Object.freeze(['yonsei', 'korea']),
     createdAt: 1700000000000,
   }),
-  // 수도권 2:2 형식 연합 샘플
   Object.freeze({
     id: 'alliance-capital',
     name: '수도권 동맹',
-    schoolIds: Object.freeze(['snu', 'skku'].slice(0, formatSize2)),
+    schoolIds: Object.freeze(['snu', 'skku']),
     createdAt: 1700000010000,
   }),
-  // 경인 2:2 형식 연합 샘플 (크기 formatSize2)
   Object.freeze({
     id: 'alliance-metro',
     name: '경인 메트로 연합',
-    schoolIds: Object.freeze(['inha', 'ajou'].slice(0, formatSize2)),
+    schoolIds: Object.freeze(['inha', 'ajou']),
     createdAt: 1700000020000,
   }),
-  // 신촌 2:2 형식 연합 샘플 (크기 formatSize2)
   Object.freeze({
     id: 'alliance-sinchon',
     name: '신촌 연합',
-    schoolIds: Object.freeze(['sogang', 'ewha'].slice(0, formatSize2)),
+    schoolIds: Object.freeze(['sogang', 'ewha']),
     createdAt: 1700000025000,
   }),
-  // 3:3 형식 연합 샘플 (크기 formatSize3)
   Object.freeze({
     id: 'alliance-tech',
-    name: '과학기술원 삼각동맹',
-    schoolIds: Object.freeze(['kaist', 'postech', 'unist'].slice(0, formatSize3)),
+    name: '과학기술원 연합',
+    schoolIds: Object.freeze(['kaist', 'postech']),
     createdAt: 1700000030000,
   }),
-  // 서울중심 3:3 형식 연합 샘플 (크기 formatSize3)
   Object.freeze({
     id: 'alliance-korea-central',
-    name: '서울 삼각 연합',
-    schoolIds: Object.freeze(['cau', 'khu', 'hufs'].slice(0, formatSize3)),
+    name: '서울 중앙 연합',
+    schoolIds: Object.freeze(['cau', 'khu']),
     createdAt: 1700000040000,
   }),
-  // 호남권 3:3 형식 연합 샘플 (크기 formatSize3)
   Object.freeze({
     id: 'alliance-honam',
     name: '호남 플래그십 연합',
-    schoolIds: Object.freeze(['chonnam', 'jbnu', 'gist'].slice(0, formatSize3)),
+    schoolIds: Object.freeze(['chonnam', 'jbnu']),
     createdAt: 1700000050000,
   }),
 ]);
