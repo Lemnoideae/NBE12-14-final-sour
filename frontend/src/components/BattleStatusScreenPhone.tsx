@@ -37,6 +37,7 @@ export const BattleStatusScreenPhone: React.FC<BattleStatusScreenPhoneProps> = (
   const { state: allianceState } = useAlliance();
   const {
     state,
+    config,
     effectiveNow,
     demoCancelConfirmedRequest,
     clockOffsetMs,
@@ -49,7 +50,7 @@ export const BattleStatusScreenPhone: React.FC<BattleStatusScreenPhoneProps> = (
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'pending' | 'finished'>('all');
 
   const filteredBattles = state.battles.filter((b) => {
-    const effStatus = getEffectiveBattleStatus(b, effectiveNow);
+    const effStatus = getEffectiveBattleStatus(b, effectiveNow, config);
     if (activeTab === 'all') return true;
     if (activeTab === 'active') return effStatus === 'active' || effStatus === 'scheduled';
     if (activeTab === 'pending') return effStatus === 'pending';
@@ -155,8 +156,8 @@ export const BattleStatusScreenPhone: React.FC<BattleStatusScreenPhoneProps> = (
           filteredBattles.map((b) => {
             const reqA = allianceState.alliances.find((a) => a.id === b.requesterAllianceId);
             const recA = allianceState.alliances.find((a) => a.id === b.recipientAllianceId);
-            const effStatus = getEffectiveBattleStatus(b, effectiveNow);
-            const remainingText = formatBattleRemainingTime(b, effectiveNow);
+            const effStatus = getEffectiveBattleStatus(b, effectiveNow, config);
+            const remainingText = formatBattleRemainingTime(b, effectiveNow, config);
 
             const reqScore = b.scores?.requesterScore ?? 0;
             const recScore = b.scores?.recipientScore ?? 0;
@@ -197,6 +198,8 @@ export const BattleStatusScreenPhone: React.FC<BattleStatusScreenPhoneProps> = (
                       ? '종료됨'
                       : effStatus === 'cancelled'
                       ? '취소됨'
+                      : effStatus === 'expired'
+                      ? '만료됨'
                       : '거절됨'}
                   </span>
                 </div>
@@ -393,7 +396,7 @@ export const BattleStatusScreenPhone: React.FC<BattleStatusScreenPhoneProps> = (
 
           {/* P3-1: Demo Cancel for Scheduled or Active Battles */}
           {state.battles.filter((b) => {
-            const s = getEffectiveBattleStatus(b, effectiveNow);
+            const s = getEffectiveBattleStatus(b, effectiveNow, config);
             return s === 'scheduled' || s === 'active';
           }).length > 0 && (
             <div className="border-t border-[#b45309]/30 pt-1.5 flex flex-col gap-1">
@@ -402,13 +405,13 @@ export const BattleStatusScreenPhone: React.FC<BattleStatusScreenPhoneProps> = (
               </span>
               {state.battles
                 .filter((b) => {
-                  const s = getEffectiveBattleStatus(b, effectiveNow);
+                  const s = getEffectiveBattleStatus(b, effectiveNow, config);
                   return s === 'scheduled' || s === 'active';
                 })
                 .map((b) => {
                   const reqA = allianceState.alliances.find((a) => a.id === b.requesterAllianceId);
                   const recA = allianceState.alliances.find((a) => a.id === b.recipientAllianceId);
-                  const eff = getEffectiveBattleStatus(b, effectiveNow);
+                  const eff = getEffectiveBattleStatus(b, effectiveNow, config);
                   return (
                     <div
                       key={b.id}

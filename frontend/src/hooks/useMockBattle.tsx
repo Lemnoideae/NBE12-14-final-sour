@@ -4,9 +4,10 @@ import {
   applyBattleRequest,
   cancelBattleRequest,
   createInitialBattleState,
-  demoAcceptBattleRequest,
+  acceptBattleRequest,
   demoCancelConfirmedBattle,
-  demoRejectBattleRequest,
+  demoReceiveBattleRequest,
+  rejectBattleRequest,
   getEffectiveBattleStatus,
   getOccupiedBattleForAlliance,
   isAllianceOccupied,
@@ -34,8 +35,16 @@ interface BattleContextValue {
   myOccupiedBattle: Battle | undefined;
   applyRequest: (targetAllianceId: string, durationHours: number, requestedStartTime: number) => BattleActionResult;
   cancelRequest: (battleId: string) => BattleActionResult;
+  /** 내 연합이 받은 대결 신청 수락. 리더가 없으므로 내 연합 학교 학생 누구든 수락할 수 있다. */
+  acceptRequest: (battleId: string) => BattleActionResult;
+  /** 내 연합이 받은 대결 신청 거절 */
+  rejectRequest: (battleId: string) => BattleActionResult;
+  /** [시연] 상대 연합 명의의 수락 (보낸 신청 포함 어느 대기 신청이든) */
   demoAcceptRequest: (battleId: string) => BattleActionResult;
+  /** [시연] 상대 연합 명의의 거절 */
   demoRejectRequest: (battleId: string) => BattleActionResult;
+  /** [시연] 다른 연합이 내 연합에 대결을 신청한 상황 */
+  demoReceiveRequest: () => BattleActionResult;
   demoCancelConfirmedRequest: (battleId: string) => BattleActionResult;
   fastForwardClock: (hours: number) => void;
   resetClock: () => void;
@@ -112,7 +121,7 @@ export function BattleProvider({
   const cancelRequest = useCallback(
     (battleId: string): BattleActionResult => {
       const now = clockNow();
-      return commit((current) => cancelBattleRequest(current, battleId, now));
+      return commit((current) => cancelBattleRequest(current, battleId, now, current.config));
     },
     [commit, clockNow],
   );
@@ -121,7 +130,7 @@ export function BattleProvider({
     (battleId: string): BattleActionResult => {
       const now = clockNow();
       return commit((current) =>
-        demoAcceptBattleRequest(current, allianceState.alliances, battleId, now, current.config),
+        acceptBattleRequest(current, allianceState.alliances, battleId, now, current.config),
       );
     },
     [commit, clockNow, allianceState.alliances],
@@ -130,10 +139,37 @@ export function BattleProvider({
   const demoRejectRequest = useCallback(
     (battleId: string): BattleActionResult => {
       const now = clockNow();
-      return commit((current) => demoRejectBattleRequest(current, battleId, now));
+      return commit((current) => rejectBattleRequest(current, battleId, now, current.config));
     },
     [commit, clockNow],
   );
+
+  const isReceivedByMe = (battleId: string) => {
+    const target = stateRef.current.battles.find((b) => b.id === battleId);
+    return !target || target.recipientAllianceId === myAllianceId;
+  };
+
+  const acceptRequest = useCallback(
+    (battleId: string): BattleActionResult => {
+      if (!isReceivedByMe(battleId)) return { success: false, error: '우리 연합이 받은 대결 신청만 수락할 수 있습니다.' };
+      return demoAcceptRequest(battleId);
+    },
+    [demoAcceptRequest, myAllianceId],
+  );
+
+  const rejectRequest = useCallback(
+    (battleId: string): BattleActionResult => {
+      if (!isReceivedByMe(battleId)) return { success: false, error: '우리 연합이 받은 대결 신청만 거절할 수 있습니다.' };
+      return demoRejectRequest(battleId);
+    },
+    [demoRejectRequest, myAllianceId],
+  );
+
+  const demoReceiveRequest = useCallback((): BattleActionResult => {
+    if (!myAllianceId) return { success: false, error: '소속된 연합이 없습니다. 먼저 연합을 결성해 주세요.' };
+    const now = clockNow();
+    return commit((current) => demoReceiveBattleRequest(current, allianceState.alliances, myAllianceId, now, current.config));
+  }, [commit, clockNow, myAllianceId, allianceState.alliances]);
 
   const demoCancelConfirmedRequest = useCallback(
     (battleId: string): BattleActionResult => {
@@ -169,19 +205,19 @@ export function BattleProvider({
   }, [state.battles, myAllianceId]);
 
   const pendingBattles = useMemo(() => {
-    return state.battles.filter((b) => getEffectiveBattleStatus(b, effectiveNow) === 'pending');
-  }, [state.battles, effectiveNow]);
+    return state.battles.filter((b) => getEffectiveBattleStatus(b, effectiveNow, state.config) === 'pending');
+  }, [state.battles, effectiveNow, state.config]);
 
   const activeBattles = useMemo(() => {
     return state.battles.filter((b) => {
-      const s = getEffectiveBattleStatus(b, effectiveNow);
+      const s = getEffectiveBattleStatus(b, effectiveNow, state.config);
       return s === 'active' || s === 'scheduled';
     });
-  }, [state.battles, effectiveNow]);
+  }, [state.battles, effectiveNow, state.config]);
 
   const finishedBattles = useMemo(() => {
-    return state.battles.filter((b) => getEffectiveBattleStatus(b, effectiveNow) === 'finished');
-  }, [state.battles, effectiveNow]);
+    return state.battles.filter((b) => getEffectiveBattleStatus(b, effectiveNow, state.config) === 'finished');
+  }, [state.battles, effectiveNow, state.config]);
 
   const isMyAllianceOccupied = useMemo(() => {
     if (!myAllianceId) return false;
@@ -208,8 +244,11 @@ export function BattleProvider({
       myOccupiedBattle,
       applyRequest,
       cancelRequest,
+      acceptRequest,
+      rejectRequest,
       demoAcceptRequest,
       demoRejectRequest,
+      demoReceiveRequest,
       demoCancelConfirmedRequest,
       fastForwardClock,
       resetClock,
@@ -230,8 +269,11 @@ export function BattleProvider({
     myOccupiedBattle,
     applyRequest,
     cancelRequest,
+    acceptRequest,
+    rejectRequest,
     demoAcceptRequest,
     demoRejectRequest,
+    demoReceiveRequest,
     demoCancelConfirmedRequest,
     fastForwardClock,
     resetClock,

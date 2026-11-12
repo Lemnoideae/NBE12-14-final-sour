@@ -43,6 +43,7 @@ const {
   isAllianceActive,
   formatAllianceRemainingTime,
   createInitialMockAlliances,
+  getSchoolInfo,
   INITIAL_ALLIANCE_STATE,
   INITIAL_MOCK_ALLIANCES,
 } = await import('../src/data/allianceModel.ts');
@@ -757,6 +758,37 @@ test('연합 신청 화면: 기간 선택·제안 대기 표시, 받은 제안�
   assert.ok(screen.getByText('자동 거절 (다른 연합 성립)'));
   assertAbsent(screen.queryByRole('region', { name: '받은 연합 제안' }), '처리된 제안은 목록에서 빠진다');
   assert.ok(screen.getByRole('note'), '이미 연합에 소속되어 있다는 안내');
+});
+
+test('연합 신청 화면: 나에게 제안한 학교는 목록에서 고를 수 없고 받은 제안으로 안내한다 (같은 두 학교 사이 대기 제안 1건)', () => {
+  cleanup();
+  let allianceValue: ReturnType<typeof useAlliance>;
+  function Probe() {
+    allianceValue = useAlliance();
+    return null;
+  }
+  render(
+    React.createElement(
+      MockGameProvider,
+      null,
+      React.createElement(AllianceProvider, null, React.createElement(Probe), React.createElement(AllianceApplyScreenPhone)),
+    ),
+  );
+
+  act(() => {
+    fireEvent.click(screen.getByRole('button', { name: '[시연] 다른 학교의 연합 제안 받기' }));
+  });
+  const proposerId = allianceValue!.receivedRequests[0].requesterSchoolId;
+  const proposerName = getSchoolInfo(proposerId).name;
+  act(() => {
+    fireEvent.change(screen.getByRole('textbox', { name: '대상 학교 검색' }), { target: { value: proposerName } });
+  });
+  // 받은 제안 섹션의 수락/거절 버튼도 학교 이름을 담으므로 후보 목록 버튼만 고른다
+  const proposerButton = screen
+    .getAllByRole('button', { name: new RegExp(proposerName) })
+    .find((b) => !/연합 제안 (수락|거절)$/.test(b.getAttribute('aria-label') ?? '')) as HTMLButtonElement;
+  assert.equal(proposerButton.disabled, true, '받은 대기 제안이 있는 학교에 다시 제안하면 중복 오류가 나므로 고를 수 없다');
+  assert.match(proposerButton.textContent ?? '', /받은 제안 있음/);
 });
 
 test('받은 제안만 수락할 수 있다: 내가 보낸 제안은 일반 수락 API로 수락되지 않는다', () => {

@@ -29,6 +29,7 @@ export const AllianceApplyScreenPhone: React.FC<AllianceApplyScreenPhoneProps> =
     effectiveNow,
     currentAlliance,
     sentRequests,
+    receivedRequests,
     applyRequest,
     cancelRequest,
     demoAcceptRequest,
@@ -44,8 +45,9 @@ export const AllianceApplyScreenPhone: React.FC<AllianceApplyScreenPhoneProps> =
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const durationConfig = MOCK_SHOP_CONFIG.alliance.durationHours;
   const [durationHours, setDurationHours] = useState(durationConfig.default);
-  // 내가 보낸 대기 제안이 있는 학교는 다시 고를 수 없다 (같은 두 학교 사이 대기 제안은 1건)
+  // 같은 두 학교 사이 대기 제안은 방향과 관계없이 1건이므로, 내가 보낸 제안이나 받은 제안이 대기 중인 학교는 고를 수 없다
   const pendingTargetIds = new Set(sentRequests.filter((r) => r.status === 'pending').map((r) => r.recipientSchoolId));
+  const pendingProposerIds = new Set(receivedRequests.filter((r) => r.status === 'pending').map((r) => r.requesterSchoolId));
 
   // Search filtered candidates (exclude self-school)
   const candidateSchools = REAL_UNIVERSITIES.filter((u) => {
@@ -231,12 +233,13 @@ export const AllianceApplyScreenPhone: React.FC<AllianceApplyScreenPhoneProps> =
                 const isSelected = selectedSchoolId === school.id;
                 const existingAlliance = getAllianceForSchool(state.alliances, school.id, effectiveNow);
                 const isPendingTarget = pendingTargetIds.has(school.id);
+                const isPendingProposer = pendingProposerIds.has(school.id);
                 return (
                   <button
                     key={school.id}
                     type="button"
                     onClick={() => handleSelectSchool(school.id)}
-                    disabled={isPendingTarget}
+                    disabled={isPendingTarget || isPendingProposer}
                     className={`p-1.5 border flex items-center justify-between text-left cursor-pointer transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                       isSelected
                         ? 'bg-[#fef08a] border-[#261608] shadow-[1px_1px_0px_#261608]'
@@ -263,6 +266,11 @@ export const AllianceApplyScreenPhone: React.FC<AllianceApplyScreenPhoneProps> =
                       {isPendingTarget && (
                         <span className="font-pixel text-[8px] px-1 py-0.2 bg-[#fef08a] border border-[#b45309] text-[#b45309]">
                           제안 대기 중
+                        </span>
+                      )}
+                      {isPendingProposer && (
+                        <span className="font-pixel text-[8px] px-1 py-0.2 bg-[#dcfce7] border border-[#166534] text-[#166534]">
+                          받은 제안 있음
                         </span>
                       )}
                       <span className="font-pixel text-[9px] text-[#8b5327]">({school.region})</span>
