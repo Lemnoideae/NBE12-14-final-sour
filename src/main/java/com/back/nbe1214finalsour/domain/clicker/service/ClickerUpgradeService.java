@@ -37,7 +37,9 @@ public class ClickerUpgradeService {
         // 유지의 클리커 레벨을 다음 레벨로 변경
         boolean changed = this.userClickerLevelStore.changeLevel(userId, currentLevel, currentLevel + 1);
 
+        // 현재 레벨일 때만 다음 레벨로 변경 (조건부 UPDATE). false면 다른 요청이 먼저 레벨을 바꾼 것
         if (!changed) {
+            // 이 요청에서 차감한 기여도를 되돌린 뒤 충돌 예외
             this.contributionWallet.restore(userId, nextClicker.getRequiredScore());
             throw new BusinessException(ErrorCode.CLICKER_UPGRADE_CONFLICT);
         }
