@@ -1,3 +1,6 @@
 spring:
   application:
     name: NBE12-14-final-sour
+  jackson:
+    # API 명세서 §1: 시각은 KST 오프셋을 포함한 ISO-8601로 응답한다 (예: 2026-11-11T14:30:00+09:00)
+    time-zone: Asia/Seoul
