@@ -113,4 +113,16 @@ public class ClickerControllerTest {
 
         verify(clickerUpgradeService, never()).upgrade(anyLong());
     }
+
+    @Test
+    @DisplayName("[POST] /api/v1/clickers/upgrade는 기여도가 부족하면 400 CLICKER_NOT_ENOUGH_SCORE")
+    void upgrade_notEnoughScore() throws Exception {
+        given(clickerUpgradeService.upgrade(USER.userId()))
+                .willThrow(new BusinessException(ErrorCode.CLICKER_NOT_ENOUGH_SCORE));
+
+        mockMvc.perform(post("/api/v1/clickers/upgrade")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtProvider.createAccessToken(USER)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CLICKER_NOT_ENOUGH_SCORE"));
+    }
 }
