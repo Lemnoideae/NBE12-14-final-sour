@@ -5,8 +5,10 @@ import com.back.nbe1214finalsour.global.response.FieldErrorDetail;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.exception.ConstraintViolationException;
 import org.jspecify.annotations.Nullable;
 import org.springframework.core.MethodParameter;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -50,6 +52,23 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public void rethrowAccessDenied(AccessDeniedException ex) {
         throw ex;
+    }
+
+    /**
+     * DB 제약 위반. {@link ConstraintErrorMapping}에 있는 제약이면 정해진 코드로, 없으면 버그로 보고 500으로 응답한다.
+     * 제약 이름은 Hibernate가 PostgreSQL 오류 메시지에서 꺼낸 값을 쓴다.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Object> handleDataIntegrityViolation(DataIntegrityViolationException ex, WebRequest request) {
+        ConstraintViolationException violation = findCause(ex, ConstraintViolationException.class);
+        String constraintName = violation == null ? null : violation.getConstraintName();
+        ErrorCode errorCode = ConstraintErrorMapping.find(constraintName).orElse(null);
+        if (errorCode == null) {
+            log.error("매핑되지 않은 DB 제약 위반: constraint={}, sqlState={}",
+                    constraintName, violation == null ? null : violation.getSQLState());
+            errorCode = ErrorCode.COMMON_INTERNAL_ERROR;
+        }
+        return handleExceptionInternal(ex, ApiResponse.fail(errorCode), new HttpHeaders(), errorCode.getStatus(), request);
     }
 
     /** 처리되지 않은 모든 예외. 내부 메시지는 로그에만 남기고 응답에는 넣지 않는다. */
@@ -120,6 +139,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             return pathVariable.name();
         }
         return parameter.getParameterName();
+    }
+
+    private static <T extends Throwable> @Nullable T findCause(Throwable ex, Class<T> type) {
+        for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
+            if (type.isInstance(cause)) {
+                return type.cast(cause);
+            }
+        }
+        return null;
     }
 
     /** 4xx는 클라이언트 원인이라 스택 없이 warn, 5xx는 서버 원인이라 스택과 함께 error. */

@@ -31,16 +31,24 @@ public enum ErrorCode {
     COMMON_INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "COMMON_INTERNAL_ERROR", "서버 오류가 발생했습니다."),
 
     // ===== AUTH (1번) =====
+    AUTH_EMAIL_ALREADY_REGISTERED(HttpStatus.CONFLICT, "AUTH_EMAIL_ALREADY_REGISTERED", "이미 가입된 이메일입니다."),
 
     // ===== USER (1번) =====
+    USER_NICKNAME_DUPLICATED(HttpStatus.CONFLICT, "USER_NICKNAME_DUPLICATED", "이미 사용 중인 닉네임입니다."),
+    USER_DEPARTMENT_MISMATCH(HttpStatus.BAD_REQUEST, "USER_DEPARTMENT_MISMATCH", "소속 학교의 학과가 아닙니다."),
 
     // ===== CLICK (2번) =====
 
     // ===== UNIV / RANK (3번) =====
 
     // ===== ALLY / MATCH / GUEST (3번) =====
+    ALLY_APPLICATION_PENDING(HttpStatus.CONFLICT, "ALLY_APPLICATION_PENDING", "이미 처리 대기 중인 연합 가입 신청이 있습니다."),
+    ALLY_UNIVERSITY_ALREADY_JOINED(HttpStatus.CONFLICT, "ALLY_UNIVERSITY_ALREADY_JOINED", "이미 연합에 소속된 학교입니다."),
+    MATCH_ALREADY_REQUESTED(HttpStatus.CONFLICT, "MATCH_ALREADY_REQUESTED", "이미 대결을 신청했습니다."),
+    GUEST_ALREADY_LIKED(HttpStatus.CONFLICT, "GUEST_ALREADY_LIKED", "이미 좋아요를 눌렀습니다."),
 
     // ===== CLICKER / ITEM / PAY (4번) =====
+    PAY_ALREADY_PROCESSED(HttpStatus.CONFLICT, "PAY_ALREADY_PROCESSED", "이미 처리된 결제입니다."),
     ;
 
     private final HttpStatus status;
