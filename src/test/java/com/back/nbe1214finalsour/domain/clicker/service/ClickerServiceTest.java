@@ -50,14 +50,16 @@ public class ClickerServiceTest {
     }
 
     @Test
-    @DisplayName("레벨표를 두 번 조회 해도 DB는 한 번만 조회 (캐시 테스트)")
+    @DisplayName("레벨표를 여러번 조회해도 DB는 한 번만 조회 (캐시 테스트)")
     void getLevelTable_cached() {
         // given
         given(clickerRepository.findAllByOrderByIdAsc()).willReturn(
                 List.of(new Clicker(1L, 10, 0L))
         );
 
-        // when: 레벨표를 두 번 조회 요청 시
+        // when: 레벨표를 네 번 조회 요청 시
+        clickerService.getLevelTable();
+        clickerService.getLevelTable();
         clickerService.getLevelTable();
         clickerService.getLevelTable();
 

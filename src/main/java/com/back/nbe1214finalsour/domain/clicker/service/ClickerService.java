@@ -3,6 +3,8 @@ package com.back.nbe1214finalsour.domain.clicker.service;
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
 import com.back.nbe1214finalsour.domain.clicker.repository.ClickerRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -10,9 +12,22 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class ClickerService {
+
     private final ClickerRepository clickerRepository;
 
+    private volatile List<Clicker> levelTable;
+
     public List<Clicker> getLevelTable() {
-        return this.clickerRepository.findAllByOrderByIdAsc();
+
+        if (levelTable == null){
+            loadLevelTable();
+        }
+        return this.levelTable;
+    }
+
+    // 서버가 시작될 때 미리 한 번 호출
+    @EventListener(ApplicationReadyEvent.class)
+    public void loadLevelTable() {
+        levelTable = List.copyOf(clickerRepository.findAllByOrderByIdAsc());
     }
 }
