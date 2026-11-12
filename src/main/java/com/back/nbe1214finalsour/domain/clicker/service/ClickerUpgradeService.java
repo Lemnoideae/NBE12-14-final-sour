@@ -7,6 +7,7 @@ import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -18,6 +19,7 @@ public class ClickerUpgradeService {
     private final UserClickerLevelStore userClickerLevelStore;
     private final ContributionWallet contributionWallet;
 
+    @Transactional
     public ClickerUpgradeResult upgrade(Long userId) {
         List<Clicker> levelTable = this.clickerService.getLevelTable();
         long currentLevel = this.userClickerLevelStore.findLevel(userId);
