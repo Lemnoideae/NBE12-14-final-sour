@@ -103,4 +103,14 @@ public class ClickerControllerTest {
 
         verify(clickerUpgradeService).upgrade(USER.userId());
     }
+
+    @Test
+    @DisplayName("[POST] /api/v1/clickers/upgrade는 비로그인이면 401 COMMON_UNAUTHORIZED, 업그레이드는 실행하지 않음")
+    void upgrade_unauthorized() throws Exception {
+        mockMvc.perform(post("/api/v1/clickers/upgrade"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("COMMON_UNAUTHORIZED"));
+
+        verify(clickerUpgradeService, never()).upgrade(anyLong());
+    }
 }
