@@ -19,7 +19,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 
 @WebMvcTest(ClickerController.class)
-@AutoConfigureMockMvc(addFilters = false) // Security 설정이 생기기 전까지 필터 제외
+@AutoConfigureMockMvc(addFilters = false) // 응답 형식만 검증. 인증·인가 규칙은 SecurityConfigTest에서 검증
 public class ClickerControllerTest {
 
     @Autowired
@@ -40,12 +40,14 @@ public class ClickerControllerTest {
         // when & then
         mockMvc.perform(get("/api/v1/clickers"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].level").value(1))
-                .andExpect(jsonPath("$[0].clickPower").value(10))
-                .andExpect(jsonPath("$[0].requiredScore").value(0))
-                .andExpect(jsonPath("$[1].level").value(2))
-                .andExpect(jsonPath("$[1].clickPower").value(20))
-                .andExpect(jsonPath("$[1].requiredScore").value(300));
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.message").value("요청이 성공했습니다."))
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].level").value(1))
+                .andExpect(jsonPath("$.data[0].clickPower").value(10))
+                .andExpect(jsonPath("$.data[0].requiredScore").value(0))
+                .andExpect(jsonPath("$.data[1].level").value(2))
+                .andExpect(jsonPath("$.data[1].clickPower").value(20))
+                .andExpect(jsonPath("$.data[1].requiredScore").value(300));
     }
 }
