@@ -1,6 +1,8 @@
 package com.back.nbe1214finalsour.domain.clicker.service;
 
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
+import com.back.nbe1214finalsour.domain.clicker.repository.UserClickerLevelStore;
+import com.back.nbe1214finalsour.domain.contribution.ContributionWallet;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -38,7 +40,7 @@ public class ClickerUpgradeServiceTest {
     @Test
     @DisplayName("이미 최고 레벨이면 CLICKER_MAX_LEVEL 예외, 기여도 차감과 레벨 변경은 하지 않음")
     void upgrade_maxLevel(){
-        // given: 레벨표는 1~2레벨, 유저는 이미 2레벨
+        // given: 레벨표는 2레벨가 최고 레벨, 유저는 이미 2레벨
         given(clickerService.getLevelTable()).willReturn(List.of(
                 new Clicker(1L, 10, 0L),
                 new Clicker(2L, 20, 300L)

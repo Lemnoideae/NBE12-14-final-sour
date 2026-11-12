@@ -38,6 +38,7 @@ public enum ErrorCode {
     USER_DEPARTMENT_MISMATCH(HttpStatus.BAD_REQUEST, "USER_DEPARTMENT_MISMATCH", "소속 학교의 학과가 아닙니다."),
 
     // ===== CLICK (2번) =====
+    CLICKER_MAX_LEVEL(HttpStatus.CONFLICT, "CLICKER_MAX_LEVEL", "이미 최고 레벨입니다."),
 
     // ===== UNIV / RANK (3번) =====
 
