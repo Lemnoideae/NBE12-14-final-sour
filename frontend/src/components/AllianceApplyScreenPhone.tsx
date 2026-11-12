@@ -5,6 +5,9 @@ import { ChevronLeft, Search, AlertCircle, Shield, CheckCircle2, XCircle, Clock 
 import { useMockAlliance } from '../hooks/useMockAlliance.tsx';
 import { REAL_UNIVERSITIES } from '../data/universitiesData.ts';
 import { getSchoolInfo, getAllianceForSchool, type AllianceRequest } from '../data/allianceModel.ts';
+import { MOCK_SHOP_CONFIG } from '../data/mockShopConfig.ts';
+import { DurationPicker, formatDurationHours } from './DurationPicker.tsx';
+import { ReceivedAllianceProposals } from './ReceivedAllianceProposals.tsx';
 import { SharedImage } from './SharedImage.tsx';
 import { soundManager } from '../utils/sound.ts';
 
@@ -23,12 +26,15 @@ export const AllianceApplyScreenPhone: React.FC<AllianceApplyScreenPhoneProps> =
   const {
     state,
     mySchoolId,
+    effectiveNow,
+    currentAlliance,
     sentRequests,
     receivedRequests,
     applyRequest,
     cancelRequest,
     demoAcceptRequest,
     demoRejectRequest,
+    demoReceiveProposal,
     simulateRequestFailure,
     toggleSimulateRequestFailure,
   } = useMockAlliance();
@@ -37,6 +43,11 @@ export const AllianceApplyScreenPhone: React.FC<AllianceApplyScreenPhoneProps> =
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSchoolId, setSelectedSchoolId] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const durationConfig = MOCK_SHOP_CONFIG.alliance.durationHours;
+  const [durationHours, setDurationHours] = useState(durationConfig.default);
+  // 같은 두 학교 사이 대기 제안은 방향과 관계없이 1건이므로, 내가 보낸 제안이나 받은 제안이 대기 중인 학교는 고를 수 없다
+  const pendingTargetIds = new Set(sentRequests.filter((r) => r.status === 'pending').map((r) => r.recipientSchoolId));
+  const pendingProposerIds = new Set(receivedRequests.filter((r) => r.status === 'pending').map((r) => r.requesterSchoolId));
 
   // Search filtered candidates (exclude self-school)
   const candidateSchools = REAL_UNIVERSITIES.filter((u) => {
@@ -57,9 +68,12 @@ export const AllianceApplyScreenPhone: React.FC<AllianceApplyScreenPhoneProps> =
   const handleSendApplication = () => {
     if (!selectedSchoolId) return;
     soundManager.playBuySound();
-    const result = applyRequest(selectedSchoolId);
+    const result = applyRequest(selectedSchoolId, durationHours);
     if (result.success) {
-      setFeedbackMessage({ type: 'success', text: `${selectedSchool?.name}에 연합 신청을 성공적으로 보냈습니다.` });
+      setFeedbackMessage({
+        type: 'success',
+        text: `${selectedSchool?.name}에 연합 신청을 성공적으로 보냈습니다. (연합 기간 ${formatDurationHours(durationHours)})`,
+      });
       setSelectedSchoolId(null);
     } else {
       setFeedbackMessage({ type: 'error', text: result.error });
@@ -80,7 +94,18 @@ export const AllianceApplyScreenPhone: React.FC<AllianceApplyScreenPhoneProps> =
     soundManager.playLevelUpSound();
     const result = demoAcceptRequest(requestId);
     if (result.success) {
-      setFeedbackMessage({ type: 'success', text: `[시연] 상대 학교가 수락하여 '${result.alliance?.name}'이 결성되었습니다!` });
+      setFeedbackMessage({ type: 'success', text: `[시연] 상대 학교 학생 1명이 수락하여 '${result.alliance?.name}'이 결성되었습니다!` });
+    } else {
+      setFeedbackMessage({ type: 'error', text: result.error });
+    }
+  };
+
+  const handleDemoReceive = () => {
+    soundManager.playTabSound();
+    const result = demoReceiveProposal();
+    if (result.success) {
+      const proposer = getSchoolInfo(result.request!.requesterSchoolId);
+      setFeedbackMessage({ type: 'success', text: `[시연] ${proposer.name}에서 연합 제안이 도착했습니다.` });
     } else {
       setFeedbackMessage({ type: 'error', text: result.error });
     }
@@ -174,9 +199,15 @@ export const AllianceApplyScreenPhone: React.FC<AllianceApplyScreenPhoneProps> =
             <Search className="w-3.5 h-3.5 text-[#8b5327]" />
             <span>대상 학교 검색 및 선택</span>
           </label>
-          <p className="font-pixel text-[9px] text-[#8b5327] -mt-1">
-            ※ 목업 단순화 제약: 단일 연합 소속만 지원됩니다 (실제 서비스 정책 미정).
+          <p className="font-pixel text-[9px] text-[#8b5327] -mt-1 leading-tight">
+            ※ 연합은 2개교로만 맺으며 한 학교는 활성 연합 하나에만 소속됩니다. 여러 학교에 동시에 제안할 수 있고,
+            하나가 성립하면 두 학교에 걸린 나머지 대기 제안은 자동 거절됩니다.
           </p>
+          {currentAlliance && (
+            <p role="note" className="font-pixel text-[10px] font-bold text-[#991b1b] bg-[#fee2e2] border border-[#991b1b] p-1.5">
+              이미 {currentAlliance.name}에 소속되어 있습니다. 연합이 만료된 뒤 새 제안을 보낼 수 있습니다.
+            </p>
+          )}
 
           <input
             type="text"
@@ -200,13 +231,16 @@ export const AllianceApplyScreenPhone: React.FC<AllianceApplyScreenPhoneProps> =
             ) : (
               candidateSchools.map((school) => {
                 const isSelected = selectedSchoolId === school.id;
-                const existingAlliance = getAllianceForSchool(state.alliances, school.id);
+                const existingAlliance = getAllianceForSchool(state.alliances, school.id, effectiveNow);
+                const isPendingTarget = pendingTargetIds.has(school.id);
+                const isPendingProposer = pendingProposerIds.has(school.id);
                 return (
                   <button
                     key={school.id}
                     type="button"
                     onClick={() => handleSelectSchool(school.id)}
-                    className={`p-1.5 border flex items-center justify-between text-left cursor-pointer transition-colors ${
+                    disabled={isPendingTarget || isPendingProposer}
+                    className={`p-1.5 border flex items-center justify-between text-left cursor-pointer transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                       isSelected
                         ? 'bg-[#fef08a] border-[#261608] shadow-[1px_1px_0px_#261608]'
                         : 'bg-[#ffffff] border-[#261608]/30 hover:bg-[#fffbeb]'
@@ -227,6 +261,16 @@ export const AllianceApplyScreenPhone: React.FC<AllianceApplyScreenPhoneProps> =
                       {existingAlliance && (
                         <span className="font-pixel text-[8px] px-1 py-0.2 bg-stone-200 border border-[#261608] text-[#8b5327]">
                           소속 연합 있음
+                        </span>
+                      )}
+                      {isPendingTarget && (
+                        <span className="font-pixel text-[8px] px-1 py-0.2 bg-[#fef08a] border border-[#b45309] text-[#b45309]">
+                          제안 대기 중
+                        </span>
+                      )}
+                      {isPendingProposer && (
+                        <span className="font-pixel text-[8px] px-1 py-0.2 bg-[#dcfce7] border border-[#166534] text-[#166534]">
+                          받은 제안 있음
                         </span>
                       )}
                       <span className="font-pixel text-[9px] text-[#8b5327]">({school.region})</span>
@@ -262,6 +306,18 @@ export const AllianceApplyScreenPhone: React.FC<AllianceApplyScreenPhoneProps> =
               </span>
             </div>
 
+            <DurationPicker
+              label="연합 기간"
+              value={durationHours}
+              min={durationConfig.min}
+              max={durationConfig.max}
+              presets={durationConfig.presets}
+              onChange={setDurationHours}
+            />
+            <p className="font-pixel text-[9px] text-[#8b5327] leading-tight">
+              ※ 상대 학교 학생 1명이 수락하는 순간부터 {formatDurationHours(durationHours)} 동안 연합이 유지됩니다.
+            </p>
+
             <button
               onClick={handleSendApplication}
               className="pixel-plaque plaque-yellow py-2 text-center font-pixel text-xs font-black cursor-pointer shadow-[2px_2px_0px_#261608]"
@@ -271,11 +327,13 @@ export const AllianceApplyScreenPhone: React.FC<AllianceApplyScreenPhoneProps> =
           </div>
         )}
 
-        {/* Section: Sent and Received Request Lists */}
-        <div className="rpg-box p-2.5 bg-[#ffffff] border-2 border-[#261608] flex flex-col gap-2">
-          <span className="font-pixel text-xs font-black text-[#261608]">신청 및 수신 내역</span>
+        <ReceivedAllianceProposals onResult={setFeedbackMessage} />
 
-          {sentRequests.length === 0 && receivedRequests.length === 0 ? (
+        {/* Section: Sent Request List */}
+        <div className="rpg-box p-2.5 bg-[#ffffff] border-2 border-[#261608] flex flex-col gap-2">
+          <span className="font-pixel text-xs font-black text-[#261608]">보낸 제안 내역</span>
+
+          {sentRequests.length === 0 ? (
             <p className="font-pixel text-[11px] text-[#8b5327] py-2 text-center">진행 중인 연합 신청 내역이 없습니다.</p>
           ) : (
             <div className="flex flex-col gap-2">
@@ -319,10 +377,13 @@ export const AllianceApplyScreenPhone: React.FC<AllianceApplyScreenPhoneProps> =
                           : req.status === 'accepted'
                           ? '수락됨'
                           : req.status === 'rejected'
-                          ? '거절됨'
+                          ? req.closedReason === 'capacity'
+                            ? '자동 거절 (다른 연합 성립)'
+                            : '거절됨'
                           : '취소됨'}
                       </span>
                     </div>
+                    <span className="font-pixel text-[9px] text-[#8b5327]">연합 기간 {formatDurationHours(req.durationHours)}</span>
 
                     {/* Normal User Action: Cancel only */}
                     {req.status === 'pending' && (
@@ -354,8 +415,16 @@ export const AllianceApplyScreenPhone: React.FC<AllianceApplyScreenPhoneProps> =
             <span className="font-pixel text-[11px] font-black">🧪 상대 학교 시연 제어 (DEMO CONTROLS)</span>
           </div>
           <p className="font-pixel text-[9px] text-[#7f1d1d] leading-tight">
-            ※ 실제 서비스에서는 상대 학교 관리자만 승인/거절할 수 있으며, 아래는 목업 시연용 모의 제어 버튼입니다.
+            ※ 실제 서비스에서는 상대 학교 학생 누구든 1명이 수락하면 성립합니다. 아래는 그 상황을 흉내 내는 목업 시연용 버튼입니다.
           </p>
+
+          <button
+            type="button"
+            onClick={handleDemoReceive}
+            className="py-1 bg-white text-[#0e7490] border border-[#0e7490] font-pixel text-[10px] font-black cursor-pointer hover:bg-[#ecfeff]"
+          >
+            [시연] 다른 학교의 연합 제안 받기
+          </button>
 
           {/* Pending requests actionable by demo control */}
           {sentRequests.filter((r: AllianceRequest) => r.status === 'pending').length === 0 ? (

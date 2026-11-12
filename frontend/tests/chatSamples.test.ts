@@ -77,9 +77,9 @@ test('교내 채팅 작성자는 모두 내 학교 배지이고 학과는 내 �
 });
 
 test('연합 채팅은 소속 연합이 없으면 null, 있으면 다른 연합 학교만 쓴다 (T44-D2)', () => {
-  assert.equal(getAllianceForSchool(INITIAL_MOCK_ALLIANCES, 'hanyang'), undefined);
+  assert.equal(getAllianceForSchool(INITIAL_MOCK_ALLIANCES, 'hanyang', Date.now()), undefined);
   assert.equal(getUnionChatSamples(input('hanyang'), null), null);
-  const alliance = getAllianceForSchool(INITIAL_MOCK_ALLIANCES, 'kaist')!;
+  const alliance = getAllianceForSchool(INITIAL_MOCK_ALLIANCES, 'kaist', Date.now())!;
   assert.equal(getUnionChatSamples(input('hanyang'), alliance.schoolIds), null, '내 학교가 없는 연합은 쓰지 않는다');
   const sample = input('kaist');
   const messages = getUnionChatSamples(sample, alliance.schoolIds)!;
@@ -113,8 +113,8 @@ test('앱: 한양대(연합 없음)는 연합 채팅 빈 상태와 비활성 입
   assertAbsent(within(dialog).queryByTestId('union-chat-empty'));
   // setPlayer keeps the current game score, so expected text comes from the live ranking.
   const schools = getSchoolViews(latest.state.schoolScore, 'kaist');
-  const alliance = getAllianceForSchool(INITIAL_MOCK_ALLIANCES, 'kaist')!;
+  const alliance = getAllianceForSchool(INITIAL_MOCK_ALLIANCES, 'kaist', Date.now())!;
   const expected = getUnionChatSamples({ schools, mySchoolId: 'kaist', myNickname: '넙죽러', myDepartment: '전산학부' }, alliance.schoolIds)!;
   for (const message of expected) assert.ok(dialog.textContent!.includes(message.text), message.text);
-  for (const id of ['postech', 'unist']) assert.ok(dialog.textContent!.includes(schools.find((entry) => entry.id === id)!.shortName), id);
+  for (const id of ['postech']) assert.ok(dialog.textContent!.includes(schools.find((entry) => entry.id === id)!.shortName), id);
 });
