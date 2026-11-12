@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 import java.util.OptionalLong;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
@@ -80,4 +81,25 @@ public class ClickerUpgradeServiceTest {
         verify(contributionWallet, never()).restore(anyLong(), anyLong());
     }
 
+    @Test
+    @DisplayName("업그레이드 성공 시 다음 레벨 비용만큼 차감하고 레벨을 1 올린 결과를 반환")
+    void upgrade_success() {
+        // given
+        given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
+        given(userClickerLevelStore.findLevel(USER_ID)).willReturn(1L);
+        given(contributionWallet.tryDeduct(USER_ID, 300L)).willReturn(OptionalLong.of(700L));
+        given(userClickerLevelStore.changeLevel(USER_ID, 1L, 2L)).willReturn(true);
+
+        // when
+        ClickerUpgradeResult result = this.clickerUpgradeService.upgrade(USER_ID);
+
+        // then
+        assertThat(result.upgradedClicker().getId()).isEqualTo(2L);
+        assertThat(result.upgradedClicker().getClickPower()).isEqualTo(20);
+        assertThat(result.nextLevelRequiredScore()).isEqualTo(1000L);
+        assertThat(result.remainingScore()).isEqualTo(700L);
+
+        verify(userClickerLevelStore).changeLevel(USER_ID, 1L, 2L);
+        verify(contributionWallet, never()).restore(anyLong(), anyLong());
+    }
 }
