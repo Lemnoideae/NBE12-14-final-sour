@@ -28,6 +28,6 @@ public class ClickerService {
     // 서버가 시작될 때 미리 한 번 호출
     @EventListener(ApplicationReadyEvent.class)
     public void loadLevelTable() {
-        levelTable = List.copyOf(clickerRepository.findAllByOrderByIdAsc());
+        this.levelTable = List.copyOf(this.clickerRepository.findAllByOrderByIdAsc());
     }
 }
