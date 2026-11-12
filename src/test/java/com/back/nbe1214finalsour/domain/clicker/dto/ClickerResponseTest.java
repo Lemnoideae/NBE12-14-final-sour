@@ -12,7 +12,7 @@ public class ClickerResponseTest {
     public void t1() {
         Clicker clicker = new Clicker(2L, 20, 300L);
 
-        ClickerResponse response = ClickerResponse.from(clikcer);
+        ClickerResponse response = new ClickerResponse(clicker);
 
         assertThat(response.level()).isEqualTo(2L);         // 엔티티 id → level
         assertThat(response.clickPower()).isEqualTo(20);
