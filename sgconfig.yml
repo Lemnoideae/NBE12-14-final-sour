@@ -1,0 +1,7 @@
+# ast-grep 프로젝트 설정. 저장소 루트에서 실행한다.
+#   규칙 검사:      ast-grep scan
+#   규칙 자체 검사: ast-grep test
+ruleDirs:
+  - ast-grep/rules
+testConfigs:
+  - testDir: ast-grep/rule-tests

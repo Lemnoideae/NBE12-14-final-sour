@@ -1,0 +1,32 @@
+id: no-generic-exception-in-domain
+snapshots:
+  throw new IllegalArgumentException("잘못된 값");:
+    labels:
+    - source: new IllegalArgumentException("잘못된 값")
+      style: primary
+      start: 6
+      end: 51
+  throw new IllegalStateException();:
+    labels:
+    - source: new IllegalStateException()
+      style: primary
+      start: 6
+      end: 33
+  throw new RuntimeException("x");:
+    labels:
+    - source: new RuntimeException("x")
+      style: primary
+      start: 6
+      end: 31
+  throw new java.lang.RuntimeException("x");:
+    labels:
+    - source: new java.lang.RuntimeException("x")
+      style: primary
+      start: 6
+      end: 41
+  userRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("없는 회원"));:
+    labels:
+    - source: new IllegalArgumentException("없는 회원")
+      style: primary
+      start: 46
+      end: 91
