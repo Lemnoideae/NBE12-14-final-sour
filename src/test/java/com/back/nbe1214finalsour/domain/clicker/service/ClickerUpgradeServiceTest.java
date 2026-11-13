@@ -11,6 +11,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
+
+
+import static org.mockito.ArgumentMatchers.any;
 
 import java.util.List;
 import java.util.OptionalLong;
@@ -44,6 +48,9 @@ public class ClickerUpgradeServiceTest {
     @Mock
     private ContributionWallet contributionWallet;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     @InjectMocks
     private ClickerUpgradeService clickerUpgradeService;
 
@@ -60,6 +67,7 @@ public class ClickerUpgradeServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.CLICKER_MAX_LEVEL);
 
+        verify(eventPublisher, never()).publishEvent(any(ClickerUpgradedEvent.class));
         verify(contributionWallet, never()).tryDeduct(anyLong(), anyLong(), anyLong());
         verify(userClickerLevelStore, never()).changeLevel(anyLong(), anyLong(), anyLong());
     }
@@ -78,6 +86,7 @@ public class ClickerUpgradeServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.CLICKER_NOT_ENOUGH_SCORE);
 
+        verify(eventPublisher, never()).publishEvent(any(ClickerUpgradedEvent.class));
         verify(userClickerLevelStore, never()).changeLevel(anyLong(), anyLong(), anyLong());
         verify(contributionWallet, never()).restore(anyLong(), anyLong(), anyLong());
     }
@@ -100,6 +109,7 @@ public class ClickerUpgradeServiceTest {
         assertThat(result.nextLevelRequiredScore()).isEqualTo(1000L);
         assertThat(result.remainingScore()).isEqualTo(700L);
 
+        verify(eventPublisher).publishEvent(new ClickerUpgradedEvent(USER_ID, 2L));
         verify(userClickerLevelStore).changeLevel(USER_ID, 1L, 2L);
         verify(contributionWallet, never()).restore(anyLong(), anyLong(), anyLong());
     }
@@ -119,6 +129,7 @@ public class ClickerUpgradeServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.CLICKER_UPGRADE_CONFLICT);
 
+        verify(eventPublisher, never()).publishEvent(any(ClickerUpgradedEvent.class));
         verify(contributionWallet).restore(USER_ID, UNIVERSITY_ID, 300L);
     }
 }
