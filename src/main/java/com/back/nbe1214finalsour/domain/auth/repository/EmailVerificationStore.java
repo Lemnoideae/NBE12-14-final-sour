@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -106,6 +107,15 @@ public class EmailVerificationStore {
     /** 가입 토큰에 정규화한 이메일을 묶어 저장한다. 회원가입(단계 6)이 읽고, 가입이 끝나면 지운다 */
     public void saveSignupToken(String signupToken, String email, Duration ttl) {
         redis.opsForValue().set(SIGNUP_KEY_PREFIX + signupToken, email, ttl);
+    }
+
+    /** 가입 토큰에 묶인 정규화한 이메일. 만료됐거나 없는 토큰이면 비어 있다 */
+    public Optional<String> findSignupEmail(String signupToken) {
+        return Optional.ofNullable(redis.opsForValue().get(SIGNUP_KEY_PREFIX + signupToken));
+    }
+
+    public void deleteSignupToken(String signupToken) {
+        redis.delete(SIGNUP_KEY_PREFIX + signupToken);
     }
 
     static String dailyKey(String emailHash, LocalDate day) {

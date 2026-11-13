@@ -37,6 +37,7 @@ public enum ErrorCode {
     AUTH_INVALID_CODE(HttpStatus.BAD_REQUEST, "AUTH_INVALID_CODE", "인증 코드가 일치하지 않습니다."),
     AUTH_CODE_EXPIRED(HttpStatus.GONE, "AUTH_CODE_EXPIRED", "인증 코드가 만료되었습니다. 코드를 다시 요청해주세요."),
     AUTH_CODE_ATTEMPTS_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "AUTH_CODE_ATTEMPTS_EXCEEDED", "인증 코드를 5번 틀렸습니다. 코드를 다시 요청해주세요."),
+    AUTH_INVALID_SIGNUP_TOKEN(HttpStatus.BAD_REQUEST, "AUTH_INVALID_SIGNUP_TOKEN", "가입 토큰이 만료되었거나 올바르지 않습니다. 이메일 인증을 다시 해주세요."),
 
     // ===== USER (1번) =====
     USER_NICKNAME_DUPLICATED(HttpStatus.CONFLICT, "USER_NICKNAME_DUPLICATED", "이미 사용 중인 닉네임입니다."),

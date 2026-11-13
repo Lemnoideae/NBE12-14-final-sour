@@ -3,12 +3,9 @@ package com.back.nbe1214finalsour.domain.auth.service;
 import com.back.nbe1214finalsour.domain.auth.dto.EmailCodeResponse;
 import com.back.nbe1214finalsour.domain.auth.dto.EmailVerifyResponse;
 import com.back.nbe1214finalsour.domain.auth.dto.UniversitySummary;
-import com.back.nbe1214finalsour.domain.auth.entity.UniDomain;
 import com.back.nbe1214finalsour.domain.auth.mail.VerificationMailSender;
 import com.back.nbe1214finalsour.domain.auth.repository.EmailVerificationStore;
-import com.back.nbe1214finalsour.domain.auth.repository.UniDomainRepository;
 import com.back.nbe1214finalsour.domain.university.entity.University;
-import com.back.nbe1214finalsour.domain.university.repository.UniversityRepository;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.global.crypto.EmailHasher;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
@@ -42,8 +39,7 @@ public class EmailVerificationService {
 
     private static final int CODE_BOUND = 1_000_000;
 
-    private final UniDomainRepository uniDomainRepository;
-    private final UniversityRepository universityRepository;
+    private final EmailUniversityResolver universityResolver;
     private final UserRepository userRepository;
     private final EmailVerificationStore store;
     private final VerificationMailSender mailSender;
@@ -53,7 +49,7 @@ public class EmailVerificationService {
 
     public EmailCodeResponse requestCode(String rawEmail) {
         String email = EmailHasher.normalize(rawEmail);
-        University university = findUniversity(email);
+        University university = universityResolver.resolve(email);
         String emailHash = emailHasher.hash(email);
 
         if (userRepository.existsByEmailHashAndDeletedAtIsNull(emailHash)) {
@@ -92,19 +88,10 @@ public class EmailVerificationService {
             }
         }
 
-        University university = findUniversity(email);
+        University university = universityResolver.resolve(email);
         String signupToken = UUID.randomUUID().toString();
         store.saveSignupToken(signupToken, email, SIGNUP_TOKEN_TTL);
         return new EmailVerifyResponse(signupToken, UniversitySummary.from(university), SIGNUP_TOKEN_TTL.toSeconds());
-    }
-
-    /** 이메일 도메인(정규화한 이메일의 마지막 {@code @} 뒤)과 정확히 같은 {@code uni_domain}의 학교 */
-    private University findUniversity(String email) {
-        String domain = email.substring(email.lastIndexOf('@') + 1);
-        UniDomain uniDomain = uniDomainRepository.findByDomain(domain)
-                .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_UNSUPPORTED_DOMAIN, "domain=" + domain));
-        return universityRepository.findById(uniDomain.getUniversityId())
-                .orElseThrow(() -> new IllegalStateException("uni_domain의 학교가 없습니다: " + uniDomain.getUniversityId()));
     }
 
     private LocalDate today() {
