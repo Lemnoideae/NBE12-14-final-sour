@@ -17,7 +17,7 @@ class RedisKeyTest {
     @Test
     @DisplayName("패턴에 인자를 채워 키를 만든다")
     void ofFillsPattern() {
-        assertThat(RedisKey.AUTH_EMAIL_CODE.of("abc123")).isEqualTo("auth:email-code:abc123");
+        assertThat(RedisKey.AUTH_EMAIL_CODE.of("abc123")).isEqualTo("auth:email:code:abc123");
         assertThat(RedisKey.RANK_DEPT.of(7)).isEqualTo("rank:univ:7:dept");
         assertThat(RedisKey.UNIV_CUSTOM_LOGO.of(7)).isEqualTo("univ:7:custom-logo");
         assertThat(RedisKey.CHAT_UNIV_CHANNEL.of(7)).isEqualTo("chat:univ:7");
@@ -116,11 +116,12 @@ class RedisKeyTest {
 
         assertThat(actual).containsExactly(
                 // 인증 (Auth)
-                "AUTH_EMAIL_CODE|auth:email-code:%s|HASH|PLAIN",
-                "AUTH_EMAIL_COOLDOWN|auth:email-cooldown:%s|STRING|PLAIN",
-                "AUTH_EMAIL_DAILY|auth:email-daily:%s|STRING|PLAIN",
-                "AUTH_SIGNUP_TOKEN|auth:signup-token:%s|HASH|PLAIN",
-                "AUTH_LOGIN_FAIL|auth:login-fail:%s|STRING|PLAIN",
+                "AUTH_EMAIL_CODE|auth:email:code:%s|HASH|PLAIN",
+                "AUTH_EMAIL_COOLDOWN|auth:email:cooldown:%s|STRING|PLAIN",
+                "AUTH_EMAIL_DAILY|auth:email:daily:%s:%s|STRING|PLAIN",
+                "AUTH_SIGNUP_TOKEN|auth:signup:%s|STRING|PLAIN",
+                "AUTH_LOGIN_FAIL|auth:login:fail:%s|STRING|PLAIN",
+                "AUTH_LOGIN_LOCK|auth:login:lock:%s|STRING|PLAIN",
                 // 회원 (User)
                 "USER_STATUS|user:%s:status|STRING|PLAIN",
                 "USER_CLICKER|user:%s:clicker|STRING|PLAIN",

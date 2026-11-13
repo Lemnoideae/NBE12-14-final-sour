@@ -1,0 +1,107 @@
+package com.back.nbe1214finalsour.domain.click.service;
+
+import com.back.nbe1214finalsour.domain.click.dto.ClickApplyResponse;
+import com.back.nbe1214finalsour.domain.click.dto.ClickRequest;
+import com.back.nbe1214finalsour.domain.click.dto.ClickResponse;
+import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
+import com.back.nbe1214finalsour.domain.clicker.service.ClickerService;
+import com.back.nbe1214finalsour.domain.user.entity.User;
+import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
+import com.back.nbe1214finalsour.global.exception.BusinessException;
+import com.back.nbe1214finalsour.global.exception.ErrorCode;
+import com.back.nbe1214finalsour.global.redis.RedisHandler;
+import com.back.nbe1214finalsour.global.redis.RedisKey;
+import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
+import org.springframework.stereotype.Service;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+public class ClickService {
+
+    private final StringRedisTemplate stringRedisTemplate;
+    private final ActionRateLimiter actionRateLimiter;
+    private final ClickerService clickerService;
+    private final UserRepository userRepository;
+    private final RedisHandler redisHandler;
+
+    private static final RedisScript<List> APPLY_CLICK = RedisScript.of(new ClassPathResource("redis/apply-click.lua"), List.class);
+
+    public ClickResponse click(Long userId, Long universityId, ClickRequest request) {
+        int clickCount = request.clickCount();
+        String submissionId = request.submissionId();
+
+        // 1. 중복 제출 확인 및 저장
+        Boolean isRequested = stringRedisTemplate.opsForValue().setIfAbsent(RedisKey.SUBMIT_DEDUPE.of(userId, submissionId), submissionId, Duration.ofSeconds(10L));
+
+        // 위에서 저장이 안됐으면 중복 요청임
+        if (Boolean.FALSE.equals(isRequested)) {
+            throw new BusinessException(ErrorCode.CLICK_DUPLICATE_SUBMISSION);
+        }
+
+        // 2. 횟수·간격 검증 (클릭·공격·지원 모두 합쳐서 10초에 12회 요청이 왔는가?)
+        actionRateLimiter.check(userId);
+
+        // 3. 인정 점수
+        int score = clickCount;
+
+        // 클리커 데미지 가져오기
+        String clickerLevel = stringRedisTemplate.opsForValue().get(RedisKey.USER_CLICKER.of(userId));
+
+        // 레디스에 정보가 없으면 레디스에 저장
+        // TODO: JWT 토큰에 DepartmentId가 생기면 user 조회 로직 if문 안으로 넣기
+        User user = userRepository.findById(userId).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        if (clickerLevel == null) {
+            stringRedisTemplate.opsForValue().set(RedisKey.USER_CLICKER.of(userId), String.valueOf(user.getClickerId()));
+            clickerLevel = String.valueOf(user.getClickerId());
+        }
+
+        Clicker clicker = clickerService.getClickerById(Long.valueOf(clickerLevel));
+
+        score *= clicker.getClickPower();
+
+        // 아이템 적용 가져오기
+        Double multiplier = redisHandler.getHash(RedisKey.USER_EFFECT.of(userId), "multiplier", Double.class)
+                .orElse(1.0);
+        score = (int) Math.floor(score * multiplier);
+
+        // 4. Redis에 반영
+        long nowSec = Instant.now().getEpochSecond();
+        List<String> keys = List.of(
+                RedisKey.RANK_UNIV.of(),
+                RedisKey.RANK_DEPT.of(universityId),
+                RedisKey.RANK_USER.of(universityId),
+                RedisKey.DIRTY_UNIV.of(),
+                RedisKey.DIRTY_DEPT.of(),
+                RedisKey.DIRTY_USER.of(),
+                RedisKey.CLICKS_UNIV_SECOND.of(universityId, nowSec),
+                RedisKey.CLICKS_UNIV_SECOND.of(universityId, nowSec - 1)
+        );
+
+        // TODO: JWT 토큰 클레임에 departmentId 추가 시 수정
+        Long departmentId = user.getDepartmentId();
+        List<String> r = stringRedisTemplate.execute(
+                APPLY_CLICK,
+                keys,
+                String.valueOf(universityId),
+                String.valueOf(departmentId),
+                String.valueOf(userId),
+                String.valueOf(score),
+                String.valueOf(clickCount)
+        );
+        ClickApplyResponse clickApplyResponse = new ClickApplyResponse(
+                Long.valueOf(r.get(0)),
+                Long.valueOf(r.get(1)),
+                Long.valueOf(r.get(2)),
+                Long.valueOf(r.get(3)),
+                Long.valueOf(r.get(4)));
+
+        return ClickResponse.from(clickApplyResponse, clickCount, score, multiplier, universityId, departmentId);
+    }
+}

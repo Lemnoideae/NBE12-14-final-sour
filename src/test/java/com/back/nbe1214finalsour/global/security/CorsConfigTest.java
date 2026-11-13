@@ -17,6 +17,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -66,10 +67,20 @@ class CorsConfigTest {
     }
 
     @Test
+    @WithMockUser
     @DisplayName("허용한 origin의 실제 요청에도 CORS 헤더가 붙는다")
     void allowedActualRequest() throws Exception {
         mockMvc.perform(get("/api/test/cors").header(HttpHeaders.ORIGIN, "https://a.example"))
                 .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://a.example"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
+    }
+
+    @Test
+    @DisplayName("401 응답에도 CORS 헤더가 붙어, 다른 origin의 프론트가 오류 코드(COMMON_EXPIRED_TOKEN 등)를 읽을 수 있다")
+    void unauthorizedResponseHasCorsHeaders() throws Exception {
+        mockMvc.perform(get("/api/test/cors").header(HttpHeaders.ORIGIN, "https://a.example"))
+                .andExpect(status().isUnauthorized())
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://a.example"))
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
     }

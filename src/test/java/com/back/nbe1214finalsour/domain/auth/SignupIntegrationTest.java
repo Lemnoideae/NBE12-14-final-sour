@@ -138,6 +138,16 @@ class SignupIntegrationTest {
     }
 
     @Test
+    @DisplayName("가입: 발급한 형식(UUID)이 아닌 토큰도 400 AUTH_INVALID_SIGNUP_TOKEN (':'가 섞여 키를 만들 수 없는 값 포함)")
+    void malformedSignupToken() throws Exception {
+        for (String token : new String[]{"a:b", "auth:signup:x", "not-a-uuid"}) {
+            signup(token, "가입왕", departmentId)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("AUTH_INVALID_SIGNUP_TOKEN"));
+        }
+    }
+
+    @Test
     @DisplayName("가입: 다른 학교의 학과면 400 USER_DEPARTMENT_MISMATCH이고, 토큰은 남아 다시 가입할 수 있다")
     void departmentOfOtherUniversity() throws Exception {
         String token = signupToken(EMAIL);
