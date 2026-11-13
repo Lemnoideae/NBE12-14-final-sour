@@ -5,6 +5,7 @@ import com.back.nbe1214finalsour.global.security.jwt.JwtProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -45,6 +46,7 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/clickers/upgrade").authenticated()    // 클리커 업그레이드 API
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/logout").authenticated()  // 로그아웃 (명세서: 인증 필요)
                         .requestMatchers("/error", "/actuator/health").permitAll()
                         // TODO(SCRUM-68): API 명세서의 인증 표기(필요·선택·불필요·관리자)대로 바꾼다.
                         // 그전까지 팀원이 로컬에서 API를 호출할 수 있도록 임시로 모두 허용한다.
