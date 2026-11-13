@@ -7,7 +7,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.RedisConnectionFailureException;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -25,5 +28,15 @@ public class ClickerLevelCacheSyncListenerTest {
         listener.onClickerUpgraded(new ClickerUpgradedEvent(1L, 2L));
 
         verify(userClickerLevelCache).raiseLevel(1L, 2L);
+    }
+
+    @Test
+    @DisplayName("Redis 갱신이 실패해도 예외를 밖으로 던지지 않음 (이미 커밋된 업그레이드가 500이 되지 않도록)")
+    void onClickerUpgraded_redisFailure() {
+        willThrow(new RedisConnectionFailureException("Redis 연결 실패"))
+                .given(userClickerLevelCache).raiseLevel(1L, 2L);
+
+        assertThatCode(() -> listener.onClickerUpgraded(new ClickerUpgradedEvent(1L, 2L)))
+                .doesNotThrowAnyException();
     }
 }
