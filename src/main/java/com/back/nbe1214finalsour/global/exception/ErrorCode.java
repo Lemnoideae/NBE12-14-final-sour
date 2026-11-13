@@ -47,9 +47,12 @@ public enum ErrorCode {
     // ===== USER (1번) =====
     USER_NICKNAME_DUPLICATED(HttpStatus.CONFLICT, "USER_NICKNAME_DUPLICATED", "이미 사용 중인 닉네임입니다."),
     USER_DEPARTMENT_MISMATCH(HttpStatus.BAD_REQUEST, "USER_DEPARTMENT_MISMATCH", "소속 학교의 학과가 아닙니다."),
+    USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "회원을 찾을 수 없습니다."),
     USER_SUSPENDED(HttpStatus.FORBIDDEN, "USER_SUSPENDED", "이용이 제한된 계정입니다."),
 
     // ===== CLICK (2번) =====
+    CLICK_DUPLICATE_SUBMISSION(HttpStatus.CONFLICT, "CLICK_DUPLICATE_SUBMISSION", "이미 처리한 제출입니다."),
+    CLICK_TOO_FREQUENT(HttpStatus.TOO_MANY_REQUESTS, "CLICK_TOO_FREQUENT", "제출 요청이 너무 많습니다."),
 
 
     // ===== UNIV / RANK (3번) =====

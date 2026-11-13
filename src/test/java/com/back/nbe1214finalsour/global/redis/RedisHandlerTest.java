@@ -32,6 +32,7 @@ class RedisHandlerTest {
     private static final String MIX_KEY = "handler:mix";
     private static final String RANK_KEY = RedisKey.RANK_USER.of(7);
     private static final String DIRTY_KEY = RedisKey.DIRTY_USER.of();
+    private static final String EFFECT_KEY = RedisKey.USER_EFFECT.of(1);
 
     @Autowired
     private RedisHandler redisHandler;
@@ -42,7 +43,7 @@ class RedisHandlerTest {
 
     @BeforeEach
     void clear() {
-        redisTemplate.delete(List.of(HASH_KEY, TTL_KEY, COUNTER_KEY, FLAG_KEY, MIX_KEY, RANK_KEY, DIRTY_KEY));
+        redisTemplate.delete(List.of(HASH_KEY, TTL_KEY, COUNTER_KEY, FLAG_KEY, MIX_KEY, RANK_KEY, DIRTY_KEY, EFFECT_KEY));
     }
 
     @Test
@@ -380,6 +381,62 @@ class RedisHandlerTest {
     void redisMemberErrorDetailIsNotExposedInResponseMessage() {
         assertThat(ErrorCode.COMMON_REDIS_MEMBER_NOT_NUMERIC.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(ErrorCode.COMMON_REDIS_MEMBER_NOT_NUMERIC.getMessage()).doesNotContain("member", "직렬화");
+    }
+
+    // --- 아이템 배율(user:{userId}:effect): 어느 쪽이 써도 Double로 읽혀야 한다 ---
+    // ClickService가 이 경로로 multiplier를 읽는다. 쓰는 팀이 숫자/문자열 중 무엇을 쓸지 알 수 없다
+
+    @Test
+    @DisplayName("RedisHandler가 숫자로 쓴 multiplier를 Double로 읽는다")
+    void getHashReadsMultiplierWrittenAsNumber() {
+        redisHandler.setHash(EFFECT_KEY, "multiplier", 1.5);
+
+        assertThat(stringRedisTemplate.<String, String>opsForHash().get(EFFECT_KEY, "multiplier"))
+                .isEqualTo("1.5");
+        assertThat(redisHandler.getHash(EFFECT_KEY, "multiplier", Double.class)).contains(1.5);
+    }
+
+    @Test
+    @DisplayName("RedisHandler가 문자열로 쓴 multiplier도 Double로 읽는다 (따옴표가 붙어도 강제 변환)")
+    void getHashReadsMultiplierWrittenAsQuotedString() {
+        redisHandler.setHash(EFFECT_KEY, "multiplier", "1.5");
+
+        // 실제 저장된 값에는 따옴표가 붙는다
+        assertThat(stringRedisTemplate.<String, String>opsForHash().get(EFFECT_KEY, "multiplier"))
+                .isEqualTo("\"1.5\"");
+        // 그래도 Double로 읽힌다 (Double.parseDouble은 여기서 터졌다)
+        assertThat(redisHandler.getHash(EFFECT_KEY, "multiplier", Double.class)).contains(1.5);
+    }
+
+    @Test
+    @DisplayName("StringRedisTemplate으로 쓴 multiplier도 Double로 읽는다")
+    void getHashReadsMultiplierWrittenByStringTemplate() {
+        stringRedisTemplate.<String, String>opsForHash().put(EFFECT_KEY, "multiplier", "1.5");
+
+        assertThat(redisHandler.getHash(EFFECT_KEY, "multiplier", Double.class)).contains(1.5);
+    }
+
+    @Test
+    @DisplayName("정수로 쓴 multiplier도 Double로 읽는다")
+    void getHashReadsMultiplierWrittenAsInteger() {
+        redisHandler.setHash(EFFECT_KEY, "multiplier", 2);
+
+        assertThat(redisHandler.getHash(EFFECT_KEY, "multiplier", Double.class)).contains(2.0);
+    }
+
+    @Test
+    @DisplayName("multiplier가 없으면 empty를 반환한다 (호출부가 1.0으로 대체한다)")
+    void getHashReturnsEmptyWhenMultiplierMissing() {
+        assertThat(redisHandler.getHash(EFFECT_KEY, "multiplier", Double.class)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("숫자가 아닌 multiplier는 터진다")
+    void getHashFailsWhenMultiplierNotNumeric() {
+        stringRedisTemplate.<String, String>opsForHash().put(EFFECT_KEY, "multiplier", "abc");
+
+        assertThatThrownBy(() -> redisHandler.getHash(EFFECT_KEY, "multiplier", Double.class))
+                .isInstanceOf(RuntimeException.class);
     }
 
     record TempPost(
