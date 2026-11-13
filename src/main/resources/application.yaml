@@ -6,12 +6,32 @@ spring:
   jackson:
     # API 명세서 §1: 시각은 KST 오프셋을 포함한 ISO-8601로 응답한다 (예: 2026-11-11T14:30:00+09:00)
     time-zone: Asia/Seoul
+  # 학교 이메일 인증 메일. SPRING_MAIL_HOST·PORT·USERNAME·PASSWORD 환경 변수로 넣는다 (저장소에 커밋하지 않는다).
+  # host가 없으면 prod가 아닌 프로필에서는 코드를 로그로 대신 남기고, prod에서는 앱이 시작하지 않는다 (VerificationMailConfig)
+  mail:
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      # SMTP가 응답하지 않을 때 요청 스레드가 오래 묶이지 않도록 (밀리초)
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
+
+# 인증 메일 발신 주소 (VERIFICATION_MAIL_FROM). 없으면 spring.mail.username을 쓴다
+verification-mail:
+  from: ${VERIFICATION_MAIL_FROM:${spring.mail.username:}}
 
 jwt:
   # HS256 서명 키, UTF-8로 32바이트 이상 (예: openssl rand -base64 48). 저장소에 커밋하지 않는다
   secret: ${JWT_SECRET}
   access-token-ttl: 60m
   refresh-token-ttl: 30d
+
+email-crypto:
+  # users.email AES-256-GCM 키. Base64로 인코딩한 32바이트 (예: openssl rand -base64 32). 저장소에 커밋하지 않는다
+  encryption-key: ${EMAIL_ENCRYPTION_KEY}
+  # users.email_hash HMAC-SHA256 키. Base64로 인코딩한 32바이트 이상. 바꾸면 기존 회원을 이메일로 찾을 수 없다
+  hash-key: ${EMAIL_HASH_KEY}
 
 cors:
   # 쉼표로 구분한 origin 목록. 기본값은 로컬 프론트 개발 서버 (frontend/package.json의 vite --port=3000)
