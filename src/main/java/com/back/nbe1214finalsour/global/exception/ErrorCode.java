@@ -30,8 +30,16 @@ public enum ErrorCode {
     COMMON_UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "COMMON_UNSUPPORTED_MEDIA_TYPE", "지원하지 않는 Content-Type입니다."),
     COMMON_INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "COMMON_INTERNAL_ERROR", "서버 오류가 발생했습니다."),
 
+    COMMON_REDIS_MEMBER_NOT_NUMERIC(HttpStatus.INTERNAL_SERVER_ERROR, "COMMON_REDIS_MEMBER_NOT_NUMERIC", "서버 오류가 발생했습니다."),
+
     // ===== AUTH (1번) =====
     AUTH_EMAIL_ALREADY_REGISTERED(HttpStatus.CONFLICT, "AUTH_EMAIL_ALREADY_REGISTERED", "이미 가입된 이메일입니다."),
+    AUTH_UNSUPPORTED_DOMAIN(HttpStatus.BAD_REQUEST, "AUTH_UNSUPPORTED_DOMAIN", "등록되지 않은 학교 이메일 도메인입니다."),
+    AUTH_CODE_COOLDOWN(HttpStatus.TOO_MANY_REQUESTS, "AUTH_CODE_COOLDOWN", "인증 코드 요청이 너무 잦습니다. 잠시 후 다시 시도해주세요."),
+    AUTH_INVALID_CODE(HttpStatus.BAD_REQUEST, "AUTH_INVALID_CODE", "인증 코드가 일치하지 않습니다."),
+    AUTH_CODE_EXPIRED(HttpStatus.GONE, "AUTH_CODE_EXPIRED", "인증 코드가 만료되었습니다. 코드를 다시 요청해주세요."),
+    AUTH_CODE_ATTEMPTS_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "AUTH_CODE_ATTEMPTS_EXCEEDED", "인증 코드를 5번 틀렸습니다. 코드를 다시 요청해주세요."),
+    AUTH_INVALID_SIGNUP_TOKEN(HttpStatus.BAD_REQUEST, "AUTH_INVALID_SIGNUP_TOKEN", "가입 토큰이 만료되었거나 올바르지 않습니다. 이메일 인증을 다시 해주세요."),
 
     // ===== USER (1번) =====
     USER_NICKNAME_DUPLICATED(HttpStatus.CONFLICT, "USER_NICKNAME_DUPLICATED", "이미 사용 중인 닉네임입니다."),

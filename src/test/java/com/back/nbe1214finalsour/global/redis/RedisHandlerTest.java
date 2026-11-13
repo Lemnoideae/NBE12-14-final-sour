@@ -4,10 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.back.nbe1214finalsour.IntegrationTest;
+import com.back.nbe1214finalsour.global.exception.BusinessException;
+import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.data.redis.RedisSystemException;
 import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -27,6 +30,8 @@ class RedisHandlerTest {
     private static final String COUNTER_KEY = "handler:counter";
     private static final String FLAG_KEY = "handler:flag";
     private static final String MIX_KEY = "handler:mix";
+    private static final String RANK_KEY = RedisKey.RANK_USER.of(7);
+    private static final String DIRTY_KEY = RedisKey.DIRTY_USER.of();
 
     @Autowired
     private RedisHandler redisHandler;
@@ -37,7 +42,7 @@ class RedisHandlerTest {
 
     @BeforeEach
     void clear() {
-        redisTemplate.delete(List.of(HASH_KEY, TTL_KEY, COUNTER_KEY, FLAG_KEY, MIX_KEY));
+        redisTemplate.delete(List.of(HASH_KEY, TTL_KEY, COUNTER_KEY, FLAG_KEY, MIX_KEY, RANK_KEY, DIRTY_KEY));
     }
 
     @Test
@@ -237,6 +242,144 @@ class RedisHandlerTest {
         stringRedisTemplate.opsForValue().set(MIX_KEY, "42");
 
         assertThat(redisHandler.get(MIX_KEY, Long.class)).contains(42L);
+    }
+
+    // --- ZSet (rank:*) : member는 평문 숫자로만 저장된다 ---
+
+    @Test
+    @DisplayName("addRank로 넣은 member는 평문 숫자라 StringRedisTemplate에서 찾을 수 있다")
+    void addRankStoresPlainNumberMember() {
+        redisHandler.addRank(RANK_KEY, 1024L, 10.0);
+
+        assertThat(stringRedisTemplate.opsForZSet().range(RANK_KEY, 0, -1)).containsExactly("1024");
+        assertThat(stringRedisTemplate.opsForZSet().score(RANK_KEY, "1024")).isEqualTo(10.0);
+    }
+
+    @Test
+    @DisplayName("incrementRankScore는 점수를 누적하고 누적값을 반환한다")
+    void incrementRankScoreAccumulates() {
+        assertThat(redisHandler.incrementRankScore(RANK_KEY, 1024L, 10.0)).isEqualTo(10.0);
+        assertThat(redisHandler.incrementRankScore(RANK_KEY, 1024L, 2.5)).isEqualTo(12.5);
+
+        assertThat(stringRedisTemplate.opsForZSet().score(RANK_KEY, "1024")).isEqualTo(12.5);
+    }
+
+    @Test
+    @DisplayName("getRankScore는 없는 멤버에 대해 empty를 반환한다")
+    void getRankScoreReturnsEmptyWhenMemberMissing() {
+        redisHandler.addRank(RANK_KEY, 1024L, 10.0);
+
+        assertThat(redisHandler.getRankScore(RANK_KEY, 1024L)).hasValue(10.0);
+        assertThat(redisHandler.getRankScore(RANK_KEY, 9999L)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("getRankPosition은 점수 높은 순으로 0부터 순위를 센다")
+    void getRankPositionCountsFromHighestScore() {
+        redisHandler.addRank(RANK_KEY, 1L, 30.0);
+        redisHandler.addRank(RANK_KEY, 2L, 20.0);
+        redisHandler.addRank(RANK_KEY, 3L, 10.0);
+
+        assertThat(redisHandler.getRankPosition(RANK_KEY, 1L)).hasValue(0L);
+        assertThat(redisHandler.getRankPosition(RANK_KEY, 3L)).hasValue(2L);
+        assertThat(redisHandler.getRankPosition(RANK_KEY, 9999L)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("getTopRank는 점수 높은 순으로 count개를 반환한다")
+    void getTopRankReturnsHighestScoresFirst() {
+        redisHandler.addRank(RANK_KEY, 1L, 10.0);
+        redisHandler.addRank(RANK_KEY, 2L, 30.0);
+        redisHandler.addRank(RANK_KEY, 3L, 20.0);
+
+        assertThat(redisHandler.getTopRank(RANK_KEY, 2))
+                .containsExactly(
+                        new RedisHandler.RankEntry(2L, 30.0),
+                        new RedisHandler.RankEntry(3L, 20.0)
+                );
+    }
+
+    @Test
+    @DisplayName("getTopRank에 0 이하를 넘기면 빈 목록을 반환한다")
+    void getTopRankReturnsEmptyWhenCountNotPositive() {
+        redisHandler.addRank(RANK_KEY, 1L, 10.0);
+
+        // count - 1 이 -1이 되어 전체가 조회되는 것을 막는다
+        assertThat(redisHandler.getTopRank(RANK_KEY, 0)).isEmpty();
+        assertThat(redisHandler.getTopRank(RANK_KEY, -5)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("removeRank는 멤버가 있으면 true, 없으면 false를 반환한다")
+    void removeRankReturnsWhetherMemberExisted() {
+        redisHandler.addRank(RANK_KEY, 1024L, 10.0);
+
+        assertThat(redisHandler.removeRank(RANK_KEY, 1024L)).isTrue();
+        assertThat(redisHandler.removeRank(RANK_KEY, 1024L)).isFalse();
+    }
+
+    // --- Set (dirty:*) ---
+
+    @Test
+    @DisplayName("addDirty는 새 ID면 true, 이미 있으면 false를 반환한다")
+    void addDirtyDeduplicates() {
+        assertThat(redisHandler.addDirty(DIRTY_KEY, 1024L)).isTrue();
+        assertThat(redisHandler.addDirty(DIRTY_KEY, 1024L)).isFalse();
+
+        assertThat(stringRedisTemplate.opsForSet().members(DIRTY_KEY)).containsExactly("1024");
+    }
+
+    @Test
+    @DisplayName("getDirtyMembers는 저장된 ID를 Long으로 돌려준다")
+    void getDirtyMembersReturnsLongs() {
+        redisHandler.addDirty(DIRTY_KEY, 1L);
+        redisHandler.addDirty(DIRTY_KEY, 2L);
+
+        assertThat(redisHandler.getDirtyMembers(DIRTY_KEY)).containsExactlyInAnyOrder(1L, 2L);
+        assertThat(redisHandler.getDirtyMembers("handler:없는키")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("removeDirty는 ID가 있으면 true, 없으면 false를 반환한다")
+    void removeDirtyReturnsWhetherMemberExisted() {
+        redisHandler.addDirty(DIRTY_KEY, 1024L);
+
+        assertThat(redisHandler.removeDirty(DIRTY_KEY, 1024L)).isTrue();
+        assertThat(redisHandler.removeDirty(DIRTY_KEY, 1024L)).isFalse();
+    }
+
+    // --- 읽기 쪽 가드: 다른 직렬화로 쓴 member가 섞이면 조용히 틀리지 않고 터진다 ---
+
+    @Test
+    @DisplayName("따옴표 붙은 ZSet member를 읽으면 COMMON_REDIS_MEMBER_NOT_NUMERIC으로 터진다")
+    void getTopRankFailsLoudlyOnQuotedMember() {
+        // 다른 팀이 RedisTemplate에 String member를 넣은 상황
+        redisTemplate.opsForZSet().add(RANK_KEY, "1024", 10.0);
+
+        assertThatThrownBy(() -> redisHandler.getTopRank(RANK_KEY, 10))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("평문 숫자가 아닙니다")
+                .extracting(ex -> ((BusinessException) ex).getErrorCode())
+                .isEqualTo(ErrorCode.COMMON_REDIS_MEMBER_NOT_NUMERIC);
+    }
+
+    @Test
+    @DisplayName("따옴표 붙은 Set member를 읽으면 COMMON_REDIS_MEMBER_NOT_NUMERIC으로 터진다")
+    void getDirtyMembersFailsLoudlyOnQuotedMember() {
+        redisTemplate.opsForSet().add(DIRTY_KEY, "1024");
+
+        assertThatThrownBy(() -> redisHandler.getDirtyMembers(DIRTY_KEY))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("평문 숫자가 아닙니다")
+                .extracting(ex -> ((BusinessException) ex).getErrorCode())
+                .isEqualTo(ErrorCode.COMMON_REDIS_MEMBER_NOT_NUMERIC);
+    }
+
+    @Test
+    @DisplayName("COMMON_REDIS_MEMBER_NOT_NUMERIC의 상세 메시지는 로그용이고 응답 메시지로는 나가지 않는다")
+    void redisMemberErrorDetailIsNotExposedInResponseMessage() {
+        assertThat(ErrorCode.COMMON_REDIS_MEMBER_NOT_NUMERIC.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(ErrorCode.COMMON_REDIS_MEMBER_NOT_NUMERIC.getMessage()).doesNotContain("member", "직렬화");
     }
 
     record TempPost(
