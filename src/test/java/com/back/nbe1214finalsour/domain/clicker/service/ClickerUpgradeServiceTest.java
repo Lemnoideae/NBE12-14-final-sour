@@ -1,6 +1,7 @@
 package com.back.nbe1214finalsour.domain.clicker.service;
 
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
+import com.back.nbe1214finalsour.domain.clicker.event.ClickerUpgradedEvent;
 import com.back.nbe1214finalsour.domain.clicker.repository.UserClickerLevelStore;
 import com.back.nbe1214finalsour.domain.contribution.ContributionWallet;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
@@ -11,12 +12,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.List;
 import java.util.OptionalLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -26,6 +29,7 @@ import static org.mockito.Mockito.verify;
 public class ClickerUpgradeServiceTest {
 
     private static final Long USER_ID = 1L;
+    private static final Long UNIVERSITY_ID = 12L;
 
     // 레벨표: 1레벨(기본) → 2레벨(300) → 3레벨(1000)
     private static final List<Clicker> LEVEL_TABLE = List.of(
@@ -43,6 +47,9 @@ public class ClickerUpgradeServiceTest {
     @Mock
     private ContributionWallet contributionWallet;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     @InjectMocks
     private ClickerUpgradeService clickerUpgradeService;
 
@@ -54,12 +61,13 @@ public class ClickerUpgradeServiceTest {
         given(userClickerLevelStore.findLevel(USER_ID)).willReturn(3L);
 
         // when & then
-        assertThatThrownBy(() -> clickerUpgradeService.upgrade(USER_ID))
+        assertThatThrownBy(() -> clickerUpgradeService.upgrade(USER_ID, UNIVERSITY_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.CLICKER_MAX_LEVEL);
 
-        verify(contributionWallet, never()).tryDeduct(anyLong(), anyLong());
+        verify(eventPublisher, never()).publishEvent(any(ClickerUpgradedEvent.class));
+        verify(contributionWallet, never()).tryDeduct(anyLong(), anyLong(), anyLong());
         verify(userClickerLevelStore, never()).changeLevel(anyLong(), anyLong(), anyLong());
     }
 
@@ -69,16 +77,17 @@ public class ClickerUpgradeServiceTest {
         // given: 유저는 1레벨, 다음 레벨(2) 비용은 300인데 잔액 부족
         given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
         given(userClickerLevelStore.findLevel(USER_ID)).willReturn(1L);
-        given(contributionWallet.tryDeduct(USER_ID, 300L)).willReturn(OptionalLong.empty());
+        given(contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 300L)).willReturn(OptionalLong.empty());
 
         // when & then
-        assertThatThrownBy(() -> clickerUpgradeService.upgrade(USER_ID))
+        assertThatThrownBy(() -> clickerUpgradeService.upgrade(USER_ID, UNIVERSITY_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.CLICKER_NOT_ENOUGH_SCORE);
 
+        verify(eventPublisher, never()).publishEvent(any(ClickerUpgradedEvent.class));
         verify(userClickerLevelStore, never()).changeLevel(anyLong(), anyLong(), anyLong());
-        verify(contributionWallet, never()).restore(anyLong(), anyLong());
+        verify(contributionWallet, never()).restore(anyLong(), anyLong(), anyLong());
     }
 
     @Test
@@ -87,11 +96,11 @@ public class ClickerUpgradeServiceTest {
         // given
         given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
         given(userClickerLevelStore.findLevel(USER_ID)).willReturn(1L);
-        given(contributionWallet.tryDeduct(USER_ID, 300L)).willReturn(OptionalLong.of(700L));
+        given(contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 300L)).willReturn(OptionalLong.of(700L));
         given(userClickerLevelStore.changeLevel(USER_ID, 1L, 2L)).willReturn(true);
 
         // when
-        ClickerUpgradeResult result = this.clickerUpgradeService.upgrade(USER_ID);
+        ClickerUpgradeResult result = this.clickerUpgradeService.upgrade(USER_ID, UNIVERSITY_ID);
 
         // then
         assertThat(result.upgradedClicker().getId()).isEqualTo(2L);
@@ -99,8 +108,9 @@ public class ClickerUpgradeServiceTest {
         assertThat(result.nextLevelRequiredScore()).isEqualTo(1000L);
         assertThat(result.remainingScore()).isEqualTo(700L);
 
+        verify(eventPublisher).publishEvent(new ClickerUpgradedEvent(USER_ID, 2L));
         verify(userClickerLevelStore).changeLevel(USER_ID, 1L, 2L);
-        verify(contributionWallet, never()).restore(anyLong(), anyLong());
+        verify(contributionWallet, never()).restore(anyLong(), anyLong(), anyLong());
     }
 
     @Test
@@ -109,15 +119,16 @@ public class ClickerUpgradeServiceTest {
         // given: 1 레벨 유저가 300 차감 성공이지만 이미 다른 요청이 레벨을 올렸을 시 변경 실패
         given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
         given(userClickerLevelStore.findLevel(USER_ID)).willReturn(1L);
-        given(contributionWallet.tryDeduct(USER_ID, 300L)).willReturn(OptionalLong.of(700L));
+        given(contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 300L)).willReturn(OptionalLong.of(700L));
         given(userClickerLevelStore.changeLevel(USER_ID, 1L, 2L)).willReturn(false);
 
         // when & then
-        assertThatThrownBy(() -> clickerUpgradeService.upgrade(USER_ID))
+        assertThatThrownBy(() -> clickerUpgradeService.upgrade(USER_ID, UNIVERSITY_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.CLICKER_UPGRADE_CONFLICT);
 
-        verify(contributionWallet).restore(USER_ID, 300L);
+        verify(eventPublisher, never()).publishEvent(any(ClickerUpgradedEvent.class));
+        verify(contributionWallet).restore(USER_ID, UNIVERSITY_ID, 300L);
     }
 }
