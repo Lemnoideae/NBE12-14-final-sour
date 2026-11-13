@@ -3,6 +3,9 @@ package com.back.nbe1214finalsour.global.exception;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.back.nbe1214finalsour.IntegrationTest;
+import com.back.nbe1214finalsour.global.security.AuthUser;
+import com.back.nbe1214finalsour.global.security.Role;
+import com.back.nbe1214finalsour.global.security.jwt.JwtProvider;
 import jakarta.servlet.Filter;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -10,6 +13,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -28,11 +32,16 @@ class ApiErrorControllerIntegrationTest {
     @LocalServerPort
     private int port;
 
+    @Autowired
+    private JwtProvider jwtProvider;
+
     @Test
     @DisplayName("필터 예외는 500 COMMON_INTERNAL_ERROR JSON으로 응답하고 예외 정보는 노출하지 않는다")
     void filterException() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + FAILING_PATH))
                 .header("Accept", "text/html")
+                // /api/** 는 로그인이 필요하다. 인증을 통과해야 보안 필터 뒤의 실패 필터까지 간다
+                .header("Authorization", "Bearer " + jwtProvider.createAccessToken(new AuthUser(1L, 1L, Role.USER)))
                 .GET()
                 .build();
 
