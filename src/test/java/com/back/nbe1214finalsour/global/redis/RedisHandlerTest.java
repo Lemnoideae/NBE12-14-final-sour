@@ -1,14 +1,18 @@
 package com.back.nbe1214finalsour.global.redis;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.back.nbe1214finalsour.IntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.RedisSystemException;
 import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.serializer.SerializationException;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -20,15 +24,20 @@ class RedisHandlerTest {
 
     private static final String HASH_KEY = "handler:hash";
     private static final String TTL_KEY = "handler:ttl";
+    private static final String COUNTER_KEY = "handler:counter";
+    private static final String FLAG_KEY = "handler:flag";
+    private static final String MIX_KEY = "handler:mix";
 
     @Autowired
     private RedisHandler redisHandler;
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
 
     @BeforeEach
     void clear() {
-        redisTemplate.delete(List.of(HASH_KEY, TTL_KEY));
+        redisTemplate.delete(List.of(HASH_KEY, TTL_KEY, COUNTER_KEY, FLAG_KEY, MIX_KEY));
     }
 
     @Test
@@ -98,6 +107,136 @@ class RedisHandlerTest {
 
         assertThat(hashOperations.getTimeToLive(HASH_KEY, List.of("post1")).persistent())
                 .containsExactly("post1");
+    }
+
+    // --- 원자 연산 ---
+
+    @Test
+    @DisplayName("increment는 키가 없으면 0에서 시작해 1을 반환한다")
+    void incrementCreatesKeyFromZero() {
+        assertThat(redisHandler.increment(COUNTER_KEY)).isEqualTo(1L);
+        assertThat(redisHandler.increment(COUNTER_KEY)).isEqualTo(2L);
+    }
+
+    @Test
+    @DisplayName("increment로 만든 카운터는 따옴표 없는 숫자로 저장된다")
+    void incrementStoresPlainNumber() {
+        redisHandler.increment(COUNTER_KEY);
+
+        assertThat(stringRedisTemplate.opsForValue().get(COUNTER_KEY)).isEqualTo("1");
+        assertThat(redisHandler.get(COUNTER_KEY, Long.class)).contains(1L);
+    }
+
+    @Test
+    @DisplayName("incrementWithTtl은 최초 증가에만 TTL을 걸고 이후 호출은 갱신하지 않는다")
+    void incrementWithTtlAppliesTtlOnlyOnFirstIncrement() {
+        assertThat(redisHandler.incrementWithTtl(COUNTER_KEY, Duration.ofMinutes(10))).isEqualTo(1L);
+
+        Long firstTtl = redisTemplate.getExpire(COUNTER_KEY);
+        assertThat(firstTtl).isPositive().isLessThanOrEqualTo(Duration.ofMinutes(10).toSeconds());
+
+        // TTL을 더 길게 넘겨도 두 번째 증가에서는 다시 걸지 않는다
+        assertThat(redisHandler.incrementWithTtl(COUNTER_KEY, Duration.ofMinutes(60))).isEqualTo(2L);
+        assertThat(redisTemplate.getExpire(COUNTER_KEY)).isLessThanOrEqualTo(firstTtl);
+    }
+
+    @Test
+    @DisplayName("incrementHash는 Hash 필드를 HINCRBY로 증가시킨다")
+    void incrementHashIncreasesField() {
+        assertThat(redisHandler.incrementHash(HASH_KEY, "count", 3L)).isEqualTo(3L);
+        assertThat(redisHandler.incrementHash(HASH_KEY, "count", 2L)).isEqualTo(5L);
+        assertThat(redisHandler.getHash(HASH_KEY, "count", Long.class)).contains(5L);
+    }
+
+    @Test
+    @DisplayName("setIfAbsent는 처음에만 true를 반환하고 TTL을 건다")
+    void setIfAbsentOnlySucceedsOnce() {
+        assertThat(redisHandler.setIfAbsent(FLAG_KEY, "sent", Duration.ofMinutes(5))).isTrue();
+        assertThat(redisHandler.setIfAbsent(FLAG_KEY, "sent", Duration.ofMinutes(5))).isFalse();
+
+        assertThat(redisTemplate.getExpire(FLAG_KEY))
+                .isPositive()
+                .isLessThanOrEqualTo(Duration.ofMinutes(5).toSeconds());
+    }
+
+    @Test
+    @DisplayName("delete는 키가 있으면 true, 없으면 false를 반환한다")
+    void deleteReturnsWhetherKeyExisted() {
+        redisHandler.set(FLAG_KEY, "sent");
+
+        assertThat(redisHandler.delete(FLAG_KEY)).isTrue();
+        assertThat(redisHandler.delete(FLAG_KEY)).isFalse();
+    }
+
+    @Test
+    @DisplayName("expire는 키가 있으면 true, 없으면 false를 반환한다")
+    void expireReturnsWhetherKeyExisted() {
+        redisHandler.set(FLAG_KEY, "sent");
+
+        assertThat(redisHandler.expire(FLAG_KEY, Duration.ofMinutes(5))).isTrue();
+        assertThat(redisTemplate.getExpire(FLAG_KEY)).isPositive();
+
+        redisHandler.delete(FLAG_KEY);
+        assertThat(redisHandler.expire(FLAG_KEY, Duration.ofMinutes(5))).isFalse();
+    }
+
+    // --- 직렬화 함정: 카운터를 set으로 초기화하면 안 되는 이유 ---
+
+    @Test
+    @DisplayName("set으로 숫자 타입을 저장하면 increment가 동작한다")
+    void incrementWorksWhenValueStoredAsNumber() {
+        redisHandler.set(COUNTER_KEY, 1);
+
+        assertThat(stringRedisTemplate.opsForValue().get(COUNTER_KEY)).isEqualTo("1");
+        assertThat(redisHandler.increment(COUNTER_KEY)).isEqualTo(2L);
+        assertThat(redisHandler.get(COUNTER_KEY, Long.class)).contains(2L);
+    }
+
+    @Test
+    @DisplayName("set으로 숫자를 문자열로 저장하면 따옴표가 붙어 increment가 실패한다")
+    void incrementFailsWhenValueStoredAsString() {
+        redisHandler.set(COUNTER_KEY, "1");
+
+        assertThat(stringRedisTemplate.opsForValue().get(COUNTER_KEY)).isEqualTo("\"1\"");
+        assertThatThrownBy(() -> redisHandler.increment(COUNTER_KEY))
+                .isInstanceOf(RedisSystemException.class);
+    }
+
+    @Test
+    @DisplayName("setHash로 숫자를 문자열로 저장한 필드는 incrementHash가 실패한다")
+    void incrementHashFailsWhenFieldStoredAsString() {
+        redisHandler.setHash(HASH_KEY, "count", "1");
+
+        assertThatThrownBy(() -> redisHandler.incrementHash(HASH_KEY, "count", 1L))
+                .isInstanceOf(RedisSystemException.class);
+    }
+
+    // --- 직렬화 함정: 한 키를 두 템플릿으로 섞어 쓰면 안 되는 이유 ---
+
+    @Test
+    @DisplayName("RedisHandler로 쓴 문자열은 StringRedisTemplate에서 따옴표가 붙어 읽힌다")
+    void handlerWrittenStringIsQuotedForStringRedisTemplate() {
+        redisHandler.set(MIX_KEY, "abc");
+
+        assertThat(stringRedisTemplate.opsForValue().get(MIX_KEY)).isEqualTo("\"abc\"");
+    }
+
+    @Test
+    @DisplayName("StringRedisTemplate으로 쓴 문자열은 RedisHandler.get에서 역직렬화에 실패한다")
+    void stringTemplateWrittenStringFailsHandlerGet() {
+        stringRedisTemplate.opsForValue().set(MIX_KEY, "abc");
+
+        // 따옴표 없는 abc는 유효한 JSON이 아니다
+        assertThatThrownBy(() -> redisHandler.get(MIX_KEY, String.class))
+                .isInstanceOf(SerializationException.class);
+    }
+
+    @Test
+    @DisplayName("StringRedisTemplate으로 쓴 숫자는 유효한 JSON이라 RedisHandler.get으로 읽힌다")
+    void stringTemplateWrittenNumberIsReadableByHandler() {
+        stringRedisTemplate.opsForValue().set(MIX_KEY, "42");
+
+        assertThat(redisHandler.get(MIX_KEY, Long.class)).contains(42L);
     }
 
     record TempPost(
