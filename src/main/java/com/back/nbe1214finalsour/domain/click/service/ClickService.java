@@ -1,15 +1,24 @@
 package com.back.nbe1214finalsour.domain.click.service;
 
+import com.back.nbe1214finalsour.domain.click.dto.ClickApplyResponse;
 import com.back.nbe1214finalsour.domain.click.dto.ClickRequest;
+import com.back.nbe1214finalsour.domain.click.dto.ClickResponse;
+import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
 import com.back.nbe1214finalsour.domain.clicker.service.ClickerService;
+import com.back.nbe1214finalsour.domain.user.entity.User;
+import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import com.back.nbe1214finalsour.global.redis.RedisKey;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -18,9 +27,11 @@ public class ClickService {
     private final StringRedisTemplate stringRedisTemplate;
     private final ActionRateLimiter actionRateLimiter;
     private final ClickerService clickerService;
+    private final UserRepository userRepository;
 
-    public void click(Long userId, ClickRequest request) {
+    private static final RedisScript<List> APPLY_CLICK = RedisScript.of(new ClassPathResource("redis/apply-click.lua"), List.class);
 
+    public ClickResponse click(Long userId, Long universityId, ClickRequest request) {
         int clickCount = request.clickCount();
         String submissionId = request.submissionId();
 
@@ -36,10 +47,59 @@ public class ClickService {
         actionRateLimiter.check(userId);
 
         // 3. 인정 점수
-        clickerService.getLevelTable();
+        int score = clickCount;
+
+        // 클리커 데미지 가져오기
+        String clickerLevel = stringRedisTemplate.opsForValue().get(RedisKey.USER_CLICKER.of(userId));
+
+        // 레디스에 정보가 없으면 레디스에 저장
+        // TODO: JWT 토큰에 DepartmentId가 생기면 user 조회 로직 if문 안으로 넣기
+        User user = userRepository.findById(userId).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        if (clickerLevel == null) {
+            stringRedisTemplate.opsForValue().set(RedisKey.USER_CLICKER.of(userId), String.valueOf(user.getClickerId()));
+            clickerLevel = String.valueOf(user.getClickerId());
+        }
+
+        Clicker clicker = clickerService.getClickerById(Long.valueOf(clickerLevel));
+
+        score *= clicker.getClickPower();
+
+        // 아이템 적용 가져오기
+        Object raw = stringRedisTemplate.opsForHash().get(RedisKey.USER_EFFECT.of(userId), "multiplier");
+        double multiplier = raw != null ? Double.parseDouble((String) raw) : 1.0;
+        score = (int) Math.floor(score * multiplier);
 
         // 4. Redis에 반영
+        long nowSec = Instant.now().getEpochSecond();
+        List<String> keys = List.of(
+                RedisKey.RANK_UNIV.of(),
+                RedisKey.RANK_DEPT.of(universityId),
+                RedisKey.RANK_USER.of(universityId),
+                RedisKey.DIRTY_UNIV.of(),
+                RedisKey.DIRTY_DEPT.of(),
+                RedisKey.DIRTY_USER.of(),
+                RedisKey.CLICKS_UNIV_SECOND.of(universityId, nowSec),
+                RedisKey.CLICKS_UNIV_SECOND.of(universityId, nowSec - 1)
+        );
 
+        // TODO: JWT 토큰 클레임에 departmentId 추가 시 수정
+        Long departmentId = user.getDepartmentId();
+        List<String> r = stringRedisTemplate.execute(
+                APPLY_CLICK,
+                keys,
+                String.valueOf(universityId),
+                String.valueOf(departmentId),
+                String.valueOf(userId),
+                String.valueOf(score),
+                String.valueOf(clickCount)
+        );
+        ClickApplyResponse clickApplyResponse = new ClickApplyResponse(
+                Long.valueOf(r.get(0)),
+                Long.valueOf(r.get(1)),
+                Long.valueOf(r.get(2)),
+                Long.valueOf(r.get(3)),
+                Long.valueOf(r.get(4)));
 
+        return ClickResponse.from(clickApplyResponse, clickCount, score, multiplier, universityId, departmentId);
     }
 }

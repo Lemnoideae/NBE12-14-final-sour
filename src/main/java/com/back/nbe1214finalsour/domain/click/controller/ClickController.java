@@ -1,6 +1,7 @@
 package com.back.nbe1214finalsour.domain.click.controller;
 
 import com.back.nbe1214finalsour.domain.click.dto.ClickRequest;
+import com.back.nbe1214finalsour.domain.click.dto.ClickResponse;
 import com.back.nbe1214finalsour.domain.click.service.ClickService;
 import com.back.nbe1214finalsour.global.response.ApiResponse;
 import com.back.nbe1214finalsour.global.security.AuthUser;
@@ -23,8 +24,10 @@ public class ClickController {
     public ApiResponse<?> batchClick(@AuthenticationPrincipal AuthUser user,
                                      @RequestBody @Valid ClickRequest request) {
         Long userId = user.userId();
+        Long universityId = user.universityId();
 
-        clickService.click(userId, request);
+        ClickResponse response = clickService.click(userId, universityId, request);
 
+        return ApiResponse.ok(response);
     }
 }

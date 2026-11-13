@@ -14,16 +14,16 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ActionRateLimiter {
 
-    private StringRedisTemplate stringRedisTemplate;
+    private final StringRedisTemplate stringRedisTemplate;
 
-    private final RedisScript<Long> INCR_WITH_TTL = RedisScript.of("""
+    private static final RedisScript<Long> INCR_WITH_TTL = RedisScript.of("""
             local c = redis.call('INCR', KEYS[1])
             if c == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
             return c
             """, Long.class);
 
-    private final int MAX_ACTIONS_PER_WINDOW = 12;
-    private final int WINDOW_SECONDS = 10;
+    private static final int MAX_ACTIONS_PER_WINDOW = 12;
+    private static final int WINDOW_SECONDS = 10;
 
 
     public void check(Long userId) {
