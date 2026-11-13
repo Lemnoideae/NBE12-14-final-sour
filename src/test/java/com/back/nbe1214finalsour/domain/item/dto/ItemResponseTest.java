@@ -27,4 +27,15 @@ public class ItemResponseTest {
         assertThat(response.price()).isEqualTo(3000L);
         assertThat(response.durationSeconds()).isEqualTo(600);
     }
+
+    @Test
+    @DisplayName("로고 변경권은 영구라 durationSeconds가 null")
+    void fromLogo() {
+        Item item = new Item(2L, "학교 로고 변경권", "우리 학교 로고 변경", ItemType.LOGO_UNIVERSITY, PayType.CREDIT, 3900L, null);
+
+        ItemResponse response = new ItemResponse(item);
+
+        assertThat(response.type()).isEqualTo(ItemType.LOGO_UNIVERSITY);
+        assertThat(response.durationSeconds()).isNull();
+    }
 }
