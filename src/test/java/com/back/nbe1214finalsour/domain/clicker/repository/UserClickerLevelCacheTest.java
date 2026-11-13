@@ -26,10 +26,25 @@ public class UserClickerLevelCacheTest {
         redisTemplate.delete(KEY);
     }
 
+    private String cachedLevel(){
+        return redisTemplate.opsForValue().get(KEY);
+    }
+
     @Test
     @DisplayName("캐시가 없으면 새 레벨을 평문 숫자로 저장")
     void raiseLevel_whenEmpty() {
         userClickerLevelCache.raiseLevel(USER_ID, 2L);
         assertThat(cachedLevel()).isEqualTo("2");
     }
+
+    @Test
+    @DisplayName("새 레벨이 더 높으면 갱신")
+    void raiseLevel_whenHigher() {
+        redisTemplate.opsForValue().set(KEY, "2");
+
+        userClickerLevelCache.raiseLevel(USER_ID, 3L);
+
+        assertThat(cachedLevel()).isEqualTo("3");
+    }
+
 }
