@@ -4,6 +4,8 @@ import com.back.nbe1214finalsour.global.response.ApiResponse;
 import com.back.nbe1214finalsour.global.response.FieldErrorDetail;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.exception.ConstraintViolationException;
 import org.jspecify.annotations.Nullable;
@@ -14,6 +16,7 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.validation.BindException;
 import org.springframework.validation.Errors;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
@@ -156,7 +159,24 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         if (status.is5xxServerError()) {
             log.error("{} {} {}", status.value(), where, ex.getClass().getSimpleName(), ex);
         } else {
-            log.warn("{} {} {}: {}", status.value(), where, ex.getClass().getSimpleName(), ex.getMessage());
+            log.warn("{} {} {}: {}", status.value(), where, ex.getClass().getSimpleName(), logMessage(ex));
         }
+    }
+
+    /**
+     * 로그에 남길 메시지. 입력 검증 실패는 거부된 값(비밀번호 등)이 예외 메시지에 들어 있으므로 필드 이름만 남긴다.
+     */
+    private static @Nullable String logMessage(Exception ex) {
+        if (ex instanceof BindException bind) {
+            return "invalid fields " + bind.getBindingResult().getFieldErrors().stream()
+                    .map(FieldError::getField)
+                    .collect(Collectors.toCollection(TreeSet::new));
+        }
+        if (ex instanceof HandlerMethodValidationException validation) {
+            return "invalid parameters " + validation.getParameterValidationResults().stream()
+                    .map(result -> parameterName(result.getMethodParameter()))
+                    .collect(Collectors.toCollection(TreeSet::new));
+        }
+        return ex.getMessage();
     }
 }
