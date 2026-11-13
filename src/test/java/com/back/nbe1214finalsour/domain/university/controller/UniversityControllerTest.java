@@ -1,6 +1,7 @@
 package com.back.nbe1214finalsour.domain.university.controller;
 
 import com.back.nbe1214finalsour.domain.university.dto.DepartmentResponse;
+import com.back.nbe1214finalsour.domain.university.dto.UniversityDetailResponse;
 import com.back.nbe1214finalsour.domain.university.dto.UniversitySearchResponse;
 import com.back.nbe1214finalsour.domain.university.service.UniversityQueryService;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -21,6 +23,7 @@ import java.util.List;
 
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -137,5 +140,175 @@ class UniversityControllerTest {
                 .andExpect(jsonPath("$.code").value("UNIV_NOT_FOUND"));
 
         verify(universityQueryService).getDepartments(999999L);
+    }
+
+    @Test
+    @DisplayName("비로그인 학교 상세 조회 시 200과 학교 정보를 반환한다")
+    void getUniversityDetail() throws Exception {
+
+        given(universityQueryService.getUniversityDetail(12L, null))
+                .willReturn(new UniversityDetailResponse(
+                        12L,
+                        "서울대학교",
+                        null,
+                        15000L,
+                        3L,
+                        498L,
+                        List.of(),
+                        List.of(),
+                        false
+                ));
+
+        mockMvc.perform(get("/api/v1/universities/12"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.id").value(12))
+                .andExpect(jsonPath("$.data.name").value("서울대학교"))
+                .andExpect(jsonPath("$.data.totalScore").value(15000))
+                .andExpect(jsonPath("$.data.rank").value(3))
+                .andExpect(jsonPath("$.data.memberCount").value(498))
+                .andExpect(jsonPath("$.data.topDepartments").isArray())
+                .andExpect(jsonPath("$.data.topContributors").isArray())
+                .andExpect(jsonPath("$.data.isMyUniversity").value(false));
+
+        verify(universityQueryService)
+                .getUniversityDetail(12L, null);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 학교 상세 조회 시 404를 반환한다")
+    void getUniversityDetail_notFound() throws Exception {
+
+        given(universityQueryService.getUniversityDetail(999999L, null))
+                .willThrow(new BusinessException(ErrorCode.UNIV_NOT_FOUND));
+
+        mockMvc.perform(get("/api/v1/universities/999999"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("UNIV_NOT_FOUND"));
+
+        verify(universityQueryService)
+                .getUniversityDetail(999999L, null);
+    }
+
+    @Test
+    @DisplayName("학교 상세 조회 시 상위 학과와 기여자 정보를 반환한다")
+    void getUniversityDetail_withRankings() throws Exception {
+
+        given(universityQueryService.getUniversityDetail(12L, null))
+                .willReturn(new UniversityDetailResponse(
+                        12L,
+                        "서울대학교",
+                        null,
+                        15000L,
+                        3L,
+                        498L,
+                        List.of(
+                                new UniversityDetailResponse.TopDepartment(
+                                        1L, 301L, "경영학과", 5000L
+                                ),
+                                new UniversityDetailResponse.TopDepartment(
+                                        2L, 302L, "컴퓨터공학과", 4000L
+                                )
+                        ),
+                        List.of(
+                                new UniversityDetailResponse.TopContributor(
+                                        1L, 101L, "클릭장인", 9000L
+                                )
+                        ),
+                        false
+                ));
+
+        mockMvc.perform(get("/api/v1/universities/12"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.topDepartments.length()").value(2))
+                .andExpect(jsonPath("$.data.topDepartments[0].rank").value(1))
+                .andExpect(jsonPath("$.data.topDepartments[0].id").value(301))
+                .andExpect(jsonPath("$.data.topDepartments[0].name").value("경영학과"))
+                .andExpect(jsonPath("$.data.topDepartments[0].totalScore").value(5000))
+                .andExpect(jsonPath("$.data.topContributors.length()").value(1))
+                .andExpect(jsonPath("$.data.topContributors[0].rank").value(1))
+                .andExpect(jsonPath("$.data.topContributors[0].userId").value(101))
+                .andExpect(jsonPath("$.data.topContributors[0].nickname").value("클릭장인"))
+                .andExpect(jsonPath("$.data.topContributors[0].contribScore").value(9000));
+
+        verify(universityQueryService).getUniversityDetail(12L, null);
+    }
+
+    @Test
+    @DisplayName("로그인 사용자가 자기 학교를 조회하면 isMyUniversity가 true이다")
+    void getUniversityDetail_myUniversity() throws Exception {
+
+        AuthUser authUser = new AuthUser(101L, 12L, Role.USER);
+
+        var authentication =
+                UsernamePasswordAuthenticationToken.authenticated(
+                        authUser,
+                        null,
+                        List.of()
+                );
+
+        given(universityQueryService.getUniversityDetail(12L, 12L))
+                .willReturn(new UniversityDetailResponse(
+                        12L,
+                        "서울대학교",
+                        null,
+                        15000L,
+                        3L,
+                        498L,
+                        List.of(),
+                        List.of(),
+                        true
+                ));
+
+        mockMvc.perform(
+                        get("/api/v1/universities/12")
+                                .with(authentication(authentication))
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.isMyUniversity").value(true));
+
+        verify(universityQueryService)
+                .getUniversityDetail(12L, 12L);
+    }
+
+    @Test
+    @DisplayName("다른 학교 소속 사용자가 조회하면 isMyUniversity가 false이다")
+    void getUniversityDetail_otherUniversity() throws Exception {
+
+        // given
+        // 로그인한 사용자는 9번 학교 소속
+        AuthUser authUser = new AuthUser(101L, 9L, Role.USER);
+
+        var authentication =
+                UsernamePasswordAuthenticationToken.authenticated(
+                        authUser,
+                        null,
+                        List.of()
+                );
+
+        // 조회 대상은 12번 학교
+        given(universityQueryService.getUniversityDetail(12L, 9L))
+                .willReturn(new UniversityDetailResponse(
+                        12L,
+                        "서울대학교",
+                        null,
+                        15000L,
+                        3L,
+                        498L,
+                        List.of(),
+                        List.of(),
+                        false
+                ));
+
+        // when & then
+        mockMvc.perform(
+                        get("/api/v1/universities/12")
+                                .with(authentication(authentication))
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.isMyUniversity").value(false));
+
+        verify(universityQueryService)
+                .getUniversityDetail(12L, 9L);
     }
 }
