@@ -7,6 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.ArrayList;
@@ -36,6 +37,11 @@ class ClickerUpgradeConcurrencyTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
+    private String rankKey;
+
     private Long universityId;
     private Long userId;
     private List<Long> insertedLevels;
@@ -57,14 +63,20 @@ class ClickerUpgradeConcurrencyTest {
                 "INSERT INTO department (university_id, name) VALUES (?, '컴퓨터공학과') RETURNING id",
                 Long.class, universityId);
         userId = jdbcTemplate.queryForObject("""
-                INSERT INTO users (university_id, department_id, nickname, email, email_hash, password, approved_at, total_contrib_score)
-                VALUES (?, ?, '동시성유저', 'concurrency@test.com', ?, 'password', now(), ?)
-                RETURNING id
-                """, Long.class, universityId, departmentId, "c".repeat(64), INITIAL_SCORE);
+            INSERT INTO users (university_id, department_id, nickname, email, email_hash, password, approved_at)
+            VALUES (?, ?, '동시성유저', 'concurrency@test.com', ?, 'password', now())
+            RETURNING id
+            """, Long.class, universityId, departmentId, "c".repeat(64));
+
+        // 기여도 원본은 교내 개인 순위 ZSet
+        rankKey = "rank:univ:" + universityId + ":user";
+        redisTemplate.opsForZSet().add(rankKey, userId.toString(), INITIAL_SCORE);
     }
 
     @AfterEach
     void tearDown() {
+        redisTemplate.delete(rankKey);
+        redisTemplate.opsForSet().remove("dirty:user", userId.toString());
         // 동시성 테스트는 트렌젝션을 걸지 않으므로 직접 데이터 정리해야함
         // FK 순서대로 삭제: users → department → university → clicker
         jdbcTemplate.update("DELETE FROM users WHERE id = ?", userId);
@@ -104,11 +116,12 @@ class ClickerUpgradeConcurrencyTest {
 
         long finalLevel = jdbcTemplate.queryForObject(
                 "SELECT clicker_id FROM users WHERE id = ?", Long.class, userId);
-        long finalScore = jdbcTemplate.queryForObject(
-                "SELECT total_contrib_score FROM users WHERE id = ?", Long.class, userId);
+
         long paidScore = jdbcTemplate.queryForObject(
                 "SELECT COALESCE(SUM(required_score), 0) FROM clicker WHERE id BETWEEN 2 AND ?",
                 Long.class, finalLevel);
+
+        long finalScore = redisTemplate.opsForZSet().score(rankKey, userId.toString()).longValue();
 
         assertThat(unexpectedErrors).isEmpty();
         assertThat(finalLevel).isGreaterThanOrEqualTo(2L);                  // 최소 한 번은 성공
