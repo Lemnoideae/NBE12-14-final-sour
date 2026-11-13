@@ -24,7 +24,7 @@ import org.springframework.stereotype.Service;
  *   <li>잠금 확인과 시도 횟수 증가 ({@link LoginAttemptStore}). 잠겼으면 429</li>
  *   <li>탈퇴하지 않은 회원을 이메일 해시로 찾고 비밀번호 확인. 회원이 없거나 틀리면 401이고, 5번째 실패면 잠그고 429</li>
  *   <li>비밀번호가 맞으면 실패 횟수를 지운 뒤 상태 확인. 정지·차단이면 403</li>
- *   <li>access 토큰과 refresh 토큰 발급</li>
+ *   <li>access 토큰과 refresh 토큰 발급. 요청에 이전 refresh 토큰 쿠키가 있으면 그 행을 지운다 (SCRUM-72 A)</li>
  * </ol>
  *
  * <p>상태(정지·차단)는 비밀번호가 맞을 때만 알려준다. 틀린 비밀번호로 계정 상태를 알아낼 수 없게 하기 위함이다.
@@ -61,10 +61,11 @@ public class LoginService {
     }
 
     /**
+     * @param previousRefreshToken 요청에 실려 온 {@code refreshToken} 쿠키 값 (없으면 {@code null}). 로그인이 성공할 때만 지운다
      * @throws BusinessException 429 {@code AUTH_LOGIN_LOCKED}, 401 {@code AUTH_INVALID_CREDENTIALS},
      *                           403 {@code USER_SUSPENDED}
      */
-    public LoginResult login(String email, String password) {
+    public LoginResult login(String email, String password, String previousRefreshToken) {
         String emailHash = emailHasher.hash(email);
         long attempt = loginAttemptStore.tryAcquire(emailHash, MAX_FAILURES, FAILURE_WINDOW);
         if (attempt < 0) {
@@ -92,7 +93,7 @@ public class LoginService {
         AuthUser authUser = new AuthUser(user.getId(), user.getUniversityId(), user.getRole());
         LoginResponse response = new LoginResponse(jwtProvider.createAccessToken(authUser),
                 jwtProvider.accessTokenExpiresInSeconds(), LoginUser.from(user));
-        return new LoginResult(response, refreshTokenService.issue(user.getId()), jwtProvider.refreshTokenTtl());
+        return new LoginResult(response, refreshTokenService.issue(user.getId(), previousRefreshToken), jwtProvider.refreshTokenTtl());
     }
 
     /**

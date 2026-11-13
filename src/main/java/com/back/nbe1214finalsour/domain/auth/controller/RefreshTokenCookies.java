@@ -18,7 +18,16 @@ final class RefreshTokenCookies {
     }
 
     static ResponseCookie issue(String refreshToken, Duration maxAge) {
-        return ResponseCookie.from(NAME, refreshToken)
+        return cookie(refreshToken, maxAge);
+    }
+
+    /** 로그아웃: 같은 이름·Path에 {@code Max-Age=0}을 보내 브라우저가 지우게 한다 */
+    static ResponseCookie expire() {
+        return cookie("", Duration.ZERO);
+    }
+
+    private static ResponseCookie cookie(String value, Duration maxAge) {
+        return ResponseCookie.from(NAME, value)
                 .httpOnly(true)
                 .secure(true)
                 .sameSite("Strict")

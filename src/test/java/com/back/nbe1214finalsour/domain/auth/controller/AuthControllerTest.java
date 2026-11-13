@@ -19,12 +19,16 @@ import com.back.nbe1214finalsour.domain.auth.dto.DepartmentSummary;
 import com.back.nbe1214finalsour.domain.auth.dto.EmailVerifyResponse;
 import com.back.nbe1214finalsour.domain.auth.dto.LoginResponse;
 import com.back.nbe1214finalsour.domain.auth.dto.LoginResponse.LoginUser;
+import com.back.nbe1214finalsour.domain.auth.dto.ReissueResponse;
 import com.back.nbe1214finalsour.domain.auth.dto.SignupRequest;
 import com.back.nbe1214finalsour.domain.auth.dto.SignupResponse;
 import com.back.nbe1214finalsour.domain.auth.dto.UniversitySummary;
 import com.back.nbe1214finalsour.domain.auth.service.EmailVerificationService;
 import com.back.nbe1214finalsour.domain.auth.service.LoginService;
 import com.back.nbe1214finalsour.domain.auth.service.LoginService.LoginResult;
+import com.back.nbe1214finalsour.domain.auth.service.RefreshTokenService;
+import com.back.nbe1214finalsour.domain.auth.service.TokenReissueService;
+import com.back.nbe1214finalsour.domain.auth.service.TokenReissueService.ReissueResult;
 import com.back.nbe1214finalsour.domain.auth.service.SignupService;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
@@ -32,6 +36,7 @@ import com.back.nbe1214finalsour.global.exception.GlobalExceptionHandler;
 import com.back.nbe1214finalsour.global.security.ApiAccessDeniedHandler;
 import com.back.nbe1214finalsour.global.security.ApiAuthenticationEntryPoint;
 import com.back.nbe1214finalsour.global.security.ApiResponseWriter;
+import com.back.nbe1214finalsour.global.security.AuthUser;
 import com.back.nbe1214finalsour.global.security.CorsConfig;
 import com.back.nbe1214finalsour.global.security.Role;
 import com.back.nbe1214finalsour.global.security.SecurityConfig;
@@ -49,6 +54,7 @@ import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import jakarta.servlet.http.Cookie;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -79,6 +85,15 @@ class AuthControllerTest {
 
     @MockitoBean
     private LoginService loginService;
+
+    @MockitoBean
+    private TokenReissueService tokenReissueService;
+
+    @MockitoBean
+    private RefreshTokenService refreshTokenService;
+
+    @Autowired
+    private JwtProvider jwtProvider;
 
     @Test
     @DisplayName("[POST] /api/v1/auth/email/code는 토큰 없이 학교와 유효 시간을 200으로 응답")
@@ -281,7 +296,7 @@ class AuthControllerTest {
     void login() throws Exception {
         LoginResponse response = new LoginResponse("access.jwt.value", 3600,
                 new LoginUser(1024L, "대대대짱", 12L, Role.USER));
-        given(loginService.login("student@snu.ac.kr", "Passw0rd!"))
+        given(loginService.login("student@snu.ac.kr", "Passw0rd!", null))
                 .willReturn(new LoginResult(response, "refresh-raw-value", Duration.ofDays(30)));
 
         mockMvc.perform(post("/api/v1/auth/login")
@@ -314,7 +329,7 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.code").value("COMMON_INVALID_INPUT"))
                 .andExpect(jsonPath("$.data[0].field").value(field));
 
-        verify(loginService, never()).login(anyString(), anyString());
+        verify(loginService, never()).login(anyString(), anyString(), any());
     }
 
     static Stream<Arguments> invalidLoginRequests() {
@@ -342,7 +357,7 @@ class AuthControllerTest {
     @MethodSource("loginErrors")
     @DisplayName("[POST] /api/v1/auth/login의 도메인 오류는 명세서의 HTTP 상태와 코드로 응답하고 쿠키를 보내지 않음")
     void login_businessErrors(ErrorCode errorCode, int status) throws Exception {
-        given(loginService.login(anyString(), anyString())).willThrow(new BusinessException(errorCode));
+        given(loginService.login(anyString(), anyString(), any())).willThrow(new BusinessException(errorCode));
 
         mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -357,6 +372,86 @@ class AuthControllerTest {
                 Arguments.of(ErrorCode.AUTH_INVALID_CREDENTIALS, 401),
                 Arguments.of(ErrorCode.USER_SUSPENDED, 403),
                 Arguments.of(ErrorCode.AUTH_LOGIN_LOCKED, 429));
+    }
+
+    @Test
+    @DisplayName("[POST] /api/v1/auth/login은 요청에 실려 온 이전 refreshToken 쿠키를 서비스에 넘긴다 (SCRUM-72 A)")
+    void login_passesPreviousCookie() throws Exception {
+        given(loginService.login(anyString(), anyString(), any())).willReturn(new LoginResult(
+                new LoginResponse("a", 3600, new LoginUser(1L, "n", 1L, Role.USER)), "new", Duration.ofDays(30)));
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .cookie(new Cookie("refreshToken", "old-refresh"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginBody("student@snu.ac.kr", "Passw0rd!")))
+                .andExpect(status().isOk());
+
+        verify(loginService).login("student@snu.ac.kr", "Passw0rd!", "old-refresh");
+    }
+
+    // ===== 재발급·로그아웃 =====
+
+    @Test
+    @DisplayName("[POST] /api/v1/auth/reissue는 쿠키의 토큰으로 새 access 토큰을 200으로, 새 refresh 토큰을 쿠키로 응답")
+    void reissue() throws Exception {
+        given(tokenReissueService.reissue("old-refresh")).willReturn(
+                new ReissueResult(new ReissueResponse("new.access", 3600), "new-refresh", Duration.ofDays(30)));
+
+        mockMvc.perform(post("/api/v1/auth/reissue").cookie(new Cookie("refreshToken", "old-refresh")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.accessToken").value("new.access"))
+                .andExpect(jsonPath("$.data.expiresInSeconds").value(3600))
+                .andExpect(jsonPath("$.data.refreshToken").doesNotExist())
+                .andExpect(header().string("Set-Cookie", allOf(
+                        startsWith("refreshToken=new-refresh;"),
+                        containsString("Path=/api/v1/auth"),
+                        containsString("Max-Age=2592000"),
+                        containsString("Secure"),
+                        containsString("HttpOnly"),
+                        containsString("SameSite=Strict"))));
+    }
+
+    @Test
+    @DisplayName("[POST] /api/v1/auth/reissue는 쿠키가 없으면 null을 넘기고, 서비스의 401 AUTH_INVALID_REFRESH_TOKEN을 쿠키 없이 응답")
+    void reissue_withoutCookie() throws Exception {
+        given(tokenReissueService.reissue(null))
+                .willThrow(new BusinessException(ErrorCode.AUTH_INVALID_REFRESH_TOKEN));
+
+        mockMvc.perform(post("/api/v1/auth/reissue"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_INVALID_REFRESH_TOKEN"))
+                .andExpect(header().doesNotExist("Set-Cookie"));
+    }
+
+    @Test
+    @DisplayName("[POST] /api/v1/auth/logout은 로그인한 회원의 토큰을 지우고 204와 Max-Age=0 쿠키로 응답")
+    void logout() throws Exception {
+        String accessToken = jwtProvider.createAccessToken(new AuthUser(1024L, 12L, Role.USER));
+
+        mockMvc.perform(post("/api/v1/auth/logout")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .cookie(new Cookie("refreshToken", "my-refresh")))
+                .andExpect(status().isNoContent())
+                .andExpect(header().string("Set-Cookie", allOf(
+                        startsWith("refreshToken=;"),
+                        containsString("Path=/api/v1/auth"),
+                        containsString("Max-Age=0"),
+                        containsString("Secure"),
+                        containsString("HttpOnly"),
+                        containsString("SameSite=Strict"))));
+
+        verify(refreshTokenService).revoke("my-refresh", 1024L);
+    }
+
+    @Test
+    @DisplayName("[POST] /api/v1/auth/logout은 access 토큰이 없으면 401 COMMON_UNAUTHORIZED이고 토큰을 지우지 않음")
+    void logout_requiresAuthentication() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/logout").cookie(new Cookie("refreshToken", "my-refresh")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("COMMON_UNAUTHORIZED"));
+
+        verify(refreshTokenService, never()).revoke(any(), any());
     }
 
     private static String loginBody(String email, String password) {
