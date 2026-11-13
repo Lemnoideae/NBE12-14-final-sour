@@ -1,6 +1,7 @@
 package com.back.nbe1214finalsour.domain.user.repository;
 
 import com.back.nbe1214finalsour.domain.user.entity.User;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -9,6 +10,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     /** 탈퇴하지 않은 회원 중에 이 이메일 해시가 있는지. {@code uk_users_email_hash}와 같은 조건이다 */
     boolean existsByEmailHashAndDeletedAtIsNull(String emailHash);
+
+    /** 탈퇴하지 않은 회원 중 이 이메일 해시를 가진 회원 ({@code uk_users_email_hash}로 많아야 하나) */
+    Optional<User> findByEmailHashAndDeletedAtIsNull(String emailHash);
 
     /**
      * 탈퇴하지 않은 회원 중에 대소문자만 다른 닉네임까지 같은 닉네임이 있는지.

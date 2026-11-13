@@ -72,7 +72,10 @@ public class User extends BaseTimeEntity {
     @Column(name = "approved_at", nullable = false)
     private OffsetDateTime approvedAt;
 
-    /** 기여도 (순위·재화 겸용). 클릭 배치·{@code JdbcContributionWallet}이 바꾼다 */
+    /**
+     * 기여도 (순위·재화 겸용). 실시간 값은 Redis {@code RANK_USER} ZSet이고 ({@code RedisContributionWallet}),
+     * 이 열은 클릭 배치가 반영한 값이다. 응답에는 {@code UserScoreCache}로 Redis 값을 먼저 쓴다
+     */
     @Generated
     @Column(name = "total_contrib_score", nullable = false, updatable = false)
     private Long totalContribScore;
