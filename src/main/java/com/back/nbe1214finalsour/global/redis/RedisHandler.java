@@ -1,8 +1,11 @@
 package com.back.nbe1214finalsour.global.redis;
 
+import com.back.nbe1214finalsour.global.exception.BusinessException;
+import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.connection.RedisHashCommands;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations.TypedTuple;
 import org.springframework.data.redis.core.types.Expiration;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
@@ -11,6 +14,9 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalDouble;
+import java.util.OptionalLong;
+import java.util.Set;
 
 @Component
 @RequiredArgsConstructor
@@ -87,4 +93,87 @@ public class RedisHandler {
     public boolean expire(String key, Duration ttl) {
         return Boolean.TRUE.equals(redisTemplate.expire(key, ttl));
     }
+
+    // 점수 설정(ZADD)
+    public void addRank(String key, long member, double score) {
+        redisTemplate.opsForZSet().add(key, member, score);
+    }
+
+    // 점수 누적(ZINCRBY)
+    public double incrementRankScore(String key, long member, double delta) {
+        Double score = redisTemplate.opsForZSet().incrementScore(key, member, delta);
+        return score != null ? score : 0.0;
+    }
+
+    // 점수 조회
+    public OptionalDouble getRankScore(String key, long member) {
+        Double score = redisTemplate.opsForZSet().score(key, member);
+        return score != null ? OptionalDouble.of(score) : OptionalDouble.empty();
+    }
+
+    // 순위 조회(0부터, 점수 높은 순)
+    public OptionalLong getRankPosition(String key, long member) {
+        Long rank = redisTemplate.opsForZSet().reverseRank(key, member);
+        return rank != null ? OptionalLong.of(rank) : OptionalLong.empty();
+    }
+
+    // 상위 count개 조회(점수 높은 순)
+    public List<RankEntry> getTopRank(String key, long count) {
+        if (count <= 0) {
+            return List.of();
+        }
+
+        Set<TypedTuple<Object>> tuples = redisTemplate.opsForZSet().reverseRangeWithScores(key, 0, count - 1);
+        if (tuples == null) {
+            return List.of();
+        }
+
+        return tuples.stream()
+                .map(tuple -> new RankEntry(
+                        toMemberId(tuple.getValue()),
+                        tuple.getScore() != null ? tuple.getScore() : 0.0
+                ))
+                .toList();
+    }
+
+    // 멤버 제거(ZREM)
+    public boolean removeRank(String key, long member) {
+        Long removed = redisTemplate.opsForZSet().remove(key, member);
+        return removed != null && removed > 0L;
+    }
+
+    // 변경 ID 추가(SADD)
+    public boolean addDirty(String key, long member) {
+        Long added = redisTemplate.opsForSet().add(key, member);
+        return added != null && added > 0L;
+    }
+
+    // 변경 ID 전체 조회(SMEMBERS)
+    public List<Long> getDirtyMembers(String key) {
+        Set<Object> members = redisTemplate.opsForSet().members(key);
+        if (members == null) {
+            return List.of();
+        }
+
+        return members.stream().map(RedisHandler::toMemberId).toList();
+    }
+
+    // 변경 ID 제거(SREM)
+    public boolean removeDirty(String key, long member) {
+        Long removed = redisTemplate.opsForSet().remove(key, member);
+        return removed != null && removed > 0L;
+    }
+
+    // 평문 숫자로 저장된 member만 허용
+    private static long toMemberId(Object member) {
+        if (member instanceof Number number) {
+            return number.longValue();
+        }
+        throw new BusinessException(
+                ErrorCode.COMMON_REDIS_MEMBER_NOT_NUMERIC,
+                "member가 평문 숫자가 아닙니다. 다른 직렬화 방식으로 쓴 값이 섞였습니다. 값: " + member
+        );
+    }
+
+    public record RankEntry(long member, double score) {}
 }
