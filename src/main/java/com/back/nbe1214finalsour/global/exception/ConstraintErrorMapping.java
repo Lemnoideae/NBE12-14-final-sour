@@ -22,7 +22,7 @@ public final class ConstraintErrorMapping {
             "uk_alliance_university_one_accepted", ErrorCode.ALLY_UNIVERSITY_ALREADY_JOINED,
             "uk_alliance_match_requested_pair", ErrorCode.MATCH_ALREADY_REQUESTED,
             "pk_guest_book_like", ErrorCode.GUEST_ALREADY_LIKED,
-            "uk_user_item_payment", ErrorCode.PAY_ALREADY_PROCESSED);
+            "uk_credit_history_payment", ErrorCode.PAY_ALREADY_PROCESSED);
 
     private ConstraintErrorMapping() {
     }
