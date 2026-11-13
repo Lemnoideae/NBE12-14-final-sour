@@ -2,17 +2,19 @@ package com.back.nbe1214finalsour.global.redis;
 
 public enum RedisKey {
 
-    // 인증 (Auth)
-    /** 인증 코드. field: code, universityId, attempts (attempts는 HINCRBY 대상) */
-    AUTH_EMAIL_CODE("auth:email-code:%s", Structure.HASH, ValueFormat.PLAIN),
-    /** 인증 쿨다운. SET NX + TTL */
-    AUTH_EMAIL_COOLDOWN("auth:email-cooldown:%s", Structure.STRING, ValueFormat.PLAIN),
-    /** 인증 일일 한도. INCR */
-    AUTH_EMAIL_DAILY("auth:email-daily:%s", Structure.STRING, ValueFormat.PLAIN),
-    /** 가입 토큰. field: emailHash, encryptedEmail, universityId */
-    AUTH_SIGNUP_TOKEN("auth:signup-token:%s", Structure.HASH, ValueFormat.PLAIN),
-    /** 로그인 실패 횟수. INCR */
-    AUTH_LOGIN_FAIL("auth:login-fail:%s", Structure.STRING, ValueFormat.PLAIN),
+    // 인증 (Auth) - emailHash는 EmailHasher.hash 값 (키에 이메일 원문을 넣지 않는다)
+    /** 인증 코드. of(emailHash). field: code, attempts (attempts는 HINCRBY 대상). TTL 5분 */
+    AUTH_EMAIL_CODE("auth:email:code:%s", Structure.HASH, ValueFormat.PLAIN),
+    /** 인증 쿨다운. of(emailHash). SET NX + TTL 60초 */
+    AUTH_EMAIL_COOLDOWN("auth:email:cooldown:%s", Structure.STRING, ValueFormat.PLAIN),
+    /** 인증 일일 한도. of(emailHash, 한국 날짜 yyyyMMdd). INCR, 처음 만들 때 TTL 1일 */
+    AUTH_EMAIL_DAILY("auth:email:daily:%s:%s", Structure.STRING, ValueFormat.PLAIN),
+    /** 가입 토큰. of(signupToken). 값: 정규화한 이메일. TTL 30분 */
+    AUTH_SIGNUP_TOKEN("auth:signup:%s", Structure.STRING, ValueFormat.PLAIN),
+    /** 로그인 연속 실패 횟수. of(emailHash). INCR, 처음 만들 때 TTL 10분 */
+    AUTH_LOGIN_FAIL("auth:login:fail:%s", Structure.STRING, ValueFormat.PLAIN),
+    /** 로그인 잠금. of(emailHash). SET EX 10분 */
+    AUTH_LOGIN_LOCK("auth:login:lock:%s", Structure.STRING, ValueFormat.PLAIN),
 
     // 회원 (User)
     /** 회원 상태. ACTIVE / SUSPENDED / BANNED */

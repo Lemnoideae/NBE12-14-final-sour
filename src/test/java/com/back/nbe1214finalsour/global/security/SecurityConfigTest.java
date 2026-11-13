@@ -102,13 +102,15 @@ class SecurityConfigTest {
         }
 
         @Test
-        @DisplayName("JWT 적용 전에는 /api/** 를 비로그인으로 호출할 수 있다 (임시)")
-        void apiIsTemporarilyOpen() throws Exception {
+        @DisplayName("명세서 공개 목록에 없는 /api/** 는 비로그인이면 401 COMMON_UNAUTHORIZED (전체 표는 UrlAuthorizationRulesTest)")
+        void unlistedApiRequiresLogin() throws Exception {
             mockMvc.perform(get("/api/test/open"))
-                    .andExpect(status().isOk());
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.code").value("COMMON_UNAUTHORIZED"));
         }
 
         @Test
+        @WithMockUser
         @DisplayName("CSRF 토큰 없이 POST할 수 있다 (STATELESS API)")
         void csrfDisabled() throws Exception {
             mockMvc.perform(post("/api/test/open"))
