@@ -53,4 +53,38 @@ public class RedisHandler {
         return Optional.ofNullable(object).map(o -> objectMapper.convertValue(o, type));
     }
 
+    // 값이 없으면 0부터 시작, +1 증가
+    public long increment(String key) {
+        Long value = redisTemplate.opsForValue().increment(key);
+        return value != null ? value : 0L;
+    }
+
+    // increment + 유효 기한 설정
+    public long incrementWithTtl(String key, Duration ttl) {
+        long value = increment(key);
+        if (value == 1L) {
+            redisTemplate.expire(key, ttl);
+        }
+        return value;
+    }
+
+    // hash 값 증가, delta -> 증가할 값
+    public long incrementHash(String key, String hashKey, long delta) {
+        Long value = redisTemplate.opsForHash().increment(key, hashKey, delta);
+        return value != null ? value : 0L;
+    }
+
+    // SET NX(값이 없으면) + TTL
+    // Increment 대상으로 쓰면 안됩니다.
+    public boolean setIfAbsent(String key, Object value, Duration ttl) {
+        return Boolean.TRUE.equals(redisTemplate.opsForValue().setIfAbsent(key, value, ttl));
+    }
+
+    public boolean delete(String key) {
+        return Boolean.TRUE.equals(redisTemplate.delete(key));
+    }
+
+    public boolean expire(String key, Duration ttl) {
+        return Boolean.TRUE.equals(redisTemplate.expire(key, ttl));
+    }
 }
