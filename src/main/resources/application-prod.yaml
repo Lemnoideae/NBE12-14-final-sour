@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: NBE12-14-final-sour
+  config:
+    import: optional:file:.env[.properties]
+  jackson:
+    # API 명세서 §1: 시각은 KST 오프셋을 포함한 ISO-8601로 응답한다 (예: 2026-11-11T14:30:00+09:00)
+    time-zone: Asia/Seoul
+  data:
+    redis:
+      host: ${REDIS_URL}
+      port: 6379
+
+jwt:
+  # HS256 서명 키, UTF-8로 32바이트 이상 (예: openssl rand -base64 48). 저장소에 커밋하지 않는다
+  secret: ${JWT_SECRET}
+  access-token-ttl: 60m
+  refresh-token-ttl: 30d
+
+cors:
+  # 쉼표로 구분한 origin 목록. 기본값은 로컬 프론트 개발 서버 (frontend/package.json의 vite --port=3000)
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
