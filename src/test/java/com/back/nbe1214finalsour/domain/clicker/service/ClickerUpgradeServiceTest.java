@@ -26,6 +26,7 @@ import static org.mockito.Mockito.verify;
 public class ClickerUpgradeServiceTest {
 
     private static final Long USER_ID = 1L;
+    private static final Long UNIVERSITY_ID = 12L;
 
     // 레벨표: 1레벨(기본) → 2레벨(300) → 3레벨(1000)
     private static final List<Clicker> LEVEL_TABLE = List.of(
@@ -54,12 +55,12 @@ public class ClickerUpgradeServiceTest {
         given(userClickerLevelStore.findLevel(USER_ID)).willReturn(3L);
 
         // when & then
-        assertThatThrownBy(() -> clickerUpgradeService.upgrade(USER_ID))
+        assertThatThrownBy(() -> clickerUpgradeService.upgrade(USER_ID, UNIVERSITY_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.CLICKER_MAX_LEVEL);
 
-        verify(contributionWallet, never()).tryDeduct(anyLong(), anyLong());
+        verify(contributionWallet, never()).tryDeduct(anyLong(), anyLong(), anyLong());
         verify(userClickerLevelStore, never()).changeLevel(anyLong(), anyLong(), anyLong());
     }
 
@@ -69,16 +70,16 @@ public class ClickerUpgradeServiceTest {
         // given: 유저는 1레벨, 다음 레벨(2) 비용은 300인데 잔액 부족
         given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
         given(userClickerLevelStore.findLevel(USER_ID)).willReturn(1L);
-        given(contributionWallet.tryDeduct(USER_ID, 300L)).willReturn(OptionalLong.empty());
+        given(contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 300L)).willReturn(OptionalLong.empty());
 
         // when & then
-        assertThatThrownBy(() -> clickerUpgradeService.upgrade(USER_ID))
+        assertThatThrownBy(() -> clickerUpgradeService.upgrade(USER_ID, UNIVERSITY_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.CLICKER_NOT_ENOUGH_SCORE);
 
         verify(userClickerLevelStore, never()).changeLevel(anyLong(), anyLong(), anyLong());
-        verify(contributionWallet, never()).restore(anyLong(), anyLong());
+        verify(contributionWallet, never()).restore(anyLong(), anyLong(), anyLong());
     }
 
     @Test
@@ -87,11 +88,11 @@ public class ClickerUpgradeServiceTest {
         // given
         given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
         given(userClickerLevelStore.findLevel(USER_ID)).willReturn(1L);
-        given(contributionWallet.tryDeduct(USER_ID, 300L)).willReturn(OptionalLong.of(700L));
+        given(contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 300L)).willReturn(OptionalLong.of(700L));
         given(userClickerLevelStore.changeLevel(USER_ID, 1L, 2L)).willReturn(true);
 
         // when
-        ClickerUpgradeResult result = this.clickerUpgradeService.upgrade(USER_ID);
+        ClickerUpgradeResult result = this.clickerUpgradeService.upgrade(USER_ID, UNIVERSITY_ID);
 
         // then
         assertThat(result.upgradedClicker().getId()).isEqualTo(2L);
@@ -100,7 +101,7 @@ public class ClickerUpgradeServiceTest {
         assertThat(result.remainingScore()).isEqualTo(700L);
 
         verify(userClickerLevelStore).changeLevel(USER_ID, 1L, 2L);
-        verify(contributionWallet, never()).restore(anyLong(), anyLong());
+        verify(contributionWallet, never()).restore(anyLong(), anyLong(), anyLong());
     }
 
     @Test
@@ -109,15 +110,15 @@ public class ClickerUpgradeServiceTest {
         // given: 1 레벨 유저가 300 차감 성공이지만 이미 다른 요청이 레벨을 올렸을 시 변경 실패
         given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
         given(userClickerLevelStore.findLevel(USER_ID)).willReturn(1L);
-        given(contributionWallet.tryDeduct(USER_ID, 300L)).willReturn(OptionalLong.of(700L));
+        given(contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 300L)).willReturn(OptionalLong.of(700L));
         given(userClickerLevelStore.changeLevel(USER_ID, 1L, 2L)).willReturn(false);
 
         // when & then
-        assertThatThrownBy(() -> clickerUpgradeService.upgrade(USER_ID))
+        assertThatThrownBy(() -> clickerUpgradeService.upgrade(USER_ID, UNIVERSITY_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.CLICKER_UPGRADE_CONFLICT);
 
-        verify(contributionWallet).restore(USER_ID, 300L);
+        verify(contributionWallet).restore(USER_ID, UNIVERSITY_ID, 300L);
     }
 }

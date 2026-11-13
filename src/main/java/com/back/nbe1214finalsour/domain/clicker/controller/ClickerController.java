@@ -37,7 +37,7 @@ public class ClickerController {
 
     @PostMapping("/upgrade")
     public ApiResponse<ClickerUpgradeResponse> upgrade(@AuthenticationPrincipal AuthUser authUser) {
-        ClickerUpgradeResult result = this.clickerUpgradeService.upgrade(authUser.userId());
+        ClickerUpgradeResult result = this.clickerUpgradeService.upgrade(authUser.userId(), authUser.universityId());
         return ApiResponse.ok(new ClickerUpgradeResponse(result));
     }
 }

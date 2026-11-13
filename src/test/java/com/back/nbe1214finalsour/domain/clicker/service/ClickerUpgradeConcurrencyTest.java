@@ -87,7 +87,7 @@ class ClickerUpgradeConcurrencyTest {
                 executor.submit(() -> {
                     try {
                         startSignal.await();
-                        clickerUpgradeService.upgrade(userId);
+                        clickerUpgradeService.upgrade(userId, universityId);
                         successCount.incrementAndGet();
                     } catch (BusinessException e) {
                         // 충돌, 잔액 부족, 최고 레벨은 정상적인 실패

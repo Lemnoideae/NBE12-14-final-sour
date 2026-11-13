@@ -88,7 +88,7 @@ public class ClickerControllerTest {
     @DisplayName("[POST] /api/v1/clickers/upgrade는 로그인 유저의 클리커를 업그레이드하고 결과를 200으로 응답")
     void upgrade() throws Exception {
         // given: 2레벨로 업그레이드, 다음 레벨 비용 1000, 남은 기여도 700
-        given(clickerUpgradeService.upgrade(USER.userId())).willReturn(
+        given(clickerUpgradeService.upgrade(USER.userId(), USER.universityId())).willReturn(
                 new ClickerUpgradeResult(new Clicker(2L, 20, 300L), 1000L, 700L));
 
         // when & then
@@ -101,7 +101,7 @@ public class ClickerControllerTest {
                 .andExpect(jsonPath("$.data.nextLevelRequiredScore").value(1000))
                 .andExpect(jsonPath("$.data.myContribScore").value(700));
 
-        verify(clickerUpgradeService).upgrade(USER.userId());
+        verify(clickerUpgradeService).upgrade(USER.userId(), USER.universityId());
     }
 
     @Test
@@ -111,13 +111,13 @@ public class ClickerControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("COMMON_UNAUTHORIZED"));
 
-        verify(clickerUpgradeService, never()).upgrade(anyLong());
+        verify(clickerUpgradeService, never()).upgrade(anyLong(), anyLong());
     }
 
     @Test
     @DisplayName("[POST] /api/v1/clickers/upgrade는 기여도가 부족하면 400 CLICKER_NOT_ENOUGH_SCORE")
     void upgrade_notEnoughScore() throws Exception {
-        given(clickerUpgradeService.upgrade(USER.userId()))
+        given(clickerUpgradeService.upgrade(USER.userId(),  USER.universityId()))
                 .willThrow(new BusinessException(ErrorCode.CLICKER_NOT_ENOUGH_SCORE));
 
         mockMvc.perform(post("/api/v1/clickers/upgrade")

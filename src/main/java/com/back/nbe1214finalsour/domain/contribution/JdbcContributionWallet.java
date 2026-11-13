@@ -14,7 +14,7 @@ public class JdbcContributionWallet implements ContributionWallet {
     private final JdbcTemplate jdbcTemplate;
 
     @Override
-    public OptionalLong tryDeduct(Long userId, long amount) {
+    public OptionalLong tryDeduct(Long userId, Long universityId, long amount) {
         // 잔액 확인과 차감을 UPDATE 한 번에 처리. 잔액이 부족하면 0건이라 결과가 비어 있음
         List<Long> remaining = jdbcTemplate.queryForList("""
                 UPDATE users
@@ -29,7 +29,7 @@ public class JdbcContributionWallet implements ContributionWallet {
     }
 
     @Override
-    public void restore(Long userId, long amount) {
+    public void restore(Long userId, Long universityId, long amount) {
         jdbcTemplate.update(
                 "UPDATE users SET total_contrib_score = total_contrib_score + ? WHERE id = ?",
                 amount, userId);

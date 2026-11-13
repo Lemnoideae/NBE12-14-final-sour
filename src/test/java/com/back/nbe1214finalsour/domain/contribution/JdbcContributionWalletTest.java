@@ -22,6 +22,7 @@ public class JdbcContributionWalletTest {
     private JdbcTemplate jdbcTemplate;
 
     private Long userId;
+    private Long universityId;
 
     private long currentScore() {
         return jdbcTemplate.queryForObject(
@@ -30,7 +31,7 @@ public class JdbcContributionWalletTest {
 
     @BeforeEach
     void setUp() {
-        Long universityId = jdbcTemplate.queryForObject(
+        universityId = jdbcTemplate.queryForObject(
                 "INSERT INTO university (name) VALUES ('지갑테스트대') RETURNING id", Long.class);
         Long departmentId = jdbcTemplate.queryForObject(
                 "INSERT INTO department (university_id, name) VALUES (?, '컴퓨터공학과') RETURNING id",
@@ -47,7 +48,7 @@ public class JdbcContributionWalletTest {
     @Test
     @DisplayName("잔액이 충분하면 차감하고 차감 후 잔액을 반환")
     void tryDeduct_success() {
-        OptionalLong result = contributionWallet.tryDeduct(userId, 300L);
+        OptionalLong result = contributionWallet.tryDeduct(userId, universityId, 300L);
 
         assertThat(result).hasValue(700L);
         assertThat(currentScore()).isEqualTo(700L);
@@ -56,7 +57,7 @@ public class JdbcContributionWalletTest {
     @Test
     @DisplayName("잔액이 부족하면 차감하지 않고 empty 반환")
     void tryDeduct_notEnough() {
-        OptionalLong result = contributionWallet.tryDeduct(userId, 1500L);
+        OptionalLong result = contributionWallet.tryDeduct(userId, universityId, 1500L);
 
         assertThat(result).isEmpty();
         assertThat(currentScore()).isEqualTo(1000L);
@@ -65,7 +66,7 @@ public class JdbcContributionWalletTest {
     @Test
     @DisplayName("잔액과 차감액이 같으면 0이 되도록 차감")
     void tryDeduct_exactBalance() {
-        OptionalLong result = contributionWallet.tryDeduct(userId, 1000L);
+        OptionalLong result = contributionWallet.tryDeduct(userId, universityId, 1000L);
 
         assertThat(result).hasValue(0L);
         assertThat(currentScore()).isEqualTo(0L);
@@ -74,7 +75,7 @@ public class JdbcContributionWalletTest {
     @Test
     @DisplayName("복구하면 그만큼 기여도가 다시 늘어남")
     void restore() {
-        contributionWallet.restore(userId, 300L);
+        contributionWallet.restore(userId, universityId, 300L);
 
         assertThat(currentScore()).isEqualTo(1300L);
     }
