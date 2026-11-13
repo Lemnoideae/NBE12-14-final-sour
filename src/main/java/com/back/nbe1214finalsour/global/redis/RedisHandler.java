@@ -136,6 +136,24 @@ public class RedisHandler {
                 .toList();
     }
 
+    // 상위 순위에서 특정 구간 조회(0부터, 점수 높은 순). 제외 회원 보충에 사용.
+    public List<RankEntry> getRankRange(String key, long start, long count) {
+        if (start < 0 || count <= 0) {
+            return List.of();
+        }
+        Set<TypedTuple<Object>> tuples = redisTemplate.opsForZSet()
+                .reverseRangeWithScores(key, start, start + count - 1);
+        if (tuples == null) {
+            return List.of();
+        }
+        return tuples.stream()
+                .map(tuple -> new RankEntry(
+                        toMemberId(tuple.getValue()),
+                        tuple.getScore() != null ? tuple.getScore() : 0.0
+                ))
+                .toList();
+    }
+
     // 멤버 제거(ZREM)
     public boolean removeRank(String key, long member) {
         Long removed = redisTemplate.opsForZSet().remove(key, member);
