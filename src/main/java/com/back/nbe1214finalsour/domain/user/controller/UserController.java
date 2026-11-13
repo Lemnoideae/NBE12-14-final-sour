@@ -1,10 +1,13 @@
 package com.back.nbe1214finalsour.domain.user.controller;
 
+import com.back.nbe1214finalsour.domain.user.dto.MyInfoResponse;
 import com.back.nbe1214finalsour.domain.user.dto.NicknameAvailabilityResponse;
 import com.back.nbe1214finalsour.domain.user.service.UserService;
 import com.back.nbe1214finalsour.domain.user.validation.Nickname;
 import com.back.nbe1214finalsour.global.response.ApiResponse;
+import com.back.nbe1214finalsour.global.security.AuthUser;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -21,5 +24,11 @@ public class UserController {
     @GetMapping("/nickname/availability")
     public ApiResponse<NicknameAvailabilityResponse> checkNickname(@RequestParam @Nickname String nickname) {
         return ApiResponse.ok(new NicknameAvailabilityResponse(userService.isNicknameAvailable(nickname)));
+    }
+
+    /** 인증 필요 ({@code SecurityConfig}: 공개 목록에 없는 {@code /api/**}). 토큰이 없으면 401 {@code COMMON_UNAUTHORIZED} */
+    @GetMapping("/me")
+    public ApiResponse<MyInfoResponse> me(@AuthenticationPrincipal AuthUser authUser) {
+        return ApiResponse.ok(userService.getMyInfo(authUser.userId()));
     }
 }
