@@ -49,6 +49,7 @@ public enum ErrorCode {
 
 
     // ===== UNIV / RANK (3번) =====
+    UNIV_NOT_FOUND(HttpStatus.NOT_FOUND, "UNIV_NOT_FOUND", "학교를 찾을 수 없습니다."),
 
     // ===== ALLY / MATCH / GUEST (3번) =====
     ALLY_APPLICATION_PENDING(HttpStatus.CONFLICT, "ALLY_APPLICATION_PENDING", "이미 처리 대기 중인 연합 가입 신청이 있습니다."),
