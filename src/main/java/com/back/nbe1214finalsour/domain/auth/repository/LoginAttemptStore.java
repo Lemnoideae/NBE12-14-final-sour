@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.auth.repository;
 
+import com.back.nbe1214finalsour.global.redis.RedisKey;
 import java.time.Duration;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -17,9 +18,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 @RequiredArgsConstructor
 public class LoginAttemptStore {
-
-    static final String FAIL_KEY_PREFIX = "auth:login:fail:";
-    static final String LOCK_KEY_PREFIX = "auth:login:lock:";
 
     /**
      * 잠겨 있지 않으면 시도 횟수를 1 올려 돌려준다. KEYS: 잠금, 횟수. ARGV: 최대 횟수, 횟수 키 만료(초).
@@ -66,10 +64,10 @@ public class LoginAttemptStore {
 
     /** 비밀번호가 맞으면 연속 실패 횟수를 지운다 */
     public void reset(String emailHash) {
-        redis.delete(FAIL_KEY_PREFIX + emailHash);
+        redis.delete(RedisKey.AUTH_LOGIN_FAIL.of(emailHash));
     }
 
     private static List<String> keys(String emailHash) {
-        return List.of(LOCK_KEY_PREFIX + emailHash, FAIL_KEY_PREFIX + emailHash);
+        return List.of(RedisKey.AUTH_LOGIN_LOCK.of(emailHash), RedisKey.AUTH_LOGIN_FAIL.of(emailHash));
     }
 }
