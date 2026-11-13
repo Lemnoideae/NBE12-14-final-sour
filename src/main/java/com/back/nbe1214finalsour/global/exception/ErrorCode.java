@@ -40,10 +40,13 @@ public enum ErrorCode {
     AUTH_CODE_EXPIRED(HttpStatus.GONE, "AUTH_CODE_EXPIRED", "인증 코드가 만료되었습니다. 코드를 다시 요청해주세요."),
     AUTH_CODE_ATTEMPTS_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "AUTH_CODE_ATTEMPTS_EXCEEDED", "인증 코드를 5번 틀렸습니다. 코드를 다시 요청해주세요."),
     AUTH_INVALID_SIGNUP_TOKEN(HttpStatus.BAD_REQUEST, "AUTH_INVALID_SIGNUP_TOKEN", "가입 토큰이 만료되었거나 올바르지 않습니다. 이메일 인증을 다시 해주세요."),
+    AUTH_INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "AUTH_INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다."),
+    AUTH_LOGIN_LOCKED(HttpStatus.TOO_MANY_REQUESTS, "AUTH_LOGIN_LOCKED", "로그인을 5번 실패해 10분 동안 로그인할 수 없습니다."),
 
     // ===== USER (1번) =====
     USER_NICKNAME_DUPLICATED(HttpStatus.CONFLICT, "USER_NICKNAME_DUPLICATED", "이미 사용 중인 닉네임입니다."),
     USER_DEPARTMENT_MISMATCH(HttpStatus.BAD_REQUEST, "USER_DEPARTMENT_MISMATCH", "소속 학교의 학과가 아닙니다."),
+    USER_SUSPENDED(HttpStatus.FORBIDDEN, "USER_SUSPENDED", "이용이 제한된 계정입니다."),
 
     // ===== CLICK (2번) =====
 
