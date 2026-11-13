@@ -4,10 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
+import java.util.Arrays;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -40,10 +42,24 @@ class VerificationMailConfigTest {
     }
 
     @Test
-    @DisplayName("prod에서 spring.mail.host가 없으면 메일 구현이 없다 (코드를 로그에 남기지 않고 앱 시작을 막는다)")
-    void noSenderInProdWithoutMailHost() {
+    @DisplayName("prod에서 spring.mail.host가 없으면 코드를 로그에 남기지 않고, 필요한 환경 변수를 알리며 시작에 실패한다")
+    void prodWithoutMailHostFailsToStart() {
         runner.withPropertyValues("spring.profiles.active=prod")
-                .run(context -> assertThat(context).doesNotHaveBean(VerificationMailSender.class));
+                .run(context -> assertThat(context).hasFailed()
+                        .getFailure().rootCause()
+                        .isInstanceOf(IllegalStateException.class)
+                        .hasMessageContaining("SPRING_MAIL_HOST"));
+    }
+
+    @Test
+    @DisplayName("VerificationMailSender 빈 정의는 하나다 (조건별 @Bean으로 나누면 IDE·@MockitoBean이 후보를 둘로 본다)")
+    void singleBeanDefinition() {
+        assertThat(Arrays.stream(VerificationMailConfig.class.getDeclaredMethods())
+                .filter(method -> method.isAnnotationPresent(Bean.class))
+                .filter(method -> VerificationMailSender.class.isAssignableFrom(method.getReturnType())))
+                .withFailMessage("VerificationMailSender를 만드는 @Bean 메서드는 하나여야 합니다. "
+                        + "구현 선택은 그 메서드 안에서 하세요.")
+                .hasSize(1);
     }
 
     @Test
