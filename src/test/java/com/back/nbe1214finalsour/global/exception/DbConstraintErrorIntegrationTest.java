@@ -2,6 +2,7 @@ package com.back.nbe1214finalsour.global.exception;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -91,7 +92,9 @@ class DbConstraintErrorIntegrationTest {
     }
 
     private ResultActions execute(String sql) throws Exception {
-        return mockMvc.perform(post("/api/test/sql").contentType(MediaType.TEXT_PLAIN).content(sql));
+        return mockMvc.perform(post("/api/test/sql")
+                .with(user("tester"))   // /api/** 는 로그인이 필요하다 (SecurityConfig)
+                .contentType(MediaType.TEXT_PLAIN).content(sql));
     }
 
     private long insertReturningId(String sql) {

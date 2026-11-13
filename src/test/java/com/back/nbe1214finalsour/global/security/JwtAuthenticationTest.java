@@ -46,6 +46,9 @@ import org.springframework.web.bind.annotation.RestController;
 })
 class JwtAuthenticationTest {
 
+    /** 명세서 인증 "선택" 경로 (학교 상세). 공개 목록은 SecurityConfig.PUBLIC_GET */
+    private static final String OPTIONAL_PATH = "/api/v1/universities/7";
+
     private static final AuthUser USER = new AuthUser(42L, 7L, Role.USER);
     private static final AuthUser ADMIN = new AuthUser(1L, 7L, Role.ADMIN);
 
@@ -164,7 +167,7 @@ class JwtAuthenticationTest {
         @Test
         @DisplayName("토큰이 없으면 AuthUser는 null")
         void anonymous() throws Exception {
-            mockMvc.perform(get("/api/test/jwt/optional"))
+            mockMvc.perform(get(OPTIONAL_PATH))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data").isEmpty());
         }
@@ -172,7 +175,7 @@ class JwtAuthenticationTest {
         @Test
         @DisplayName("만료된 토큰이어도 401이 아니라 익명으로 통과한다")
         void expiredIsAnonymous() throws Exception {
-            getWithToken("/api/test/jwt/optional", expiredToken())
+            getWithToken(OPTIONAL_PATH, expiredToken())
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data").isEmpty());
         }
@@ -180,7 +183,7 @@ class JwtAuthenticationTest {
         @Test
         @DisplayName("유효한 토큰이면 AuthUser가 채워진다")
         void valid() throws Exception {
-            getWithToken("/api/test/jwt/optional", jwtProvider.createAccessToken(USER))
+            getWithToken(OPTIONAL_PATH, jwtProvider.createAccessToken(USER))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.userId").value(42));
         }
@@ -201,7 +204,7 @@ class JwtAuthenticationTest {
             return ApiResponse.ok();
         }
 
-        @GetMapping("/api/test/jwt/optional")
+        @GetMapping(OPTIONAL_PATH)
         ApiResponse<AuthUser> optional(@AuthenticationPrincipal AuthUser authUser) {
             return ApiResponse.ok(authUser);
         }
