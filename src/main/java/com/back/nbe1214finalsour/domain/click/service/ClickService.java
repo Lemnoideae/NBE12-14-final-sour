@@ -9,6 +9,7 @@ import com.back.nbe1214finalsour.domain.user.entity.User;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
+import com.back.nbe1214finalsour.global.redis.RedisHandler;
 import com.back.nbe1214finalsour.global.redis.RedisKey;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ClassPathResource;
@@ -28,6 +29,7 @@ public class ClickService {
     private final ActionRateLimiter actionRateLimiter;
     private final ClickerService clickerService;
     private final UserRepository userRepository;
+    private final RedisHandler redisHandler;
 
     private static final RedisScript<List> APPLY_CLICK = RedisScript.of(new ClassPathResource("redis/apply-click.lua"), List.class);
 
@@ -65,8 +67,8 @@ public class ClickService {
         score *= clicker.getClickPower();
 
         // 아이템 적용 가져오기
-        Object raw = stringRedisTemplate.opsForHash().get(RedisKey.USER_EFFECT.of(userId), "multiplier");
-        double multiplier = raw != null ? Double.parseDouble((String) raw) : 1.0;
+        Double multiplier = redisHandler.getHash(RedisKey.USER_EFFECT.of(userId), "multiplier", Double.class)
+                .orElse(1.0);
         score = (int) Math.floor(score * multiplier);
 
         // 4. Redis에 반영

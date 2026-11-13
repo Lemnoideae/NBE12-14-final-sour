@@ -8,6 +8,7 @@ import com.back.nbe1214finalsour.domain.user.entity.User;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
+import com.back.nbe1214finalsour.global.redis.RedisHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,7 +16,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -25,11 +25,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
@@ -58,7 +54,7 @@ class ClickServiceTest {
     @Mock
     private ValueOperations<String, String> valueOperations;
     @Mock
-    private HashOperations<String, Object, Object> hashOperations;
+    private RedisHandler redisHandler;
     @Mock
     private ActionRateLimiter actionRateLimiter;
     @Mock
@@ -83,7 +79,6 @@ class ClickServiceTest {
         given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
         given(user.getDepartmentId()).willReturn(DEPARTMENT_ID);
         given(clickerService.getClickerById(3L)).willReturn(CLICKER_LV3);
-        given(stringRedisTemplate.<Object, Object>opsForHash()).willReturn(hashOperations);
     }
 
     // --- 1단계: 중복 제출 ---
@@ -115,7 +110,6 @@ class ClickServiceTest {
         given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
         given(user.getDepartmentId()).willReturn(DEPARTMENT_ID);
         given(clickerService.getClickerById(3L)).willReturn(CLICKER_LV3);
-        given(stringRedisTemplate.<Object, Object>opsForHash()).willReturn(hashOperations);
         given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
@@ -154,7 +148,6 @@ class ClickServiceTest {
         given(user.getClickerId()).willReturn(2L);
         given(user.getDepartmentId()).willReturn(DEPARTMENT_ID);
         given(clickerService.getClickerById(2L)).willReturn(new Clicker(2L, 20, 300L));
-        given(stringRedisTemplate.<Object, Object>opsForHash()).willReturn(hashOperations);
         given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
@@ -200,7 +193,7 @@ class ClickServiceTest {
     @DisplayName("아이템 효과가 없으면 배율 1.0으로 clickCount * clickPower만 적용한다")
     void click_scoreWithoutMultiplier() {
         givenHappyPathBeforeScript();
-        given(hashOperations.get("user:1:effect", "multiplier")).willReturn(null);
+        given(redisHandler.getHash("user:1:effect", "multiplier", Double.class)).willReturn(Optional.empty());
         given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
@@ -214,7 +207,7 @@ class ClickServiceTest {
     @DisplayName("아이템 배율을 곱한다")
     void click_scoreWithMultiplier() {
         givenHappyPathBeforeScript();
-        given(hashOperations.get("user:1:effect", "multiplier")).willReturn("1.5");
+        given(redisHandler.getHash("user:1:effect", "multiplier", Double.class)).willReturn(Optional.of(1.5));
         given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
@@ -228,7 +221,7 @@ class ClickServiceTest {
     @DisplayName("소수점이 생기면 버린다 (반올림이 아니다)")
     void click_scoreIsFloored() {
         givenHappyPathBeforeScript();
-        given(hashOperations.get("user:1:effect", "multiplier")).willReturn("1.09");
+        given(redisHandler.getHash("user:1:effect", "multiplier", Double.class)).willReturn(Optional.of(1.09));
         given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
@@ -244,7 +237,7 @@ class ClickServiceTest {
     @DisplayName("apply-click.lua의 KEYS 순서와 ARGV 값을 그대로 넘긴다")
     void click_passesKeysAndArgsInLuaOrder() {
         givenHappyPathBeforeScript();
-        given(hashOperations.get("user:1:effect", "multiplier")).willReturn("1.5");
+        given(redisHandler.getHash("user:1:effect", "multiplier", Double.class)).willReturn(Optional.of(1.5));
         given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
@@ -280,7 +273,7 @@ class ClickServiceTest {
     @DisplayName("스크립트 반환값을 응답 필드에 순서대로 매핑한다")
     void click_mapsScriptResultToResponse() {
         givenHappyPathBeforeScript();
-        given(hashOperations.get("user:1:effect", "multiplier")).willReturn("1.5");
+        given(redisHandler.getHash("user:1:effect", "multiplier", Double.class)).willReturn(Optional.of(1.5));
         given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
