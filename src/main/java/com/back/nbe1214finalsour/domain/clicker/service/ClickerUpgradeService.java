@@ -1,11 +1,13 @@
 package com.back.nbe1214finalsour.domain.clicker.service;
 
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
+import com.back.nbe1214finalsour.domain.clicker.event.ClickerUpgradedEvent;
 import com.back.nbe1214finalsour.domain.clicker.repository.UserClickerLevelStore;
 import com.back.nbe1214finalsour.domain.contribution.ContributionWallet;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +20,7 @@ public class ClickerUpgradeService {
     private final ClickerService clickerService;
     private final UserClickerLevelStore userClickerLevelStore;
     private final ContributionWallet contributionWallet;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public ClickerUpgradeResult upgrade(Long userId, Long universityId) {
@@ -43,6 +46,9 @@ public class ClickerUpgradeService {
             this.contributionWallet.restore(userId, universityId, nextClicker.getRequiredScore());
             throw new BusinessException(ErrorCode.CLICKER_UPGRADE_CONFLICT);
         }
+
+        // 커밋 후 리스너가 클릭 엔진용 레벨 캐시를 갱신한다 (롤백되면 전달되지 않음)
+        this.eventPublisher.publishEvent(new ClickerUpgradedEvent(userId, nextClicker.getId()));
 
         // 다음 레벨업에 필요한 기여도 계산, 이번 레벨업 결과가 최고 레벨이라면 null
         Long nextLevelRequiredScore = levelTable.stream()
