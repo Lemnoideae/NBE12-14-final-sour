@@ -4,6 +4,7 @@ import com.back.nbe1214finalsour.domain.auth.controller.RefreshTokenCookies;
 import com.back.nbe1214finalsour.domain.user.dto.ChangePasswordRequest;
 import com.back.nbe1214finalsour.domain.user.dto.MyInfoResponse;
 import com.back.nbe1214finalsour.domain.user.dto.NicknameAvailabilityResponse;
+import com.back.nbe1214finalsour.domain.user.dto.WithdrawalRequest;
 import com.back.nbe1214finalsour.domain.user.service.UserService;
 import com.back.nbe1214finalsour.domain.user.validation.Nickname;
 import com.back.nbe1214finalsour.global.response.ApiResponse;
@@ -15,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -48,6 +50,17 @@ public class UserController {
             @AuthenticationPrincipal AuthUser authUser,
             @RequestBody @Valid ChangePasswordRequest request) {
         userService.changePassword(authUser.userId(), request.currentPassword(), request.newPassword());
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, RefreshTokenCookies.expire().toString())
+                .build();
+    }
+
+    /** 회원 탈퇴. 인증 필요. 비밀번호 변경과 같이 refresh 토큰을 모두 지우고 쿠키도 지운다. 응답은 본문 없는 204 */
+    @PostMapping("/me/withdrawal")
+    public ResponseEntity<Void> withdraw(
+            @AuthenticationPrincipal AuthUser authUser,
+            @RequestBody @Valid WithdrawalRequest request) {
+        userService.withdraw(authUser.userId(), request.password());
         return ResponseEntity.noContent()
                 .header(HttpHeaders.SET_COOKIE, RefreshTokenCookies.expire().toString())
                 .build();

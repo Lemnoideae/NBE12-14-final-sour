@@ -21,7 +21,7 @@ public final class RefreshTokenCookies {
         return cookie(refreshToken, maxAge);
     }
 
-    /** 로그아웃·비밀번호 변경: 같은 이름·Path에 {@code Max-Age=0}을 보내 브라우저가 지우게 한다 */
+    /** 로그아웃·비밀번호 변경·탈퇴: 같은 이름·Path에 {@code Max-Age=0}을 보내 브라우저가 지우게 한다 */
     public static ResponseCookie expire() {
         return cookie("", Duration.ZERO);
     }
