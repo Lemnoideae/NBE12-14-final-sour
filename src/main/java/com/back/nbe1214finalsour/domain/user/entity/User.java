@@ -122,6 +122,16 @@ public class User extends BaseTimeEntity {
         this.password = encodedPassword;
     }
 
+    /** 중복 검사는 호출한 쪽이 한다. 동시 변경은 {@code uk_users_nickname_ci}가 막는다 */
+    public void changeNickname(String nickname) {
+        this.nickname = nickname;
+    }
+
+    /** @param profileImageUrl 검사를 마친 우리 CDN 주소 ({@code ProfileImageUrlPolicy}) */
+    public void changeProfileImageUrl(String profileImageUrl) {
+        this.logoUrl = profileImageUrl;
+    }
+
     /**
      * 탈퇴 (soft delete). 상태와 탈퇴 시각을 함께 바꾼다 ({@code ck_users_withdrawn}). 탈퇴하면 부분 UK
      * ({@code uk_users_email_hash}, {@code uk_users_nickname_ci})에서 빠져 같은 이메일·닉네임으로 다시 가입할 수 있다.

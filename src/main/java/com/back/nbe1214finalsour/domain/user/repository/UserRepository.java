@@ -21,4 +21,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
      */
     @Query("select count(u) > 0 from User u where lower(u.nickname) = lower(:nickname) and u.deletedAt is null")
     boolean existsActiveNicknameIgnoreCase(@Param("nickname") String nickname);
+
+    /** {@link #existsActiveNicknameIgnoreCase}에서 이 회원은 빼고 본다 (프로필 수정: 자기 닉네임의 대소문자만 바꾸는 경우) */
+    @Query("select count(u) > 0 from User u where lower(u.nickname) = lower(:nickname) and u.deletedAt is null"
+            + " and u.id <> :userId")
+    boolean existsActiveNicknameIgnoreCaseExcept(@Param("nickname") String nickname, @Param("userId") Long userId);
 }

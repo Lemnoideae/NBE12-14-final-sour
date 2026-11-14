@@ -4,6 +4,7 @@ import com.back.nbe1214finalsour.domain.auth.controller.RefreshTokenCookies;
 import com.back.nbe1214finalsour.domain.user.dto.ChangePasswordRequest;
 import com.back.nbe1214finalsour.domain.user.dto.MyInfoResponse;
 import com.back.nbe1214finalsour.domain.user.dto.NicknameAvailabilityResponse;
+import com.back.nbe1214finalsour.domain.user.dto.UpdateProfileRequest;
 import com.back.nbe1214finalsour.domain.user.dto.WithdrawalRequest;
 import com.back.nbe1214finalsour.domain.user.service.UserService;
 import com.back.nbe1214finalsour.domain.user.validation.Nickname;
@@ -39,6 +40,17 @@ public class UserController {
     @GetMapping("/me")
     public ApiResponse<MyInfoResponse> me(@AuthenticationPrincipal AuthUser authUser) {
         return ApiResponse.ok(userService.getMyInfo(authUser.userId()));
+    }
+
+    /**
+     * 프로필 수정. 인증 필요. 보낸 필드만 바꾸고 내 정보와 같은 형식으로 응답한다.
+     * 닉네임 규칙 위반은 400 {@code COMMON_INVALID_INPUT}
+     */
+    @PatchMapping("/me")
+    public ApiResponse<MyInfoResponse> updateProfile(
+            @AuthenticationPrincipal AuthUser authUser,
+            @RequestBody @Valid UpdateProfileRequest request) {
+        return ApiResponse.ok(userService.updateProfile(authUser.userId(), request.nickname(), request.profileImageUrl()));
     }
 
     /**

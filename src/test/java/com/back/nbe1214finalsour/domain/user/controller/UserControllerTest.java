@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
@@ -17,6 +18,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.back.nbe1214finalsour.domain.user.dto.MyInfoResponse;
+import com.back.nbe1214finalsour.domain.user.dto.MyInfoResponse.ClickerInfo;
+import com.back.nbe1214finalsour.domain.user.dto.MyInfoResponse.DepartmentInfo;
+import com.back.nbe1214finalsour.domain.user.dto.MyInfoResponse.UniversityInfo;
+import com.back.nbe1214finalsour.domain.user.entity.UserStatus;
 import com.back.nbe1214finalsour.domain.user.service.UserService;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
@@ -98,6 +104,90 @@ class UserControllerTest {
         mockMvc.perform(get("/api/v1/users/nickname/availability"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("COMMON_INVALID_INPUT"));
+    }
+
+    // ===== 프로필 수정 (SCRUM-80) =====
+
+    private static final String PROFILE_URL = "https://cdn.devcproject.cloud/profile/1024/3f9a.png";
+
+    @Test
+    @DisplayName("[PATCH] /api/v1/users/me는 서비스 결과를 내 정보 형식으로 200 응답")
+    void updateProfile() throws Exception {
+        given(userService.updateProfile(1024L, "대대대왕", PROFILE_URL)).willReturn(myInfo("대대대왕", PROFILE_URL));
+
+        updateProfile("{\"nickname\":\"대대대왕\",\"profileImageUrl\":\"" + PROFILE_URL + "\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.id").value(1024))
+                .andExpect(jsonPath("$.data.nickname").value("대대대왕"))
+                .andExpect(jsonPath("$.data.profileImageUrl").value(PROFILE_URL))
+                .andExpect(jsonPath("$.data.university.name").value("서울대학교"))
+                .andExpect(jsonPath("$.data.clicker.level").value(1));
+    }
+
+    @Test
+    @DisplayName("[PATCH] /api/v1/users/me는 빠진 필드를 null로 넘긴다 (그대로 둠)")
+    void updateProfile_missingFieldsAreNull() throws Exception {
+        given(userService.updateProfile(1024L, null, null)).willReturn(myInfo("대대대짱", null));
+
+        updateProfile("{}").andExpect(status().isOk());
+
+        verify(userService).updateProfile(1024L, null, null);
+    }
+
+    @ParameterizedTest(name = "nickname=\"{0}\"")
+    @ValueSource(strings = {"", "대", "가나다라마바사아자차카타파", " 대대대"})
+    @DisplayName("[PATCH] /api/v1/users/me는 닉네임 규칙을 어기면 400 COMMON_INVALID_INPUT, 서비스를 부르지 않음")
+    void updateProfile_invalidNickname(String nickname) throws Exception {
+        updateProfile("{\"nickname\":\"" + nickname + "\"}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("COMMON_INVALID_INPUT"))
+                .andExpect(jsonPath("$.data[0].field").value("nickname"));
+
+        verify(userService, never()).updateProfile(any(), any(), any());
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("profileErrors")
+    @DisplayName("[PATCH] /api/v1/users/me의 도메인 오류는 명세서의 상태와 코드로 응답")
+    void updateProfile_businessErrors(ErrorCode errorCode, int httpStatus) throws Exception {
+        given(userService.updateProfile(any(), any(), isNull())).willThrow(new BusinessException(errorCode));
+
+        updateProfile("{\"nickname\":\"대대대왕\"}")
+                .andExpect(status().is(httpStatus))
+                .andExpect(jsonPath("$.code").value(errorCode.getCode()));
+    }
+
+    static Stream<Arguments> profileErrors() {
+        return Stream.of(
+                Arguments.of(ErrorCode.USER_NICKNAME_DUPLICATED, 409),
+                Arguments.of(ErrorCode.FILE_INVALID_URL, 400));
+    }
+
+    @Test
+    @DisplayName("[PATCH] /api/v1/users/me는 access 토큰이 없으면 401 COMMON_UNAUTHORIZED")
+    void updateProfile_requiresAuthentication() throws Exception {
+        mockMvc.perform(patch("/api/v1/users/me")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nickname\":\"대대대왕\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("COMMON_UNAUTHORIZED"));
+
+        verify(userService, never()).updateProfile(any(), any(), any());
+    }
+
+    private ResultActions updateProfile(String body) throws Exception {
+        String accessToken = jwtProvider.createAccessToken(new AuthUser(1024L, 12L, Role.USER));
+        return mockMvc.perform(patch("/api/v1/users/me")
+                .header("Authorization", "Bearer " + accessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body));
+    }
+
+    private static MyInfoResponse myInfo(String nickname, String profileImageUrl) {
+        return new MyInfoResponse(1024L, nickname, "student@snu.ac.kr", Role.USER, UserStatus.ACTIVE, profileImageUrl,
+                new UniversityInfo(12L, "서울대학교", null), new DepartmentInfo(301L, "컴퓨터공학부"),
+                new ClickerInfo(1L, 10, 300L), 0, 0);
     }
 
     // ===== 비밀번호 변경 (SCRUM-78) =====

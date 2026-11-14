@@ -59,6 +59,9 @@ public enum ErrorCode {
     // ===== UNIV / RANK (3번) =====
     UNIV_NOT_FOUND(HttpStatus.NOT_FOUND, "UNIV_NOT_FOUND", "학교를 찾을 수 없습니다."),
 
+    // ===== FILE (3번 업로드 모듈, 프로필 수정이 먼저 사용) =====
+    FILE_INVALID_URL(HttpStatus.BAD_REQUEST, "FILE_INVALID_URL", "허용되지 않은 파일 주소입니다."),
+
     // ===== ALLY / MATCH / GUEST (3번) =====
     ALLY_APPLICATION_PENDING(HttpStatus.CONFLICT, "ALLY_APPLICATION_PENDING", "이미 처리 대기 중인 연합 가입 신청이 있습니다."),
     ALLY_UNIVERSITY_ALREADY_JOINED(HttpStatus.CONFLICT, "ALLY_UNIVERSITY_ALREADY_JOINED", "이미 연합에 소속된 학교입니다."),
