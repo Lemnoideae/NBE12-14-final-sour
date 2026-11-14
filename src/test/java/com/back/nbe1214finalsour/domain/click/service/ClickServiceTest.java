@@ -71,13 +71,11 @@ class ClickServiceTest {
         return new ClickRequest(SUBMISSION_ID, clickCount);
     }
 
-    /** 중복 아님 → 레벨 캐시 히트(3레벨) → 유저 조회 성공까지의 공통 경로 */
+    /** 중복 아님 → 레벨 캐시 히트(3레벨). 학과 ID는 토큰 값이라 회원을 조회하지 않는다 */
     private void givenHappyPathBeforeScript() {
         given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
         given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(true);
         given(valueOperations.get("user:1:clicker")).willReturn("3");
-        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
-        given(user.getDepartmentId()).willReturn(DEPARTMENT_ID);
         given(clickerService.getClickerById(3L)).willReturn(CLICKER_LV3);
     }
 
@@ -90,7 +88,7 @@ class ClickServiceTest {
         given(valueOperations.setIfAbsent("submit:1:sub-1", SUBMISSION_ID, Duration.ofSeconds(10L)))
                 .willReturn(false);
 
-        assertThatThrownBy(() -> clickService.click(USER_ID, UNIVERSITY_ID, request(3)))
+        assertThatThrownBy(() -> clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3)))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.CLICK_DUPLICATE_SUBMISSION);
@@ -107,13 +105,11 @@ class ClickServiceTest {
         given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
         given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(null);
         given(valueOperations.get("user:1:clicker")).willReturn("3");
-        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
-        given(user.getDepartmentId()).willReturn(DEPARTMENT_ID);
         given(clickerService.getClickerById(3L)).willReturn(CLICKER_LV3);
         given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
-        clickService.click(USER_ID, UNIVERSITY_ID, request(3));
+        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
 
         verify(actionRateLimiter).check(USER_ID);
     }
@@ -128,7 +124,7 @@ class ClickServiceTest {
         willThrow(new BusinessException(ErrorCode.CLICK_TOO_FREQUENT))
                 .given(actionRateLimiter).check(USER_ID);
 
-        assertThatThrownBy(() -> clickService.click(USER_ID, UNIVERSITY_ID, request(3)))
+        assertThatThrownBy(() -> clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3)))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.CLICK_TOO_FREQUENT);
@@ -146,12 +142,11 @@ class ClickServiceTest {
         given(valueOperations.get("user:1:clicker")).willReturn(null);
         given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
         given(user.getClickerId()).willReturn(2L);
-        given(user.getDepartmentId()).willReturn(DEPARTMENT_ID);
         given(clickerService.getClickerById(2L)).willReturn(new Clicker(2L, 20, 300L));
         given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
-        ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, request(3));
+        ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
 
         verify(valueOperations).set("user:1:clicker", "2");
         verify(clickerService).getClickerById(2L);
@@ -165,21 +160,53 @@ class ClickServiceTest {
         given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
-        clickService.click(USER_ID, UNIVERSITY_ID, request(3));
+        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
 
         verify(valueOperations, never()).set(eq("user:1:clicker"), anyString());
         verify(clickerService).getClickerById(3L);
     }
 
     @Test
-    @DisplayName("레벨 캐시가 있어도 회원이 없으면 USER_NOT_FOUND 예외")
+    @DisplayName("레벨 캐시와 토큰의 학과 ID가 있으면 회원을 DB에서 조회하지 않는다")
+    void click_cacheHitWithDepartmentClaimSkipsUserLookup() {
+        givenHappyPathBeforeScript();
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
+                .willReturn(SCRIPT_RESULT);
+
+        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
+
+        verify(userRepository, never()).findById(anyLong());
+    }
+
+    @Test
+    @DisplayName("토큰에 학과 ID가 없으면(배포 전 발급) DB의 학과 ID를 쓰고, 레벨 캐시는 다시 쓰지 않는다")
+    void click_tokenWithoutDepartmentUsesDepartmentFromDb() {
+        givenHappyPathBeforeScript();
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+        given(user.getDepartmentId()).willReturn(9L);
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
+                .willReturn(SCRIPT_RESULT);
+
+        ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, null, request(3));
+
+        ArgumentCaptor<Object> argsCaptor = ArgumentCaptor.captor();
+        verify(stringRedisTemplate).execute(any(), anyList(),
+                argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(),
+                argsCaptor.capture(), argsCaptor.capture());
+        assertThat(argsCaptor.getAllValues().get(1)).isEqualTo("9");
+        assertThat(response).extracting("department.id").isEqualTo(9L);
+        verify(valueOperations, never()).set(eq("user:1:clicker"), anyString());
+    }
+
+    @Test
+    @DisplayName("회원을 조회해야 하는데(레벨 캐시 없음) 회원이 없으면 USER_NOT_FOUND 예외")
     void click_userNotFound() {
         given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
         given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(true);
-        given(valueOperations.get("user:1:clicker")).willReturn("3");
+        given(valueOperations.get("user:1:clicker")).willReturn(null);
         given(userRepository.findById(USER_ID)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> clickService.click(USER_ID, UNIVERSITY_ID, request(3)))
+        assertThatThrownBy(() -> clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3)))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
@@ -197,7 +224,7 @@ class ClickServiceTest {
         given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
-        ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, request(3));
+        ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
 
         assertThat(response.multiplier()).isEqualTo(1.0);
         assertThat(response.earnedScore()).isEqualTo(30L); // 3 * 10 * 1.0
@@ -211,7 +238,7 @@ class ClickServiceTest {
         given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
-        ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, request(3));
+        ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
 
         assertThat(response.multiplier()).isEqualTo(1.5);
         assertThat(response.earnedScore()).isEqualTo(45L); // floor(3 * 10 * 1.5)
@@ -225,7 +252,7 @@ class ClickServiceTest {
         given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
-        ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, request(3));
+        ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
 
         // 3 * 10 * 1.09 = 32.7 → 32
         assertThat(response.earnedScore()).isEqualTo(32L);
@@ -241,7 +268,7 @@ class ClickServiceTest {
         given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
-        clickService.click(USER_ID, UNIVERSITY_ID, request(3));
+        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
 
         ArgumentCaptor<List<String>> keysCaptor = ArgumentCaptor.captor();
         ArgumentCaptor<Object> argsCaptor = ArgumentCaptor.captor();
@@ -277,7 +304,7 @@ class ClickServiceTest {
         given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
-        ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, request(3));
+        ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
 
         assertThat(response)
                 .extracting("acceptedClicks", "earnedScore", "multiplier",

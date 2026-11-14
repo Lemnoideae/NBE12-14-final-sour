@@ -64,6 +64,8 @@ class ClickIntegrationTest {
 
     private long universityId;
     private long departmentId;
+    /** 토큰의 학과 ID가 DB 값 대신 쓰이는지 확인할 때만 만든다 */
+    private Long otherDepartmentId;
     private User user;
     private String token;
 
@@ -79,7 +81,7 @@ class ClickIntegrationTest {
                 universityId);
         user = userRepository.saveAndFlush(User.create(universityId, departmentId, "클릭왕", EMAIL,
                 emailHasher.hash(EMAIL), "{noop}unused", OffsetDateTime.now()));
-        token = jwtProvider.createAccessToken(new AuthUser(user.getId(), universityId, Role.USER));
+        token = jwtProvider.createAccessToken(new AuthUser(user.getId(), universityId, departmentId, Role.USER));
     }
 
     @AfterEach
@@ -88,6 +90,9 @@ class ClickIntegrationTest {
         redis.opsForZSet().remove(RedisKey.RANK_UNIV.of(), String.valueOf(universityId));
         redis.opsForSet().remove(RedisKey.DIRTY_UNIV.of(), String.valueOf(universityId));
         redis.opsForSet().remove(RedisKey.DIRTY_DEPT.of(), String.valueOf(departmentId));
+        if (otherDepartmentId != null) {
+            redis.opsForSet().remove(RedisKey.DIRTY_DEPT.of(), String.valueOf(otherDepartmentId));
+        }
         redis.opsForSet().remove(RedisKey.DIRTY_USER.of(), String.valueOf(user.getId()));
         redis.delete(List.of(
                 RedisKey.RANK_DEPT.of(universityId),
@@ -127,6 +132,40 @@ class ClickIntegrationTest {
         assertThat(redis.opsForZSet().score(RedisKey.RANK_USER.of(universityId), String.valueOf(user.getId())))
                 .isEqualTo(3.0);
         assertThat(redis.opsForSet().isMember(RedisKey.DIRTY_USER.of(), String.valueOf(user.getId()))).isTrue();
+    }
+
+    @Test
+    @DisplayName("학과 점수는 토큰의 학과 ID로 반영한다 (회원을 DB에서 다시 읽지 않음)")
+    void departmentScoreUsesDepartmentFromToken() throws Exception {
+        otherDepartmentId = jdbcTemplate.queryForObject(
+                "INSERT INTO department (university_id, name) VALUES (?, '전자공학과') RETURNING id", Long.class,
+                universityId);
+        String tokenWithOtherDepartment = jwtProvider.createAccessToken(
+                new AuthUser(user.getId(), universityId, otherDepartmentId, Role.USER));
+        // 첫 클릭은 레벨 캐시를 채우려고 회원을 읽으므로, 캐시가 있는 상태에서 확인한다
+        redis.opsForValue().set(RedisKey.USER_CLICKER.of(user.getId()), "1");
+
+        click(tokenWithOtherDepartment, "sub-1", 3)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.department.id").value(otherDepartmentId))
+                .andExpect(jsonPath("$.data.department.totalScore").value(3));
+
+        assertThat(redis.opsForZSet().score(RedisKey.RANK_DEPT.of(universityId), String.valueOf(otherDepartmentId)))
+                .isEqualTo(3.0);
+        assertThat(redis.opsForZSet().score(RedisKey.RANK_DEPT.of(universityId), String.valueOf(departmentId)))
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("학과 claim이 없는 토큰(배포 전 발급)이면 DB의 학과 ID로 반영한다")
+    void tokenWithoutDepartmentFallsBackToDb() throws Exception {
+        String legacyToken = jwtProvider.createAccessToken(new AuthUser(user.getId(), universityId, null, Role.USER));
+        redis.opsForValue().set(RedisKey.USER_CLICKER.of(user.getId()), "1");
+
+        click(legacyToken, "sub-1", 3)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.department.id").value(departmentId))
+                .andExpect(jsonPath("$.data.department.totalScore").value(3));
     }
 
     @Test
@@ -239,8 +278,12 @@ class ClickIntegrationTest {
     }
 
     private ResultActions click(String submissionId, int clickCount) throws Exception {
+        return click(token, submissionId, clickCount);
+    }
+
+    private ResultActions click(String accessToken, String submissionId, int clickCount) throws Exception {
         return mockMvc.perform(post("/api/v1/clicks")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"submissionId":"%s","clickCount":%d}""".formatted(submissionId, clickCount)));
