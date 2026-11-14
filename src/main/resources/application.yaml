@@ -33,6 +33,11 @@ email-crypto:
   # users.email_hash HMAC-SHA256 키. Base64로 인코딩한 32바이트 이상. 바꾸면 기존 회원을 이메일로 찾을 수 없다
   hash-key: ${EMAIL_HASH_KEY}
 
+file:
+  # 업로드한 파일(S3)을 내려주는 공개 주소 (CloudFront). 프로필 이미지 URL 검사(ProfileImageUrlPolicy)에 쓴다.
+  # 기본값은 추가 기능 API 명세서 예시의 주소다. 3번 업로드 모듈이 생기면 같은 값을 쓴다
+  public-base-url: ${FILE_PUBLIC_BASE_URL:https://cdn.devcproject.cloud}
+
 cors:
   # 쉼표로 구분한 origin 목록. 기본값은 로컬 프론트 개발 서버 (frontend/package.json의 vite --port=3000)
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}

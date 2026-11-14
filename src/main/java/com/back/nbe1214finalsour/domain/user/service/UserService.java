@@ -15,6 +15,7 @@ import com.back.nbe1214finalsour.domain.user.entity.User;
 import com.back.nbe1214finalsour.domain.user.entity.UserStatus;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.domain.user.repository.UserScoreCache;
+import com.back.nbe1214finalsour.domain.user.validation.ProfileImageUrlPolicy;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import java.time.Clock;
@@ -38,6 +39,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final RefreshTokenService refreshTokenService;
     private final Clock clock;
+    private final ProfileImageUrlPolicy profileImageUrlPolicy;
 
     /** 탈퇴하지 않은 회원 중에 대소문자를 무시하고 같은 닉네임이 없으면 사용할 수 있다 */
     public boolean isNicknameAvailable(String nickname) {
@@ -120,6 +122,37 @@ public class UserService {
         return userRepository.findById(userId)
                 .filter(found -> found.getDeletedAt() == null)
                 .orElseThrow(() -> new BusinessException(ErrorCode.COMMON_UNAUTHORIZED, "없거나 탈퇴한 회원: " + userId));
+    }
+
+    /**
+     * 프로필 수정 (추가 명세 §3-1). {@code null}인 값은 그대로 둔다. 둘 다 검사를 통과해야 바꾼다 (하나라도 실패하면 바꾸지 않음).
+     * 정지·차단 회원도 바꿀 수 있다 (정지는 로그인 때만 막는 기준, 비밀번호 변경과 같음).
+     *
+     * <p>닉네임 중복 검사를 동시에 통과한 요청은 flush 때 {@code uk_users_nickname_ci}에 막히고,
+     * {@code GlobalExceptionHandler}가 409 {@code USER_NICKNAME_DUPLICATED}로 바꾼다 (회원가입과 같은 방식).
+     *
+     * @return 바뀐 뒤의 내 정보 ({@code GET /api/v1/users/me}와 같은 형식)
+     * @throws BusinessException 400 {@code FILE_INVALID_URL}: 우리 CDN의 내 profile 경로가 아님.
+     *                           409 {@code USER_NICKNAME_DUPLICATED}: 다른 회원이 쓰는 닉네임 (대소문자 무시).
+     *                           401 {@code COMMON_UNAUTHORIZED}: 없거나 탈퇴한 회원
+     */
+    @Transactional
+    public MyInfoResponse updateProfile(Long userId, String nickname, String profileImageUrl) {
+        User user = findActiveUser(userId);
+        if (profileImageUrl != null && !profileImageUrlPolicy.isAllowed(profileImageUrl, userId)) {
+            throw new BusinessException(ErrorCode.FILE_INVALID_URL, "프로필 이미지 URL 거부: userId=" + userId);
+        }
+        if (nickname != null && !nickname.equals(user.getNickname())) {
+            if (userRepository.existsActiveNicknameIgnoreCaseExcept(nickname, userId)) {
+                throw new BusinessException(ErrorCode.USER_NICKNAME_DUPLICATED);
+            }
+            user.changeNickname(nickname);
+        }
+        if (profileImageUrl != null) {
+            user.changeProfileImageUrl(profileImageUrl);
+        }
+        userRepository.flush();
+        return getMyInfo(userId);
     }
 
     /** 레벨표는 {@link ClickerService}가 캐시한 것을 쓴다 (클리커 업그레이드와 같은 출처) */

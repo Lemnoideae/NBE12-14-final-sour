@@ -240,6 +240,8 @@ class AuthControllerTest {
                 Arguments.of("닉네임 1자", signupBody("대", "Passw0rd!", 301), "nickname"),
                 Arguments.of("닉네임 13자", signupBody("가".repeat(13), "Passw0rd!", 301), "nickname"),
                 Arguments.of("닉네임 앞 공백", signupBody(" 대대대", "Passw0rd!", 301), "nickname"),
+                Arguments.of("닉네임 없음",
+                        "{\"signupToken\":\"" + TOKEN + "\",\"password\":\"Passw0rd!\",\"departmentId\":301}", "nickname"),
                 Arguments.of("비밀번호 7자", signupBody("대대대짱", "Pass0r!", 301), "password"),
                 Arguments.of("비밀번호 65자", signupBody("대대대짱", "Passw0rd!" + "a".repeat(56), 301), "password"),
                 Arguments.of("비밀번호 숫자 없음", signupBody("대대대짱", "Password!", 301), "password"),

@@ -14,7 +14,7 @@ import jakarta.validation.constraints.Size;
  */
 public record SignupRequest(
         @NotBlank @Size(max = 64) String signupToken,
-        @Nickname String nickname,
+        @NotNull @Nickname String nickname,
         @Password String password,
         @NotNull @Positive Long departmentId) {
 
