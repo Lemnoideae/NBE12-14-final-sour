@@ -49,6 +49,7 @@ public enum ErrorCode {
     USER_DEPARTMENT_MISMATCH(HttpStatus.BAD_REQUEST, "USER_DEPARTMENT_MISMATCH", "소속 학교의 학과가 아닙니다."),
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "회원을 찾을 수 없습니다."),
     USER_SUSPENDED(HttpStatus.FORBIDDEN, "USER_SUSPENDED", "이용이 제한된 계정입니다."),
+    USER_INVALID_PASSWORD(HttpStatus.BAD_REQUEST, "USER_INVALID_PASSWORD", "비밀번호가 올바르지 않습니다."),
 
     // ===== CLICK (2번) =====
     CLICK_DUPLICATE_SUBMISSION(HttpStatus.CONFLICT, "CLICK_DUPLICATE_SUBMISSION", "이미 처리한 제출입니다."),
