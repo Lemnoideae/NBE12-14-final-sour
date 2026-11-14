@@ -6,6 +6,7 @@ import com.back.nbe1214finalsour.domain.click.dto.ClickResponse;
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
 import com.back.nbe1214finalsour.domain.clicker.service.ClickerService;
 import com.back.nbe1214finalsour.domain.user.entity.User;
+import com.back.nbe1214finalsour.domain.user.entity.UserStatus;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
@@ -43,7 +44,12 @@ public class ClickService {
 
         // 회원이 활성화인 경우만 가능
         String userStatus = stringRedisTemplate.opsForValue().get(RedisKey.USER_STATUS.of(userId));
-        if (userStatus == null || !userStatus.equals("ACTIVE")) {
+        if (userStatus == null) {
+            User user = userRepository.findById(userId).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+            userStatus = String.valueOf(user.getStatus());
+            stringRedisTemplate.opsForValue().set(RedisKey.USER_STATUS.of(userId), userStatus);
+        }
+        if (!userStatus.equals("ACTIVE")) {
             throw new BusinessException(ErrorCode.USER_SUSPENDED);
         }
 

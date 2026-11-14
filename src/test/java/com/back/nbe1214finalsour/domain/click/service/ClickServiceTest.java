@@ -102,21 +102,6 @@ class ClickServiceTest {
         verify(stringRedisTemplate, never()).execute(any(), anyList(), any());
     }
 
-    @Test
-    @DisplayName("회원 상태 캐시가 없으면 USER_SUSPENDED 예외")
-    void click_userStatusMissing() {
-        given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("user:1:status")).willReturn(null);
-
-        assertThatThrownBy(() -> clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3)))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.USER_SUSPENDED);
-
-        verify(valueOperations, never()).setIfAbsent(anyString(), anyString(), any(Duration.class));
-        verify(actionRateLimiter, never()).check(anyLong());
-    }
-
     // --- 1단계: 중복 제출 ---
 
     @Test

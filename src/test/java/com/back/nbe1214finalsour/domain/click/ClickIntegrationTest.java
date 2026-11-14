@@ -212,16 +212,6 @@ class ClickIntegrationTest {
     }
 
     @Test
-    @DisplayName("Redis에 회원 상태가 없으면 403 USER_SUSPENDED")
-    void missingUserStatusIsRejected() throws Exception {
-        redis.delete(RedisKey.USER_STATUS.of(user.getId()));
-
-        click("sub-1", 3)
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("USER_SUSPENDED"));
-    }
-
-    @Test
     @DisplayName("같은 submissionId로 다시 제출하면 409 CLICK_DUPLICATE_SUBMISSION, 점수는 오르지 않는다")
     void duplicateSubmissionIsRejected() throws Exception {
         click("sub-dup", 3).andExpect(status().isOk());
