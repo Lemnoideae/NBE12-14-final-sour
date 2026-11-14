@@ -82,6 +82,12 @@ public class RefreshTokenService {
         }
     }
 
+    /** 비밀번호 변경·탈퇴: 이 회원의 모든 기기를 로그아웃시킨다 (추가 명세 §3-1). 이미 발급한 access 토큰은 만료까지 남는다 */
+    @Transactional
+    public void revokeAll(Long userId) {
+        refreshTokenRepository.deleteAllByUserId(userId);
+    }
+
     /** refresh 토큰 원문의 SHA-256, 소문자 hex 64자 */
     public static String hash(String token) {
         try {

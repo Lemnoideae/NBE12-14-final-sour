@@ -9,7 +9,7 @@ import org.springframework.http.ResponseCookie;
  * <p>Path는 인증 API로 좁혀 다른 API 요청에는 쿠키가 실리지 않게 한다. URL 접두어 결정(회원 MVP 계획 Q1)에 따라
  * 명세서의 {@code /api/auth} 대신 {@code /api/v1/auth}다.
  */
-final class RefreshTokenCookies {
+public final class RefreshTokenCookies {
 
     static final String NAME = "refreshToken";
     static final String PATH = "/api/v1/auth";
@@ -21,8 +21,8 @@ final class RefreshTokenCookies {
         return cookie(refreshToken, maxAge);
     }
 
-    /** 로그아웃: 같은 이름·Path에 {@code Max-Age=0}을 보내 브라우저가 지우게 한다 */
-    static ResponseCookie expire() {
+    /** 로그아웃·비밀번호 변경: 같은 이름·Path에 {@code Max-Age=0}을 보내 브라우저가 지우게 한다 */
+    public static ResponseCookie expire() {
         return cookie("", Duration.ZERO);
     }
 

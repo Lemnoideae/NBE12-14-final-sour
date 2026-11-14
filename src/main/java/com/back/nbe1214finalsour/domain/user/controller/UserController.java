@@ -1,14 +1,21 @@
 package com.back.nbe1214finalsour.domain.user.controller;
 
+import com.back.nbe1214finalsour.domain.auth.controller.RefreshTokenCookies;
+import com.back.nbe1214finalsour.domain.user.dto.ChangePasswordRequest;
 import com.back.nbe1214finalsour.domain.user.dto.MyInfoResponse;
 import com.back.nbe1214finalsour.domain.user.dto.NicknameAvailabilityResponse;
 import com.back.nbe1214finalsour.domain.user.service.UserService;
 import com.back.nbe1214finalsour.domain.user.validation.Nickname;
 import com.back.nbe1214finalsour.global.response.ApiResponse;
 import com.back.nbe1214finalsour.global.security.AuthUser;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -30,5 +37,19 @@ public class UserController {
     @GetMapping("/me")
     public ApiResponse<MyInfoResponse> me(@AuthenticationPrincipal AuthUser authUser) {
         return ApiResponse.ok(userService.getMyInfo(authUser.userId()));
+    }
+
+    /**
+     * 비밀번호 변경. 인증 필요. 모든 refresh 토큰을 지우므로 이 브라우저의 refresh 쿠키도 지운다.
+     * 응답은 로그아웃과 같이 본문 없는 204다 (계획 D2).
+     */
+    @PatchMapping("/me/password")
+    public ResponseEntity<Void> changePassword(
+            @AuthenticationPrincipal AuthUser authUser,
+            @RequestBody @Valid ChangePasswordRequest request) {
+        userService.changePassword(authUser.userId(), request.currentPassword(), request.newPassword());
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, RefreshTokenCookies.expire().toString())
+                .build();
     }
 }

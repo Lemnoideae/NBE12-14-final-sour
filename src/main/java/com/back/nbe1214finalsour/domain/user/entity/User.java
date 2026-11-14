@@ -116,4 +116,9 @@ public class User extends BaseTimeEntity {
         user.status = UserStatus.ACTIVE;
         return user;
     }
+
+    /** @param encodedPassword 인코딩한 비밀번호 (원문을 넣지 않는다) */
+    public void changePassword(String encodedPassword) {
+        this.password = encodedPassword;
+    }
 }
