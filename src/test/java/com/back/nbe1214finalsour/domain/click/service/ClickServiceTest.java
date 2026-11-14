@@ -12,6 +12,8 @@ import com.back.nbe1214finalsour.global.redis.RedisHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -71,14 +73,50 @@ class ClickServiceTest {
         return new ClickRequest(SUBMISSION_ID, clickCount);
     }
 
-    /** 중복 아님 → 레벨 캐시 히트(3레벨) → 유저 조회 성공까지의 공통 경로 */
+    /** 활성 회원 → 중복 아님 → 레벨 캐시 히트(3레벨) → 유저 조회 성공까지의 공통 경로 */
     private void givenHappyPathBeforeScript() {
         given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("user:1:status")).willReturn("ACTIVE");
         given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(true);
         given(valueOperations.get("user:1:clicker")).willReturn("3");
         given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
         given(user.getDepartmentId()).willReturn(DEPARTMENT_ID);
         given(clickerService.getClickerById(3L)).willReturn(CLICKER_LV3);
+    }
+
+    // --- 0단계: 회원 상태 ---
+
+    @ParameterizedTest
+    @ValueSource(strings = {"SUSPENDED", "BANNED", "WITHDRAWN"})
+    @DisplayName("회원 상태가 ACTIVE가 아니면 USER_SUSPENDED 예외, 이후 단계는 진행하지 않는다")
+    void click_inactiveUser(String status) {
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("user:1:status")).willReturn(status);
+
+        assertThatThrownBy(() -> clickService.click(USER_ID, UNIVERSITY_ID, request(3)))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.USER_SUSPENDED);
+
+        // 상태 검사가 중복 검사보다 먼저다
+        verify(valueOperations, never()).setIfAbsent(anyString(), anyString(), any(Duration.class));
+        verify(actionRateLimiter, never()).check(anyLong());
+        verify(stringRedisTemplate, never()).execute(any(), anyList(), any());
+    }
+
+    @Test
+    @DisplayName("회원 상태 캐시가 없으면 USER_SUSPENDED 예외")
+    void click_userStatusMissing() {
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("user:1:status")).willReturn(null);
+
+        assertThatThrownBy(() -> clickService.click(USER_ID, UNIVERSITY_ID, request(3)))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.USER_SUSPENDED);
+
+        verify(valueOperations, never()).setIfAbsent(anyString(), anyString(), any(Duration.class));
+        verify(actionRateLimiter, never()).check(anyLong());
     }
 
     // --- 1단계: 중복 제출 ---
@@ -87,6 +125,7 @@ class ClickServiceTest {
     @DisplayName("중복 제출이면 CLICK_DUPLICATE_SUBMISSION 예외, 한도 검사와 점수 반영은 하지 않는다")
     void click_duplicateSubmission() {
         given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("user:1:status")).willReturn("ACTIVE");
         given(valueOperations.setIfAbsent("submit:1:sub-1", SUBMISSION_ID, Duration.ofSeconds(10L)))
                 .willReturn(false);
 
@@ -105,6 +144,7 @@ class ClickServiceTest {
     @DisplayName("setIfAbsent가 null이면 중복으로 보지 않고 진행한다")
     void click_proceedsWhenSetIfAbsentReturnsNull() {
         given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("user:1:status")).willReturn("ACTIVE");
         given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(null);
         given(valueOperations.get("user:1:clicker")).willReturn("3");
         given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
@@ -124,6 +164,7 @@ class ClickServiceTest {
     @DisplayName("한도 초과 예외는 그대로 전파되고 점수 반영은 하지 않는다")
     void click_rateLimitExceeded() {
         given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("user:1:status")).willReturn("ACTIVE");
         given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(true);
         willThrow(new BusinessException(ErrorCode.CLICK_TOO_FREQUENT))
                 .given(actionRateLimiter).check(USER_ID);
@@ -142,6 +183,7 @@ class ClickServiceTest {
     @DisplayName("레벨 캐시가 없으면 DB의 clickerId로 캐시를 채우고 그 레벨을 쓴다")
     void click_cacheMissWritesClickerLevelCache() {
         given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("user:1:status")).willReturn("ACTIVE");
         given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(true);
         given(valueOperations.get("user:1:clicker")).willReturn(null);
         given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
@@ -175,6 +217,7 @@ class ClickServiceTest {
     @DisplayName("레벨 캐시가 있어도 회원이 없으면 USER_NOT_FOUND 예외")
     void click_userNotFound() {
         given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("user:1:status")).willReturn("ACTIVE");
         given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(true);
         given(valueOperations.get("user:1:clicker")).willReturn("3");
         given(userRepository.findById(USER_ID)).willReturn(Optional.empty());

@@ -80,6 +80,8 @@ class ClickIntegrationTest {
         user = userRepository.saveAndFlush(User.create(universityId, departmentId, "클릭왕", EMAIL,
                 emailHasher.hash(EMAIL), "{noop}unused", OffsetDateTime.now()));
         token = jwtProvider.createAccessToken(new AuthUser(user.getId(), universityId, Role.USER));
+        // 회원 상태는 로그인 시 Redis에 기록된다고 보고 미리 넣어 둔다
+        redis.opsForValue().set(RedisKey.USER_STATUS.of(user.getId()), "ACTIVE");
     }
 
     @AfterEach
@@ -92,6 +94,7 @@ class ClickIntegrationTest {
         redis.delete(List.of(
                 RedisKey.RANK_DEPT.of(universityId),
                 RedisKey.RANK_USER.of(universityId),
+                RedisKey.USER_STATUS.of(user.getId()),
                 RedisKey.USER_CLICKER.of(user.getId()),
                 RedisKey.USER_EFFECT.of(user.getId()),
                 RedisKey.RATELIMIT_ACTION.of(user.getId())));
@@ -156,6 +159,29 @@ class ClickIntegrationTest {
         click("sub-1", 3).andExpect(status().isOk());
 
         assertThat(redis.opsForValue().get(RedisKey.USER_CLICKER.of(user.getId()))).isEqualTo("1");
+    }
+
+    @Test
+    @DisplayName("정지된 회원이 클릭하면 403 USER_SUSPENDED, 점수는 반영되지 않는다")
+    void suspendedUserIsRejected() throws Exception {
+        redis.opsForValue().set(RedisKey.USER_STATUS.of(user.getId()), "SUSPENDED");
+
+        click("sub-1", 3)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("USER_SUSPENDED"));
+
+        assertThat(redis.opsForZSet().score(RedisKey.RANK_USER.of(universityId), String.valueOf(user.getId())))
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("Redis에 회원 상태가 없으면 403 USER_SUSPENDED")
+    void missingUserStatusIsRejected() throws Exception {
+        redis.delete(RedisKey.USER_STATUS.of(user.getId()));
+
+        click("sub-1", 3)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("USER_SUSPENDED"));
     }
 
     @Test
