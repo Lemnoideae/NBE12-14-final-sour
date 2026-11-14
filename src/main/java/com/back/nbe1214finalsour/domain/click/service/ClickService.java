@@ -37,6 +37,12 @@ public class ClickService {
         int clickCount = request.clickCount();
         String submissionId = request.submissionId();
 
+        // 회원이 활성화인 경우만 가능
+        String userStatus = stringRedisTemplate.opsForValue().get(RedisKey.USER_STATUS.of(userId));
+        if (userStatus == null || !userStatus.equals("ACTIVE")) {
+            throw new BusinessException(ErrorCode.USER_SUSPENDED);
+        }
+
         // 1. 중복 제출 확인 및 저장
         Boolean isRequested = stringRedisTemplate.opsForValue().setIfAbsent(RedisKey.SUBMIT_DEDUPE.of(userId, submissionId), submissionId, Duration.ofSeconds(10L));
 
