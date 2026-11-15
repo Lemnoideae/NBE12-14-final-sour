@@ -122,6 +122,8 @@ class RedisKeyTest {
                 "AUTH_SIGNUP_TOKEN|auth:signup:%s|STRING|PLAIN",
                 "AUTH_LOGIN_FAIL|auth:login:fail:%s|STRING|PLAIN",
                 "AUTH_LOGIN_LOCK|auth:login:lock:%s|STRING|PLAIN",
+                "AUTH_IP_LOGIN_FAIL|auth:ip:login:fail:%s|STRING|PLAIN",
+                "AUTH_IP_EMAIL_CODE|auth:ip:email:code:%s|STRING|PLAIN",
                 "AUTH_SESSION|auth:session:%s|STRING|PLAIN",
                 // 회원 (User)
                 "USER_STATUS|user:%s:status|STRING|PLAIN",

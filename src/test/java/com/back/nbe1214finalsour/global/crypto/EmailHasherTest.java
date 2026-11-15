@@ -44,6 +44,16 @@ class EmailHasherTest {
     }
 
     @Test
+    @DisplayName("클라이언트 IP는 'ip:' 접두어를 붙여 해시해 같은 문자열의 이메일 해시와 겹치지 않는다 (hex 64자, IPv6 대소문자 무시)")
+    void hashClientIp() {
+        assertThat(hasher.hashClientIp("203.0.113.7"))
+                .matches("^[0-9a-f]{64}$")
+                .isNotEqualTo(hasher.hash("203.0.113.7"))
+                .isNotEqualTo(hasher.hashClientIp("203.0.113.8"));
+        assertThat(hasher.hashClientIp("2001:DB8::1")).isEqualTo(hasher.hashClientIp("2001:db8::1"));
+    }
+
+    @Test
     @DisplayName("해시 키가 32바이트 미만이면 생성에 실패한다 (애플리케이션 시작 실패)")
     void shortKey() {
         String shortKey = Base64.getEncoder().encodeToString(new byte[31]);
