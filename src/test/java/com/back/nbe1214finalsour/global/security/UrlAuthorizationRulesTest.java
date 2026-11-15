@@ -238,4 +238,35 @@ class UrlAuthorizationRulesTest {
             return ApiResponse.ok(authUser == null ? null : authUser.userId());
         }
     }
+
+    @Test
+    @DisplayName("연합 생성 및 상세 조회 API는 JWT 인증이 필요하다")
+    void allianceApisRequireAuthentication() throws Exception {
+
+        // given: 인증이 필요한 연합 API
+        List<Row> allianceApis = List.of(
+                new Row(HttpMethod.POST, "/api/v1/alliances", Auth.REQUIRED),
+                new Row(HttpMethod.GET, "/api/v1/alliances/100", Auth.REQUIRED)
+        );
+
+        for (Row row : allianceApis) {
+
+            // 1. 로그인하지 않은 사용자는 401
+            perform(row, null)
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.code")
+                            .value("COMMON_UNAUTHORIZED"));
+
+            // 2. 정상 JWT를 가진 사용자는 인증 통과
+            perform(row, jwtProvider.createAccessToken(USER, null))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data").value(42));
+
+            // 3. 만료된 JWT는 401
+            perform(row, expiredToken())
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.code")
+                            .value("COMMON_EXPIRED_TOKEN"));
+        }
+    }
 }
