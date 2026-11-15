@@ -93,4 +93,16 @@ public class RedisContributionWalletTest {
         return Boolean.TRUE.equals(redisTemplate.opsForSet().isMember(DIRTY_KEY, USER_ID.toString()));
     }
 
+    @Test
+    @DisplayName("현재 기여도를 조회한다")
+    void findBalance() {
+        assertThat(contributionWallet.findBalance(USER_ID, UNIVERSITY_ID)).isEqualTo(1000L);
+    }
+
+    @Test
+    @DisplayName("순위표에 없는 회원은 기여도 0")
+    void findBalance_notInRank() {
+        assertThat(contributionWallet.findBalance(999_999L, UNIVERSITY_ID)).isZero();
+    }
+
 }

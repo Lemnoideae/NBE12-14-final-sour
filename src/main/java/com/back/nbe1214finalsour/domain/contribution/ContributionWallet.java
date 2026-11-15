@@ -9,4 +9,7 @@ public interface ContributionWallet {
 
     // 이미 차감한 기여도를 되돌림
     void restore(Long userId, Long universityId, long amount);
+
+    // 회원의 현재 기여도 (교내 개인 순위 ZSET의 점수, 없으면 0)
+    long findBalance(Long userId, Long universityId);
 }

@@ -112,7 +112,7 @@ class ItemPurchaseConcurrencyTest {
                 executor.submit(() -> {
                     try {
                         startSignal.await();
-                        itemPurchaseService.purchase(userId, universityId, POTION_2X_ID);
+                        itemPurchaseService.purchase(userId, universityId, null, POTION_2X_ID, null);
                         successCount.incrementAndGet();
                     } catch (BusinessException e) {
                         if (e.getErrorCode() == ErrorCode.ITEM_NOT_ENOUGH_SCORE) {
@@ -159,7 +159,7 @@ class ItemPurchaseConcurrencyTest {
                 executor.submit(() -> {
                     try {
                         startSignal.await();
-                        itemPurchaseService.purchase(userId, universityId, itemId);
+                        itemPurchaseService.purchase(userId, universityId, null, itemId, null);
                     } catch (Throwable e) {
                         unexpectedErrors.add(e);
                     } finally {
