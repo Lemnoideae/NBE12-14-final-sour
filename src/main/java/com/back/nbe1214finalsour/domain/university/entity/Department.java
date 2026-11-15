@@ -47,4 +47,8 @@ public class Department extends BaseTimeEntity {
         this.university = university;
         this.name = name;
     }
+
+    public void changeLogoUrl(String logoUrl) {
+        this.logoUrl = logoUrl;
+    }
 }

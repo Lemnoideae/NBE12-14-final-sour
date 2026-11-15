@@ -9,6 +9,12 @@ import com.back.nbe1214finalsour.domain.item.entity.Item;
 import com.back.nbe1214finalsour.domain.item.entity.ItemType;
 import com.back.nbe1214finalsour.domain.item.entity.PayType;
 import com.back.nbe1214finalsour.domain.item.event.PotionPurchasedEvent;
+import com.back.nbe1214finalsour.domain.university.entity.Department;
+import com.back.nbe1214finalsour.domain.university.entity.University;
+import com.back.nbe1214finalsour.domain.university.repository.DepartmentRepository;
+import com.back.nbe1214finalsour.domain.university.repository.UniversityRepository;
+import com.back.nbe1214finalsour.domain.user.entity.User;
+import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.domain.userItem.entity.UserItem;
 import com.back.nbe1214finalsour.domain.userItem.repository.UserItemRepository;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
@@ -27,8 +33,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -55,6 +63,15 @@ public class ItemPurchaseServiceTest {
     private CreditHistoryRepository creditHistoryRepository;
 
     @Mock
+    private UniversityRepository universityRepository;
+
+    @Mock
+    private DepartmentRepository departmentRepository;
+
+    @Mock
+    private UserRepository userRepository;
+
+    @Mock
     private CreditWallet creditWallet;
 
     @Mock
@@ -74,11 +91,22 @@ public class ItemPurchaseServiceTest {
     private static final List<Item> POTIONS = List.of(
             new Item(1L, "2배 물약", "1시간 동안 클릭 점수 2배", ItemType.MULTIPLIER, PayType.CONTRIBUTION, 500L, 3600, 2.0),
             new Item(2L, "4배 물약", "1시간 동안 클릭 점수 4배", ItemType.MULTIPLIER, PayType.CONTRIBUTION, 1000L, 3600,  4.0),
-            new Item(3L, "학교 로고 변경권", "우리 학교 로고 변경", ItemType.LOGO_UNIVERSITY, PayType.CREDIT, 3900L, null, null)
+            new Item(3L, "학교 로고 변경권", "우리 학교 로고 변경", ItemType.LOGO_UNIVERSITY, PayType.CREDIT, 3900L, null, null),
+            new Item(4L, "학과 로고 변경권", "우리 학과 로고 변경", ItemType.LOGO_DEPARTMENT, PayType.CREDIT, 2900L, null, null),
+            new Item(5L, "개인 로고 변경권", "내 프로필 로고 변경", ItemType.LOGO_PROFILE, PayType.CREDIT, 1900L, null, null)
     );
 
     private static final Long LOGO_ITEM_ID = 3L;   // POTIONS의 학교 로고 변경권 (CREDIT, 3900)
     private static final String LOGO_URL = "https://cdn.devcproject.cloud/custom-logo/1/abc.png";
+    private static final Long DEPARTMENT_ID = 34L;
+
+
+    // 토큰의 학교가 DB에 있음
+    private University givenUniversity() {
+        University university = new University("로고테스트대");
+        given(this.universityRepository.findById(UNIVERSITY_ID)).willReturn(Optional.of(university));
+        return university;
+    }
 
     @Test
     @DisplayName("기여도로 아이템 구매 시 아이템 가격만큼 회원의 기여도 차감")
@@ -358,5 +386,44 @@ public class ItemPurchaseServiceTest {
         assertThat(result.expiredAt()).isNull();
         assertThat(result.myCreditBalance()).isEqualTo(1100L);
         assertThat(result.myContribScore()).isEqualTo(12888L);
+    }
+
+    @Test
+    @DisplayName("학교 로고 변경권을 사면 토큰의 학교 로고를 새 이미지로 바꾼다")
+    void purchase_universityLogo_changesUniversityLogo() {
+        given(this.itemService.getItems()).willReturn(POTIONS);
+        given(this.creditWallet.tryDeduct(USER_ID, 3900L)).willReturn(OptionalLong.of(1100L));
+        University university = givenUniversity();
+
+        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_URL);
+
+        assertThat(university.getLogoUrl()).isEqualTo(LOGO_URL);
+    }
+
+    @Test
+    @DisplayName("학과 로고 변경권을 사면 토큰의 학과 로고를 새 이미지로 바꾼다")
+    void purchase_departmentLogo_changesDepartmentLogo() {
+        given(this.itemService.getItems()).willReturn(POTIONS);
+        given(this.creditWallet.tryDeduct(USER_ID, 2900L)).willReturn(OptionalLong.of(2100L));
+        Department department = new Department(new University("로고테스트대"), "컴퓨터공학과");
+        given(this.departmentRepository.findById(DEPARTMENT_ID)).willReturn(Optional.of(department));
+
+        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 4L, LOGO_URL);
+
+        assertThat(department.getLogoUrl()).isEqualTo(LOGO_URL);
+    }
+
+    @Test
+    @DisplayName("개인 로고 변경권을 사면 내 프로필 로고를 새 이미지로 바꾼다")
+    void purchase_profileLogo_changesProfileLogo() {
+        given(this.itemService.getItems()).willReturn(POTIONS);
+        given(this.creditWallet.tryDeduct(USER_ID, 1900L)).willReturn(OptionalLong.of(3100L));
+        User user = User.create(UNIVERSITY_ID, DEPARTMENT_ID, "로고유저", "logo@test.com",
+                "a".repeat(64), "encoded", OffsetDateTime.now());
+        given(this.userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 5L, LOGO_URL);
+
+        assertThat(user.getLogoUrl()).isEqualTo(LOGO_URL);
     }
 }

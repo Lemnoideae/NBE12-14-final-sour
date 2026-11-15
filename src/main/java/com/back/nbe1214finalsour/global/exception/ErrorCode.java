@@ -62,6 +62,7 @@ public enum ErrorCode {
 
     // ===== UNIV / RANK (3번) =====
     UNIV_NOT_FOUND(HttpStatus.NOT_FOUND, "UNIV_NOT_FOUND", "학교를 찾을 수 없습니다."),
+    UNIV_DEPARTMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "UNIV_DEPARTMENT_NOT_FOUND", "학과를 찾을 수 없습니다."),
 
     // ===== FILE (3번 업로드 모듈, 프로필 수정이 먼저 사용) =====
     FILE_INVALID_URL(HttpStatus.BAD_REQUEST, "FILE_INVALID_URL", "허용되지 않은 파일 주소입니다."),
