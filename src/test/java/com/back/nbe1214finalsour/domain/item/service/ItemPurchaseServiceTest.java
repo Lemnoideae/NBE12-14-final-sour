@@ -167,6 +167,8 @@ public class ItemPurchaseServiceTest {
         given(this.itemService.getItems())
                 .willReturn(POTIONS);
 
+        givenUniversity();
+
 
         // when
         this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, LOGO_ITEM_ID, LOGO_URL);
@@ -331,6 +333,7 @@ public class ItemPurchaseServiceTest {
                 .willReturn(POTIONS);
         given(this.creditWallet.tryDeduct(USER_ID, 3900L))
                 .willReturn(OptionalLong.of(1100L));
+        givenUniversity();
 
         this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, LOGO_ITEM_ID, LOGO_URL);
 
@@ -353,6 +356,7 @@ public class ItemPurchaseServiceTest {
         given(this.creditWallet.tryDeduct(USER_ID, 3900L))
                 .willReturn(OptionalLong.of(1100L));
         givenUserItemSavedWithId(7001L);
+        givenUniversity();
 
         this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, LOGO_ITEM_ID, LOGO_URL);
 
@@ -377,6 +381,7 @@ public class ItemPurchaseServiceTest {
         givenUserItemSavedWithId(7001L);
         given(this.contributionWallet.findBalance(USER_ID, UNIVERSITY_ID))
                 .willReturn(12888L);
+        givenUniversity();
 
         ItemPurchaseResult result = this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, LOGO_ITEM_ID, LOGO_URL);
 

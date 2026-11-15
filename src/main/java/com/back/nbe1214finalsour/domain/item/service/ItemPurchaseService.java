@@ -7,6 +7,9 @@ import com.back.nbe1214finalsour.domain.credit.repository.CreditWallet;
 import com.back.nbe1214finalsour.domain.item.entity.Item;
 import com.back.nbe1214finalsour.domain.item.entity.PayType;
 import com.back.nbe1214finalsour.domain.item.event.PotionPurchasedEvent;
+import com.back.nbe1214finalsour.domain.university.repository.DepartmentRepository;
+import com.back.nbe1214finalsour.domain.university.repository.UniversityRepository;
+import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.domain.userItem.entity.UserItem;
 import com.back.nbe1214finalsour.domain.userItem.repository.UserItemRepository;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
@@ -30,6 +33,9 @@ public class ItemPurchaseService {
     private final UserItemRepository userItemRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final CreditHistoryRepository creditHistoryRepository;
+    private final UniversityRepository universityRepository;
+    private final DepartmentRepository departmentRepository;
+    private final UserRepository userRepository;
 
     private final Clock clock;
 
@@ -65,7 +71,19 @@ public class ItemPurchaseService {
             this.creditHistoryRepository.save(
                     CreditHistory.use(userId, userItem.getId(), item.getPrice(), myCreditBalance));
 
-            // TODO: 로고 적용 (university/department/users.logo_url 덮어쓰기)
+            // 로고 적용: 아이템 종류에 따라 학교·학과·개인 로고를 덮어씀 (마지막 구매 기준, 커밋 시 변경 감지로 UPDATE)
+            switch (item.getType()) {
+                case LOGO_UNIVERSITY -> this.universityRepository.findById(universityId)
+                        .orElseThrow(() -> new BusinessException(ErrorCode.UNIV_NOT_FOUND))
+                        .changeLogoUrl(logoImageUrl);
+                case LOGO_DEPARTMENT -> this.departmentRepository.findById(departmentId)
+                        .orElseThrow(() -> new BusinessException(ErrorCode.UNIV_DEPARTMENT_NOT_FOUND))
+                        .changeLogoUrl(logoImageUrl);
+                case LOGO_PROFILE -> this.userRepository.findById(userId)
+                        .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND))
+                        .changeProfileImageUrl(logoImageUrl);
+                case MULTIPLIER -> throw new IllegalStateException("물약은 크레딧으로 살 수 없음 (ck_item_type_pay_type)");
+            }
 
             // 크레딧 아이템이라 기여도는 차감되지 않은 현재 값
             return new ItemPurchaseResult(
