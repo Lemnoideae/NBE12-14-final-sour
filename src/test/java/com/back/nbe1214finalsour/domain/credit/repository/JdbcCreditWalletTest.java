@@ -1,8 +1,7 @@
-package com.back.nbe1214finalsour.domain.item.repository;
+package com.back.nbe1214finalsour.domain.credit.repository;
 
 
 import com.back.nbe1214finalsour.IntegrationTest;
-import com.back.nbe1214finalsour.domain.credit.repository.JdbcCreditWallet;
 import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
