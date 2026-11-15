@@ -82,7 +82,7 @@ public class ItemPurchaseService {
                 case LOGO_PROFILE -> this.userRepository.findById(userId)
                         .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND))
                         .changeProfileImageUrl(logoImageUrl);
-                case MULTIPLIER -> throw new IllegalStateException("물약은 크레딧으로 살 수 없음 (ck_item_type_pay_type)");
+                default -> throw new IllegalStateException("크레딧 아이템이 로고가 아님: " + item.getType());
             }
 
             // 크레딧 아이템이라 기여도는 차감되지 않은 현재 값
