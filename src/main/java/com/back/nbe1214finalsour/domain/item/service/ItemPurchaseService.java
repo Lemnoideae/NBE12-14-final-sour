@@ -1,6 +1,8 @@
 package com.back.nbe1214finalsour.domain.item.service;
 
 import com.back.nbe1214finalsour.domain.contribution.ContributionWallet;
+import com.back.nbe1214finalsour.domain.credit.entity.CreditHistory;
+import com.back.nbe1214finalsour.domain.credit.repository.CreditHistoryRepository;
 import com.back.nbe1214finalsour.domain.credit.repository.CreditWallet;
 import com.back.nbe1214finalsour.domain.item.entity.Item;
 import com.back.nbe1214finalsour.domain.item.entity.PayType;
@@ -27,6 +29,7 @@ public class ItemPurchaseService {
     private final CreditWallet creditWallet;
     private final UserItemRepository userItemRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final CreditHistoryRepository creditHistoryRepository;
 
     private final Clock clock;
 
@@ -44,10 +47,35 @@ public class ItemPurchaseService {
                 .findFirst()
                 .orElseThrow(() -> new BusinessException(ErrorCode.ITEM_NOT_FOUND));    // 아이템이 리스트에 없으면 404
 
-        // 크레딧 아이템
+        // 크레딧 아이템 (로고 변경권). DB 한 트랜잭션이라 중간에 실패하면 크레딧 차감까지 함께 롤백된다
         if (item.getPayType() == PayType.CREDIT) {
-            // TODO: 크레딧 구매 구현
-            return null;
+            if (logoImageUrl == null || logoImageUrl.isBlank()) {
+                throw new BusinessException(ErrorCode.ITEM_LOGO_IMAGE_REQUIRED);
+            }
+
+            // 크레딧 차감 (조건부 UPDATE), 성공하면 차감 후 잔액
+            long myCreditBalance = this.creditWallet.tryDeduct(userId, item.getPrice())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.ITEM_NOT_ENOUGH_CREDIT));
+
+            // 구매 이력 저장 (IDENTITY라 저장 후 같은 객체에 id가 채워짐)
+            UserItem userItem = UserItem.ofLogo(userId, item, logoImageUrl);
+            this.userItemRepository.save(userItem);
+
+            // 크레딧 사용 내역 저장 (구매 이력과 연결)
+            this.creditHistoryRepository.save(
+                    CreditHistory.use(userId, userItem.getId(), item.getPrice(), myCreditBalance));
+
+            // TODO: 로고 적용 (university/department/users.logo_url 덮어쓰기)
+
+            // 크레딧 아이템이라 기여도는 차감되지 않은 현재 값
+            return new ItemPurchaseResult(
+                    userItem.getId(),
+                    item,
+                    userItem.getPrice(),
+                    userItem.getExpiredAt(),
+                    this.contributionWallet.findBalance(userId, universityId),
+                    myCreditBalance
+            );
         }
 
         // 기여도 아이템일 때

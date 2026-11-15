@@ -141,7 +141,7 @@ public class ItemPurchaseServiceTest {
 
 
         // when
-        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, UNIVERSITY_ID, 3L, null);
+        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, LOGO_ITEM_ID, LOGO_URL);
 
         // then
         verify(this.creditWallet).tryDeduct(USER_ID, 3900L);

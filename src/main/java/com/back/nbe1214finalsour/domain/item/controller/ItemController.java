@@ -47,7 +47,6 @@ public class ItemController {
 
         ItemPurchaseResult result = this.itemPurchaseService.purchase(user.userId(), user.universityId(), user.departmentId(), itemId, logoImageUrl);
 
-        // TODO: 크레딧 구매 구현 전까지 크레딧 아이템은 결과가 null
-        return ApiResponse.ok(result == null ? null : ItemPurchaseResponse.from(result));
+        return ApiResponse.ok(ItemPurchaseResponse.from(result));
     }
 }
