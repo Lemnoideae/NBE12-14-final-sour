@@ -1,3 +1,10 @@
+server:
+  # 프록시(Nginx·ALB) 뒤에서 실제 사용자 IP를 request.getRemoteAddr()로 얻는다 (Tomcat RemoteIpValve, 인증 IP 한도의 기준).
+  # 신뢰하는 프록시가 보낸 X-Forwarded-For만 반영하고, 그 밖의 곳에서 온 헤더는 무시한다.
+  # 신뢰 대역은 server.tomcat.remoteip.internal-proxies (기본: 사설·루프백 대역, 환경 변수 SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES).
+  # CloudFront 엣지는 공인 대역이라 신뢰되지 않는다. 운영 경로에 맞춘 설정은 GitHub Issue #66
+  forward-headers-strategy: native
+
 spring:
   application:
     name: NBE12-14-final-sour
