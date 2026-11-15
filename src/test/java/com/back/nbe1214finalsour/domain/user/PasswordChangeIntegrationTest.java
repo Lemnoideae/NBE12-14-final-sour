@@ -2,6 +2,7 @@ package com.back.nbe1214finalsour.domain.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -12,9 +13,11 @@ import com.back.nbe1214finalsour.IntegrationTest;
 import com.back.nbe1214finalsour.domain.user.entity.User;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.global.crypto.EmailHasher;
+import com.back.nbe1214finalsour.global.redis.RedisKey;
 import com.back.nbe1214finalsour.global.security.AuthUser;
 import com.back.nbe1214finalsour.global.security.Role;
 import com.back.nbe1214finalsour.global.security.jwt.JwtProvider;
+import com.jayway.jsonpath.JsonPath;
 import jakarta.servlet.http.Cookie;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -122,6 +125,32 @@ class PasswordChangeIntegrationTest {
     }
 
     @Test
+    @DisplayName("변경하면 커밋 뒤 로그인 세션을 지워, 이미 발급된 access 토큰도 다음 요청부터 401 COMMON_EXPIRED_TOKEN (SCRUM-98)")
+    void changePasswordEndsLoginSession() throws Exception {
+        String accessToken = loginAndGetAccessToken(PASSWORD);
+        getMyInfo(accessToken).andExpect(status().isOk());
+
+        changePassword(accessToken, PASSWORD, NEW_PASSWORD).andExpect(status().isNoContent());
+
+        assertThat(redis.hasKey(RedisKey.AUTH_SESSION.of(user.getId()))).isFalse();
+        getMyInfo(accessToken)
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("COMMON_EXPIRED_TOKEN"));
+        getMyInfo(loginAndGetAccessToken(NEW_PASSWORD)).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("현재 비밀번호가 다르면 로그인 세션과 access 토큰이 그대로다 (SCRUM-98)")
+    void wrongCurrentPasswordKeepsLoginSession() throws Exception {
+        String accessToken = loginAndGetAccessToken(PASSWORD);
+
+        changePassword(accessToken, "Wr0ngPass!", NEW_PASSWORD).andExpect(status().isBadRequest());
+
+        assertThat(redis.hasKey(RedisKey.AUTH_SESSION.of(user.getId()))).isTrue();
+        getMyInfo(accessToken).andExpect(status().isOk());
+    }
+
+    @Test
     @DisplayName("새 비밀번호가 현재와 같아도 204 (계획 Q1)")
     void samePasswordIsAllowed() throws Exception {
         changePassword(accessTokenOf(user), PASSWORD, PASSWORD).andExpect(status().isNoContent());
@@ -191,6 +220,16 @@ class PasswordChangeIntegrationTest {
         String setCookie = result.getResponse().getHeader("Set-Cookie");
         assertThat(setCookie).startsWith("refreshToken=");
         return setCookie.substring("refreshToken=".length(), setCookie.indexOf(';'));
+    }
+
+    /** 로그인 응답의 access 토큰 (세션 ID {@code sid}가 들어 있어 세션 검사를 받는다) */
+    private String loginAndGetAccessToken(String password) throws Exception {
+        MvcResult result = login(password).andExpect(status().isOk()).andReturn();
+        return JsonPath.read(result.getResponse().getContentAsString(), "$.data.accessToken");
+    }
+
+    private ResultActions getMyInfo(String accessToken) throws Exception {
+        return mockMvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer " + accessToken));
     }
 
     private ResultActions reissue(String token) throws Exception {
