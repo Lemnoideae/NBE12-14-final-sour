@@ -43,6 +43,8 @@ public enum ErrorCode {
     AUTH_INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "AUTH_INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다."),
     AUTH_INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH_INVALID_REFRESH_TOKEN", "로그인이 만료되었습니다. 다시 로그인해주세요."),
     AUTH_LOGIN_LOCKED(HttpStatus.TOO_MANY_REQUESTS, "AUTH_LOGIN_LOCKED", "로그인을 5번 실패해 10분 동안 로그인할 수 없습니다."),
+    /** 같은 IP에서 로그인 실패·인증 코드 요청이 한도를 넘음 (SCRUM-100, 기준은 {@code auth.ip-limit.*}) */
+    AUTH_TOO_MANY_REQUESTS(HttpStatus.TOO_MANY_REQUESTS, "AUTH_TOO_MANY_REQUESTS", "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."),
     /** 다른 기기에서 로그인해 이 기기의 세션이 끝남 (계정당 1기기, SCRUM-83). 재발급하지 말고 로그인 화면으로 */
     AUTH_SESSION_REPLACED(HttpStatus.UNAUTHORIZED, "AUTH_SESSION_REPLACED", "다른 기기에서 로그인해 로그아웃되었습니다. 다시 로그인해주세요."),
 
