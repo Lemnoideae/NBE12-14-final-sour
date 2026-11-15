@@ -1,3 +1,10 @@
+server:
+  # 프록시(Nginx·ALB) 뒤에서 실제 사용자 IP를 request.getRemoteAddr()로 얻는다 (Tomcat RemoteIpValve, 인증 IP 한도의 기준).
+  # 신뢰하는 프록시가 보낸 X-Forwarded-For만 반영하고, 그 밖의 곳에서 온 헤더는 무시한다.
+  # 신뢰 대역은 server.tomcat.remoteip.internal-proxies (기본: 사설·루프백 대역, 환경 변수 SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES).
+  # CloudFront 엣지는 공인 대역이라 신뢰되지 않는다. 운영 경로에 맞춘 설정은 GitHub Issue #66
+  forward-headers-strategy: native
+
 spring:
   application:
     name: NBE12-14-final-sour
@@ -26,6 +33,17 @@ jwt:
   secret: ${JWT_SECRET}
   access-token-ttl: 60m
   refresh-token-ttl: 30d
+
+auth:
+  # 인증 API의 IP 기준 한도 (SCRUM-100). 학교 와이파이처럼 여러 학생이 한 IP를 쓰므로 넉넉히 잡는다.
+  # 운영에서 바꾸려면 환경 변수 AUTH_IPLIMIT_LOGINMAXFAILURES 등을 쓴다 (AuthIpLimitProperties)
+  ip-limit:
+    # 로그인 실패만 센다 (비밀번호가 맞으면 빼 줌). 넘으면 첫 실패부터 10분이 끝날 때까지 그 IP의 로그인을 모두 거절
+    login-max-failures: 30
+    login-window: 10m
+    # 학교 도메인이 맞는 인증 코드 요청을 모두 센다 (가입된 이메일 조회 포함)
+    email-code-max-requests: 20
+    email-code-window: 1h
 
 email-crypto:
   # users.email AES-256-GCM 키. Base64로 인코딩한 32바이트 (예: openssl rand -base64 32). 저장소에 커밋하지 않는다

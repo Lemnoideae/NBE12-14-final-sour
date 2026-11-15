@@ -43,6 +43,8 @@ public enum ErrorCode {
     AUTH_INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "AUTH_INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다."),
     AUTH_INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH_INVALID_REFRESH_TOKEN", "로그인이 만료되었습니다. 다시 로그인해주세요."),
     AUTH_LOGIN_LOCKED(HttpStatus.TOO_MANY_REQUESTS, "AUTH_LOGIN_LOCKED", "로그인을 5번 실패해 10분 동안 로그인할 수 없습니다."),
+    /** 같은 IP에서 로그인 실패·인증 코드 요청이 한도를 넘음 (SCRUM-100, 기준은 {@code auth.ip-limit.*}) */
+    AUTH_TOO_MANY_REQUESTS(HttpStatus.TOO_MANY_REQUESTS, "AUTH_TOO_MANY_REQUESTS", "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."),
     /** 다른 기기에서 로그인해 이 기기의 세션이 끝남 (계정당 1기기, SCRUM-83). 재발급하지 말고 로그인 화면으로 */
     AUTH_SESSION_REPLACED(HttpStatus.UNAUTHORIZED, "AUTH_SESSION_REPLACED", "다른 기기에서 로그인해 로그아웃되었습니다. 다시 로그인해주세요."),
 
@@ -60,6 +62,7 @@ public enum ErrorCode {
 
     // ===== UNIV / RANK (3번) =====
     UNIV_NOT_FOUND(HttpStatus.NOT_FOUND, "UNIV_NOT_FOUND", "학교를 찾을 수 없습니다."),
+    UNIV_DEPARTMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "UNIV_DEPARTMENT_NOT_FOUND", "학과를 찾을 수 없습니다."),
 
     // ===== FILE (3번 업로드 모듈, 프로필 수정이 먼저 사용) =====
     FILE_INVALID_URL(HttpStatus.BAD_REQUEST, "FILE_INVALID_URL", "허용되지 않은 파일 주소입니다."),
@@ -78,7 +81,9 @@ public enum ErrorCode {
     CLICKER_NOT_ENOUGH_SCORE(HttpStatus.BAD_REQUEST, "CLICKER_NOT_ENOUGH_SCORE", "업그레이드에 필요한 기여도가 부족합니다."),
     CLICKER_UPGRADE_CONFLICT(HttpStatus.CONFLICT, "CLICKER_UPGRADE_CONFLICT", "다른 업그레이드 요청이 먼저 처리되었습니다. 다시 시도해주세요."),
     ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "ITEM_NOT_FOUND", "아이템을 찾을 수 없습니다."),
-    ITEM_NOT_ENOUGH_SCORE(HttpStatus.BAD_REQUEST, "ITEM_NOT_ENOUGH_SCORE", "아이템 구매에 필요한 기여도가 부족합니다.")
+    ITEM_NOT_ENOUGH_SCORE(HttpStatus.BAD_REQUEST, "ITEM_NOT_ENOUGH_SCORE", "아이템 구매에 필요한 기여도가 부족합니다."),
+    ITEM_NOT_ENOUGH_CREDIT(HttpStatus.BAD_REQUEST, "ITEM_NOT_ENOUGH_CREDIT", "아이템 구매에 필요한 크레딧이 부족합니다."),
+    ITEM_LOGO_IMAGE_REQUIRED(HttpStatus.BAD_REQUEST, "ITEM_LOGO_IMAGE_REQUIRED", "로고 아이템은 로고 이미지가 필요합니다.")
     ;
 
     private final HttpStatus status;

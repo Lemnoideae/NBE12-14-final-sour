@@ -51,4 +51,14 @@ public class UserItem extends BaseTimeEntity {
         userItem.expiredAt = purchasedAt.plusSeconds(potion.getDuration());
         return userItem;
     }
+
+    // 로고 변경권 구매 이력
+    public static UserItem ofLogo(Long userId, Item logo, String logoImageUrl) {
+        UserItem userItem = new UserItem();
+        userItem.userId = userId;
+        userItem.itemId = logo.getId();
+        userItem.price = logo.getPrice();
+        userItem.logoImageUrl = logoImageUrl;
+        return userItem;
+    }
 }

@@ -42,13 +42,25 @@ public class EmailHasher {
 
     /** {@link #normalize(String)}한 뒤 해시한다. */
     public String hash(String email) {
+        return hmacHex(normalize(email));
+    }
+
+    /**
+     * 클라이언트 IP의 해시 (인증 IP 한도의 Redis 키, SCRUM-100). 이메일과 같은 개인정보 기준으로 키에 원문을 넣지 않는다.
+     * IPv6의 {@code ':'}도 키에 섞이지 않는다. 이메일 해시와 겹치지 않도록 앞에 {@code "ip:"}를 붙여 해시한다
+     */
+    public String hashClientIp(String ip) {
+        return hmacHex("ip:" + ip.strip().toLowerCase(Locale.ROOT));
+    }
+
+    private String hmacHex(String value) {
         try {
             Mac mac = Mac.getInstance(ALGORITHM);
             mac.init(key);
-            byte[] digest = mac.doFinal(normalize(email).getBytes(StandardCharsets.UTF_8));
+            byte[] digest = mac.doFinal(value.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest);
         } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("이메일 해시를 만들지 못했습니다", e);
+            throw new IllegalStateException("해시를 만들지 못했습니다", e);
         }
     }
 }

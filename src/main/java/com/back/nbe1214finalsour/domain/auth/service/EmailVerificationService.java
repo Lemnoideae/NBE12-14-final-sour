@@ -23,7 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 학교 이메일 인증 (API 명세서 {@code POST /api/auth/email/code}, {@code /email/verify}).
  *
- * <p>코드 요청: 도메인으로 학교 결정 → 가입된 이메일 확인 → 60초 쿨다운 → 하루 10번 → 코드 저장 → 메일 발송.
+ * <p>코드 요청: 도메인으로 학교 결정 → IP 한도 (SCRUM-100) → 가입된 이메일 확인 → 60초 쿨다운 → 하루 10번 → 코드 저장 → 메일 발송.
+ * IP 한도를 가입 확인보다 먼저 두어 가입 여부 대량 조회도 막는다 (보안 점검 #6). 학교 도메인이 아닌 요청은 Redis를 건드리지 않는다.
  * 코드 확인: 맞으면 가입 토큰을 발급하고, 5번 틀리면 코드를 폐기한다.
  */
 @Service
@@ -44,12 +45,19 @@ public class EmailVerificationService {
     private final EmailVerificationStore store;
     private final VerificationMailSender mailSender;
     private final EmailHasher emailHasher;
+    private final AuthIpRateLimiter ipRateLimiter;
     private final Clock clock;
     private final SecureRandom random = new SecureRandom();
 
-    public EmailCodeResponse requestCode(String rawEmail) {
+    /**
+     * @param clientIp 요청한 사용자 IP ({@code request.getRemoteAddr()})
+     * @throws BusinessException 400 {@code AUTH_UNSUPPORTED_DOMAIN}, 429 {@code AUTH_TOO_MANY_REQUESTS}·{@code AUTH_CODE_COOLDOWN},
+     *                           409 {@code AUTH_EMAIL_ALREADY_REGISTERED}
+     */
+    public EmailCodeResponse requestCode(String rawEmail, String clientIp) {
         String email = EmailHasher.normalize(rawEmail);
         University university = universityResolver.resolve(email);
+        ipRateLimiter.checkEmailCode(clientIp);
         String emailHash = emailHasher.hash(email);
 
         if (userRepository.existsByEmailHashAndDeletedAtIsNull(emailHash)) {

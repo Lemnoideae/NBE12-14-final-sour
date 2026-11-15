@@ -44,4 +44,8 @@ public class University extends BaseTimeEntity {
         }
         this.name = name;
     }
+
+    public void changeLogoUrl(String logoUrl) {
+        this.logoUrl = logoUrl;
+    }
 }

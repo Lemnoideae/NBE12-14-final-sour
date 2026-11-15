@@ -237,7 +237,7 @@ class LoginIntegrationTest {
             futures.add(executor.submit(() -> {
                 start.await();
                 try {
-                    loginService.login(EMAIL, WRONG_PASSWORD, null);
+                    loginService.login(EMAIL, WRONG_PASSWORD, null, "203.0.113.7");
                     return null;
                 } catch (BusinessException e) {
                     return e.getErrorCode();
