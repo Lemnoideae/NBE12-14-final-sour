@@ -1,7 +1,7 @@
 package com.back.nbe1214finalsour.domain.item.service;
 
 import com.back.nbe1214finalsour.domain.contribution.ContributionWallet;
-import com.back.nbe1214finalsour.domain.credit.CreditWallet;
+import com.back.nbe1214finalsour.domain.credit.repository.CreditWallet;
 import com.back.nbe1214finalsour.domain.item.entity.Item;
 import com.back.nbe1214finalsour.domain.item.entity.PayType;
 import com.back.nbe1214finalsour.domain.item.event.PotionPurchasedEvent;

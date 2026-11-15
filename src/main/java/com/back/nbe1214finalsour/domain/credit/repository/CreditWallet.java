@@ -1,4 +1,4 @@
-package com.back.nbe1214finalsour.domain.credit;
+package com.back.nbe1214finalsour.domain.credit.repository;
 
 public interface CreditWallet {
 
