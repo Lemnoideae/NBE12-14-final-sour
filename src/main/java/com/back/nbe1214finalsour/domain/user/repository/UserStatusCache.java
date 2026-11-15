@@ -15,7 +15,7 @@ import org.springframework.stereotype.Repository;
  * <ul>
  *   <li>채우기: 캐시가 없을 때 DB 값을 읽은 쪽(클릭)이 {@link #fillIfAbsent}로 채운다. 이미 있는 값은 덮지 않는다</li>
  *   <li>덮어쓰기: <b>회원 상태를 바꾸는 코드는 커밋 뒤 {@link #put}을 부른다</b> (탈퇴: {@code UserStatusCacheSyncListener}).
- *       관리자 정지·차단도 같은 방법을 써야 한다</li>
+ *       관리자 정지·차단·해제({@code AdminUserService})도 같은 이벤트를 쓴다</li>
  *   <li>TTL: 설정 {@code jwt.access-token-ttl}(access 토큰 유효 시간). 갱신을 빠뜨린 경로가 있어도 TTL 뒤에는 DB 값으로 돌아온다</li>
  * </ul>
  */

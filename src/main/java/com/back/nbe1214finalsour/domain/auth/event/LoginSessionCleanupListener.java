@@ -10,7 +10,7 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * 회원이 {@code ACTIVE}가 아니게 되면(탈퇴, 앞으로 관리자 정지·차단) 커밋 뒤 현재 로그인 세션을 지운다 (계정당 1기기, SCRUM-87).
+ * 회원이 {@code ACTIVE}가 아니게 되면(탈퇴, 관리자 정지·차단) 커밋 뒤 현재 로그인 세션을 지운다 (계정당 1기기, SCRUM-87).
  * 남은 access 토큰은 바로 {@code COMMON_EXPIRED_TOKEN}이 되고, 재발급도 회원 상태에서 거부된다. 롤백되면 세션은 그대로다.
  */
 @Slf4j
