@@ -79,4 +79,15 @@ public class JdbcCreditWalletTest {
         assertThat(remaining).hasValue(0L);
         assertThat(balanceInDb()).isZero();
     }
+
+    @Test
+    @DisplayName("잔액이 부족하면 차감하지 않고 empty를 반환")
+    void tryDeduct_notEnough() {
+        setBalance(3000);
+
+        OptionalLong remaining = creditWallet.tryDeduct(userId, 3900);
+
+        assertThat(remaining).isEmpty();
+        assertThat(balanceInDb()).isEqualTo(3000L);
+    }
 }
