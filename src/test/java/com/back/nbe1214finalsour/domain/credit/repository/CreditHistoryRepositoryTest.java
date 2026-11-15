@@ -40,7 +40,7 @@ class CreditHistoryRepositoryTest {
                 "INSERT INTO department (university_id, name) VALUES (?, '컴퓨터공학과') RETURNING id",
                 Long.class, universityId);
         userId = insertUser(universityId, departmentId, "원장유저", "ledger@test.com", "f");
-        otherUserId = insertUser(universityId, departmentId, "원장다른유저", "ledger-other@test.com", "g");
+        otherUserId = insertUser(universityId, departmentId, "원장다른유저", "ledger-other@test.com", "0");
 
         // 로고 아이템은 종류별로 하나만 허용(uk_item_logo_type)하므로, 이미 있으면 그걸 쓴다
         jdbcTemplate.update("""
