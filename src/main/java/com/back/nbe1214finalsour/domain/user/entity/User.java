@@ -1,6 +1,8 @@
 package com.back.nbe1214finalsour.domain.user.entity;
 
 import com.back.nbe1214finalsour.global.crypto.EncryptedEmailConverter;
+import com.back.nbe1214finalsour.global.exception.BusinessException;
+import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import com.back.nbe1214finalsour.global.jpa.BaseTimeEntity;
 import com.back.nbe1214finalsour.global.security.Role;
 import jakarta.persistence.Column;
@@ -130,6 +132,22 @@ public class User extends BaseTimeEntity {
     /** @param profileImageUrl 검사를 마친 우리 CDN 주소 ({@code ProfileImageUrlPolicy}) */
     public void changeProfileImageUrl(String profileImageUrl) {
         this.logoUrl = profileImageUrl;
+    }
+
+    /**
+     * 관리자 정지·차단·해제 (추가 명세 §3-9). 탈퇴는 {@code deleted_at}이 함께 필요하므로 {@link #withdraw}로만 한다.
+     *
+     * @throws BusinessException 400 {@code COMMON_INVALID_INPUT}: {@code WITHDRAWN}으로 바꾸려 함.
+     *                           404 {@code USER_NOT_FOUND}: 이미 탈퇴한 회원
+     */
+    public void changeStatus(UserStatus status) {
+        if (status == UserStatus.WITHDRAWN) {
+            throw new BusinessException(ErrorCode.COMMON_INVALID_INPUT, "탈퇴는 withdraw로만 한다: userId=" + id);
+        }
+        if (this.deletedAt != null) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND, "탈퇴한 회원의 상태 변경: userId=" + id);
+        }
+        this.status = status;
     }
 
     /**
