@@ -68,4 +68,15 @@ public class JdbcCreditWalletTest {
         assertThat(remaining).hasValue(1100L);
         assertThat(balanceInDb()).isEqualTo(1100L);
     }
+
+    @Test
+    @DisplayName("잔액과 가격이 같으면 0까지 차감")
+    void tryDeduct_exact() {
+        setBalance(3900);
+
+        OptionalLong remaining = creditWallet.tryDeduct(userId, 3900);
+
+        assertThat(remaining).hasValue(0L);
+        assertThat(balanceInDb()).isZero();
+    }
 }
