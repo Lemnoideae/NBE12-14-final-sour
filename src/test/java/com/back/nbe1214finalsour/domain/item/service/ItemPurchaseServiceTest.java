@@ -82,7 +82,7 @@ public class ItemPurchaseServiceTest {
                 .willReturn(OptionalLong.of(1500L));
 
         // when
-        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, 2L);
+        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 2L, null);
 
         // then: 해당 회원의 기여도에서 물약 가격만큼 차감 요청을 했음
         verify(this.contributionWallet).tryDeduct(USER_ID, UNIVERSITY_ID, 1000L);
@@ -96,7 +96,7 @@ public class ItemPurchaseServiceTest {
                 .willReturn(POTIONS);
 
         // when & then: 아이템 목록에 없는 아이템 구매 시도 시 404
-        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, 3980L))
+        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 3980L, null))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ITEM_NOT_FOUND);
@@ -116,7 +116,7 @@ public class ItemPurchaseServiceTest {
                 .willReturn(OptionalLong.empty());
 
         // when & then
-        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, 1L))
+        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 1L, null))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ITEM_NOT_ENOUGH_SCORE);
@@ -130,7 +130,7 @@ public class ItemPurchaseServiceTest {
                 .willReturn(POTIONS);
 
         // when
-        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, 3L);
+        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 3L, null);
 
         // then
         verify(this.contributionWallet, never())
@@ -148,7 +148,7 @@ public class ItemPurchaseServiceTest {
                 .willReturn(OptionalLong.of(1500L));
 
         // when
-        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, 2L);
+        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 2L, null);
 
         // then
         ArgumentCaptor<UserItem> captor = ArgumentCaptor.forClass(UserItem.class);
@@ -173,7 +173,7 @@ public class ItemPurchaseServiceTest {
                 .willReturn(OptionalLong.of(1500L));
 
         // when
-        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, 2L);
+        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 2L, null);
 
         // then: 리스너가 Redis(user:{userId}:effect)에 쓸 내용을 담아 발행
         ArgumentCaptor<PotionPurchasedEvent> captor = ArgumentCaptor.forClass(PotionPurchasedEvent.class);
@@ -198,7 +198,7 @@ public class ItemPurchaseServiceTest {
                 .willThrow(new DataIntegrityViolationException("user_item 저장 실패"));
 
         // when & then: 원래 예외가 그대로 나감
-        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, 2L))
+        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 2L, null))
                 .isInstanceOf(DataIntegrityViolationException.class);
 
         // then: Redis는 롤백되지 않으므로 차감한 만큼 직접 되돌림
@@ -227,7 +227,7 @@ public class ItemPurchaseServiceTest {
                 .willReturn(1100L);
 
         // when
-        ItemPurchaseResult result = this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, 2L);
+        ItemPurchaseResult result = this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 2L, null);
 
         // then: 명세 응답(201)의 재료
         assertThat(result.userItemId()).isEqualTo(5530L);

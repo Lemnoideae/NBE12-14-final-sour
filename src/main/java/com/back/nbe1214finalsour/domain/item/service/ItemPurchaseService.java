@@ -33,7 +33,7 @@ public class ItemPurchaseService {
 
     // 아이템 구매
     @Transactional
-    public ItemPurchaseResult purchase(Long userId, Long universityId, Long itemId) {
+    public ItemPurchaseResult purchase(Long userId, Long universityId, Long departmentId, Long itemId, String logoImageUrl) {
 
         // 캐시에서 아이템 목록
         List<Item> items = this.itemService.getItems();

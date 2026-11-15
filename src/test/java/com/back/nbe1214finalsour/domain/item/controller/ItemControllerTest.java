@@ -108,7 +108,7 @@ public class ItemControllerTest {
     void purchase() throws Exception {
         // given: 1시간 뒤 만료(UTC 04:00 = KST 13:00), 차감 후 기여도 1500, 크레딧 1100
         OffsetDateTime expiredAt = OffsetDateTime.of(2026, 11, 14, 4, 0, 0, 0, ZoneOffset.UTC);
-        given(itemPurchaseService.purchase(1L, 7L, 2L))
+        given(itemPurchaseService.purchase(1L, 7L, 34L, 2L, null))
                 .willReturn(new ItemPurchaseResult(5530L, POTION, 1000L, expiredAt, 1500L, 1100L));
 
         // when & then
@@ -130,7 +130,7 @@ public class ItemControllerTest {
     @Test
     @DisplayName("[POST] /api/v1/items/{itemId}/purchase는 없는 아이템이면 404 ITEM_NOT_FOUND")
     void purchase_itemNotFound() throws Exception {
-        given(itemPurchaseService.purchase(1L, 7L, 9999L))
+        given(itemPurchaseService.purchase(1L, 7L, 34L, 9999L, null))
                 .willThrow(new BusinessException(ErrorCode.ITEM_NOT_FOUND));
 
         mockMvc.perform(post("/api/v1/items/9999/purchase")
@@ -142,7 +142,7 @@ public class ItemControllerTest {
     @Test
     @DisplayName("[POST] /api/v1/items/{itemId}/purchase는 기여도가 부족하면 400 ITEM_NOT_ENOUGH_SCORE")
     void purchase_notEnoughScore() throws Exception {
-        given(itemPurchaseService.purchase(1L, 7L, 2L))
+        given(itemPurchaseService.purchase(1L, 7L, 34L, 2L, null))
                 .willThrow(new BusinessException(ErrorCode.ITEM_NOT_ENOUGH_SCORE));
 
         mockMvc.perform(post("/api/v1/items/2/purchase")
