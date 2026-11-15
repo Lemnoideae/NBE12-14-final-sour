@@ -70,6 +70,8 @@ public enum ErrorCode {
     // ===== ALLY / MATCH / GUEST (3번) =====
     ALLY_APPLICATION_PENDING(HttpStatus.CONFLICT, "ALLY_APPLICATION_PENDING", "이미 처리 대기 중인 연합 가입 신청이 있습니다."),
     ALLY_UNIVERSITY_ALREADY_JOINED(HttpStatus.CONFLICT, "ALLY_UNIVERSITY_ALREADY_JOINED", "이미 연합에 소속된 학교입니다."),
+    ALLY_NOT_FOUND(HttpStatus.NOT_FOUND, "ALLY_NOT_FOUND", "연합을 찾을 수 없습니다."),
+    ALLY_USER_NOT_ACTIVE(HttpStatus.FORBIDDEN, "ALLY_USER_NOT_ACTIVE", "활성 회원만 연합을 생성할 수 있습니다."),
     MATCH_ALREADY_REQUESTED(HttpStatus.CONFLICT, "MATCH_ALREADY_REQUESTED", "이미 대결을 신청했습니다."),
     GUEST_ALREADY_LIKED(HttpStatus.CONFLICT, "GUEST_ALREADY_LIKED", "이미 좋아요를 눌렀습니다."),
 
