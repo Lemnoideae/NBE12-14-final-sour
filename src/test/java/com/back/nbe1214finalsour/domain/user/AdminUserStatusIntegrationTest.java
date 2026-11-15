@@ -3,6 +3,7 @@ package com.back.nbe1214finalsour.domain.user;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -16,7 +17,11 @@ import com.back.nbe1214finalsour.global.crypto.EmailHasher;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import com.back.nbe1214finalsour.global.redis.RedisKey;
+import com.back.nbe1214finalsour.global.security.AuthUser;
+import com.back.nbe1214finalsour.global.security.Role;
+import com.back.nbe1214finalsour.global.security.jwt.JwtProvider;
 import com.jayway.jsonpath.JsonPath;
+import jakarta.servlet.http.Cookie;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
@@ -26,11 +31,13 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -60,6 +67,8 @@ class AdminUserStatusIntegrationTest {
     private EmailHasher emailHasher;
     @Autowired
     private AdminUserService adminUserService;
+    @Autowired
+    private JwtProvider jwtProvider;
 
     private long universityId;
     private long departmentId;
@@ -193,6 +202,96 @@ class AdminUserStatusIntegrationTest {
 
         assertThat(statusOf(admin.getId())).isEqualTo("ACTIVE");
         assertThat(tokenHashesOf(admin.getId())).containsExactly("b".repeat(64));
+    }
+
+    @Test
+    @DisplayName("API 정지: 200 {userId, status}, 그 회원의 남은 access 토큰 401·재발급 401·로그인 403")
+    void suspendViaApi() throws Exception {
+        MockHttpServletResponse loginResponse = login().andExpect(status().isOk()).andReturn().getResponse();
+        String accessToken = JsonPath.read(loginResponse.getContentAsString(), "$.data.accessToken");
+        String refreshToken = loginResponse.getCookie("refreshToken").getValue();
+
+        changeStatus(adminAccessToken(), user.getId(), "{\"status\":\"SUSPENDED\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.userId").value(user.getId()))
+                .andExpect(jsonPath("$.data.status").value("SUSPENDED"));
+
+        assertThat(statusOf(user.getId())).isEqualTo("SUSPENDED");
+        me(accessToken).andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/v1/auth/reissue").cookie(new Cookie("refreshToken", refreshToken)))
+                .andExpect(status().isUnauthorized());
+        login().andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("USER_SUSPENDED"));
+    }
+
+    @Test
+    @DisplayName("API 해제: 200 ACTIVE, 다시 로그인할 수 있다")
+    void reactivateViaApi() throws Exception {
+        changeStatus(adminAccessToken(), user.getId(), "{\"status\":\"BANNED\"}").andExpect(status().isOk());
+
+        changeStatus(adminAccessToken(), user.getId(), "{\"status\":\"ACTIVE\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"));
+
+        login().andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("API 권한: 익명 401, 일반 회원 403이고 상태는 그대로다")
+    void apiRequiresAdmin() throws Exception {
+        mockMvc.perform(patch(statusUrl(user.getId())).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"SUSPENDED\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("COMMON_UNAUTHORIZED"));
+        String userToken = jwtProvider.createAccessToken(
+                new AuthUser(admin.getId(), universityId, departmentId, Role.USER), null);
+        changeStatus(userToken, user.getId(), "{\"status\":\"SUSPENDED\"}")
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("COMMON_FORBIDDEN"));
+
+        assertThat(statusOf(user.getId())).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    @DisplayName("API 없는 회원: 404 USER_NOT_FOUND")
+    void apiNotFound() throws Exception {
+        changeStatus(adminAccessToken(), Long.MAX_VALUE, "{\"status\":\"SUSPENDED\"}")
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"{\"status\":\"WITHDRAWN\"}", "{\"status\":\"PAUSED\"}", "{\"status\":null}", "{}"})
+    @DisplayName("API 잘못된 status: 400 COMMON_INVALID_INPUT이고 상태는 그대로다")
+    void apiInvalidStatus(String body) throws Exception {
+        changeStatus(adminAccessToken(), user.getId(), body)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("COMMON_INVALID_INPUT"));
+
+        assertThat(statusOf(user.getId())).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    @DisplayName("API 자기 자신: 400 COMMON_INVALID_INPUT")
+    void apiCannotChangeSelf() throws Exception {
+        changeStatus(adminAccessToken(), admin.getId(), "{\"status\":\"SUSPENDED\"}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("COMMON_INVALID_INPUT"));
+    }
+
+    private String adminAccessToken() {
+        return jwtProvider.createAccessToken(new AuthUser(admin.getId(), universityId, departmentId, Role.ADMIN), null);
+    }
+
+    private static String statusUrl(Long userId) {
+        return "/api/v1/admin/users/" + userId + "/status";
+    }
+
+    private ResultActions changeStatus(String accessToken, Long userId, String body) throws Exception {
+        return mockMvc.perform(patch(statusUrl(userId))
+                .header("Authorization", "Bearer " + accessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body));
     }
 
     private User createUser(String nickname, String email) {
