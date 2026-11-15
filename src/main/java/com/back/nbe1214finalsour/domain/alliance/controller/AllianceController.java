@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.alliance.controller;
 
+import com.back.nbe1214finalsour.domain.alliance.dto.AllianceApplicationResponse;
 import com.back.nbe1214finalsour.domain.alliance.dto.AllianceCreateRequest;
 import com.back.nbe1214finalsour.domain.alliance.dto.AllianceResponse;
 import com.back.nbe1214finalsour.domain.alliance.service.AllianceQueryService;
@@ -10,13 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequiredArgsConstructor
@@ -26,19 +21,82 @@ public class AllianceController {
     private final AllianceService allianceService;
     private final AllianceQueryService allianceQueryService;
 
+    // 기존 연합 상세 조회
     @GetMapping("/{allianceId}")
-    public ApiResponse<AllianceResponse> getAlliance(@PathVariable Long allianceId) {
-        return ApiResponse.ok(new AllianceResponse(allianceQueryService.getAlliance(allianceId)));
+    public ApiResponse<AllianceResponse> getAlliance(
+            @PathVariable Long allianceId
+    ) {
+        return ApiResponse.ok(
+                new AllianceResponse(
+                        allianceQueryService.getAlliance(allianceId)
+                )
+        );
     }
 
+    // 기존 연합 생성
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<AllianceResponse> createAlliance(
             @AuthenticationPrincipal AuthUser authUser,
             @Valid @RequestBody AllianceCreateRequest request
     ) {
-        return ApiResponse.ok(new AllianceResponse(
-                allianceService.createAlliance(authUser.userId(), request.name(), request.durationHours())
-        ));
+        return ApiResponse.ok(
+                new AllianceResponse(
+                        allianceService.createAlliance(
+                                authUser.userId(),
+                                request.name(),
+                                request.durationHours()
+                        )
+                )
+        );
+    }
+
+    // 연합 가입 신청
+    @PostMapping("/{allianceId}/applications")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<AllianceApplicationResponse> applyToAlliance(
+            @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long allianceId
+    ) {
+        return ApiResponse.ok(
+                new AllianceApplicationResponse(
+                        allianceService.applyToAlliance(
+                                authUser.userId(),
+                                allianceId
+                        )
+                )
+        );
+    }
+
+    // 연합 가입 승인
+    @PatchMapping("/applications/{applicationId}/approve")
+    public ApiResponse<AllianceApplicationResponse> approveApplication(
+            @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long applicationId
+    ) {
+        return ApiResponse.ok(
+                new AllianceApplicationResponse(
+                        allianceService.approveApplication(
+                                authUser.userId(),
+                                applicationId
+                        )
+                )
+        );
+    }
+
+    // 연합 가입 거절
+    @PatchMapping("/applications/{applicationId}/reject")
+    public ApiResponse<AllianceApplicationResponse> rejectApplication(
+            @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long applicationId
+    ) {
+        return ApiResponse.ok(
+                new AllianceApplicationResponse(
+                        allianceService.rejectApplication(
+                                authUser.userId(),
+                                applicationId
+                        )
+                )
+        );
     }
 }
