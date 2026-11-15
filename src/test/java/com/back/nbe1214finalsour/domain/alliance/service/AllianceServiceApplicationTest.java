@@ -142,7 +142,8 @@ class AllianceServiceApplicationTest {
                 .thenReturn(false);
 
         when(allianceUniversityRepository
-                .existsByUniversityIdAndStatusAndDeletedAtIsNull(
+                .existsByAllianceIdAndUniversityIdAndStatusAndDeletedAtIsNull(
+                        allianceId,
                         universityId,
                         AllianceUniversityStatus.PENDING
                 ))
@@ -183,7 +184,8 @@ class AllianceServiceApplicationTest {
                 .thenReturn(false);
 
         when(allianceUniversityRepository
-                .existsByUniversityIdAndStatusAndDeletedAtIsNull(
+                .existsByAllianceIdAndUniversityIdAndStatusAndDeletedAtIsNull(
+                        allianceId,
                         universityId,
                         AllianceUniversityStatus.PENDING
                 ))

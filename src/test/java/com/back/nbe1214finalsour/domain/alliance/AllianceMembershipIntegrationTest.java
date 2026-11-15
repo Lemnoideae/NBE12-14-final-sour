@@ -284,6 +284,54 @@ class AllianceMembershipIntegrationTest {
                 );
     }
 
+    @Test
+    @DisplayName("같은 학교가 서로 다른 연합에 가입 신청할 수 있다")
+    void applyToAlliance_allowsPendingInDifferentAlliances() {
+        // given: 서로 다른 연합 2개 생성
+        Alliance firstAlliance = createAlliance();
+
+        TestMember otherFounder = createTestMember("otherFounder");
+
+        Alliance secondAlliance = allianceService.createAlliance(
+                otherFounder.userId(),
+                "다른테스트연합",
+                24
+        );
+
+        // when: 같은 학교가 두 연합에 각각 가입 신청
+        AllianceUniversity firstApplication =
+                allianceService.applyToAlliance(
+                        applicant.userId(),
+                        firstAlliance.getId()
+                );
+
+        AllianceUniversity secondApplication =
+                allianceService.applyToAlliance(
+                        applicant.userId(),
+                        secondAlliance.getId()
+                );
+
+        entityManager.flush();
+        entityManager.clear();
+
+        // then: 두 신청 모두 PENDING
+        assertThat(firstApplication.getId())
+                .isNotEqualTo(secondApplication.getId());
+
+        assertThat(findStatus(firstApplication.getId()))
+                .isEqualTo("PENDING");
+
+        assertThat(findStatus(secondApplication.getId()))
+                .isEqualTo("PENDING");
+
+        // 각각 다른 연합에 신청이 저장되었는지 확인
+        assertThat(countByStatus(firstAlliance.getId(), "PENDING"))
+                .isEqualTo(1L);
+
+        assertThat(countByStatus(secondAlliance.getId(), "PENDING"))
+                .isEqualTo(1L);
+    }
+
     // ===== 공통 테스트 데이터 생성 =====
 
     private Alliance createAlliance() {

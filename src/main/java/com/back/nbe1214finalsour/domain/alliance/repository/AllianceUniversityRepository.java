@@ -36,4 +36,10 @@ public interface AllianceUniversityRepository
     Optional<Long> findAllianceIdByApplicationId(
             @Param("applicationId") Long applicationId
     );
+
+    boolean existsByAllianceIdAndUniversityIdAndStatusAndDeletedAtIsNull(
+            Long allianceId,
+            Long universityId,
+            AllianceUniversityStatus status
+    );
 }

@@ -110,7 +110,8 @@ public class AllianceService {
         }
 
         boolean alreadyPending = allianceUniversityRepository
-                .existsByUniversityIdAndStatusAndDeletedAtIsNull(
+                .existsByAllianceIdAndUniversityIdAndStatusAndDeletedAtIsNull(
+                        allianceId,
                         universityId,
                         AllianceUniversityStatus.PENDING
                 );
@@ -126,7 +127,7 @@ public class AllianceService {
                 );
 
         if (memberCount >= MAX_ALLIANCE_SIZE) {
-            throw new BusinessException(ErrorCode.COMMON_INVALID_INPUT);
+            throw new BusinessException(ErrorCode.ALLY_FULL);
         }
 
         AllianceUniversity application =
@@ -157,7 +158,7 @@ public class AllianceService {
         Long allianceId = allianceUniversityRepository
                 .findAllianceIdByApplicationId(applicationId)
                 .orElseThrow(() ->
-                        new BusinessException(ErrorCode.COMMON_INVALID_INPUT));
+                        new BusinessException(ErrorCode.ALLY_APPLICATION_NOT_FOUND));
 
         // 2. 연합 비관적 락 획득
         Alliance alliance = allianceRepository
@@ -169,7 +170,7 @@ public class AllianceService {
         AllianceUniversity application = allianceUniversityRepository
                 .findById(applicationId)
                 .orElseThrow(() ->
-                        new BusinessException(ErrorCode.COMMON_INVALID_INPUT));
+                        new BusinessException(ErrorCode.ALLY_APPLICATION_NOT_FOUND));
 
         validateActiveAlliance(alliance);
         validatePendingApplication(application);
@@ -186,7 +187,7 @@ public class AllianceService {
 
         // 6. 연합 정원 검증
         if (members.size() >= MAX_ALLIANCE_SIZE) {
-            throw new BusinessException(ErrorCode.COMMON_INVALID_INPUT);
+            throw new BusinessException(ErrorCode.ALLY_FULL);
         }
 
         // 7. 다른 연합에 이미 가입했는지 확인
@@ -243,7 +244,7 @@ public class AllianceService {
         Long allianceId = allianceUniversityRepository
                 .findAllianceIdByApplicationId(applicationId)
                 .orElseThrow(() ->
-                        new BusinessException(ErrorCode.COMMON_INVALID_INPUT));
+                        new BusinessException(ErrorCode.ALLY_APPLICATION_NOT_FOUND));
 
         // 2. 연합 비관적 락 획득
         Alliance alliance = allianceRepository
@@ -255,7 +256,7 @@ public class AllianceService {
         AllianceUniversity application = allianceUniversityRepository
                 .findById(applicationId)
                 .orElseThrow(() ->
-                        new BusinessException(ErrorCode.COMMON_INVALID_INPUT));
+                        new BusinessException(ErrorCode.ALLY_APPLICATION_NOT_FOUND));
 
         validateActiveAlliance(alliance);
         validatePendingApplication(application);
@@ -281,7 +282,7 @@ public class AllianceService {
         if (alliance.getStatus() != AllianceStatus.ACTIVE
                 || alliance.getDeletedAt() != null
                 || !alliance.getExpiredAt().isAfter(OffsetDateTime.now())) {
-            throw new BusinessException(ErrorCode.COMMON_INVALID_INPUT);
+            throw new BusinessException(ErrorCode.ALLY_NOT_ACTIVE);
         }
     }
 
@@ -289,7 +290,7 @@ public class AllianceService {
     private void validatePendingApplication(AllianceUniversity application) {
         if (application.getDeletedAt() != null
                 || application.getStatus() != AllianceUniversityStatus.PENDING) {
-            throw new BusinessException(ErrorCode.COMMON_INVALID_INPUT);
+            throw new BusinessException(ErrorCode.ALLY_APPLICATION_NOT_PENDING);
         }
     }
 
@@ -303,7 +304,7 @@ public class AllianceService {
                         member.getUniversityId().equals(user.getUniversityId()));
 
         if (!isMember) {
-            throw new BusinessException(ErrorCode.COMMON_INVALID_INPUT);
+            throw new BusinessException(ErrorCode.ALLY_NOT_MEMBER);
         }
     }
 }

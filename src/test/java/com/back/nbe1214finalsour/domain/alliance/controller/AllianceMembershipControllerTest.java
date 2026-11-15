@@ -4,6 +4,8 @@ import com.back.nbe1214finalsour.domain.alliance.entity.AllianceUniversity;
 import com.back.nbe1214finalsour.domain.alliance.entity.AllianceUniversityStatus;
 import com.back.nbe1214finalsour.domain.alliance.service.AllianceQueryService;
 import com.back.nbe1214finalsour.domain.alliance.service.AllianceService;
+import com.back.nbe1214finalsour.global.exception.BusinessException;
+import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import com.back.nbe1214finalsour.global.exception.GlobalExceptionHandler;
 import com.back.nbe1214finalsour.global.security.ApiAccessDeniedHandler;
 import com.back.nbe1214finalsour.global.security.ApiAuthenticationEntryPoint;
@@ -168,6 +170,68 @@ class AllianceMembershipControllerTest {
                         .value("COMMON_UNAUTHORIZED"));
 
         verifyNoInteractions(allianceService);
+    }
+
+    @Test
+    @DisplayName("연합 정원이 가득 차면 409를 반환한다")
+    void applyToAlliance_full() throws Exception {
+        // given
+        given(allianceService.applyToAlliance(1L, 1L))
+                .willThrow(new BusinessException(ErrorCode.ALLY_FULL));
+
+        // when & then
+        mockMvc.perform(post("/api/v1/alliances/1/applications")
+                        .header(HttpHeaders.AUTHORIZATION, authorization()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ALLY_FULL"));
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 가입 신청을 승인하면 404를 반환한다")
+    void approveApplication_notFound() throws Exception {
+        // given
+        given(allianceService.approveApplication(1L, 100L))
+                .willThrow(new BusinessException(
+                        ErrorCode.ALLY_APPLICATION_NOT_FOUND
+                ));
+
+        // when & then
+        mockMvc.perform(patch("/api/v1/alliances/applications/100/approve")
+                        .header(HttpHeaders.AUTHORIZATION, authorization()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code")
+                        .value("ALLY_APPLICATION_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("연합 소속 회원이 아니면 거절 요청 시 403을 반환한다")
+    void rejectApplication_notMember() throws Exception {
+        // given
+        given(allianceService.rejectApplication(1L, 100L))
+                .willThrow(new BusinessException(ErrorCode.ALLY_NOT_MEMBER));
+
+        // when & then
+        mockMvc.perform(patch("/api/v1/alliances/applications/100/reject")
+                        .header(HttpHeaders.AUTHORIZATION, authorization()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ALLY_NOT_MEMBER"));
+    }
+
+    @Test
+    @DisplayName("이미 처리된 신청을 승인하면 409를 반환한다")
+    void approveApplication_alreadyProcessed() throws Exception {
+        // given
+        given(allianceService.approveApplication(1L, 100L))
+                .willThrow(new BusinessException(
+                        ErrorCode.ALLY_APPLICATION_NOT_PENDING
+                ));
+
+        // when & then
+        mockMvc.perform(patch("/api/v1/alliances/applications/100/approve")
+                        .header(HttpHeaders.AUTHORIZATION, authorization()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code")
+                        .value("ALLY_APPLICATION_NOT_PENDING"));
     }
 
     private String authorization() {
