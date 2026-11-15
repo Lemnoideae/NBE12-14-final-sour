@@ -43,7 +43,7 @@ class AllianceQueryServiceTest {
         Long allianceId = 100L;
 
         Alliance alliance = Alliance.create(
-                "청주연합",
+                "테스트연합",
                 24,
                 OffsetDateTime.parse("2026-11-15T09:00:00+09:00")
         );
@@ -56,7 +56,7 @@ class AllianceQueryServiceTest {
 
         // then
         assertThat(result).isSameAs(alliance);
-        assertThat(result.getName()).isEqualTo("청주연합");
+        assertThat(result.getName()).isEqualTo("테스트연합");
         assertThat(result.getDurationHours()).isEqualTo(24);
 
         verify(allianceRepository).findById(allianceId);
@@ -126,7 +126,7 @@ class AllianceQueryServiceTest {
         Long allianceId = 100L;
 
         Alliance alliance = Alliance.create(
-                "청주연합",
+                "테스트연합",
                 24,
                 OffsetDateTime.parse("2026-11-15T09:00:00+09:00")
         );

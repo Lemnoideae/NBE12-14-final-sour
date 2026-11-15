@@ -51,7 +51,7 @@ class AllianceControllerTest {
     private static final AuthUser USER = new AuthUser(1L, 10L, 20L, Role.USER);
     private static final String VALID_REQUEST = """
             {
-                "name": "청주연합",
+                "name": "테스트연합",
                 "durationHours": 24
             }
             """;
@@ -74,14 +74,14 @@ class AllianceControllerTest {
     @Test
     @DisplayName("로그인 사용자가 연합 상세를 조회하면 200과 연합 정보를 반환한다")
     void getAlliance() throws Exception {
-        Alliance alliance = Alliance.create("청주연합", 24, OffsetDateTime.parse("2026-11-15T09:00:00+09:00"));
+        Alliance alliance = Alliance.create("테스트연합", 24, OffsetDateTime.parse("2026-11-15T09:00:00+09:00"));
         given(allianceQueryService.getAlliance(100L)).willReturn(alliance);
 
         mockMvc.perform(get("/api/v1/alliances/100")
                         .header(HttpHeaders.AUTHORIZATION, authorization()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data.name").value("청주연합"))
+                .andExpect(jsonPath("$.data.name").value("테스트연합"))
                 .andExpect(jsonPath("$.data.totalScore").value(0))
                 .andExpect(jsonPath("$.data.durationHours").value(24))
                 .andExpect(jsonPath("$.data.status").value("ACTIVE"))
@@ -109,12 +109,12 @@ class AllianceControllerTest {
     void createAlliance() throws Exception {
         Alliance alliance = mock(Alliance.class);
         given(alliance.getId()).willReturn(100L);
-        given(alliance.getName()).willReturn("청주연합");
+        given(alliance.getName()).willReturn("테스트연합");
         given(alliance.getTotalScore()).willReturn(0L);
         given(alliance.getDurationHours()).willReturn(24);
         given(alliance.getStatus()).willReturn(AllianceStatus.ACTIVE);
         given(alliance.getExpiredAt()).willReturn(OffsetDateTime.parse("2026-11-16T09:00:00+09:00"));
-        given(allianceService.createAlliance(1L, "청주연합", 24)).willReturn(alliance);
+        given(allianceService.createAlliance(1L, "테스트연합", 24)).willReturn(alliance);
 
         mockMvc.perform(post("/api/v1/alliances")
                         .header(HttpHeaders.AUTHORIZATION, authorization())
@@ -123,13 +123,13 @@ class AllianceControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.id").value(100))
-                .andExpect(jsonPath("$.data.name").value("청주연합"))
+                .andExpect(jsonPath("$.data.name").value("테스트연합"))
                 .andExpect(jsonPath("$.data.totalScore").value(0))
                 .andExpect(jsonPath("$.data.durationHours").value(24))
                 .andExpect(jsonPath("$.data.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.data.expiredAt").exists());
 
-        verify(allianceService).createAlliance(1L, "청주연합", 24);
+        verify(allianceService).createAlliance(1L, "테스트연합", 24);
     }
 
     @Test
@@ -155,7 +155,7 @@ class AllianceControllerTest {
                         .header(HttpHeaders.AUTHORIZATION, authorization())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"청주연합","durationHours":3}
+                                {"name":"테스트연합","durationHours":3}
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("COMMON_INVALID_INPUT"))

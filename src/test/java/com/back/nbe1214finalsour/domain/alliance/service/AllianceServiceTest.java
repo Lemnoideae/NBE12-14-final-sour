@@ -66,7 +66,7 @@ class AllianceServiceTest {
         // when
         Alliance result = allianceService.createAlliance(
                 userId,
-                "청주연합",
+                "테스트연합",
                 24
         );
 
@@ -80,7 +80,7 @@ class AllianceServiceTest {
 
         Alliance createdAlliance = allianceCaptor.getValue();
 
-        assertThat(createdAlliance.getName()).isEqualTo("청주연합");
+        assertThat(createdAlliance.getName()).isEqualTo("테스트연합");
         assertThat(createdAlliance.getDurationHours()).isEqualTo(24);
 
         ArgumentCaptor<AllianceUniversity> memberCaptor =
@@ -158,7 +158,7 @@ class AllianceServiceTest {
 
         // 5시간: 최소 시간 미만
         assertThatThrownBy(() ->
-                allianceService.createAlliance(userId, "청주연합", 5)
+                allianceService.createAlliance(userId, "테스트연합", 5)
         )
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue(
@@ -168,7 +168,7 @@ class AllianceServiceTest {
 
         // 73시간: 최대 시간 초과
         assertThatThrownBy(() ->
-                allianceService.createAlliance(userId, "청주연합", 73)
+                allianceService.createAlliance(userId, "테스트연합", 73)
         )
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue(
@@ -195,7 +195,7 @@ class AllianceServiceTest {
 
         // when & then
         assertThatThrownBy(() ->
-                allianceService.createAlliance(userId, "청주연합", 24)
+                allianceService.createAlliance(userId, "테스트연합", 24)
         )
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue(
@@ -225,7 +225,7 @@ class AllianceServiceTest {
 
         // when & then
         assertThatThrownBy(() ->
-                allianceService.createAlliance(userId, "청주연합", 24)
+                allianceService.createAlliance(userId, "테스트연합", 24)
         )
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue(
