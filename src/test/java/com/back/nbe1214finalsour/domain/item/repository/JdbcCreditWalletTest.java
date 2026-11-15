@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.util.OptionalLong;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 @IntegrationTest
@@ -54,5 +56,16 @@ public class JdbcCreditWalletTest {
         setBalance(5000);
 
         assertThat(this.creditWallet.findBalance(userId)).isEqualTo(5000L);
+    }
+
+    @Test
+    @DisplayName("잔액이 충분하면 차감하고 차감 후 잔액을 반환")
+    void tryDeduct_enough(){
+        setBalance(5000);
+
+        OptionalLong remaining = this.creditWallet.tryDeduct(userId, 3900);
+
+        assertThat(remaining).hasValue(1100L);
+        assertThat(balanceInDb()).isEqualTo(1100L);
     }
 }
