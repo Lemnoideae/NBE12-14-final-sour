@@ -1,6 +1,7 @@
 package com.back.nbe1214finalsour.domain.item.service;
 
 import com.back.nbe1214finalsour.IntegrationTest;
+import com.back.nbe1214finalsour.global.crypto.EmailCipher;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import io.awspring.cloud.s3.S3Template;
@@ -43,6 +44,9 @@ class ItemCreditPurchaseIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
+    private EmailCipher emailCipher;
+
+    @Autowired
     private S3Template s3Template;
 
     @Value("${file.logo-bucket}")
@@ -56,6 +60,7 @@ class ItemCreditPurchaseIntegrationTest {
     private Long userId;
     private Long universityLogoItemId;
     private Long departmentLogoItemId;
+    private Long profileLogoItemId;
     private final List<Long> insertedItemIds = new ArrayList<>();
 
     @BeforeEach
@@ -67,12 +72,15 @@ class ItemCreditPurchaseIntegrationTest {
                 Long.class, universityId);
         userId = jdbcTemplate.queryForObject("""
                 INSERT INTO users (university_id, department_id, nickname, email, email_hash, password, approved_at)
-                VALUES (?, ?, '크레딧구매유저', 'credit-purchase@test.com', ?, 'password', now())
+                VALUES (?, ?, '크레딧구매유저', ?, ?, 'password', now())
                 RETURNING id
-                """, Long.class, universityId, departmentId, "3".repeat(64));
+                """, Long.class, universityId, departmentId,
+                // 개인 로고 변경권은 User 엔티티를 읽으므로 이메일이 복호화돼야 한다
+                emailCipher.encrypt("credit-purchase@test.com"), "3".repeat(64));
 
         universityLogoItemId = logoItem("LOGO_UNIVERSITY", 3900);
         departmentLogoItemId = logoItem("LOGO_DEPARTMENT", 2900);
+        profileLogoItemId = logoItem("LOGO_PROFILE", 1900);
         itemService.loadItemTable();   // 서버 시작 때 캐시된 아이템 목록을 다시 읽음
     }
 
@@ -148,6 +156,23 @@ class ItemCreditPurchaseIntegrationTest {
                 .containsEntry("balance_after", 1100L);
         // 로고 주소: {공개 주소}/custom-logo/{회원}/{UUID}.png
         assertThat(logoOf("university", universityId))
+                .startsWith(publicBaseUrl + "/custom-logo/" + userId + "/")
+                .endsWith(".png");
+        assertThat(uploadedLogoCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("개인 로고 변경권을 사면 올린 이미지 주소로 프로필 이미지가 바뀐다")
+    void purchase_profileLogo_changesProfileImage() {
+        long price = priceOf(profileLogoItemId);
+        setCredit(price);
+
+        itemPurchaseService.purchase(userId, universityId, departmentId, profileLogoItemId, logoImage());
+
+        assertThat(credit()).isZero();
+        assertThat(count("user_item")).isEqualTo(1L);
+        // 주소는 서버가 만든다 (클라이언트가 URL을 보낼 수 없음)
+        assertThat(logoOf("users", userId))
                 .startsWith(publicBaseUrl + "/custom-logo/" + userId + "/")
                 .endsWith(".png");
         assertThat(uploadedLogoCount()).isEqualTo(1);

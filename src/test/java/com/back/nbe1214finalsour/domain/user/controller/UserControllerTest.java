@@ -6,7 +6,6 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
@@ -118,9 +117,9 @@ class UserControllerTest {
     @Test
     @DisplayName("[PATCH] /api/v1/users/me는 서비스 결과를 내 정보 형식으로 200 응답")
     void updateProfile() throws Exception {
-        given(userService.updateProfile(1024L, "대대대왕", PROFILE_URL)).willReturn(myInfo("대대대왕", PROFILE_URL));
+        given(userService.updateProfile(1024L, "대대대왕")).willReturn(myInfo("대대대왕", PROFILE_URL));
 
-        updateProfile("{\"nickname\":\"대대대왕\",\"profileImageUrl\":\"" + PROFILE_URL + "\"}")
+        updateProfile("{\"nickname\":\"대대대왕\"}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.id").value(1024))
@@ -131,13 +130,24 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("[PATCH] /api/v1/users/me는 빠진 필드를 null로 넘긴다 (그대로 둠)")
+    @DisplayName("[PATCH] /api/v1/users/me는 빠진 닉네임을 null로 넘긴다 (그대로 둠)")
     void updateProfile_missingFieldsAreNull() throws Exception {
-        given(userService.updateProfile(1024L, null, null)).willReturn(myInfo("대대대짱", null));
+        given(userService.updateProfile(1024L, null)).willReturn(myInfo("대대대짱", null));
 
         updateProfile("{}").andExpect(status().isOk());
 
-        verify(userService).updateProfile(1024L, null, null);
+        verify(userService).updateProfile(1024L, null);
+    }
+
+    @Test
+    @DisplayName("[PATCH] /api/v1/users/me는 profileImageUrl을 서비스로 넘기지 않는다 (이미지는 상점 구매로만 변경)")
+    void updateProfile_ignoresProfileImageUrl() throws Exception {
+        given(userService.updateProfile(1024L, "대대대왕")).willReturn(myInfo("대대대왕", null));
+
+        updateProfile("{\"nickname\":\"대대대왕\",\"profileImageUrl\":\"" + PROFILE_URL + "\"}")
+                .andExpect(status().isOk());
+
+        verify(userService).updateProfile(1024L, "대대대왕");
     }
 
     @ParameterizedTest(name = "nickname=\"{0}\"")
@@ -149,14 +159,14 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.code").value("COMMON_INVALID_INPUT"))
                 .andExpect(jsonPath("$.data[0].field").value("nickname"));
 
-        verify(userService, never()).updateProfile(any(), any(), any());
+        verify(userService, never()).updateProfile(any(), any());
     }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("profileErrors")
     @DisplayName("[PATCH] /api/v1/users/me의 도메인 오류는 명세서의 상태와 코드로 응답")
     void updateProfile_businessErrors(ErrorCode errorCode, int httpStatus) throws Exception {
-        given(userService.updateProfile(any(), any(), isNull())).willThrow(new BusinessException(errorCode));
+        given(userService.updateProfile(any(), any())).willThrow(new BusinessException(errorCode));
 
         updateProfile("{\"nickname\":\"대대대왕\"}")
                 .andExpect(status().is(httpStatus))
@@ -165,8 +175,7 @@ class UserControllerTest {
 
     static Stream<Arguments> profileErrors() {
         return Stream.of(
-                Arguments.of(ErrorCode.USER_NICKNAME_DUPLICATED, 409),
-                Arguments.of(ErrorCode.FILE_INVALID_URL, 400));
+                Arguments.of(ErrorCode.USER_NICKNAME_DUPLICATED, 409));
     }
 
     @Test
@@ -178,7 +187,7 @@ class UserControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("COMMON_UNAUTHORIZED"));
 
-        verify(userService, never()).updateProfile(any(), any(), any());
+        verify(userService, never()).updateProfile(any(), any());
     }
 
     private ResultActions updateProfile(String body) throws Exception {

@@ -78,6 +78,11 @@ public enum ErrorCode {
     ALLY_APPLICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "ALLY_APPLICATION_NOT_FOUND", "연합 가입 신청을 찾을 수 없습니다."),
     ALLY_APPLICATION_NOT_PENDING(HttpStatus.CONFLICT, "ALLY_APPLICATION_NOT_PENDING", "이미 처리된 연합 가입 신청입니다."),
     MATCH_ALREADY_REQUESTED(HttpStatus.CONFLICT, "MATCH_ALREADY_REQUESTED", "이미 대결을 신청했습니다."),
+    MATCH_NOT_FOUND(HttpStatus.NOT_FOUND, "MATCH_NOT_FOUND", "대결을 찾을 수 없습니다."),
+    MATCH_NOT_PENDING(HttpStatus.CONFLICT, "MATCH_NOT_PENDING", "대기 중인 대결 신청이 아닙니다."),
+    MATCH_REQUEST_EXPIRED(HttpStatus.CONFLICT, "MATCH_REQUEST_EXPIRED", "대결 신청 기한이 지났습니다."),
+    MATCH_MEMBERS_INCOMPLETE(HttpStatus.CONFLICT, "MATCH_MEMBERS_INCOMPLETE", "양쪽 연합 모두 2개 학교가 가입해야 합니다."),
+    MATCH_INSUFFICIENT_TIME(HttpStatus.CONFLICT, "MATCH_INSUFFICIENT_TIME", "연합 만료 전 대결을 끝낼 시간이 부족합니다."),
     GUEST_ALREADY_LIKED(HttpStatus.CONFLICT, "GUEST_ALREADY_LIKED", "이미 좋아요를 눌렀습니다."),
 
     // ===== CLICKER / ITEM / PAY (4번) =====
