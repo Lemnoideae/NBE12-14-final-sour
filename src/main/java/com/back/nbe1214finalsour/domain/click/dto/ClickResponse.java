@@ -9,11 +9,11 @@ public record ClickResponse(
         ClickDepartmentResponse department,
         Long schoolClicksLastSecond
 ) {
-    public static ClickResponse from(ClickApplyResponse clickApplyResponse, int clickCount, int score, Double multiplier, Long universityId, Long departmentId) {
+    public static ClickResponse from(ClickApplyResponse clickApplyResponse, int clickCount, long score, Double multiplier, Long universityId, Long departmentId) {
         // TODO: 대학 로고 URL 수정
         return new ClickResponse(
                 (long) clickCount,
-                (long) score,
+                score,
                 multiplier,
                 clickApplyResponse.myContrib(),
                 new ClickUniversityResponse(universityId, clickApplyResponse.univTotal(), clickApplyResponse.univRank(), "tempUrl"),
