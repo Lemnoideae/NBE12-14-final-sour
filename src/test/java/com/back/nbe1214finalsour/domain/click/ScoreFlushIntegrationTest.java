@@ -232,6 +232,29 @@ class ScoreFlushIntegrationTest {
         assertThat(contribScoreOf(next.getId())).isEqualTo(70L);
     }
 
+    @Test
+    @DisplayName("Redis 점수가 없는 dirty 학과는 건너뛰고 나머지 학과는 반영한다")
+    void skipsDepartmentsMissingFromRanking() {
+        // given
+        University university = universityRepository.saveAndFlush(new University("배치테스트대학교"));
+        Department scored = departmentRepository.saveAndFlush(new Department(university, "점수있는학과"));
+        Department missing = departmentRepository.saveAndFlush(new Department(university, "점수없는학과"));
+
+        String rankKey = RedisKey.RANK_DEPT.of(university.getId());
+        usedKeys.add(rankKey);
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_DEPT.of(),
+                String.valueOf(scored.getId()), String.valueOf(missing.getId()));
+        // missing은 순위 ZSET에 없다 (Redis 재시작 등으로 점수가 사라진 경우)
+        stringRedisTemplate.opsForZSet().add(rankKey, String.valueOf(scored.getId()), 300);
+
+        // when
+        scoreFlushService.flush();
+
+        // then
+        assertThat(departmentScoreOf(scored.getId())).isEqualTo(300L);
+        assertThat(departmentScoreOf(missing.getId())).isZero();
+    }
+
     private Long departmentScoreOf(Long departmentId) {
         return jdbcTemplate.queryForObject(
                 "SELECT total_score FROM department WHERE id = ?", Long.class, departmentId);

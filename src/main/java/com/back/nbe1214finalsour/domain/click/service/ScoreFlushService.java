@@ -79,6 +79,7 @@ public class ScoreFlushService {
                     .score(key, deptIds.stream().map(String::valueOf).toArray());
             for (int i = 0; i < deptIds.size(); i++) {
                 Double v = values.get(i);
+                if (v == null) continue;
                 ids.add(deptIds.get(i));
                 scores.add(v.longValue());
             }
