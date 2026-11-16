@@ -49,7 +49,7 @@ class ScoreFlushIntegrationTest {
     private EmailHasher emailHasher;
 
     private final List<String> usedKeys = new ArrayList<>(List.of(
-            RedisKey.DIRTY_USER.of(), RedisKey.DIRTY_UNIV.of()));
+            RedisKey.DIRTY_USER.of(), RedisKey.DIRTY_UNIV.of(), RedisKey.DIRTY_DEPT.of()));
     /** {@code rank:univ}는 키가 하나뿐이라 통째로 지우지 않고 테스트가 넣은 학교만 뺀다. */
     private final List<String> addedUnivRankMembers = new ArrayList<>();
 
@@ -97,6 +97,31 @@ class ScoreFlushIntegrationTest {
 
         // then
         assertThat(universityScoreOf(university.getId())).isEqualTo(1200L);
+    }
+
+    @Test
+    @DisplayName("dirty 학과의 Redis 점수로 DB 학과 점수를 덮어쓴다")
+    void flushesDirtyDepartmentScore() {
+        // given
+        University university = universityRepository.saveAndFlush(new University("배치테스트대학교"));
+        Department department = departmentRepository.saveAndFlush(new Department(university, "배치학과"));
+        String deptId = String.valueOf(department.getId());
+
+        String rankKey = RedisKey.RANK_DEPT.of(university.getId());
+        usedKeys.add(rankKey);
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_DEPT.of(), deptId);
+        stringRedisTemplate.opsForZSet().add(rankKey, deptId, 300);
+
+        // when
+        scoreFlushService.flush();
+
+        // then
+        assertThat(departmentScoreOf(department.getId())).isEqualTo(300L);
+    }
+
+    private Long departmentScoreOf(Long departmentId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT total_score FROM department WHERE id = ?", Long.class, departmentId);
     }
 
     /** JPA 1차 캐시를 거치지 않도록 DB 값을 직접 읽는다. */
