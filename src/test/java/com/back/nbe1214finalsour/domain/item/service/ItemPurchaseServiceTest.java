@@ -164,8 +164,9 @@ public class ItemPurchaseServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ITEM_NOT_ENOUGH_CREDIT);
 
-        // 올린 경로와 같은 경로를 지움
-        verify(this.imageStorage).delete(uploadedKey());
+        // 올린 경로와 같은 경로를 지움 (verify 안에서 또 verify를 부르면 안 되므로 먼저 꺼냄)
+        String key = uploadedKey();
+        verify(this.imageStorage).delete(key);
     }
 
     @Test
