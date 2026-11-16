@@ -129,7 +129,11 @@ public class User extends BaseTimeEntity {
         this.nickname = nickname;
     }
 
-    /** @param profileImageUrl 검사를 마친 우리 CDN 주소 ({@code ProfileImageUrlPolicy}) */
+    /**
+     * 개인 로고 변경권 구매({@code CreditPurchaseService})에서만 부른다. 프로필 수정 API로는 바꾸지 않는다 (SCRUM-105).
+     *
+     * @param profileImageUrl 검사를 마친 우리 CDN 주소 ({@code ProfileImageUrlPolicy})
+     */
     public void changeProfileImageUrl(String profileImageUrl) {
         this.logoUrl = profileImageUrl;
     }

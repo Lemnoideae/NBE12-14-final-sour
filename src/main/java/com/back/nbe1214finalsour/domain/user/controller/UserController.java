@@ -43,14 +43,14 @@ public class UserController {
     }
 
     /**
-     * 프로필 수정. 인증 필요. 보낸 필드만 바꾸고 내 정보와 같은 형식으로 응답한다.
-     * 닉네임 규칙 위반은 400 {@code COMMON_INVALID_INPUT}
+     * 프로필 수정. 인증 필요. 닉네임을 바꾸고 내 정보와 같은 형식으로 응답한다.
+     * 프로필 이미지는 상점의 개인 로고 변경권 구매로만 바꾼다. 닉네임 규칙 위반은 400 {@code COMMON_INVALID_INPUT}
      */
     @PatchMapping("/me")
     public ApiResponse<MyInfoResponse> updateProfile(
             @AuthenticationPrincipal AuthUser authUser,
             @RequestBody @Valid UpdateProfileRequest request) {
-        return ApiResponse.ok(userService.updateProfile(authUser.userId(), request.nickname(), request.profileImageUrl()));
+        return ApiResponse.ok(userService.updateProfile(authUser.userId(), request.nickname()));
     }
 
     /**
