@@ -30,6 +30,10 @@ spring:
     aws:
       region:
         static: ${AWS_REGION:ap-northeast-2}
+      s3:
+        # 로컬·테스트의 에뮬레이터(Floci)는 localhost 주소라서, 버킷 이름을 도메인이 아닌 경로에 넣는 방식을 쓴다.
+        # 운영은 application-prod.yaml에서 false
+        path-style-access-enabled: true
 
 # 인증 메일 발신 주소 (VERIFICATION_MAIL_FROM). 없으면 spring.mail.username을 쓴다
 verification-mail:
@@ -62,7 +66,8 @@ file:
   # 업로드한 파일(S3)을 내려주는 공개 주소 (CloudFront). 프로필 이미지 URL 검사(ProfileImageUrlPolicy)에 쓴다.
   # 기본값은 추가 기능 API 명세서 예시의 주소다. 3번 업로드 모듈이 생기면 같은 값을 쓴다
   public-base-url: ${FILE_PUBLIC_BASE_URL:https://cdn.devcproject.cloud}
-
+  # 로고 이미지를 올리는 버킷. 기본값은 로컬·테스트 에뮬레이터용 (운영은 FILE_LOGO_BUCKET 필수)
+  logo-bucket: ${FILE_LOGO_BUCKET:local-logo-bucket}
 cors:
   # 쉼표로 구분한 origin 목록. 기본값은 로컬 프론트 개발 서버 (frontend/package.json의 vite --port=3000)
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
