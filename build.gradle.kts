@@ -63,7 +63,7 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-postgresql")
     testImplementation("io.awspring.cloud:spring-cloud-aws-testcontainers")
-    testImplementation("org.testcontainers:testcontainers-localstack")
+    testImplementation("io.floci:testcontainers-floci:2.9.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
