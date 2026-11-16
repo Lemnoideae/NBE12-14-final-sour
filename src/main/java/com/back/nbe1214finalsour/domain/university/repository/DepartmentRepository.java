@@ -1,8 +1,10 @@
 package com.back.nbe1214finalsour.domain.university.repository;
 
 import com.back.nbe1214finalsour.domain.university.entity.Department;
+import com.back.nbe1214finalsour.domain.university.repository.projections.DeptUniv;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.Collection;
 import java.util.List;
@@ -21,4 +23,7 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
             Long universityId,
             Collection<Long> departmentIds
     );
+
+    @Query("select id, university.id from Department where id in :ids")
+    List<DeptUniv> findUniversityIdsByIdIn(Collection<Long> ids);
 }

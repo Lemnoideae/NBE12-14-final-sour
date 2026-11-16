@@ -1,7 +1,12 @@
 package com.back.nbe1214finalsour.domain.user.repository;
 
 import com.back.nbe1214finalsour.domain.user.entity.User;
+
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
+
+import com.back.nbe1214finalsour.domain.user.repository.projections.UserUniv;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -26,4 +31,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("select count(u) > 0 from User u where lower(u.nickname) = lower(:nickname) and u.deletedAt is null"
             + " and u.id <> :userId")
     boolean existsActiveNicknameIgnoreCaseExcept(@Param("nickname") String nickname, @Param("userId") Long userId);
+
+    @Query("select u.id, u.universityId from User u where u.id in :ids")
+    List<UserUniv> findUniversityIdsByIdIn(@Param("ids") Collection<Long> ids);
 }
