@@ -13,21 +13,28 @@ import com.back.nbe1214finalsour.global.security.*;
 import com.back.nbe1214finalsour.global.security.jwt.JwtProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -47,6 +54,15 @@ public class ItemControllerTest {
 
     private static final Item POTION =
             new Item(2L, "4배 물약", "1시간 동안 클릭 점수 4배", ItemType.MULTIPLIER, PayType.CONTRIBUTION, 1000L, 3600, 4.0);
+
+    private static final Item UNIVERSITY_LOGO =
+            new Item(3L, "학교 로고 변경권", "우리 학교 로고 변경", ItemType.LOGO_UNIVERSITY, PayType.CREDIT, 3900L, null, null);
+
+    private static final byte[] PNG_BYTES = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0, 1, 2};
+
+    private static MockMultipartFile logoImage() {
+        return new MockMultipartFile("logoImage", "logo.png", "image/png", PNG_BYTES);
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -149,5 +165,45 @@ public class ItemControllerTest {
                         .header(HttpHeaders.AUTHORIZATION, bearerToken()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("ITEM_NOT_ENOUGH_SCORE"));
+    }
+
+
+
+    @Test
+    @DisplayName("[POST] /api/v1/items/{itemId}/purchase는 로고 아이템이면 multipart의 logoImage 파트로 이미지를 받아 구매하고 201을 응답")
+    void purchase_logoItem_multipart() throws Exception {
+        given(itemPurchaseService.purchase(eq(1L), eq(7L), eq(34L), eq(3L), any(MultipartFile.class)))
+                .willReturn(new ItemPurchaseResult(7001L, UNIVERSITY_LOGO, 3900L, null, 12888L, 1100L));
+
+        mockMvc.perform(multipart("/api/v1/items/3/purchase")
+                        .file(logoImage())
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.userItemId").value(7001))
+                .andExpect(jsonPath("$.data.item.payType").value("CREDIT"))
+                .andExpect(jsonPath("$.data.expiredAt").value(nullValue()))
+                .andExpect(jsonPath("$.data.myCreditBalance").value(1100))
+                .andExpect(jsonPath("$.data.myContribScore").value(12888));
+
+        // 보낸 파일이 그대로 서비스에 전달됨
+        ArgumentCaptor<MultipartFile> file = ArgumentCaptor.forClass(MultipartFile.class);
+        verify(itemPurchaseService).purchase(eq(1L), eq(7L), eq(34L), eq(3L), file.capture());
+        assertThat(file.getValue().getOriginalFilename()).isEqualTo("logo.png");
+        assertThat(file.getValue().getBytes()).isEqualTo(PNG_BYTES);
+    }
+
+    @Test
+    @DisplayName("[POST] /api/v1/items/{itemId}/purchase는 업로드 크기 제한을 넘으면 400 ITEM_LOGO_IMAGE_TOO_LARGE")
+    void purchase_uploadTooLarge() throws Exception {
+        // 실제로는 서블릿이 요청 본문을 읽다가 던지는 예외. MockMvc는 크기 제한을 적용하지 않으므로 서비스가 던지게 해서 응답 형식만 확인한다
+        given(itemPurchaseService.purchase(eq(1L), eq(7L), eq(34L), eq(3L), any(MultipartFile.class)))
+                .willThrow(new MaxUploadSizeExceededException(5L * 1024 * 1024));
+
+        mockMvc.perform(multipart("/api/v1/items/3/purchase")
+                        .file(logoImage())
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ITEM_LOGO_IMAGE_TOO_LARGE"));
     }
 }

@@ -101,8 +101,11 @@ public enum ErrorCode {
     ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "ITEM_NOT_FOUND", "아이템을 찾을 수 없습니다."),
     ITEM_NOT_ENOUGH_SCORE(HttpStatus.BAD_REQUEST, "ITEM_NOT_ENOUGH_SCORE", "아이템 구매에 필요한 기여도가 부족합니다."),
     ITEM_NOT_ENOUGH_CREDIT(HttpStatus.BAD_REQUEST, "ITEM_NOT_ENOUGH_CREDIT", "아이템 구매에 필요한 크레딧이 부족합니다."),
-    ITEM_LOGO_IMAGE_REQUIRED(HttpStatus.BAD_REQUEST, "ITEM_LOGO_IMAGE_REQUIRED", "로고 아이템은 로고 이미지가 필요합니다.")
+    ITEM_LOGO_IMAGE_REQUIRED(HttpStatus.BAD_REQUEST, "ITEM_LOGO_IMAGE_REQUIRED", "로고 아이템은 로고 이미지가 필요합니다."),
+    ITEM_LOGO_IMAGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "ITEM_LOGO_IMAGE_TOO_LARGE", "로고 이미지는 5MB 이하만 올릴 수 있습니다."),
+    ITEM_LOGO_IMAGE_INVALID_TYPE(HttpStatus.BAD_REQUEST, "ITEM_LOGO_IMAGE_INVALID_TYPE", "로고 이미지는 PNG, JPG, WEBP만 올릴 수 있습니다.")
     ;
+
 
     private final HttpStatus status;
     private final String code;
