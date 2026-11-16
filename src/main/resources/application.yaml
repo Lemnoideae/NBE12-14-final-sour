@@ -34,6 +34,12 @@ spring:
         # 로컬·테스트의 에뮬레이터(Floci)는 localhost 주소라서, 버킷 이름을 도메인이 아닌 경로에 넣는 방식을 쓴다.
         # 운영은 application-prod.yaml에서 false
         path-style-access-enabled: true
+  servlet:
+    multipart:
+      # 로고 이미지 업로드 (로고 변경권 구매). 파일은 LogoImageValidator와 같은 5MB, 요청 전체는 multipart 부가 데이터 여유를 둠
+      # 넘으면 GlobalExceptionHandler가 400 ITEM_LOGO_IMAGE_TOO_LARGE로 응답
+      max-file-size: 5MB
+      max-request-size: 6MB
 
 # 인증 메일 발신 주소 (VERIFICATION_MAIL_FROM). 없으면 spring.mail.username을 쓴다
 verification-mail:

@@ -2,10 +2,6 @@ package com.back.nbe1214finalsour.global.exception;
 
 import com.back.nbe1214finalsour.global.response.ApiResponse;
 import com.back.nbe1214finalsour.global.response.FieldErrorDetail;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.TreeSet;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.exception.ConstraintViolationException;
 import org.jspecify.annotations.Nullable;
@@ -29,7 +25,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 /**
  * 컨트롤러에서 나온 모든 예외를 {@link ApiResponse} 형식으로 응답한다.
@@ -106,6 +108,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return handleExceptionInternal(ex, ApiResponse.fail(ErrorCode.COMMON_INVALID_INPUT, details), headers, status, request);
     }
 
+    /**
+     * 업로드 크기 제한(spring.servlet.multipart) 초과. 부모 클래스는 413으로 응답하지만,
+     * 지금 파일을 받는 API는 로고 변경권 구매뿐이라 LogoImageValidator의 크기 초과와 같은 코드(400)로 맞춘다.
+     */
+    @Override
+    protected ResponseEntity<Object> handleMaxUploadSizeExceededException(
+            MaxUploadSizeExceededException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        ErrorCode errorCode = ErrorCode.ITEM_LOGO_IMAGE_TOO_LARGE;
+        return handleExceptionInternal(ex, ApiResponse.fail(errorCode), headers, errorCode.getStatus(), request);
+    }
     /**
      * 이 클래스가 만드는 모든 오류 응답이 거치는 지점. 본문을 {@link ApiResponse}로 바꾸고
      * Content-Type을 JSON으로 고정한다 (클라이언트 Accept와 무관하게 같은 형식으로 응답).
