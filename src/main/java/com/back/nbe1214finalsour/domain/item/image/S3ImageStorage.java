@@ -18,9 +18,11 @@ public class S3ImageStorage implements ImageStorage {
     private final String bucket;
     private final String publicBaseUrl;
 
-    public S3ImageStorage(S3Template s3Template,
-                          @Value("${file.logo-bucket}") String bucket,
-                          @Value("${file.public-base-url}") String publicBaseUrl) {
+    public S3ImageStorage(
+            S3Template s3Template,
+            @Value("${file.logo-bucket}") String bucket,
+            @Value("${file.logo-public-base-url}") String publicBaseUrl
+    ) {
         this.s3Template = s3Template;
         this.bucket = bucket;
         // 설정 끝에 /가 있어도 주소에 //가 생기지 않게

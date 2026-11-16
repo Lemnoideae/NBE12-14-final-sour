@@ -48,7 +48,7 @@ class ItemCreditPurchaseIntegrationTest {
     @Value("${file.logo-bucket}")
     private String bucket;
 
-    @Value("${file.public-base-url}")
+    @Value("${file.logo-public-base-url}")
     private String publicBaseUrl;
 
     private Long universityId;

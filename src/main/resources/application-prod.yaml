@@ -30,3 +30,5 @@ cors:
 file:
   # 운영 로고 버킷. 기본값이 없어서 환경 변수가 빠지면 앱이 시작하지 않는다 (엉뚱한 버킷에 올리는 것보다 낫다)
   logo-bucket: ${FILE_LOGO_BUCKET}
+  # 로고 이미지 주소의 앞부분. CloudFront가 /custom-logo/* 를 로고 버킷으로 보내므로 기본은 공개 주소와 같다
+  logo-public-base-url: ${FILE_LOGO_PUBLIC_BASE_URL:${file.public-base-url}}
