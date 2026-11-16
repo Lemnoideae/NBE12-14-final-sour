@@ -5,9 +5,11 @@ import com.back.nbe1214finalsour.domain.credit.entity.CreditHistory;
 import com.back.nbe1214finalsour.domain.credit.repository.CreditHistoryRepository;
 import com.back.nbe1214finalsour.domain.credit.repository.CreditWallet;
 import com.back.nbe1214finalsour.domain.item.entity.Item;
+import com.back.nbe1214finalsour.domain.item.entity.ItemType;
 import com.back.nbe1214finalsour.domain.university.repository.DepartmentRepository;
 import com.back.nbe1214finalsour.domain.university.repository.UniversityRepository;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
+import com.back.nbe1214finalsour.domain.user.validation.ProfileImageUrlPolicy;
 import com.back.nbe1214finalsour.domain.userItem.entity.UserItem;
 import com.back.nbe1214finalsour.domain.userItem.repository.UserItemRepository;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
@@ -29,12 +31,18 @@ public class CreditPurchaseService {
     private final UniversityRepository universityRepository;
     private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
+    private final ProfileImageUrlPolicy profileImageUrlPolicy;
 
     // DB 한 트랜잭션이라 중간에 실패하면 크레딧 차감까지 함께 롤백된다
     @Transactional
     public ItemPurchaseResult purchase(Long userId, Long universityId, Long departmentId, Item item, String logoImageUrl) {
         if (logoImageUrl == null || logoImageUrl.isBlank()) {
             throw new BusinessException(ErrorCode.ITEM_LOGO_IMAGE_REQUIRED);
+        }
+
+        // 프로필 이미지는 이 구매로만 바꿀 수 있으므로, 크레딧 차감 전에 우리 CDN의 내 profile 경로인지 확인
+        if (item.getType() == ItemType.LOGO_PROFILE && !this.profileImageUrlPolicy.isAllowed(logoImageUrl, userId)) {
+            throw new BusinessException(ErrorCode.FILE_INVALID_URL, "개인 로고 이미지 URL 거부: userId=" + userId);
         }
 
         // 크레딧 차감 (조건부 UPDATE), 성공하면 차감 후 잔액

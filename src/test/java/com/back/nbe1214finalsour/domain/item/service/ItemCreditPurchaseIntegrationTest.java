@@ -1,6 +1,7 @@
 package com.back.nbe1214finalsour.domain.item.service;
 
 import com.back.nbe1214finalsour.IntegrationTest;
+import com.back.nbe1214finalsour.global.crypto.EmailCipher;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import org.junit.jupiter.api.AfterEach;
@@ -38,11 +39,15 @@ class ItemCreditPurchaseIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private EmailCipher emailCipher;
+
     private Long universityId;
     private Long departmentId;
     private Long userId;
     private Long universityLogoItemId;
     private Long departmentLogoItemId;
+    private Long profileLogoItemId;
     private final List<Long> insertedItemIds = new ArrayList<>();
 
     @BeforeEach
@@ -54,12 +59,15 @@ class ItemCreditPurchaseIntegrationTest {
                 Long.class, universityId);
         userId = jdbcTemplate.queryForObject("""
                 INSERT INTO users (university_id, department_id, nickname, email, email_hash, password, approved_at)
-                VALUES (?, ?, '크레딧구매유저', 'credit-purchase@test.com', ?, 'password', now())
+                VALUES (?, ?, '크레딧구매유저', ?, ?, 'password', now())
                 RETURNING id
-                """, Long.class, universityId, departmentId, "3".repeat(64));
+                """, Long.class, universityId, departmentId,
+                // 개인 로고 변경권은 User 엔티티를 읽으므로 이메일이 복호화돼야 한다
+                emailCipher.encrypt("credit-purchase@test.com"), "3".repeat(64));
 
         universityLogoItemId = logoItem("LOGO_UNIVERSITY", 3900);
         departmentLogoItemId = logoItem("LOGO_DEPARTMENT", 2900);
+        profileLogoItemId = logoItem("LOGO_PROFILE", 1900);
         itemService.loadItemTable();   // 서버 시작 때 캐시된 아이템 목록을 다시 읽음
     }
 
@@ -125,6 +133,38 @@ class ItemCreditPurchaseIntegrationTest {
                 .containsEntry("amount", price)
                 .containsEntry("balance_after", 1100L);
         assertThat(logoOf("university", universityId)).isEqualTo(LOGO_URL);
+    }
+
+    @Test
+    @DisplayName("개인 로고 변경권을 내 profile 경로 이미지로 사면 프로필 이미지가 바뀐다")
+    void purchase_profileLogo_changesProfileImage() {
+        long price = priceOf(profileLogoItemId);
+        setCredit(price);
+        String url = "https://cdn.devcproject.cloud/profile/" + userId + "/abc.png";
+
+        itemPurchaseService.purchase(userId, universityId, departmentId, profileLogoItemId, url);
+
+        assertThat(credit()).isZero();
+        assertThat(count("user_item")).isEqualTo(1L);
+        assertThat(logoOf("users", userId)).isEqualTo(url);
+    }
+
+    @Test
+    @DisplayName("개인 로고 변경권 이미지가 다른 회원 경로면 FILE_INVALID_URL이고 크레딧·구매 이력·프로필 이미지가 그대로다")
+    void purchase_profileLogo_otherUsersPath_changesNothing() {
+        long price = priceOf(profileLogoItemId);
+        setCredit(price);
+        String url = "https://cdn.devcproject.cloud/profile/" + (userId + 1) + "/abc.png";
+
+        assertThatThrownBy(() -> itemPurchaseService.purchase(userId, universityId, departmentId, profileLogoItemId, url))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.FILE_INVALID_URL);
+
+        assertThat(credit()).isEqualTo(price);
+        assertThat(count("user_item")).isZero();
+        assertThat(count("credit_history")).isZero();
+        assertThat(logoOf("users", userId)).isNull();
     }
 
     @Test
