@@ -24,6 +24,13 @@ spring:
       mail.smtp.timeout: 5000
       mail.smtp.writetimeout: 5000
 
+  # S3 (로고 이미지 업로드). 리전은 앱이 뜰 때 반드시 필요하다.
+  # 자격 증명은 실제로 S3를 호출할 때 찾는다 (운영 EC2는 IAM 역할, 로컬·테스트는 LocalStack)
+  cloud:
+    aws:
+      region:
+        static: ${AWS_REGION:ap-northeast-2}
+
 # 인증 메일 발신 주소 (VERIFICATION_MAIL_FROM). 없으면 spring.mail.username을 쓴다
 verification-mail:
   from: ${VERIFICATION_MAIL_FROM:${spring.mail.username:}}

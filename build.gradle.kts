@@ -20,6 +20,13 @@ repositories {
     mavenCentral()
 }
 
+// Spring Cloud AWS 모듈 버전을 한곳에서 맞춘다 (S3 로고 이미지 업로드)
+dependencyManagement {
+    imports {
+        mavenBom("io.awspring.cloud:spring-cloud-aws-dependencies:4.2.1")
+    }
+}
+
 dependencies {
     annotationProcessor("org.projectlombok:lombok")
     compileOnly("org.projectlombok:lombok")
@@ -38,6 +45,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
     implementation("org.springframework.boot:spring-boot-starter-websocket")
+    implementation("io.awspring.cloud:spring-cloud-aws-starter-s3")
     runtimeOnly("io.micrometer:micrometer-registry-prometheus")
     runtimeOnly("org.postgresql:postgresql")
     testAnnotationProcessor("org.projectlombok:lombok")
@@ -54,6 +62,8 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-postgresql")
+    testImplementation("io.awspring.cloud:spring-cloud-aws-testcontainers")
+    testImplementation("org.testcontainers:testcontainers-localstack")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
