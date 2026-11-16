@@ -1,0 +1,100 @@
+package com.back.nbe1214finalsour.domain.alliance.entity;
+
+import com.back.nbe1214finalsour.global.jpa.BaseTimeEntity;
+import jakarta.persistence.*;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import java.time.OffsetDateTime;
+
+@Entity
+@Table(name = "alliance_match")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class AllianceMatch extends BaseTimeEntity {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "alliance_a_id", nullable = false)
+    private Long allianceAId;
+
+    @Column(name = "alliance_b_id", nullable = false)
+    private Long allianceBId;
+
+    @Column(name = "winner_alliance_id")
+    private Long winnerAllianceId;
+
+    @Column(name = "started_at")
+    private OffsetDateTime startedAt;
+
+    @Column(name = "ended_at")
+    private OffsetDateTime endedAt;
+
+    @Column(name = "duration_hours", nullable = false)
+    private Integer durationHours;
+
+    @Column(name = "request_expired_at", nullable = false)
+    private OffsetDateTime requestExpiredAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private AllianceMatchStatus status;
+
+    @Column(name = "a_score", nullable = false)
+    private Long aScore = 0L;
+
+    @Column(name = "b_score", nullable = false)
+    private Long bScore = 0L;
+
+    @Column(name = "deleted_at")
+    private OffsetDateTime deletedAt;
+
+    public static AllianceMatch request(Long allianceAId, Long allianceBId,
+                                        int durationHours, OffsetDateTime requestExpiredAt) {
+        if (allianceAId == null || allianceBId == null || allianceAId <= 0 || allianceBId <= 0) {
+            throw new IllegalArgumentException("연합 ID는 올바른 양수여야 합니다.");
+        }
+        if (allianceAId.equals(allianceBId)) {
+            throw new IllegalArgumentException("같은 연합끼리는 대결할 수 없습니다.");
+        }
+        if (durationHours < 1 || durationHours > 24) {
+            throw new IllegalArgumentException("대결 시간은 1~24시간이어야 합니다.");
+        }
+        if (requestExpiredAt == null) {
+            throw new IllegalArgumentException("대결 신청 마감 시각은 필수입니다.");
+        }
+        AllianceMatch match = new AllianceMatch();
+        match.allianceAId = allianceAId;
+        match.allianceBId = allianceBId;
+        match.durationHours = durationHours;
+        match.requestExpiredAt = requestExpiredAt;
+        match.status = AllianceMatchStatus.REQUESTED;
+        match.aScore = 0L;
+        match.bScore = 0L;
+        return match;
+    }
+
+    public void accept(OffsetDateTime acceptedAt) {
+        if (acceptedAt == null) {
+            throw new IllegalArgumentException("대결 수락 시각은 필수입니다.");
+        }
+        if (status != AllianceMatchStatus.REQUESTED || deletedAt != null) {
+            throw new IllegalStateException("대결 신청 대기 상태에서만 수락할 수 있습니다.");
+        }
+        if (!acceptedAt.isBefore(requestExpiredAt)) {
+            throw new IllegalStateException("대결 신청 유효기간이 만료되었습니다.");
+        }
+        this.startedAt = acceptedAt;
+        this.endedAt = acceptedAt.plusHours(durationHours);
+        this.status = AllianceMatchStatus.IN_PROGRESS;
+    }
+
+    // 신청자 취소, 상대 거절, 기한 만료 모두 같은 CANCELED 상태로 귀결됨.
+    public void cancelRequested() {
+        if (status != AllianceMatchStatus.REQUESTED || deletedAt != null) {
+            throw new IllegalStateException("대기 중인 대결 신청만 취소할 수 있습니다.");
+        }
+        this.status = AllianceMatchStatus.CANCELED;
+    }
+}
