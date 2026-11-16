@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.back.nbe1214finalsour.IntegrationTest;
 import com.back.nbe1214finalsour.domain.auth.entity.RefreshToken;
 import com.back.nbe1214finalsour.domain.auth.entity.UniDomain;
+import com.back.nbe1214finalsour.domain.support.entity.CustomerSupport;
 import com.back.nbe1214finalsour.domain.user.entity.User;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.metamodel.Type;
@@ -26,12 +27,12 @@ class EntitySchemaValidationTest {
     private EntityManagerFactory entityManagerFactory;
 
     @Test
-    @DisplayName("회원·인증 엔티티가 ddl-auto=validate를 통과한다")
+    @DisplayName("회원·인증·문의 엔티티가 ddl-auto=validate를 통과한다")
     void entitiesMatchSchema() {
         List<Class<?>> entities = entityManagerFactory.getMetamodel().getEntities().stream()
                 .<Class<?>>map(Type::getJavaType)
                 .toList();
 
-        assertThat(entities).contains(User.class, UniDomain.class, RefreshToken.class);
+        assertThat(entities).contains(User.class, UniDomain.class, RefreshToken.class, CustomerSupport.class);
     }
 }

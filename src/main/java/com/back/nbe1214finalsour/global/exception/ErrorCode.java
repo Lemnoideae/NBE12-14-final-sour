@@ -31,6 +31,8 @@ public enum ErrorCode {
     COMMON_INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "COMMON_INTERNAL_ERROR", "서버 오류가 발생했습니다."),
 
     COMMON_REDIS_MEMBER_NOT_NUMERIC(HttpStatus.INTERNAL_SERVER_ERROR, "COMMON_REDIS_MEMBER_NOT_NUMERIC", "서버 오류가 발생했습니다."),
+    /** 도메인 전용 코드가 없는 요청 횟수 초과. 문의 등록 한도가 먼저 쓴다 (추가 명세 §3-8, SCRUM-110) */
+    COMMON_TOO_MANY_REQUESTS(HttpStatus.TOO_MANY_REQUESTS, "COMMON_TOO_MANY_REQUESTS", "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."),
 
     // ===== AUTH (1번) =====
     AUTH_EMAIL_ALREADY_REGISTERED(HttpStatus.CONFLICT, "AUTH_EMAIL_ALREADY_REGISTERED", "이미 가입된 이메일입니다."),
@@ -54,6 +56,12 @@ public enum ErrorCode {
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "회원을 찾을 수 없습니다."),
     USER_SUSPENDED(HttpStatus.FORBIDDEN, "USER_SUSPENDED", "이용이 제한된 계정입니다."),
     USER_INVALID_PASSWORD(HttpStatus.BAD_REQUEST, "USER_INVALID_PASSWORD", "비밀번호가 올바르지 않습니다."),
+
+    // ===== SUPPORT (1번, 추가 명세 §3-8·§3-9) =====
+    SUPPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "SUPPORT_NOT_FOUND", "문의를 찾을 수 없습니다."),
+    SUPPORT_NOT_OWNER(HttpStatus.FORBIDDEN, "SUPPORT_NOT_OWNER", "본인의 문의만 조회할 수 있습니다."),
+    SUPPORT_ALREADY_ANSWERED(HttpStatus.CONFLICT, "SUPPORT_ALREADY_ANSWERED", "이미 답변한 문의입니다."),
+    SUPPORT_ATTACHMENT_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "SUPPORT_ATTACHMENT_NOT_ALLOWED", "비회원 문의에는 파일을 첨부할 수 없습니다."),
 
     // ===== CLICK (2번) =====
     CLICK_DUPLICATE_SUBMISSION(HttpStatus.CONFLICT, "CLICK_DUPLICATE_SUBMISSION", "이미 처리한 제출입니다."),
