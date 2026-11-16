@@ -6,7 +6,6 @@ import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -20,7 +19,6 @@ public class ItemPurchaseService {
     private final ContributionPurchaseService contributionPurchaseService;
 
     // 아이템 구매
-    @Transactional
     public ItemPurchaseResult purchase(Long userId, Long universityId, Long departmentId, Long itemId, String logoImageUrl) {
 
         // 캐시에서 아이템 목록
