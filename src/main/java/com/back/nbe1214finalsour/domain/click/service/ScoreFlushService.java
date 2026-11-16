@@ -26,16 +26,37 @@ public class ScoreFlushService {
     private final DepartmentRepository departmentRepository;
 
     public void flush() {
+        String newUserDirtyKey = RedisKey.DIRTY_USER.of() + ":flushing";
+        String newUnivDirtyKey = RedisKey.DIRTY_UNIV.of() + ":flushing";
+        String newDeptDirtyKey = RedisKey.DIRTY_DEPT.of() + ":flushing";
+
         // 개인 점수 저장
-        flushUsers();
+        if (detach(RedisKey.DIRTY_USER.of(), newUserDirtyKey)) {
+            flushUsers(newUserDirtyKey);
+        }
+
         // 학교 점수 저장
-        flushUnivs();
+        if (detach(RedisKey.DIRTY_UNIV.of(), newUnivDirtyKey)) {
+            flushUnivs(newUnivDirtyKey);
+        }
+
         // 학과 점수 저장
-        flushDepts();
+        if (detach(RedisKey.DIRTY_DEPT.of(), newDeptDirtyKey)) {
+            flushDepts(newDeptDirtyKey);
+        }
+
+        // 기존 dirty 제거
+        stringRedisTemplate.delete(List.of(newUserDirtyKey, newUnivDirtyKey, newDeptDirtyKey));
     }
 
-    private void flushDepts() {
-        List<Long> dirtyDepts = stringRedisTemplate.opsForSet().members(RedisKey.DIRTY_DEPT.of()).stream().map(Long::parseLong).toList();
+    private boolean detach(String dirtyKey, String flushingKey) {
+        if (!Boolean.TRUE.equals(stringRedisTemplate.hasKey(dirtyKey))) return false;
+        stringRedisTemplate.rename(dirtyKey, flushingKey);
+        return true;
+    }
+
+    private void flushDepts(String dirtyKey) {
+        List<Long> dirtyDepts = stringRedisTemplate.opsForSet().members(dirtyKey).stream().map(Long::parseLong).toList();
 
         Map<Long, List<Long>> deptsByUniv = departmentRepository.findUniversityIdsByIdIn(dirtyDepts).stream()
                 .collect(Collectors.groupingBy(DeptUniv::universityId,
@@ -66,8 +87,9 @@ public class ScoreFlushService {
                 """, ids.toArray(Long[]::new), scores.toArray(Long[]::new));
     }
 
-    private void flushUnivs() {
-        Set<String> dirtyUnivs = stringRedisTemplate.opsForSet().members(RedisKey.DIRTY_UNIV.of());
+    private void flushUnivs(String dirtyKey) {
+        Set<String> dirtyUnivs = stringRedisTemplate.opsForSet().members(dirtyKey);
+
         if (dirtyUnivs == null || dirtyUnivs.isEmpty()) return;
 
         List<String> univIds = new ArrayList<>(dirtyUnivs);
@@ -92,8 +114,8 @@ public class ScoreFlushService {
                 """, ids.toArray(Long[]::new), scores.toArray(Long[]::new));
     }
 
-    private void flushUsers() {
-        List<Long> dirtyUsers = stringRedisTemplate.opsForSet().members(RedisKey.DIRTY_USER.of()).stream().map(Long::parseLong).toList();
+    private void flushUsers(String dirtyKey) {
+        List<Long> dirtyUsers = stringRedisTemplate.opsForSet().members(dirtyKey).stream().map(Long::parseLong).toList();
 
         Map<Long, List<Long>> usersByUniv = userRepository.findUniversityIdsByIdIn(dirtyUsers).stream()
                 .collect(Collectors.groupingBy(
