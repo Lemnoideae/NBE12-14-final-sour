@@ -2,6 +2,7 @@ package com.back.nbe1214finalsour.domain.support.repository;
 
 import com.back.nbe1214finalsour.domain.support.dto.SupportListItem;
 import com.back.nbe1214finalsour.domain.support.entity.CustomerSupport;
+import com.back.nbe1214finalsour.domain.support.entity.SupportStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -24,6 +25,15 @@ public interface CustomerSupportRepository extends JpaRepository<CustomerSupport
             """,
             countQuery = "select count(s) from CustomerSupport s where s.userId = :userId")
     Page<SupportListItem> findListByUserId(@Param("userId") Long userId, Pageable pageable);
+
+    /** 관리자 전체 목록. 최신순, 같은 시각이면 id 역순 (계획 D5·D6) */
+    Page<CustomerSupport> findAllByOrderByCreatedAtDescIdDesc(Pageable pageable);
+
+    /**
+     * 관리자 상태별 목록. 최신순, 같은 시각이면 id 역순. {@code RECEIVED}는 부분 인덱스
+     * {@code idx_customer_support_received}를 쓸 수 있다
+     */
+    Page<CustomerSupport> findByStatusOrderByCreatedAtDescIdDesc(SupportStatus status, Pageable pageable);
 
     /**
      * 접수 상태인 문의에만 답변을 넣고 {@code ANSWERED}로 바꾼다 (계획 Q5). 두 관리자가 동시에 답변해도 한 건만 1을 받는다.
