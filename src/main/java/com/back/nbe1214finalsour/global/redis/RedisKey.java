@@ -103,6 +103,10 @@ public enum RedisKey {
     CHAT_UNIV_CHANNEL("chat:univ:%s", Structure.CHANNEL, ValueFormat.JSON),
     /** 연합 채팅 채널. 메시지 JSON */
     CHAT_ALLIANCE_CHANNEL("chat:alliance:%s", Structure.CHANNEL, ValueFormat.JSON),
+
+    // 락
+    /** 점수 1분 배치 락 */
+    LOCK_SCORE_FLUSH("lock:score-flush", Structure.STRING, ValueFormat.PLAIN),
     ;
 
     private final String pattern;
