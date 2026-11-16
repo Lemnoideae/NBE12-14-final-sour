@@ -28,6 +28,23 @@ spring:
       # AsyncConfig가 문의 메일 전용 Executor 빈을 만들어도 기본 applicationTaskExecutor를 계속 만든다
       mode: force
 
+  # S3 (로고 이미지 업로드). 리전은 앱이 뜰 때 반드시 필요하다.
+  # 자격 증명은 실제로 S3를 호출할 때 찾는다 (운영 EC2는 IAM 역할, 로컬·테스트는 LocalStack)
+  cloud:
+    aws:
+      region:
+        static: ${AWS_REGION:ap-northeast-2}
+      s3:
+        # 로컬·테스트의 에뮬레이터(Floci)는 localhost 주소라서, 버킷 이름을 도메인이 아닌 경로에 넣는 방식을 쓴다.
+        # 운영은 application-prod.yaml에서 false
+        path-style-access-enabled: true
+  servlet:
+    multipart:
+      # 로고 이미지 업로드 (로고 변경권 구매). 파일은 LogoImageValidator와 같은 5MB, 요청 전체는 multipart 부가 데이터 여유를 둠
+      # 넘으면 GlobalExceptionHandler가 400 ITEM_LOGO_IMAGE_TOO_LARGE로 응답
+      max-file-size: 5MB
+      max-request-size: 6MB
+
 # 인증 메일·문의 답변 메일 발신 주소 (VERIFICATION_MAIL_FROM). 없으면 spring.mail.username을 쓴다
 verification-mail:
   from: ${VERIFICATION_MAIL_FROM:${spring.mail.username:}}
@@ -66,7 +83,11 @@ file:
   # 업로드한 파일(S3)을 내려주는 공개 주소 (CloudFront). 프로필 이미지 URL 검사(ProfileImageUrlPolicy)에 쓴다.
   # 기본값은 추가 기능 API 명세서 예시의 주소다. 3번 업로드 모듈이 생기면 같은 값을 쓴다
   public-base-url: ${FILE_PUBLIC_BASE_URL:https://cdn.devcproject.cloud}
-
+  # 로고 이미지를 올리는 버킷. 기본값은 로컬·테스트 에뮬레이터용 (운영은 FILE_LOGO_BUCKET 필수)
+  logo-bucket: ${FILE_LOGO_BUCKET:local-logo-bucket}
+  # 로고 이미지 주소의 앞부분. 기본값은 로컬 Floci 주소(compose의 4566 포트 + 경로 방식)라 로컬 브라우저에서 바로 열린다
+  # 운영은 application-prod.yaml에서 CloudFront 주소(file.public-base-url)를 따른다
+  logo-public-base-url: ${FILE_LOGO_PUBLIC_BASE_URL:http://localhost:4566/${file.logo-bucket}}
 cors:
   # 쉼표로 구분한 origin 목록. 기본값은 로컬 프론트 개발 서버 (frontend/package.json의 vite --port=3000)
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}

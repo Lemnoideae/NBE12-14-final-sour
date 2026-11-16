@@ -20,10 +20,18 @@ repositories {
     mavenCentral()
 }
 
+// Spring Cloud AWS 모듈 버전을 한곳에서 맞춘다 (S3 로고 이미지 업로드)
+dependencyManagement {
+    imports {
+        mavenBom("io.awspring.cloud:spring-cloud-aws-dependencies:4.2.1")
+    }
+}
+
 dependencies {
     annotationProcessor("org.projectlombok:lombok")
     compileOnly("org.projectlombok:lombok")
     developmentOnly("org.springframework.boot:spring-boot-docker-compose")
+    developmentOnly("io.awspring.cloud:spring-cloud-aws-docker-compose")
     implementation("io.jsonwebtoken:jjwt-api:0.13.0")
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.13.0")
     // jjwt-jackson은 Jackson 2(com.fasterxml)를 끌어온다. 프로젝트는 Jackson 3이므로 Gson 모듈을 쓴다
@@ -38,6 +46,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
     implementation("org.springframework.boot:spring-boot-starter-websocket")
+    implementation("io.awspring.cloud:spring-cloud-aws-starter-s3")
     runtimeOnly("io.micrometer:micrometer-registry-prometheus")
     runtimeOnly("org.postgresql:postgresql")
     testAnnotationProcessor("org.projectlombok:lombok")
@@ -54,6 +63,8 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-postgresql")
+    testImplementation("io.awspring.cloud:spring-cloud-aws-testcontainers")
+    testImplementation("io.floci:testcontainers-floci:2.9.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

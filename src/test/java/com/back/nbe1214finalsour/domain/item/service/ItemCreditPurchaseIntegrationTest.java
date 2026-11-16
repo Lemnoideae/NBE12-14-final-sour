@@ -4,12 +4,15 @@ import com.back.nbe1214finalsour.IntegrationTest;
 import com.back.nbe1214finalsour.global.crypto.EmailCipher;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
+import io.awspring.cloud.s3.S3Template;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -24,10 +27,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 // 커밋·롤백을 실제로 확인해야 하므로 @Transactional(테스트 후 롤백)을 쓰지 않고, 넣은 데이터는 직접 지운다
+// 로고 이미지는 Floci(S3 에뮬레이터)에 실제로 올라간다
 @IntegrationTest
 class ItemCreditPurchaseIntegrationTest {
 
-    private static final String LOGO_URL = "https://cdn.devcproject.cloud/custom-logo/1/abc.png";
+    private static final byte[] PNG_BYTES = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0, 1, 2};
     private static final int THREAD_COUNT = 10;
 
     @Autowired
@@ -41,6 +45,15 @@ class ItemCreditPurchaseIntegrationTest {
 
     @Autowired
     private EmailCipher emailCipher;
+
+    @Autowired
+    private S3Template s3Template;
+
+    @Value("${file.logo-bucket}")
+    private String bucket;
+
+    @Value("${file.logo-public-base-url}")
+    private String publicBaseUrl;
 
     private Long universityId;
     private Long departmentId;
@@ -94,6 +107,15 @@ class ItemCreditPurchaseIntegrationTest {
         return jdbcTemplate.queryForObject("SELECT id FROM item WHERE type = ?", Long.class, type);
     }
 
+    private MockMultipartFile logoImage() {
+        return new MockMultipartFile("logoImage", "logo.png", "image/png", PNG_BYTES);
+    }
+
+    // 이 회원 폴더(custom-logo/{userId}/)에 남아 있는 이미지 수. userId가 테스트마다 새로 생겨서 다른 테스트와 섞이지 않는다
+    private int uploadedLogoCount() {
+        return s3Template.listObjects(bucket, "custom-logo/" + userId + "/").size();
+    }
+
     private long priceOf(Long itemId) {
         return jdbcTemplate.queryForObject("SELECT price FROM item WHERE id = ?", Long.class, itemId);
     }
@@ -115,14 +137,14 @@ class ItemCreditPurchaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("학교 로고 변경권 구매가 커밋되면 크레딧 차감·구매 이력·사용 내역·학교 로고가 한꺼번에 반영된다")
+    @DisplayName("학교 로고 변경권 구매가 커밋되면 크레딧 차감·구매 이력·사용 내역·학교 로고가 한꺼번에 반영되고, 이미지가 S3에 남는다")
     void purchase_universityLogo_commitsAll() {
         // given: 가격보다 1100 많은 크레딧
         long price = priceOf(universityLogoItemId);
         setCredit(price + 1100);
 
         // when
-        itemPurchaseService.purchase(userId, universityId, departmentId, universityLogoItemId, LOGO_URL);
+        itemPurchaseService.purchase(userId, universityId, departmentId, universityLogoItemId, logoImage());
 
         // then
         assertThat(credit()).isEqualTo(1100L);
@@ -132,50 +154,39 @@ class ItemCreditPurchaseIntegrationTest {
                 .containsEntry("type", "USE")
                 .containsEntry("amount", price)
                 .containsEntry("balance_after", 1100L);
-        assertThat(logoOf("university", universityId)).isEqualTo(LOGO_URL);
+        // 로고 주소: {공개 주소}/custom-logo/{회원}/{UUID}.png
+        assertThat(logoOf("university", universityId))
+                .startsWith(publicBaseUrl + "/custom-logo/" + userId + "/")
+                .endsWith(".png");
+        assertThat(uploadedLogoCount()).isEqualTo(1);
     }
 
     @Test
-    @DisplayName("개인 로고 변경권을 내 profile 경로 이미지로 사면 프로필 이미지가 바뀐다")
+    @DisplayName("개인 로고 변경권을 사면 올린 이미지 주소로 프로필 이미지가 바뀐다")
     void purchase_profileLogo_changesProfileImage() {
         long price = priceOf(profileLogoItemId);
         setCredit(price);
-        String url = "https://cdn.devcproject.cloud/profile/" + userId + "/abc.png";
 
-        itemPurchaseService.purchase(userId, universityId, departmentId, profileLogoItemId, url);
+        itemPurchaseService.purchase(userId, universityId, departmentId, profileLogoItemId, logoImage());
 
         assertThat(credit()).isZero();
         assertThat(count("user_item")).isEqualTo(1L);
-        assertThat(logoOf("users", userId)).isEqualTo(url);
+        // 주소는 서버가 만든다 (클라이언트가 URL을 보낼 수 없음)
+        assertThat(logoOf("users", userId))
+                .startsWith(publicBaseUrl + "/custom-logo/" + userId + "/")
+                .endsWith(".png");
+        assertThat(uploadedLogoCount()).isEqualTo(1);
     }
 
     @Test
-    @DisplayName("개인 로고 변경권 이미지가 다른 회원 경로면 FILE_INVALID_URL이고 크레딧·구매 이력·프로필 이미지가 그대로다")
-    void purchase_profileLogo_otherUsersPath_changesNothing() {
-        long price = priceOf(profileLogoItemId);
-        setCredit(price);
-        String url = "https://cdn.devcproject.cloud/profile/" + (userId + 1) + "/abc.png";
-
-        assertThatThrownBy(() -> itemPurchaseService.purchase(userId, universityId, departmentId, profileLogoItemId, url))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.FILE_INVALID_URL);
-
-        assertThat(credit()).isEqualTo(price);
-        assertThat(count("user_item")).isZero();
-        assertThat(count("credit_history")).isZero();
-        assertThat(logoOf("users", userId)).isNull();
-    }
-
-    @Test
-    @DisplayName("크레딧이 부족하면 ITEM_NOT_ENOUGH_CREDIT이고 아무것도 바뀌지 않는다")
+    @DisplayName("크레딧이 부족하면 ITEM_NOT_ENOUGH_CREDIT이고 아무것도 바뀌지 않으며, 올린 이미지도 지운다")
     void purchase_notEnoughCredit_changesNothing() {
         // given: 가격보다 1 적은 크레딧
         long price = priceOf(universityLogoItemId);
         setCredit(price - 1);
 
         // when & then
-        assertThatThrownBy(() -> itemPurchaseService.purchase(userId, universityId, departmentId, universityLogoItemId, LOGO_URL))
+        assertThatThrownBy(() -> itemPurchaseService.purchase(userId, universityId, departmentId, universityLogoItemId, logoImage()))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ITEM_NOT_ENOUGH_CREDIT);
@@ -184,17 +195,18 @@ class ItemCreditPurchaseIntegrationTest {
         assertThat(count("user_item")).isZero();
         assertThat(count("credit_history")).isZero();
         assertThat(logoOf("university", universityId)).isNull();
+        assertThat(uploadedLogoCount()).isZero();
     }
 
     @Test
-    @DisplayName("크레딧 차감 뒤 로고 적용에서 실패하면 차감·구매 이력·사용 내역까지 전부 롤백된다 (한 트랜잭션, 보상 불필요)")
+    @DisplayName("크레딧 차감 뒤 로고 적용에서 실패하면 DB는 전부 롤백되고, 올린 이미지도 지운다")
     void purchase_failsAfterDeduct_rollsBackAll() {
         // given: 크레딧은 충분하지만, 토큰의 학과가 DB에 없음 → 차감·이력 저장 후 로고 적용 단계에서 실패
         long price = priceOf(departmentLogoItemId);
         setCredit(price + 1000);
 
         // when & then
-        assertThatThrownBy(() -> itemPurchaseService.purchase(userId, universityId, 999_999L, departmentLogoItemId, LOGO_URL))
+        assertThatThrownBy(() -> itemPurchaseService.purchase(userId, universityId, 999_999L, departmentLogoItemId, logoImage()))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.UNIV_DEPARTMENT_NOT_FOUND);
@@ -203,10 +215,12 @@ class ItemCreditPurchaseIntegrationTest {
         assertThat(credit()).isEqualTo(price + 1000);
         assertThat(count("user_item")).isZero();
         assertThat(count("credit_history")).isZero();
+        // 트랜잭션 밖에서 먼저 올린 이미지는 롤백되지 않으므로 직접 지웠는지 확인
+        assertThat(uploadedLogoCount()).isZero();
     }
 
     @Test
-    @DisplayName("같은 회원이 동시에 10번 사도 잔액만큼만 성공하고 크레딧은 음수가 되지 않는다 (이중 지출 없음)")
+    @DisplayName("같은 회원이 동시에 10번 사도 잔액만큼만 성공하고, 크레딧은 음수가 되지 않으며, S3에는 성공한 만큼만 남는다")
     void concurrentPurchase_noOverspend() throws InterruptedException {
         // given: 정확히 2번 살 수 있는 크레딧 + 100
         long price = priceOf(universityLogoItemId);
@@ -224,7 +238,7 @@ class ItemCreditPurchaseIntegrationTest {
                 executor.submit(() -> {
                     try {
                         startSignal.await();
-                        itemPurchaseService.purchase(userId, universityId, departmentId, universityLogoItemId, LOGO_URL);
+                        itemPurchaseService.purchase(userId, universityId, departmentId, universityLogoItemId, logoImage());
                         successCount.incrementAndGet();
                     } catch (BusinessException e) {
                         if (e.getErrorCode() == ErrorCode.ITEM_NOT_ENOUGH_CREDIT) {
@@ -240,7 +254,8 @@ class ItemCreditPurchaseIntegrationTest {
                 });
             }
             startSignal.countDown();
-            assertThat(finished.await(10, TimeUnit.SECONDS)).isTrue();
+            // 이제 요청마다 S3 업로드(실패 시 삭제)가 붙어서 기존 10초보다 넉넉히
+            assertThat(finished.await(30, TimeUnit.SECONDS)).isTrue();
         }
 
         // then
@@ -253,5 +268,7 @@ class ItemCreditPurchaseIntegrationTest {
         assertThat(jdbcTemplate.queryForList(
                 "SELECT balance_after FROM credit_history WHERE user_id = ? ORDER BY balance_after DESC", Long.class, userId))
                 .containsExactly(price + 100, 100L);
+        // 실패한 8건이 올린 이미지는 지워지고 성공한 2건만 남음
+        assertThat(uploadedLogoCount()).isEqualTo(2);
     }
 }

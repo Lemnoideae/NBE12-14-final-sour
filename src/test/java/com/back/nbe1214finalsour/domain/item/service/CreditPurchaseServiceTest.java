@@ -14,7 +14,6 @@ import com.back.nbe1214finalsour.domain.university.repository.DepartmentReposito
 import com.back.nbe1214finalsour.domain.university.repository.UniversityRepository;
 import com.back.nbe1214finalsour.domain.user.entity.User;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
-import com.back.nbe1214finalsour.domain.user.validation.ProfileImageUrlPolicy;
 import com.back.nbe1214finalsour.domain.userItem.entity.UserItem;
 import com.back.nbe1214finalsour.domain.userItem.repository.UserItemRepository;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
@@ -22,12 +21,9 @@ import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -66,10 +62,6 @@ class CreditPurchaseServiceTest {
 
     @Mock
     private UserRepository userRepository;
-
-    // URL 규칙은 실제 정책으로 확인한다
-    @Spy
-    private ProfileImageUrlPolicy profileImageUrlPolicy = new ProfileImageUrlPolicy("https://cdn.devcproject.cloud");
 
     @InjectMocks
     private CreditPurchaseService creditPurchaseService;
@@ -241,26 +233,5 @@ class CreditPurchaseServiceTest {
         this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, PROFILE_LOGO, PROFILE_URL);
 
         assertThat(user.getLogoUrl()).isEqualTo(PROFILE_URL);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {
-            "https://cdn.devcproject.cloud/profile/2/abc.png",      // 다른 회원 경로
-            "https://evil.example.com/profile/1/abc.png",           // 우리 CDN이 아님
-            "https://cdn.devcproject.cloud/custom-logo/1/abc.png"   // profile 경로가 아님
-    })
-    @DisplayName("개인 로고 변경권의 이미지가 우리 CDN의 내 profile 경로가 아니면 FILE_INVALID_URL, 크레딧 차감·구매 이력·프로필 변경이 없다")
-    void purchase_profileLogo_invalidUrl_changesNothing(String url) {
-        assertThatThrownBy(() -> this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, PROFILE_LOGO, url))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.FILE_INVALID_URL);
-
-        verify(this.creditWallet, never())
-                .tryDeduct(anyLong(), anyLong());
-        verify(this.userItemRepository, never())
-                .save(any());
-        verify(this.userRepository, never())
-                .findById(any());
     }
 }
