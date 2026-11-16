@@ -62,6 +62,13 @@ auth:
     email-code-max-requests: 20
     email-code-window: 1h
 
+support:
+  # 문의 등록 한도 (SCRUM-110). 회원은 회원별, 비회원은 IP별로 센다. 첫 등록부터 window가 끝날 때까지 max-requests건.
+  # 운영에서 바꾸려면 환경 변수 SUPPORT_RATELIMIT_MAXREQUESTS 등을 쓴다 (SupportRateLimitProperties)
+  rate-limit:
+    max-requests: 5
+    window: 1h
+
 email-crypto:
   # users.email AES-256-GCM 키. Base64로 인코딩한 32바이트 (예: openssl rand -base64 32). 저장소에 커밋하지 않는다
   encryption-key: ${EMAIL_ENCRYPTION_KEY}

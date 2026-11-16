@@ -75,8 +75,10 @@ public enum RedisKey {
     RATELIMIT_GUESTBOOK("ratelimit:guestbook:%s", Structure.STRING, ValueFormat.PLAIN),
     /** 채팅 한도. SET NX + TTL */
     RATELIMIT_CHAT("ratelimit:chat:%s", Structure.STRING, ValueFormat.PLAIN),
-    /** 비회원 문의 한도. of(ip), INCR */
-    RATELIMIT_SUPPORT("ratelimit:support:%s", Structure.STRING, ValueFormat.PLAIN),
+    /** 회원 문의 등록 한도 ({@code SupportRateLimiter}). of(userId). INCR, 처음 만들 때 TTL {@code support.rate-limit.window} */
+    RATELIMIT_SUPPORT_USER("ratelimit:support:user:%s", Structure.STRING, ValueFormat.PLAIN),
+    /** 비회원 문의 등록 한도. of(ipHash, {@code EmailHasher.hashClientIp} 값). INCR, TTL은 회원과 같다 */
+    RATELIMIT_SUPPORT_IP("ratelimit:support:ip:%s", Structure.STRING, ValueFormat.PLAIN),
 
     // 학교 (University)
     /** 커스텀 로고 이미지 URL */
