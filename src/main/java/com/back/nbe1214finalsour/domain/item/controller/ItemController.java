@@ -1,6 +1,5 @@
 package com.back.nbe1214finalsour.domain.item.controller;
 
-import com.back.nbe1214finalsour.domain.item.dto.ItemPurchaseRequest;
 import com.back.nbe1214finalsour.domain.item.dto.ItemPurchaseResponse;
 import com.back.nbe1214finalsour.domain.item.dto.ItemResponse;
 import com.back.nbe1214finalsour.domain.item.service.ItemPurchaseResult;
@@ -12,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -40,12 +40,11 @@ public class ItemController {
     public ApiResponse<ItemPurchaseResponse> purchase(
             @AuthenticationPrincipal AuthUser user,
             @PathVariable Long itemId,
-            @RequestBody(required = false) ItemPurchaseRequest request
-            ) {
+            // 로고 아이템만 multipart의 logoImage 파트로 이미지를 보낸다. 물약은 본문 없이 요청하므로 null
+            @RequestPart(name = "logoImage", required = false) MultipartFile logoImage
+    ) {
 
-        String logoImageUrl = request == null ? null : request.logoImageUrl();
-
-        ItemPurchaseResult result = this.itemPurchaseService.purchase(user.userId(), user.universityId(), user.departmentId(), itemId, logoImageUrl);
+        ItemPurchaseResult result = this.itemPurchaseService.purchase(user.userId(), user.universityId(), user.departmentId(), itemId, logoImage);
 
         return ApiResponse.ok(ItemPurchaseResponse.from(result));
     }

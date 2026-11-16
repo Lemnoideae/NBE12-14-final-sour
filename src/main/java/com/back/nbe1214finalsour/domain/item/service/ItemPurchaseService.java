@@ -2,10 +2,13 @@ package com.back.nbe1214finalsour.domain.item.service;
 
 import com.back.nbe1214finalsour.domain.item.entity.Item;
 import com.back.nbe1214finalsour.domain.item.entity.PayType;
+import com.back.nbe1214finalsour.domain.item.image.ImageStorage;
+import com.back.nbe1214finalsour.domain.item.image.LogoImageValidator;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -17,9 +20,11 @@ public class ItemPurchaseService {
     private final ItemService itemService;
     private final CreditPurchaseService creditPurchaseService;
     private final ContributionPurchaseService contributionPurchaseService;
+    private final LogoImageValidator logoImageValidator;
+    private final ImageStorage imageStorage;
 
     // 아이템 구매
-    public ItemPurchaseResult purchase(Long userId, Long universityId, Long departmentId, Long itemId, String logoImageUrl) {
+    public ItemPurchaseResult purchase(Long userId, Long universityId, Long departmentId, Long itemId, MultipartFile logoImage) {
 
         // 캐시에서 아이템 목록
         List<Item> items = this.itemService.getItems();
@@ -32,7 +37,7 @@ public class ItemPurchaseService {
 
         // 크레딧 아이템(로고 변경권)
         if (item.getPayType() == PayType.CREDIT) {
-            return this.creditPurchaseService.purchase(userId, universityId, departmentId, item, logoImageUrl);
+            return this.creditPurchaseService.purchase(userId, universityId, departmentId, item, null);
         }
 
         // 기여도 아이템(물약)
