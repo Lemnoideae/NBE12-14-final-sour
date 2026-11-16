@@ -13,6 +13,7 @@ import com.back.nbe1214finalsour.domain.user.dto.MyInfoResponse.DepartmentInfo;
 import com.back.nbe1214finalsour.domain.user.dto.MyInfoResponse.UniversityInfo;
 import com.back.nbe1214finalsour.domain.user.entity.User;
 import com.back.nbe1214finalsour.domain.user.entity.UserStatus;
+import com.back.nbe1214finalsour.domain.user.event.PasswordChangedEvent;
 import com.back.nbe1214finalsour.domain.user.event.UserStatusChangedEvent;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.domain.user.repository.UserScoreCache;
@@ -81,7 +82,8 @@ public class UserService {
 
     /**
      * 비밀번호 변경 (추가 명세 §3-1). 현재 비밀번호를 확인한 뒤 바꾸고, 이 회원의 refresh 토큰을 모두 지워 모든 기기를
-     * 로그아웃시킨다. 새 비밀번호가 현재와 같아도 막지 않는다 (계획 Q1).
+     * 로그아웃시킨다. 커밋 뒤 로그인 세션도 지워({@code LoginSessionCleanupListener}) 이미 발급된 access 토큰도 다음 요청부터
+     * 401 {@code COMMON_EXPIRED_TOKEN}이다 (SCRUM-98). 새 비밀번호가 현재와 같아도 막지 않는다 (계획 Q1).
      *
      * @throws BusinessException 400 {@code USER_INVALID_PASSWORD}: 현재 비밀번호 불일치.
      *                           401 {@code COMMON_UNAUTHORIZED}: 없거나 탈퇴한 회원
@@ -92,6 +94,7 @@ public class UserService {
         verifyPassword(user, currentPassword);
         user.changePassword(passwordEncoder.encode(newPassword));
         refreshTokenService.revokeAll(userId);
+        eventPublisher.publishEvent(new PasswordChangedEvent(userId));
     }
 
     /**

@@ -103,7 +103,7 @@ class AuthControllerTest {
     @Test
     @DisplayName("[POST] /api/v1/auth/email/code는 토큰 없이 학교와 유효 시간을 200으로 응답")
     void requestEmailCode() throws Exception {
-        given(emailVerificationService.requestCode("student@snu.ac.kr")).willReturn(new EmailCodeResponse(SNU, 300));
+        given(emailVerificationService.requestCode("student@snu.ac.kr", "127.0.0.1")).willReturn(new EmailCodeResponse(SNU, 300));
 
         mockMvc.perform(post("/api/v1/auth/email/code")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -139,7 +139,7 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.code").value("COMMON_INVALID_INPUT"))
                 .andExpect(jsonPath("$.data[0].field").value("email"));
 
-        verify(emailVerificationService, never()).requestCode(anyString());
+        verify(emailVerificationService, never()).requestCode(anyString(), anyString());
     }
 
     static Stream<String> invalidCodeRequests() {
@@ -168,7 +168,7 @@ class AuthControllerTest {
     @MethodSource("codeErrors")
     @DisplayName("[POST] /api/v1/auth/email/code의 도메인 오류는 명세서의 HTTP 상태와 코드로 응답")
     void requestEmailCode_businessErrors(ErrorCode errorCode, int status) throws Exception {
-        given(emailVerificationService.requestCode(anyString())).willThrow(new BusinessException(errorCode));
+        given(emailVerificationService.requestCode(anyString(), anyString())).willThrow(new BusinessException(errorCode));
 
         mockMvc.perform(post("/api/v1/auth/email/code")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -181,7 +181,8 @@ class AuthControllerTest {
         return Stream.of(
                 Arguments.of(ErrorCode.AUTH_UNSUPPORTED_DOMAIN, 400),
                 Arguments.of(ErrorCode.AUTH_EMAIL_ALREADY_REGISTERED, 409),
-                Arguments.of(ErrorCode.AUTH_CODE_COOLDOWN, 429));
+                Arguments.of(ErrorCode.AUTH_CODE_COOLDOWN, 429),
+                Arguments.of(ErrorCode.AUTH_TOO_MANY_REQUESTS, 429));
     }
 
     @ParameterizedTest(name = "{0}")
@@ -303,7 +304,7 @@ class AuthControllerTest {
     void login() throws Exception {
         LoginResponse response = new LoginResponse("access.jwt.value", 3600,
                 new LoginUser(1024L, "대대대짱", 12L, Role.USER));
-        given(loginService.login("student@snu.ac.kr", "Passw0rd!", null))
+        given(loginService.login("student@snu.ac.kr", "Passw0rd!", null, "127.0.0.1"))
                 .willReturn(new LoginResult(response, "refresh-raw-value", Duration.ofDays(30)));
 
         mockMvc.perform(post("/api/v1/auth/login")
@@ -336,7 +337,7 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.code").value("COMMON_INVALID_INPUT"))
                 .andExpect(jsonPath("$.data[0].field").value(field));
 
-        verify(loginService, never()).login(anyString(), anyString(), any());
+        verify(loginService, never()).login(anyString(), anyString(), any(), anyString());
     }
 
     static Stream<Arguments> invalidLoginRequests() {
@@ -364,7 +365,7 @@ class AuthControllerTest {
     @MethodSource("loginErrors")
     @DisplayName("[POST] /api/v1/auth/login의 도메인 오류는 명세서의 HTTP 상태와 코드로 응답하고 쿠키를 보내지 않음")
     void login_businessErrors(ErrorCode errorCode, int status) throws Exception {
-        given(loginService.login(anyString(), anyString(), any())).willThrow(new BusinessException(errorCode));
+        given(loginService.login(anyString(), anyString(), any(), anyString())).willThrow(new BusinessException(errorCode));
 
         mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -378,22 +379,27 @@ class AuthControllerTest {
         return Stream.of(
                 Arguments.of(ErrorCode.AUTH_INVALID_CREDENTIALS, 401),
                 Arguments.of(ErrorCode.USER_SUSPENDED, 403),
-                Arguments.of(ErrorCode.AUTH_LOGIN_LOCKED, 429));
+                Arguments.of(ErrorCode.AUTH_LOGIN_LOCKED, 429),
+                Arguments.of(ErrorCode.AUTH_TOO_MANY_REQUESTS, 429));
     }
 
     @Test
-    @DisplayName("[POST] /api/v1/auth/login은 요청에 실려 온 이전 refreshToken 쿠키를 서비스에 넘긴다 (SCRUM-72 A)")
+    @DisplayName("[POST] /api/v1/auth/login은 요청에 실려 온 이전 refreshToken 쿠키와 접속 IP를 서비스에 넘긴다 (SCRUM-72 A, SCRUM-100)")
     void login_passesPreviousCookie() throws Exception {
-        given(loginService.login(anyString(), anyString(), any())).willReturn(new LoginResult(
+        given(loginService.login(anyString(), anyString(), any(), anyString())).willReturn(new LoginResult(
                 new LoginResponse("a", 3600, new LoginUser(1L, "n", 1L, Role.USER)), "new", Duration.ofDays(30)));
 
         mockMvc.perform(post("/api/v1/auth/login")
                         .cookie(new Cookie("refreshToken", "old-refresh"))
+                        .with(request -> {
+                            request.setRemoteAddr("203.0.113.7");
+                            return request;
+                        })
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(loginBody("student@snu.ac.kr", "Passw0rd!")))
                 .andExpect(status().isOk());
 
-        verify(loginService).login("student@snu.ac.kr", "Passw0rd!", "old-refresh");
+        verify(loginService).login("student@snu.ac.kr", "Passw0rd!", "old-refresh", "203.0.113.7");
     }
 
     // ===== 재발급·로그아웃 =====

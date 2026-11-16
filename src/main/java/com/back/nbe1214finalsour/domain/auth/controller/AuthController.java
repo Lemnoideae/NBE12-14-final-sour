@@ -18,6 +18,7 @@ import com.back.nbe1214finalsour.domain.auth.service.TokenReissueService.Reissue
 import com.back.nbe1214finalsour.domain.auth.service.SignupService;
 import com.back.nbe1214finalsour.global.response.ApiResponse;
 import com.back.nbe1214finalsour.global.security.AuthUser;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -43,9 +44,11 @@ public class AuthController {
     private final TokenReissueService tokenReissueService;
     private final LogoutService logoutService;
 
+    /** IP 기준 한도는 {@code getRemoteAddr()}로 센다 (프록시 뒤 실제 IP는 {@code server.forward-headers-strategy}) */
     @PostMapping("/email/code")
-    public ApiResponse<EmailCodeResponse> requestEmailCode(@Valid @RequestBody EmailCodeRequest request) {
-        return ApiResponse.ok(emailVerificationService.requestCode(request.email()));
+    public ApiResponse<EmailCodeResponse> requestEmailCode(@Valid @RequestBody EmailCodeRequest request,
+            HttpServletRequest servletRequest) {
+        return ApiResponse.ok(emailVerificationService.requestCode(request.email(), servletRequest.getRemoteAddr()));
     }
 
     @PostMapping("/email/verify")
@@ -59,12 +62,17 @@ public class AuthController {
         return ApiResponse.ok(signupService.signup(request));
     }
 
-    /** access 토큰은 본문으로, refresh 토큰은 {@code refreshToken} 쿠키로 보낸다. 이전 쿠키가 있으면 그 행은 지운다 */
+    /**
+     * access 토큰은 본문으로, refresh 토큰은 {@code refreshToken} 쿠키로 보낸다. 이전 쿠키가 있으면 그 행은 지운다.
+     * IP 기준 실패 한도는 {@code getRemoteAddr()}로 센다
+     */
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<LoginResponse>> login(
             @Valid @RequestBody LoginRequest request,
-            @CookieValue(name = RefreshTokenCookies.NAME, required = false) String previousRefreshToken) {
-        LoginResult result = loginService.login(request.email(), request.password(), previousRefreshToken);
+            @CookieValue(name = RefreshTokenCookies.NAME, required = false) String previousRefreshToken,
+            HttpServletRequest servletRequest) {
+        LoginResult result = loginService.login(request.email(), request.password(), previousRefreshToken,
+                servletRequest.getRemoteAddr());
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE,
                         RefreshTokenCookies.issue(result.refreshToken(), result.refreshTokenTtl()).toString())

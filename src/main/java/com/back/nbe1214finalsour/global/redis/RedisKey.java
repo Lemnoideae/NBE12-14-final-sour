@@ -16,6 +16,13 @@ public enum RedisKey {
     /** 로그인 잠금. of(emailHash). SET EX 10분 */
     AUTH_LOGIN_LOCK("auth:login:lock:%s", Structure.STRING, ValueFormat.PLAIN),
     /**
+     * IP별 로그인 실패 횟수 (진행 중인 시도 포함). of(ipHash, {@code EmailHasher.hashClientIp} 값). INCR,
+     * 처음 만들 때 TTL {@code auth.ip-limit.login-window}. 비밀번호가 맞으면 1 줄인다
+     */
+    AUTH_IP_LOGIN_FAIL("auth:ip:login:fail:%s", Structure.STRING, ValueFormat.PLAIN),
+    /** IP별 인증 코드 요청 횟수. of(ipHash). INCR, 처음 만들 때 TTL {@code auth.ip-limit.email-code-window} */
+    AUTH_IP_EMAIL_CODE("auth:ip:email:code:%s", Structure.STRING, ValueFormat.PLAIN),
+    /**
      * 현재 로그인 세션 (계정당 1기기). of(userId). 값: 세션 ID(UUID). TTL = {@code jwt.refresh-token-ttl}, 로그인·재발급 때 다시 설정.
      * 읽기·쓰기는 {@code LoginSessionStore}만 한다
      */

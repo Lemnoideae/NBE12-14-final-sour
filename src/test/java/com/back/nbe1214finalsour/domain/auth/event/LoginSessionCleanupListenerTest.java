@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.back.nbe1214finalsour.domain.user.entity.UserStatus;
+import com.back.nbe1214finalsour.domain.user.event.PasswordChangedEvent;
 import com.back.nbe1214finalsour.domain.user.event.UserStatusChangedEvent;
 import com.back.nbe1214finalsour.global.security.LoginSessionStore;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +45,23 @@ class LoginSessionCleanupListenerTest {
         listener.onUserStatusChanged(new UserStatusChangedEvent(USER_ID, UserStatus.ACTIVE));
 
         verifyNoInteractions(loginSessionStore);
+    }
+
+    @Test
+    @DisplayName("비밀번호가 바뀌면 세션 키를 지운다 (SCRUM-98)")
+    void deletesSessionWhenPasswordChanged() {
+        listener.onPasswordChanged(new PasswordChangedEvent(USER_ID));
+
+        verify(loginSessionStore).delete(USER_ID);
+    }
+
+    @Test
+    @DisplayName("비밀번호 변경 뒤 Redis 실패도 로그만 남기고 던지지 않는다 (비밀번호는 이미 커밋됨, 응답 204 유지)")
+    void redisFailureOnPasswordChangeDoesNotPropagate() {
+        willThrow(new RedisConnectionFailureException("down")).given(loginSessionStore).delete(USER_ID);
+
+        assertThatCode(() -> listener.onPasswordChanged(new PasswordChangedEvent(USER_ID)))
+                .doesNotThrowAnyException();
     }
 
     @Test

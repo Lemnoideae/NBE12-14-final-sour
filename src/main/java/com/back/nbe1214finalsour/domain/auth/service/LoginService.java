@@ -23,9 +23,11 @@ import org.springframework.stereotype.Service;
  * 이메일·비밀번호 로그인 (API 명세서 {@code POST /api/auth/login}).
  *
  * <ol>
+ *   <li>IP 기준 실패 한도 확인과 자리 잡기 ({@link AuthIpRateLimiter}, SCRUM-100). 넘었으면 429 {@code AUTH_TOO_MANY_REQUESTS}.
+ *       이메일 잠금보다 먼저 확인해 막힌 IP가 남의 계정 실패 횟수를 올리지 못하게 한다</li>
  *   <li>잠금 확인과 시도 횟수 증가 ({@link LoginAttemptStore}). 잠겼으면 429</li>
  *   <li>탈퇴하지 않은 회원을 이메일 해시로 찾고 비밀번호 확인. 회원이 없거나 틀리면 401이고, 5번째 실패면 잠그고 429</li>
- *   <li>비밀번호가 맞으면 실패 횟수를 지운 뒤 상태 확인. 정지·차단이면 403</li>
+ *   <li>비밀번호가 맞으면 이메일 실패 횟수를 지우고 IP 자리를 돌려놓은 뒤 상태 확인. 정지·차단이면 403</li>
  *   <li>새 로그인 세션 시작 (계정당 1기기, SCRUM-84): 이 회원의 다른 기기 refresh 토큰을 모두 지우고, 새 세션 ID를
  *       refresh 토큰 행·Redis 현재 세션·access 토큰 {@code sid}에 넣는다. 요청에 이전 refresh 토큰 쿠키가 있으면 그 행도 지운다
  *       (SCRUM-72 A)</li>
@@ -44,6 +46,7 @@ public class LoginService {
     private final EmailHasher emailHasher;
     private final PasswordEncoder passwordEncoder;
     private final LoginAttemptStore loginAttemptStore;
+    private final AuthIpRateLimiter ipRateLimiter;
     private final JwtProvider jwtProvider;
     private final RefreshTokenService refreshTokenService;
     private final LoginSessionStore loginSessionStore;
@@ -55,12 +58,13 @@ public class LoginService {
     private final String dummyPasswordHash;
 
     public LoginService(UserRepository userRepository, EmailHasher emailHasher, PasswordEncoder passwordEncoder,
-            LoginAttemptStore loginAttemptStore, JwtProvider jwtProvider, RefreshTokenService refreshTokenService,
-            LoginSessionStore loginSessionStore) {
+            LoginAttemptStore loginAttemptStore, AuthIpRateLimiter ipRateLimiter, JwtProvider jwtProvider,
+            RefreshTokenService refreshTokenService, LoginSessionStore loginSessionStore) {
         this.userRepository = userRepository;
         this.emailHasher = emailHasher;
         this.passwordEncoder = passwordEncoder;
         this.loginAttemptStore = loginAttemptStore;
+        this.ipRateLimiter = ipRateLimiter;
         this.jwtProvider = jwtProvider;
         this.refreshTokenService = refreshTokenService;
         this.loginSessionStore = loginSessionStore;
@@ -69,10 +73,12 @@ public class LoginService {
 
     /**
      * @param previousRefreshToken 요청에 실려 온 {@code refreshToken} 쿠키 값 (없으면 {@code null}). 로그인이 성공할 때만 지운다
-     * @throws BusinessException 429 {@code AUTH_LOGIN_LOCKED}, 401 {@code AUTH_INVALID_CREDENTIALS},
-     *                           403 {@code USER_SUSPENDED}
+     * @param clientIp             요청한 사용자 IP ({@code request.getRemoteAddr()})
+     * @throws BusinessException 429 {@code AUTH_TOO_MANY_REQUESTS}·{@code AUTH_LOGIN_LOCKED},
+     *                           401 {@code AUTH_INVALID_CREDENTIALS}, 403 {@code USER_SUSPENDED}
      */
-    public LoginResult login(String email, String password, String previousRefreshToken) {
+    public LoginResult login(String email, String password, String previousRefreshToken, String clientIp) {
+        String ipHash = ipRateLimiter.acquireLogin(clientIp);
         String emailHash = emailHasher.hash(email);
         long attempt = loginAttemptStore.tryAcquire(emailHash, MAX_FAILURES, FAILURE_WINDOW);
         if (attempt < 0) {
@@ -90,6 +96,7 @@ public class LoginService {
             throw new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS, "로그인 " + attempt + "번째 실패");
         }
         loginAttemptStore.reset(emailHash);
+        ipRateLimiter.releaseLogin(ipHash);
 
         User user = found.get();
         if (user.getStatus() != UserStatus.ACTIVE) {

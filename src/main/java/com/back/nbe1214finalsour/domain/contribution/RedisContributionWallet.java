@@ -42,5 +42,10 @@ public class RedisContributionWallet implements ContributionWallet {
                 String.valueOf(userId), String.valueOf(amount));
     }
 
-
+    @Override
+    public long findBalance(Long userId, Long universityId) {
+        Double score = redisTemplate.opsForZSet()
+                .score(RedisKey.RANK_USER.of(universityId), String.valueOf(userId));
+        return score == null ? 0L : score.longValue();
+    }
 }

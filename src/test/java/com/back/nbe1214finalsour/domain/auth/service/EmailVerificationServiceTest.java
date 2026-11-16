@@ -48,6 +48,8 @@ class EmailVerificationServiceTest {
 
     private static final String DOMAIN = "scrum64-test.ac.kr";
     private static final String EMAIL = "student@" + DOMAIN;
+    /** IP 한도(20번/1시간)에 닿지 않도록 테스트마다 Redis {@code auth:*}를 지운다 */
+    private static final String CLIENT_IP = "203.0.113.7";
     /** 2026-11-14 00:30 KST. UTC 날짜(11-13)와 한국 날짜(11-14)가 다른 시각 */
     private static final Instant NOW = Instant.parse("2026-11-13T15:30:00Z");
 
@@ -97,7 +99,7 @@ class EmailVerificationServiceTest {
     @Test
     @DisplayName("코드 요청: 학교와 유효 시간 300초를 응답하고, 정규화한 이메일로 6자리 코드를 보내며 같은 코드를 Redis에 5분 저장한다")
     void requestCode() {
-        EmailCodeResponse response = service.requestCode("  Student@SCRUM64-Test.ac.kr ");
+        EmailCodeResponse response = service.requestCode("  Student@SCRUM64-Test.ac.kr ", CLIENT_IP);
 
         assertThat(response.university().id()).isEqualTo(universityId);
         assertThat(response.university().name()).isEqualTo("인증테스트대");
@@ -114,7 +116,7 @@ class EmailVerificationServiceTest {
     @Test
     @DisplayName("코드 요청: 하루 횟수 키의 날짜는 한국 날짜다 (UTC 11-13 15:30 → 20261114)")
     void dailyKeyUsesKoreanDate() {
-        service.requestCode(EMAIL);
+        service.requestCode(EMAIL, CLIENT_IP);
 
         String key = "auth:email:daily:" + emailHash + ":20261114";
         assertThat(redis.opsForValue().get(key)).isEqualTo("1");
@@ -124,7 +126,7 @@ class EmailVerificationServiceTest {
     @Test
     @DisplayName("코드 요청: 등록되지 않은 도메인이면 400 AUTH_UNSUPPORTED_DOMAIN, 메일과 쿨다운 없음")
     void unsupportedDomain() {
-        assertErrorCode(() -> service.requestCode("student@unknown-school.ac.kr"), ErrorCode.AUTH_UNSUPPORTED_DOMAIN);
+        assertErrorCode(() -> service.requestCode("student@unknown-school.ac.kr", CLIENT_IP), ErrorCode.AUTH_UNSUPPORTED_DOMAIN);
 
         verify(mailSender, never()).sendCode(anyString(), anyString());
         assertThat(redis.keys("auth:*")).isEmpty();
@@ -133,7 +135,7 @@ class EmailVerificationServiceTest {
     @Test
     @DisplayName("코드 요청: 도메인은 정확히 같아야 한다 (하위 도메인은 다른 도메인)")
     void subdomainIsNotSupported() {
-        assertErrorCode(() -> service.requestCode("student@mail." + DOMAIN), ErrorCode.AUTH_UNSUPPORTED_DOMAIN);
+        assertErrorCode(() -> service.requestCode("student@mail." + DOMAIN, CLIENT_IP), ErrorCode.AUTH_UNSUPPORTED_DOMAIN);
     }
 
     @Test
@@ -141,7 +143,7 @@ class EmailVerificationServiceTest {
     void alreadyRegistered() {
         saveUser();
 
-        assertErrorCode(() -> service.requestCode(EMAIL.toUpperCase()), ErrorCode.AUTH_EMAIL_ALREADY_REGISTERED);
+        assertErrorCode(() -> service.requestCode(EMAIL.toUpperCase(), CLIENT_IP), ErrorCode.AUTH_EMAIL_ALREADY_REGISTERED);
         verify(mailSender, never()).sendCode(anyString(), anyString());
     }
 
@@ -151,7 +153,7 @@ class EmailVerificationServiceTest {
         User user = saveUser();
         jdbcTemplate.update("UPDATE users SET status = 'WITHDRAWN', deleted_at = now() WHERE id = ?", user.getId());
 
-        service.requestCode(EMAIL);
+        service.requestCode(EMAIL, CLIENT_IP);
 
         verify(mailSender).sendCode(anyString(), anyString());
     }
@@ -159,9 +161,9 @@ class EmailVerificationServiceTest {
     @Test
     @DisplayName("코드 요청: 60초 안에 다시 요청하면 429 AUTH_CODE_COOLDOWN, 메일은 한 번만 보낸다")
     void cooldown() {
-        service.requestCode(EMAIL);
+        service.requestCode(EMAIL, CLIENT_IP);
 
-        assertErrorCode(() -> service.requestCode(EMAIL), ErrorCode.AUTH_CODE_COOLDOWN);
+        assertErrorCode(() -> service.requestCode(EMAIL, CLIENT_IP), ErrorCode.AUTH_CODE_COOLDOWN);
         verify(mailSender, times(1)).sendCode(anyString(), anyString());
     }
 
@@ -169,11 +171,11 @@ class EmailVerificationServiceTest {
     @DisplayName("코드 요청: 하루 10번까지 보내고 11번째는 429 AUTH_CODE_COOLDOWN")
     void dailyLimit() {
         for (int i = 0; i < 10; i++) {
-            service.requestCode(EMAIL);
+            service.requestCode(EMAIL, CLIENT_IP);
             redis.delete("auth:email:cooldown:" + emailHash);
         }
 
-        assertErrorCode(() -> service.requestCode(EMAIL), ErrorCode.AUTH_CODE_COOLDOWN);
+        assertErrorCode(() -> service.requestCode(EMAIL, CLIENT_IP), ErrorCode.AUTH_CODE_COOLDOWN);
         verify(mailSender, times(10)).sendCode(anyString(), anyString());
     }
 
@@ -182,12 +184,12 @@ class EmailVerificationServiceTest {
     void mailFailureDiscardsCode() {
         willThrow(new MailSendException("SMTP 연결 실패")).given(mailSender).sendCode(anyString(), anyString());
 
-        assertThatThrownBy(() -> service.requestCode(EMAIL)).isInstanceOf(MailSendException.class);
+        assertThatThrownBy(() -> service.requestCode(EMAIL, CLIENT_IP)).isInstanceOf(MailSendException.class);
         assertThat(redis.hasKey(codeKey())).isFalse();
         assertThat(redis.hasKey("auth:email:cooldown:" + emailHash)).isFalse();
 
         willDoNothing().given(mailSender).sendCode(anyString(), anyString());
-        service.requestCode(EMAIL);
+        service.requestCode(EMAIL, CLIENT_IP);
         assertThat(redis.hasKey(codeKey())).isTrue();
     }
 
@@ -196,7 +198,7 @@ class EmailVerificationServiceTest {
     @Test
     @DisplayName("코드 확인: 맞으면 가입 토큰(UUID)을 발급해 정규화한 이메일과 30분 묶고, 코드는 지운다")
     void verifyCode() {
-        service.requestCode(EMAIL);
+        service.requestCode(EMAIL, CLIENT_IP);
         String code = sentCode();
 
         EmailVerifyResponse response = service.verifyCode(" STUDENT@" + DOMAIN.toUpperCase(), code);
@@ -213,7 +215,7 @@ class EmailVerificationServiceTest {
     @Test
     @DisplayName("코드 확인: 한 번 쓴 코드로 다시 확인하면 410 AUTH_CODE_EXPIRED")
     void codeIsSingleUse() {
-        service.requestCode(EMAIL);
+        service.requestCode(EMAIL, CLIENT_IP);
         String code = sentCode();
         service.verifyCode(EMAIL, code);
 
@@ -230,7 +232,7 @@ class EmailVerificationServiceTest {
     @Test
     @DisplayName("코드 확인: 틀리면 400 AUTH_INVALID_CODE, 5번째로 틀리면 429 AUTH_CODE_ATTEMPTS_EXCEEDED이고 코드가 폐기된다")
     void attemptsExceeded() {
-        service.requestCode(EMAIL);
+        service.requestCode(EMAIL, CLIENT_IP);
         String code = sentCode();
         String wrong = wrongCode(code);
 
@@ -247,12 +249,12 @@ class EmailVerificationServiceTest {
     @Test
     @DisplayName("코드 확인: 코드를 다시 요청하면 실패 횟수가 0부터 다시 센다")
     void newCodeResetsAttempts() {
-        service.requestCode(EMAIL);
+        service.requestCode(EMAIL, CLIENT_IP);
         String first = sentCode();
         assertErrorCode(() -> service.verifyCode(EMAIL, wrongCode(first)), ErrorCode.AUTH_INVALID_CODE);
         redis.delete("auth:email:cooldown:" + emailHash);
 
-        service.requestCode(EMAIL);
+        service.requestCode(EMAIL, CLIENT_IP);
 
         assertThat(redis.opsForHash().get(codeKey(), "attempts")).isEqualTo("0");
     }
