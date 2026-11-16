@@ -162,7 +162,9 @@ class RedisKeyTest {
                 "CACHE_MAP_UNIVERSITIES|cache:map:universities|STRING|JSON",
                 // 채팅 (Chat)
                 "CHAT_UNIV_CHANNEL|chat:univ:%s|CHANNEL|JSON",
-                "CHAT_ALLIANCE_CHANNEL|chat:alliance:%s|CHANNEL|JSON"
+                "CHAT_ALLIANCE_CHANNEL|chat:alliance:%s|CHANNEL|JSON",
+                // 락
+                "LOCK_SCORE_FLUSH|lock:score-flush|STRING|PLAIN"
         );
     }
 }
