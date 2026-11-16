@@ -1,12 +1,29 @@
 package com.back.nbe1214finalsour.domain.support.repository;
 
+import com.back.nbe1214finalsour.domain.support.dto.SupportListItem;
 import com.back.nbe1214finalsour.domain.support.entity.CustomerSupport;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface CustomerSupportRepository extends JpaRepository<CustomerSupport, Long> {
+
+    /**
+     * 회원의 문의 목록. 최신순, 같은 시각이면 id 역순 (계획 D5). 목록에 필요한 열만 읽어 본문과 암호문 복호화를 피한다.
+     * {@code idx_customer_support_user_created (user_id, created_at DESC)}를 쓴다.
+     */
+    @Query(value = """
+            select new com.back.nbe1214finalsour.domain.support.dto.SupportListItem(
+                       s.id, s.title, s.status, s.createdAt)
+              from CustomerSupport s
+             where s.userId = :userId
+             order by s.createdAt desc, s.id desc
+            """,
+            countQuery = "select count(s) from CustomerSupport s where s.userId = :userId")
+    Page<SupportListItem> findListByUserId(@Param("userId") Long userId, Pageable pageable);
 
     /**
      * 접수 상태인 문의에만 답변을 넣고 {@code ANSWERED}로 바꾼다 (계획 Q5). 두 관리자가 동시에 답변해도 한 건만 1을 받는다.

@@ -2,6 +2,8 @@ package com.back.nbe1214finalsour.domain.support.controller;
 
 import com.back.nbe1214finalsour.domain.support.dto.SupportCreateRequest;
 import com.back.nbe1214finalsour.domain.support.dto.SupportCreateResponse;
+import com.back.nbe1214finalsour.domain.support.dto.SupportDetailResponse;
+import com.back.nbe1214finalsour.domain.support.dto.SupportListResponse;
 import com.back.nbe1214finalsour.domain.support.service.SupportService;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
@@ -10,12 +12,17 @@ import com.back.nbe1214finalsour.global.security.AuthUser;
 import com.back.nbe1214finalsour.global.security.jwt.JwtAuthenticationFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -41,6 +48,23 @@ public class SupportController {
         rejectInvalidToken(servletRequest);
         Long userId = authUser == null ? null : authUser.userId();
         return ApiResponse.ok(supportService.create(userId, servletRequest.getRemoteAddr(), request));
+    }
+
+    /** 내 문의 목록. 최신순, size 최대 100 */
+    @GetMapping("/me")
+    public ApiResponse<SupportListResponse> getMine(
+            @AuthenticationPrincipal AuthUser authUser,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        return ApiResponse.ok(supportService.getMine(authUser.userId(), page, size));
+    }
+
+    /** 내 문의 상세. 본인 문의만 볼 수 있다 */
+    @GetMapping("/{supportId}")
+    public ApiResponse<SupportDetailResponse> getDetail(
+            @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long supportId) {
+        return ApiResponse.ok(supportService.getDetail(authUser.userId(), supportId));
     }
 
     /** JWT 필터가 남긴 토큰 오류(만료·위조·끊긴 세션)가 있으면 그 코드로 401 */

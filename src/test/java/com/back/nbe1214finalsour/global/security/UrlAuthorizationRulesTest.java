@@ -216,6 +216,9 @@ class UrlAuthorizationRulesTest {
                 new Row(HttpMethod.GET, "/api/v1/auth/login", Auth.REQUIRED),
                 new Row(HttpMethod.DELETE, "/api/v1/universities/12", Auth.REQUIRED),
                 new Row(HttpMethod.GET, "/api/v1/supports", Auth.REQUIRED),
+                // 문의 등록만 선택이고 조회는 필요 (추가 명세 §3-8)
+                new Row(HttpMethod.GET, "/api/v1/supports/me", Auth.REQUIRED),
+                new Row(HttpMethod.GET, "/api/v1/supports/88", Auth.REQUIRED),
                 // 공개 POST는 정확한 경로만
                 new Row(HttpMethod.POST, "/api/v1/supports/88", Auth.REQUIRED),
                 // '*'는 경로 한 칸만

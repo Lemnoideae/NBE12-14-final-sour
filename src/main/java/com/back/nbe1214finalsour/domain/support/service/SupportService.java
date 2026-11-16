@@ -2,6 +2,8 @@ package com.back.nbe1214finalsour.domain.support.service;
 
 import com.back.nbe1214finalsour.domain.support.dto.SupportCreateRequest;
 import com.back.nbe1214finalsour.domain.support.dto.SupportCreateResponse;
+import com.back.nbe1214finalsour.domain.support.dto.SupportDetailResponse;
+import com.back.nbe1214finalsour.domain.support.dto.SupportListResponse;
 import com.back.nbe1214finalsour.domain.support.entity.CustomerSupport;
 import com.back.nbe1214finalsour.domain.support.repository.CustomerSupportRepository;
 import com.back.nbe1214finalsour.domain.support.validation.SupportAttachmentUrlPolicy;
@@ -9,6 +11,7 @@ import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,5 +52,27 @@ public class SupportService {
         CustomerSupport support = repository.save(CustomerSupport.receive(
                 userId, request.recipientEmail(), request.title(), request.content(), attachFileUrl));
         return new SupportCreateResponse(support.getId(), support.getStatus());
+    }
+
+    /** 내 문의 목록. 최신순 (계획 D5) */
+    @Transactional(readOnly = true)
+    public SupportListResponse getMine(Long userId, int page, int size) {
+        return SupportListResponse.from(repository.findListByUserId(userId, PageRequest.of(page, size)));
+    }
+
+    /**
+     * 내 문의 상세. 비회원 문의는 주인이 없으므로 누구에게도 보이지 않는다 (답변은 메일로만 받는다).
+     *
+     * @throws BusinessException 404 {@code SUPPORT_NOT_FOUND}, 403 {@code SUPPORT_NOT_OWNER}
+     */
+    @Transactional(readOnly = true)
+    public SupportDetailResponse getDetail(Long userId, Long supportId) {
+        CustomerSupport support = repository.findById(supportId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SUPPORT_NOT_FOUND, "supportId=" + supportId));
+        if (!userId.equals(support.getUserId())) {
+            throw new BusinessException(ErrorCode.SUPPORT_NOT_OWNER,
+                    "supportId=" + supportId + " userId=" + userId);
+        }
+        return SupportDetailResponse.from(support);
     }
 }
