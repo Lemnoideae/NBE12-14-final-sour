@@ -19,8 +19,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
@@ -31,7 +29,8 @@ import org.springframework.test.web.servlet.ResultActions;
 /**
  * 프로필 수정 (추가 명세 §3-1, SCRUM-80)을 PostgreSQL·Redis(Testcontainers)와 실제 HTTP 처리로 확인한다.
  *
- * <p>이미지 URL은 {@code file.public-base-url} 기본값 {@code https://cdn.devcproject.cloud} 기준이다 (명세서 예시와 같음).
+ * <p>프로필 이미지는 개인 로고 변경권 구매로만 바꾼다 (SCRUM-105). 이 API는 닉네임만 바꾸고 {@code profileImageUrl}은 무시한다.
+ * URL 규칙 사례는 {@code ProfileImageUrlPolicyTest}로 옮겼다.
  */
 @IntegrationTest
 @AutoConfigureMockMvc
@@ -94,37 +93,38 @@ class ProfileUpdateIntegrationTest {
     }
 
     @Test
-    @DisplayName("이미지만 보내면 이미지만 바뀐다 (users.logo_url)")
-    void updateImageOnly() throws Exception {
-        String url = profileUrl(user.getId(), "3f9a7c2e-1b4d-4e8f-9a0b-1c2d3e4f5a6b.webp");
+    @DisplayName("profileImageUrl을 보내도 이미지는 바뀌지 않고 닉네임만 바뀐다 (이미지는 상점 구매로만 변경)")
+    void profileImageUrlIsIgnored() throws Exception {
+        String before = profileUrl(user.getId(), "before.png");
+        jdbcTemplate.update("UPDATE users SET logo_url = ? WHERE id = ?", before, user.getId());
+        String requested = profileUrl(user.getId(), "after.png");   // 예전 규칙으로는 허용되던 내 profile 경로
 
-        update("{\"profileImageUrl\":\"" + url + "\"}")
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.nickname").value(NICKNAME))
-                .andExpect(jsonPath("$.data.profileImageUrl").value(url));
-
-        assertThat(row()).containsEntry("nickname", NICKNAME).containsEntry("logo_url", url);
-    }
-
-    @Test
-    @DisplayName("둘 다 보내면 둘 다 바뀐다")
-    void updateBoth() throws Exception {
-        String url = profileUrl(user.getId(), "me.jpg");
-
-        update("{\"nickname\":\"둘다바꿈\",\"profileImageUrl\":\"" + url + "\"}")
+        update("{\"nickname\":\"둘다바꿈\",\"profileImageUrl\":\"" + requested + "\"}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.nickname").value("둘다바꿈"))
-                .andExpect(jsonPath("$.data.profileImageUrl").value(url));
+                .andExpect(jsonPath("$.data.profileImageUrl").value(before));
+
+        assertThat(row()).containsEntry("nickname", "둘다바꿈").containsEntry("logo_url", before);
     }
 
     @Test
-    @DisplayName("빈 본문이나 null 필드는 아무것도 바꾸지 않는다 (이미지 삭제 미지원, 계획 Q3)")
+    @DisplayName("이미지가 없는 회원이 profileImageUrl만 보내도 이미지가 생기지 않는다")
+    void profileImageUrlOnlyDoesNotSetImage() throws Exception {
+        update("{\"profileImageUrl\":\"" + profileUrl(user.getId(), "new.png") + "\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.profileImageUrl").value(nullValue()));
+
+        assertThat(row()).containsEntry("nickname", NICKNAME).containsEntry("logo_url", null);
+    }
+
+    @Test
+    @DisplayName("빈 본문이나 null 필드는 아무것도 바꾸지 않는다")
     void emptyOrNullFieldsKeepValues() throws Exception {
         String url = profileUrl(user.getId(), "keep.png");
         jdbcTemplate.update("UPDATE users SET logo_url = ? WHERE id = ?", url, user.getId());
 
         update("{}").andExpect(status().isOk());
-        update("{\"nickname\":null,\"profileImageUrl\":null}")
+        update("{\"nickname\":null}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.profileImageUrl").value(url));
 
@@ -162,40 +162,6 @@ class ProfileUpdateIntegrationTest {
                 withdrawn.getId());
 
         update("{\"nickname\":\"떠난회원\"}").andExpect(status().isOk());
-    }
-
-    @ParameterizedTest(name = "{0}")
-    @ValueSource(strings = {
-            "https://cdn.devcproject.cloud/profile/999999/a.png",         // 다른 회원 경로
-            "https://evil.example.com/profile/{id}/a.png",                // 우리 CDN이 아님
-            "http://cdn.devcproject.cloud/profile/{id}/a.png",            // https가 아님
-            "https://cdn.devcproject.cloud.evil.com/profile/{id}/a.png",  // 접두어만 같은 다른 호스트
-            "https://cdn.devcproject.cloud/custom-logo/{id}/a.png",       // 다른 용도
-            "https://cdn.devcproject.cloud/profile/{id}/../999999/a.png", // 경로 이동
-            "https://cdn.devcproject.cloud/profile/{id}/sub/a.png",       // 하위 경로
-            "https://cdn.devcproject.cloud/profile/{id}/a.png?x=1",       // 쿼리
-            "https://cdn.devcproject.cloud/profile/{id}/a.gif",           // PROFILE이 허용하지 않는 형식
-            "https://cdn.devcproject.cloud/profile/{id}/",                // 파일 이름 없음
-            ""})
-    @DisplayName("우리 CDN의 내 profile 경로가 아니면 400 FILE_INVALID_URL이고 함께 보낸 닉네임도 바뀌지 않는다")
-    void invalidImageUrlIsRejected(String template) throws Exception {
-        String url = template.replace("{id}", user.getId().toString());
-
-        update("{\"nickname\":\"바뀌면안됨\",\"profileImageUrl\":\"" + url + "\"}")
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("FILE_INVALID_URL"));
-
-        assertThat(row()).containsEntry("nickname", NICKNAME).containsEntry("logo_url", null);
-    }
-
-    @Test
-    @DisplayName("users.logo_url(500자)보다 긴 URL은 400 FILE_INVALID_URL")
-    void tooLongUrlIsRejected() throws Exception {
-        String url = profileUrl(user.getId(), "a".repeat(500) + ".png");
-
-        update("{\"profileImageUrl\":\"" + url + "\"}")
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("FILE_INVALID_URL"));
     }
 
     @Test

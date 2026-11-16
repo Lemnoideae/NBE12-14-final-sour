@@ -1,51 +1,23 @@
 package com.back.nbe1214finalsour.domain.item.service;
 
-import com.back.nbe1214finalsour.domain.contribution.ContributionWallet;
-import com.back.nbe1214finalsour.domain.credit.entity.CreditHistory;
-import com.back.nbe1214finalsour.domain.credit.entity.CreditHistoryType;
-import com.back.nbe1214finalsour.domain.credit.repository.CreditHistoryRepository;
-import com.back.nbe1214finalsour.domain.credit.repository.CreditWallet;
 import com.back.nbe1214finalsour.domain.item.entity.Item;
 import com.back.nbe1214finalsour.domain.item.entity.ItemType;
 import com.back.nbe1214finalsour.domain.item.entity.PayType;
-import com.back.nbe1214finalsour.domain.item.event.PotionPurchasedEvent;
-import com.back.nbe1214finalsour.domain.university.entity.Department;
-import com.back.nbe1214finalsour.domain.university.entity.University;
-import com.back.nbe1214finalsour.domain.university.repository.DepartmentRepository;
-import com.back.nbe1214finalsour.domain.university.repository.UniversityRepository;
-import com.back.nbe1214finalsour.domain.user.entity.User;
-import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
-import com.back.nbe1214finalsour.domain.userItem.entity.UserItem;
-import com.back.nbe1214finalsour.domain.userItem.repository.UserItemRepository;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.test.util.ReflectionTestUtils;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Optional;
-import java.util.OptionalLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 public class ItemPurchaseServiceTest {
@@ -54,381 +26,68 @@ public class ItemPurchaseServiceTest {
     private ItemService itemService;
 
     @Mock
-    private ContributionWallet contributionWallet;
+    private CreditPurchaseService creditPurchaseService;
 
     @Mock
-    private UserItemRepository userItemRepository;
-
-    @Mock
-    private CreditHistoryRepository creditHistoryRepository;
-
-    @Mock
-    private UniversityRepository universityRepository;
-
-    @Mock
-    private DepartmentRepository departmentRepository;
-
-    @Mock
-    private UserRepository userRepository;
-
-    @Mock
-    private CreditWallet creditWallet;
-
-    @Mock
-    private ApplicationEventPublisher eventPublisher;
-
-    private static final Instant NOW = Instant.parse("2026-11-14T03:00:00Z");
-
-    @Spy
-    private Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+    private ContributionPurchaseService contributionPurchaseService;
 
     @InjectMocks
     private ItemPurchaseService itemPurchaseService;
 
     private static final Long USER_ID = 1L;
     private static final Long UNIVERSITY_ID = 12L;
+    private static final Long DEPARTMENT_ID = 34L;
+    private static final String LOGO_URL = "https://cdn.devcproject.cloud/custom-logo/1/abc.png";
 
-    private static final List<Item> POTIONS = List.of(
+    private static final List<Item> ITEMS = List.of(
             new Item(1L, "2배 물약", "1시간 동안 클릭 점수 2배", ItemType.MULTIPLIER, PayType.CONTRIBUTION, 500L, 3600, 2.0),
-            new Item(2L, "4배 물약", "1시간 동안 클릭 점수 4배", ItemType.MULTIPLIER, PayType.CONTRIBUTION, 1000L, 3600,  4.0),
+            new Item(2L, "4배 물약", "1시간 동안 클릭 점수 4배", ItemType.MULTIPLIER, PayType.CONTRIBUTION, 1000L, 3600, 4.0),
             new Item(3L, "학교 로고 변경권", "우리 학교 로고 변경", ItemType.LOGO_UNIVERSITY, PayType.CREDIT, 3900L, null, null),
             new Item(4L, "학과 로고 변경권", "우리 학과 로고 변경", ItemType.LOGO_DEPARTMENT, PayType.CREDIT, 2900L, null, null),
             new Item(5L, "개인 로고 변경권", "내 프로필 로고 변경", ItemType.LOGO_PROFILE, PayType.CREDIT, 1900L, null, null)
     );
 
-    private static final Long LOGO_ITEM_ID = 3L;   // POTIONS의 학교 로고 변경권 (CREDIT, 3900)
-    private static final String LOGO_URL = "https://cdn.devcproject.cloud/custom-logo/1/abc.png";
-    private static final Long DEPARTMENT_ID = 34L;
-
-
-    // 토큰의 학교가 DB에 있음
-    private University givenUniversity() {
-        University university = new University("로고테스트대");
-        given(this.universityRepository.findById(UNIVERSITY_ID)).willReturn(Optional.of(university));
-        return university;
-    }
-
     @Test
-    @DisplayName("기여도로 아이템 구매 시 아이템 가격만큼 회원의 기여도 차감")
-    void purchase_deductsContribution() {
-        // given: 아이템 목록에 기여도 아이템이 있고 기여도가 충분해서 차감 후 1500이 남는다.
+    @DisplayName("존재하지 않는 아이템을 사면 ITEM_NOT_FOUND, 어느 결제 서비스도 호출하지 않는다")
+    void purchase_itemNotFound() {
         given(this.itemService.getItems())
-                .willReturn(POTIONS);
-        given(this.contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 1000L))
-                .willReturn(OptionalLong.of(1500L));
+                .willReturn(ITEMS);
 
-        // when
-        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 2L, null);
-
-        // then: 해당 회원의 기여도에서 물약 가격만큼 차감 요청을 했음
-        verify(this.contributionWallet).tryDeduct(USER_ID, UNIVERSITY_ID, 1000L);
-    }
-
-    @Test
-    @DisplayName("기여도로 존재하지 않는 아이템 구매 시 ITEM_NOT_FOUND 반환")
-    void purchase_ItemNotFound() {
-        // given
-        given(this.itemService.getItems())
-                .willReturn(POTIONS);
-
-        // when & then: 아이템 목록에 없는 아이템 구매 시도 시 404
         assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 3980L, null))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ITEM_NOT_FOUND);
 
-        // then: 차감은 시도하지 않음
-        verify(this.contributionWallet, never())
-                .tryDeduct(anyLong(), anyLong(), anyLong());
+        verifyNoInteractions(this.creditPurchaseService, this.contributionPurchaseService);
     }
 
     @Test
-    @DisplayName("기여도로 잔여 기여도보다 가격이 비싼 아이템 구매 시 ITEM_NOT_ENOUGH_SCORE 반환")
-    void purchase_ItemNotEnoughScore() {
-        // given
+    @DisplayName("크레딧 아이템이면 CreditPurchaseService에 위임하고, 기여도 구매는 호출하지 않는다")
+    void purchase_creditItem_delegatesToCreditPurchaseService() {
         given(this.itemService.getItems())
-                .willReturn(POTIONS);
-        given(this.contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 500L))
-                .willReturn(OptionalLong.empty());
+                .willReturn(ITEMS);
+        ItemPurchaseResult expected = new ItemPurchaseResult(7001L, ITEMS.get(2), 3900L, null, 12888L, 1100L);
+        given(this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, ITEMS.get(2), LOGO_URL))
+                .willReturn(expected);
 
-        // when & then
-        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 1L, null))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.ITEM_NOT_ENOUGH_SCORE);
+        ItemPurchaseResult result = this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_URL);
+
+        assertThat(result).isSameAs(expected);
+        verifyNoInteractions(this.contributionPurchaseService);
     }
 
     @Test
-    @DisplayName("크레딧 아이템을 사면 크레딧을 차감하고, 기여도 차감과 물약 효과 이벤트는 없음")
-    void purchase_creditItemByContribution() {
-        // given
-        given(this.creditWallet.tryDeduct(USER_ID, 3900L)).willReturn(OptionalLong.of(1100L));
-
+    @DisplayName("기여도 아이템이면 ContributionPurchaseService에 위임하고, 크레딧 구매는 호출하지 않는다")
+    void purchase_contributionItem_delegatesToContributionPurchaseService() {
         given(this.itemService.getItems())
-                .willReturn(POTIONS);
+                .willReturn(ITEMS);
+        ItemPurchaseResult expected = new ItemPurchaseResult(5530L, ITEMS.get(1), 1000L, null, 1500L, 1100L);
+        given(this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, ITEMS.get(1)))
+                .willReturn(expected);
 
-        givenUniversity();
-
-
-        // when
-        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, LOGO_ITEM_ID, LOGO_URL);
-
-        // then
-        verify(this.creditWallet).tryDeduct(USER_ID, 3900L);
-        verify(this.contributionWallet, never())
-                .tryDeduct(anyLong(), anyLong(), anyLong());
-        verify(this.eventPublisher, never())
-                .publishEvent(any(PotionPurchasedEvent.class));
-    }
-
-
-    @Test
-    @DisplayName("기여도로 아이템 구매 시 구매 이력을 저장")
-    void purchase_saveUserItem() {
-        // given
-        given(this.itemService.getItems())
-                .willReturn(POTIONS);
-        given(this.contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 1000L))
-                .willReturn(OptionalLong.of(1500L));
-
-        // when
-        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 2L, null);
-
-        // then
-        ArgumentCaptor<UserItem> captor = ArgumentCaptor.forClass(UserItem.class);
-        verify(this.contributionWallet).tryDeduct(USER_ID, UNIVERSITY_ID, 1000L);
-        verify(this.userItemRepository).save(captor.capture());
-
-        UserItem saved = captor.getValue();
-        assertThat(saved.getUserId()).isEqualTo(USER_ID);
-        assertThat(saved.getItemId()).isEqualTo(2L);
-        assertThat(saved.getPrice()).isEqualTo(1000L);
-        assertThat(saved.getExpiredAt()).isAtSameInstantAs(NOW.plusSeconds(3600).atOffset(ZoneOffset.UTC));
-        assertThat(saved.getLogoImageUrl()).isNull();
-    }
-
-    @Test
-    @DisplayName("물약을 사면 배율과 만료 시각을 담은 효과 적용 이벤트를 발행한다")
-    void purchase_publishesPotionPurchasedEvent() {
-        // given: 2번 물약(4배, 1000, 3600초), 기여도 충분
-        given(this.itemService.getItems())
-                .willReturn(POTIONS);
-        given(this.contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 1000L))
-                .willReturn(OptionalLong.of(1500L));
-
-        // when
-        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 2L, null);
-
-        // then: 리스너가 Redis(user:{userId}:effect)에 쓸 내용을 담아 발행
-        ArgumentCaptor<PotionPurchasedEvent> captor = ArgumentCaptor.forClass(PotionPurchasedEvent.class);
-        verify(this.eventPublisher).publishEvent(captor.capture());
-
-        PotionPurchasedEvent event = captor.getValue();
-        assertThat(event.userId()).isEqualTo(USER_ID);
-        assertThat(event.itemId()).isEqualTo(2L);
-        assertThat(event.multiplier()).isEqualTo(4.0);
-        assertThat(event.expiredAt()).isAtSameInstantAs(NOW.plusSeconds(3600).atOffset(ZoneOffset.UTC));
-    }
-
-    @Test
-    @DisplayName("구매 이력 저장이 실패하면 차감한 기여도를 되돌리고 예외를 다시 던진다")
-    void purchase_restoresContributionWhenSaveFails() {
-        // given: 2번 물약(1000), 차감은 성공했는데 이력 저장에서 DB 예외
-        given(this.itemService.getItems())
-                .willReturn(POTIONS);
-        given(this.contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 1000L))
-                .willReturn(OptionalLong.of(1500L));
-        given(this.userItemRepository.save(any()))
-                .willThrow(new DataIntegrityViolationException("user_item 저장 실패"));
-
-        // when & then: 원래 예외가 그대로 나감
-        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 2L, null))
-                .isInstanceOf(DataIntegrityViolationException.class);
-
-        // then: Redis는 롤백되지 않으므로 차감한 만큼 직접 되돌림
-        verify(this.contributionWallet).restore(USER_ID, UNIVERSITY_ID, 1000L);
-        // 구매가 성립하지 않았으니 효과 적용 이벤트도 없음
-        verify(this.eventPublisher, never())
-                .publishEvent(any(PotionPurchasedEvent.class));
-    }
-
-    @Test
-    @DisplayName("물약 구매 결과로 구매 이력 ID·아이템·가격·만료 시각·차감 후 기여도·현재 크레딧을 반환")
-    void purchase_returnsResult() {
-        // given: 2번 물약(4배, 1000, 3600초), 차감 후 기여도 1500, 크레딧 1100
-        given(this.itemService.getItems())
-                .willReturn(POTIONS);
-        given(this.contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 1000L))
-                .willReturn(OptionalLong.of(1500L));
-        // IDENTITY 저장 시 DB가 같은 객체에 id를 채워 주는 것을 흉내
-        given(this.userItemRepository.save(any()))
-                .willAnswer(invocation -> {
-                    UserItem userItem = invocation.getArgument(0);
-                    ReflectionTestUtils.setField(userItem, "id", 5530L);
-                    return userItem;
-                });
-        given(this.creditWallet.findBalance(USER_ID))
-                .willReturn(1100L);
-
-        // when
         ItemPurchaseResult result = this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 2L, null);
 
-        // then: 명세 응답(201)의 재료
-        assertThat(result.userItemId()).isEqualTo(5530L);
-        assertThat(result.item()).isSameAs(POTIONS.get(1));
-        assertThat(result.price()).isEqualTo(1000L);
-        assertThat(result.expiredAt()).isAtSameInstantAs(NOW.plusSeconds(3600).atOffset(ZoneOffset.UTC));
-        assertThat(result.myContribScore()).isEqualTo(1500L);
-        assertThat(result.myCreditBalance()).isEqualTo(1100L);
-    }
-
-    // IDENTITY 저장 시 DB가 같은 객체에 id를 채워 주는 것을 흉내
-    private void givenUserItemSavedWithId(long id) {
-        given(this.userItemRepository.save(any()))
-                .willAnswer(invocation -> {
-                    UserItem userItem = invocation.getArgument(0);
-                    ReflectionTestUtils.setField(userItem, "id", id);
-                    return userItem;
-                });
-    }
-
-    @Test
-    @DisplayName("로고 아이템인데 로고 이미지 주소가 없으면 ITEM_LOGO_IMAGE_REQUIRED, 크레딧을 차감하지 않는다")
-    void purchase_logoImageRequired() {
-        given(this.itemService.getItems())
-                .willReturn(POTIONS);
-
-        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, LOGO_ITEM_ID, null))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.ITEM_LOGO_IMAGE_REQUIRED);
-
-        verify(this.creditWallet, never())
-                .tryDeduct(anyLong(), anyLong());
-    }
-
-    @Test
-    @DisplayName("크레딧이 부족하면 ITEM_NOT_ENOUGH_CREDIT, 구매 이력과 크레딧 사용 내역을 저장하지 않는다")
-    void purchase_notEnoughCredit() {
-        given(this.itemService.getItems())
-                .willReturn(POTIONS);
-        given(this.creditWallet.tryDeduct(USER_ID, 3900L))
-                .willReturn(OptionalLong.empty());
-
-        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, LOGO_ITEM_ID, LOGO_URL))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.ITEM_NOT_ENOUGH_CREDIT);
-
-        verify(this.userItemRepository, never())
-                .save(any());
-        verify(this.creditHistoryRepository, never())
-                .save(any());
-    }
-
-    @Test
-    @DisplayName("로고 구매 이력은 가격 스냅샷과 로고 이미지를 담고, 영구라 만료 시각이 없다")
-    void purchase_saveLogoUserItem() {
-        given(this.itemService.getItems())
-                .willReturn(POTIONS);
-        given(this.creditWallet.tryDeduct(USER_ID, 3900L))
-                .willReturn(OptionalLong.of(1100L));
-        givenUniversity();
-
-        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, LOGO_ITEM_ID, LOGO_URL);
-
-        ArgumentCaptor<UserItem> captor = ArgumentCaptor.forClass(UserItem.class);
-        verify(this.userItemRepository).save(captor.capture());
-
-        UserItem saved = captor.getValue();
-        assertThat(saved.getUserId()).isEqualTo(USER_ID);
-        assertThat(saved.getItemId()).isEqualTo(LOGO_ITEM_ID);
-        assertThat(saved.getPrice()).isEqualTo(3900L);
-        assertThat(saved.getLogoImageUrl()).isEqualTo(LOGO_URL);
-        assertThat(saved.getExpiredAt()).isNull();
-    }
-
-    @Test
-    @DisplayName("크레딧 사용 내역은 방금 저장한 구매 이력과 연결되고, 사용 금액과 차감 후 잔액을 담는다")
-    void purchase_saveCreditHistory() {
-        given(this.itemService.getItems())
-                .willReturn(POTIONS);
-        given(this.creditWallet.tryDeduct(USER_ID, 3900L))
-                .willReturn(OptionalLong.of(1100L));
-        givenUserItemSavedWithId(7001L);
-        givenUniversity();
-
-        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, LOGO_ITEM_ID, LOGO_URL);
-
-        ArgumentCaptor<CreditHistory> captor = ArgumentCaptor.forClass(CreditHistory.class);
-        verify(this.creditHistoryRepository).save(captor.capture());
-
-        CreditHistory saved = captor.getValue();
-        assertThat(saved.getUserId()).isEqualTo(USER_ID);
-        assertThat(saved.getUserItemId()).isEqualTo(7001L);
-        assertThat(saved.getType()).isEqualTo(CreditHistoryType.USE);
-        assertThat(saved.getAmount()).isEqualTo(3900L);
-        assertThat(saved.getBalanceAfter()).isEqualTo(1100L);
-    }
-
-    @Test
-    @DisplayName("크레딧 구매 결과: 크레딧은 차감 후 값, 기여도는 차감되지 않은 현재 값, 만료 시각은 없음")
-    void purchase_creditItem_returnsResult() {
-        given(this.itemService.getItems())
-                .willReturn(POTIONS);
-        given(this.creditWallet.tryDeduct(USER_ID, 3900L))
-                .willReturn(OptionalLong.of(1100L));
-        givenUserItemSavedWithId(7001L);
-        given(this.contributionWallet.findBalance(USER_ID, UNIVERSITY_ID))
-                .willReturn(12888L);
-        givenUniversity();
-
-        ItemPurchaseResult result = this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, LOGO_ITEM_ID, LOGO_URL);
-
-        assertThat(result.userItemId()).isEqualTo(7001L);
-        assertThat(result.item()).isSameAs(POTIONS.get(2));
-        assertThat(result.price()).isEqualTo(3900L);
-        assertThat(result.expiredAt()).isNull();
-        assertThat(result.myCreditBalance()).isEqualTo(1100L);
-        assertThat(result.myContribScore()).isEqualTo(12888L);
-    }
-
-    @Test
-    @DisplayName("학교 로고 변경권을 사면 토큰의 학교 로고를 새 이미지로 바꾼다")
-    void purchase_universityLogo_changesUniversityLogo() {
-        given(this.itemService.getItems()).willReturn(POTIONS);
-        given(this.creditWallet.tryDeduct(USER_ID, 3900L)).willReturn(OptionalLong.of(1100L));
-        University university = givenUniversity();
-
-        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_URL);
-
-        assertThat(university.getLogoUrl()).isEqualTo(LOGO_URL);
-    }
-
-    @Test
-    @DisplayName("학과 로고 변경권을 사면 토큰의 학과 로고를 새 이미지로 바꾼다")
-    void purchase_departmentLogo_changesDepartmentLogo() {
-        given(this.itemService.getItems()).willReturn(POTIONS);
-        given(this.creditWallet.tryDeduct(USER_ID, 2900L)).willReturn(OptionalLong.of(2100L));
-        Department department = new Department(new University("로고테스트대"), "컴퓨터공학과");
-        given(this.departmentRepository.findById(DEPARTMENT_ID)).willReturn(Optional.of(department));
-
-        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 4L, LOGO_URL);
-
-        assertThat(department.getLogoUrl()).isEqualTo(LOGO_URL);
-    }
-
-    @Test
-    @DisplayName("개인 로고 변경권을 사면 내 프로필 로고를 새 이미지로 바꾼다")
-    void purchase_profileLogo_changesProfileLogo() {
-        given(this.itemService.getItems()).willReturn(POTIONS);
-        given(this.creditWallet.tryDeduct(USER_ID, 1900L)).willReturn(OptionalLong.of(3100L));
-        User user = User.create(UNIVERSITY_ID, DEPARTMENT_ID, "로고유저", "logo@test.com",
-                "a".repeat(64), "encoded", OffsetDateTime.now());
-        given(this.userRepository.findById(USER_ID)).willReturn(Optional.of(user));
-
-        this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 5L, LOGO_URL);
-
-        assertThat(user.getLogoUrl()).isEqualTo(LOGO_URL);
+        assertThat(result).isSameAs(expected);
+        verifyNoInteractions(this.creditPurchaseService);
     }
 }

@@ -66,4 +66,14 @@ public class Alliance extends BaseTimeEntity {
 
         return alliance;
     }
+
+    // 잠금 획득 후 호출한다. JPA 변경 감지로 상태가 저장된다.
+    public void startMatch(OffsetDateTime now) {
+        if (now == null) throw new IllegalArgumentException("현재 시각은 필수입니다.");
+        if (status != AllianceStatus.ACTIVE || deletedAt != null
+                || expiredAt == null || !expiredAt.isAfter(now)) {
+            throw new IllegalStateException("현재 대결을 시작할 수 없는 연합입니다.");
+        }
+        status = AllianceStatus.IN_MATCH;
+    }
 }
