@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * 프로필 이미지로 저장할 수 있는 URL인지 판단한다 (추가 명세 §3-1 "{@code profileImageUrl}은 3-2에서 발급받은 우리 S3 URL만").
+ * 프로필 수정과 개인 로고 변경권({@code LOGO_PROFILE}) 구매({@code CreditPurchaseService})가 쓴다.
  *
  * <p>허용 형식: {@code {file.public-base-url}/profile/{userId}/{파일 이름}.{png|jpg|jpeg|webp}}.
  * 업로드 URL 발급(3-2)의 저장 키 {@code {purpose}/{userId}/{UUID}.{확장자}}와 응답 예시
