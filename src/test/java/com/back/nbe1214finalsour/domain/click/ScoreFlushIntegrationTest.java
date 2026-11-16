@@ -119,6 +119,39 @@ class ScoreFlushIntegrationTest {
         assertThat(departmentScoreOf(department.getId())).isEqualTo(300L);
     }
 
+    @Test
+    @DisplayName("반영한 뒤에는 dirty 표시를 지워 다음 배치가 다시 쓰지 않게 한다")
+    void clearsDirtySetsAfterFlush() {
+        // given
+        University university = universityRepository.saveAndFlush(new University("배치테스트대학교"));
+        Department department = departmentRepository.saveAndFlush(new Department(university, "배치학과"));
+        User user = saveUser(university, department, "배치회원", "flush-clear@test.ac.kr");
+        String univId = String.valueOf(university.getId());
+        String deptId = String.valueOf(department.getId());
+        String userId = String.valueOf(user.getId());
+
+        String deptRankKey = RedisKey.RANK_DEPT.of(university.getId());
+        String userRankKey = RedisKey.RANK_USER.of(university.getId());
+        usedKeys.add(deptRankKey);
+        usedKeys.add(userRankKey);
+        addedUnivRankMembers.add(univId);
+
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_UNIV.of(), univId);
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_DEPT.of(), deptId);
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_USER.of(), userId);
+        stringRedisTemplate.opsForZSet().add(RedisKey.RANK_UNIV.of(), univId, 100);
+        stringRedisTemplate.opsForZSet().add(deptRankKey, deptId, 100);
+        stringRedisTemplate.opsForZSet().add(userRankKey, userId, 100);
+
+        // when
+        scoreFlushService.flush();
+
+        // then
+        assertThat(stringRedisTemplate.opsForSet().size(RedisKey.DIRTY_UNIV.of())).isZero();
+        assertThat(stringRedisTemplate.opsForSet().size(RedisKey.DIRTY_DEPT.of())).isZero();
+        assertThat(stringRedisTemplate.opsForSet().size(RedisKey.DIRTY_USER.of())).isZero();
+    }
+
     private Long departmentScoreOf(Long departmentId) {
         return jdbcTemplate.queryForObject(
                 "SELECT total_score FROM department WHERE id = ?", Long.class, departmentId);

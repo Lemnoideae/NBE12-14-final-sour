@@ -1,9 +1,9 @@
 package com.back.nbe1214finalsour.domain.click.service;
 
 import com.back.nbe1214finalsour.domain.university.repository.DepartmentRepository;
-import com.back.nbe1214finalsour.domain.university.repository.UniversityRepository;
+import com.back.nbe1214finalsour.domain.university.repository.projections.DeptUniv;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
-import com.back.nbe1214finalsour.domain.user.repository.dto.UserUniv;
+import com.back.nbe1214finalsour.domain.user.repository.projections.UserUniv;
 import com.back.nbe1214finalsour.global.redis.RedisKey;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -23,20 +23,47 @@ public class ScoreFlushService {
     private final StringRedisTemplate stringRedisTemplate;
     private final JdbcTemplate jdbcTemplate;
     private final UserRepository userRepository;
-    private final UniversityRepository universityRepository;
     private final DepartmentRepository departmentRepository;
 
     public void flush() {
-        // 변경된 항목
-        List<Long> dirtyDepts = stringRedisTemplate.opsForSet().members(RedisKey.DIRTY_DEPT.of()).stream().map(Long::parseLong).toList();
-
         // 개인 점수 저장
         flushUsers();
         // 학교 점수 저장
         flushUnivs();
-
         // 학과 점수 저장
+        flushDepts();
+    }
 
+    private void flushDepts() {
+        List<Long> dirtyDepts = stringRedisTemplate.opsForSet().members(RedisKey.DIRTY_DEPT.of()).stream().map(Long::parseLong).toList();
+
+        Map<Long, List<Long>> deptsByUniv = departmentRepository.findUniversityIdsByIdIn(dirtyDepts).stream()
+                .collect(Collectors.groupingBy(DeptUniv::universityId,
+                        Collectors.mapping(DeptUniv::departmentId, Collectors.toList()))
+                );
+        List<Long> ids = new ArrayList<>();
+        List<Long> scores = new ArrayList<>();
+
+        deptsByUniv.forEach((univId, deptIds) -> {
+            String key = RedisKey.RANK_DEPT.of(univId);
+            List<Double> values = stringRedisTemplate.opsForZSet()
+                    .score(key, deptIds.stream().map(String::valueOf).toArray());
+            for (int i = 0; i < deptIds.size(); i++) {
+                Double v = values.get(i);
+                ids.add(deptIds.get(i));
+                scores.add(v.longValue());
+            }
+        });
+
+        if (ids.isEmpty()) return;
+
+        jdbcTemplate.update("""
+                update department as d
+                set total_score = x.score
+                from unnest(?::bigint[], ?::bigint[]) as x(id, score)
+                where d.id = x.id
+                    and d.total_score is distinct from x.score
+                """, ids.toArray(Long[]::new), scores.toArray(Long[]::new));
     }
 
     private void flushUnivs() {
@@ -49,7 +76,7 @@ public class ScoreFlushService {
 
         List<Long> ids = new ArrayList<>();
         List<Long> scores = new ArrayList<>();
-        for (int i=0; i<univIds.size(); i++) {
+        for (int i = 0; i < univIds.size(); i++) {
             Double v = values.get(i);
             if (v == null) continue;
             ids.add(Long.parseLong(univIds.get(i)));
@@ -57,12 +84,12 @@ public class ScoreFlushService {
         }
 
         jdbcTemplate.update("""
-                            update university as u
-                            set total_score = x.score
-                            from unnest(?::bigint[], ?::bigint[]) as x(id, score)
-                            where u.id = x.id
-                                and u.total_score is distinct from x.score
-                            """, ids.toArray(Long[]::new), scores.toArray(Long[]::new));
+                update university as u
+                set total_score = x.score
+                from unnest(?::bigint[], ?::bigint[]) as x(id, score)
+                where u.id = x.id
+                    and u.total_score is distinct from x.score
+                """, ids.toArray(Long[]::new), scores.toArray(Long[]::new));
     }
 
     private void flushUsers() {
@@ -80,7 +107,7 @@ public class ScoreFlushService {
             String key = RedisKey.RANK_USER.of(univId);
             List<Double> values = stringRedisTemplate.opsForZSet()
                     .score(key, userIds.stream().map(String::valueOf).toArray());
-            for (int i=0; i<userIds.size();i++) {
+            for (int i = 0; i < userIds.size(); i++) {
                 Double v = values.get(i);
                 if (v == null) continue;
                 ids.add(userIds.get(i));
@@ -91,12 +118,11 @@ public class ScoreFlushService {
         if (ids.isEmpty()) return;
 
         jdbcTemplate.update("""
-                            update users as u 
-                            set total_contrib_score = x.score
-                            from unnest(?::bigint[], ?::bigint[]) AS x(id, score)
-                            where u.id = x.id
-                                and u.total_contrib_score is distinct from x.score
-                            """,
-                ids.toArray(Long[]::new), scores.toArray(Long[]::new));
+                update users as u 
+                set total_contrib_score = x.score
+                from unnest(?::bigint[], ?::bigint[]) AS x(id, score)
+                where u.id = x.id
+                    and u.total_contrib_score is distinct from x.score
+                """, ids.toArray(Long[]::new), scores.toArray(Long[]::new));
     }
 }

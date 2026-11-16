@@ -6,7 +6,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
-import com.back.nbe1214finalsour.domain.user.repository.dto.UserUniv;
+import com.back.nbe1214finalsour.domain.user.repository.projections.UserUniv;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
