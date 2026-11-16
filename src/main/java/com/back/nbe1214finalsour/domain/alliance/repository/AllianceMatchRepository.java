@@ -23,6 +23,16 @@ public interface AllianceMatchRepository extends JpaRepository<AllianceMatch, Lo
     boolean existsRequestedBetween(@Param("a") Long allianceAId,
                                    @Param("b") Long allianceBId);
 
+    // 엔티티를 영속성 컨텍스트에 넣지 않고 FK 값 두 개만 읽는다.
+    // 두 연합에 락을 건 다음에야 findByIdForUpdate()로 대결 엔티티를 조회한다.
+    @Query("""
+        SELECT new com.back.nbe1214finalsour.domain.alliance.repository.AllianceMatchPair(
+            m.allianceAId, m.allianceBId)
+        FROM AllianceMatch m
+        WHERE m.id = :matchId
+        """)
+    Optional<AllianceMatchPair> findPairById(@Param("matchId") Long matchId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT m FROM AllianceMatch m WHERE m.id = :matchId")
     Optional<AllianceMatch> findByIdForUpdate(@Param("matchId") Long matchId);

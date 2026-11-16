@@ -321,7 +321,7 @@ class AllianceMatchServiceTest {
         ).isInstanceOfSatisfying(
                 BusinessException.class,
                 ex -> assertThat(ex.getErrorCode())
-                        .isEqualTo(ErrorCode.ALLY_FULL)
+                        .isEqualTo(ErrorCode.MATCH_MEMBERS_INCOMPLETE)
         );
 
         // 대결 신청 정보는 저장하지 않음
@@ -436,7 +436,7 @@ class AllianceMatchServiceTest {
         ).isInstanceOfSatisfying(
                 BusinessException.class,
                 ex -> assertThat(ex.getErrorCode())
-                        .isEqualTo(ErrorCode.COMMON_INVALID_INPUT)
+                        .isEqualTo(ErrorCode.MATCH_INSUFFICIENT_TIME)
         );
 
         // 신청 정보가 저장되지 않았는지 검증
@@ -462,8 +462,8 @@ class AllianceMatchServiceTest {
                 now.plusHours(12)
         );
 
-        when(allianceMatchRepository.findById(matchId))
-                .thenReturn(Optional.of(match));
+        when(allianceMatchRepository.findPairById(matchId))
+                .thenReturn(Optional.of(new AllianceMatchPair(allianceAId, allianceBId)));
 
         when(allianceMatchRepository.findByIdForUpdate(matchId))
                 .thenReturn(Optional.of(match));
@@ -557,8 +557,8 @@ class AllianceMatchServiceTest {
                 now.plusHours(12)
         );
 
-        when(allianceMatchRepository.findById(matchId))
-                .thenReturn(Optional.of(match));
+        when(allianceMatchRepository.findPairById(matchId))
+                .thenReturn(Optional.of(new AllianceMatchPair(allianceAId, allianceBId)));
 
         when(allianceMatchRepository.findByIdForUpdate(matchId))
                 .thenReturn(Optional.of(match));
@@ -659,8 +659,8 @@ class AllianceMatchServiceTest {
         OffsetDateTime startedAt = now.minusMinutes(1);
         match.accept(startedAt);
 
-        when(allianceMatchRepository.findById(matchId))
-                .thenReturn(Optional.of(match));
+        when(allianceMatchRepository.findPairById(matchId))
+                .thenReturn(Optional.of(new AllianceMatchPair(allianceAId, allianceBId)));
 
         when(allianceMatchRepository.findByIdForUpdate(matchId))
                 .thenReturn(Optional.of(match));
@@ -696,7 +696,7 @@ class AllianceMatchServiceTest {
         ).isInstanceOfSatisfying(
                 BusinessException.class,
                 ex -> assertThat(ex.getErrorCode())
-                        .isEqualTo(ErrorCode.COMMON_INVALID_INPUT)
+                        .isEqualTo(ErrorCode.MATCH_NOT_PENDING)
         );
 
         // 기존 대결 상태와 시작 시간이 유지되어야 함
