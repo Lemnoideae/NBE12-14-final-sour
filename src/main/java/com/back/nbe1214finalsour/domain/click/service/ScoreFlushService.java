@@ -50,9 +50,17 @@ public class ScoreFlushService {
     }
 
     private boolean detach(String dirtyKey, String flushingKey) {
-        if (!Boolean.TRUE.equals(stringRedisTemplate.hasKey(dirtyKey))) return false;
-        stringRedisTemplate.rename(dirtyKey, flushingKey);
-        return true;
+        boolean hasNew = Boolean.TRUE.equals(stringRedisTemplate.hasKey(dirtyKey));
+        boolean hasLeftover = Boolean.TRUE.equals(stringRedisTemplate.hasKey(flushingKey));
+        if (hasNew && !hasLeftover) {
+            stringRedisTemplate.rename(dirtyKey, flushingKey);
+        } else if (hasNew) {
+            String incomingKey = dirtyKey + ":incoming";
+            stringRedisTemplate.rename(dirtyKey, incomingKey);
+            stringRedisTemplate.opsForSet().unionAndStore(flushingKey, incomingKey, flushingKey);
+            stringRedisTemplate.delete(incomingKey);
+        }
+        return hasNew || hasLeftover;
     }
 
     private void flushDepts(String dirtyKey) {
