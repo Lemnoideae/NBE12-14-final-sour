@@ -48,11 +48,17 @@ class ScoreFlushIntegrationTest {
     @Autowired
     private EmailHasher emailHasher;
 
-    private final List<String> usedKeys = new ArrayList<>(List.of(RedisKey.DIRTY_USER.of()));
+    private final List<String> usedKeys = new ArrayList<>(List.of(
+            RedisKey.DIRTY_USER.of(), RedisKey.DIRTY_UNIV.of()));
+    /** {@code rank:univ}는 키가 하나뿐이라 통째로 지우지 않고 테스트가 넣은 학교만 뺀다. */
+    private final List<String> addedUnivRankMembers = new ArrayList<>();
 
     @AfterEach
     void cleanUpRedis() {
         stringRedisTemplate.delete(usedKeys);
+        if (!addedUnivRankMembers.isEmpty()) {
+            stringRedisTemplate.opsForZSet().remove(RedisKey.RANK_UNIV.of(), addedUnivRankMembers.toArray());
+        }
     }
 
     @Test
@@ -75,10 +81,33 @@ class ScoreFlushIntegrationTest {
         assertThat(contribScoreOf(user.getId())).isEqualTo(500L);
     }
 
+    @Test
+    @DisplayName("dirty 학교의 Redis 점수로 DB 학교 점수를 덮어쓴다")
+    void flushesDirtyUniversityScore() {
+        // given
+        University university = universityRepository.saveAndFlush(new University("배치테스트대학교"));
+        String univId = String.valueOf(university.getId());
+
+        addedUnivRankMembers.add(univId);
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_UNIV.of(), univId);
+        stringRedisTemplate.opsForZSet().add(RedisKey.RANK_UNIV.of(), univId, 1200);
+
+        // when
+        scoreFlushService.flush();
+
+        // then
+        assertThat(universityScoreOf(university.getId())).isEqualTo(1200L);
+    }
+
     /** JPA 1차 캐시를 거치지 않도록 DB 값을 직접 읽는다. */
     private Long contribScoreOf(Long userId) {
         return jdbcTemplate.queryForObject(
                 "SELECT total_contrib_score FROM users WHERE id = ?", Long.class, userId);
+    }
+
+    private Long universityScoreOf(Long universityId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT total_score FROM university WHERE id = ?", Long.class, universityId);
     }
 
     private User saveUser(University university, Department department, String nickname, String email) {
