@@ -47,7 +47,12 @@ public class ClickerUpgradeService {
         }
 
         // updater의 트랜잭션이 이미 커밋된 뒤이므로, 클릭 엔진용 레벨 캐시를 직접 갱신한다
-        this.userClickerLevelCache.raiseLevel(userId, nextClicker.getId());
+        // try 밖의 복구 대상이 아니다: 캐시 실패로 기여도를 돌려주면 DB는 커밋됐는데 기여도가 돌아가는 공짜 레벨업이 된다
+        try {
+            this.userClickerLevelCache.raiseLevel(userId, nextClicker.getId());
+        } catch (RuntimeException e) {
+            log.error("클리커 레벨 캐시 갱신 실패 userId={}, newLevel={}", userId, nextClicker.getId(), e);
+        }
 
         // 다음 레벨업에 필요한 기여도 계산, 이번 레벨업 결과가 최고 레벨이라면 null
         Long nextLevelRequiredScore = levelTable.stream()
