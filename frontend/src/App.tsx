@@ -27,6 +27,8 @@ import { OurSchoolGuestbookBottomSheet } from './components/OurSchoolGuestbookBo
 import { ChatPreviewBar } from './components/ChatPreviewBar';
 import { ChatBottomSheet } from './components/ChatBottomSheet';
 import { BottomSheetDialog } from './components/BottomSheetDialog';
+import { BotCheckDialog } from './components/BotCheckDialog';
+import { SupportGuestScreenPhone } from './components/SupportGuestScreenPhone';
 import { CampusStatsSheet } from './components/CampusStatsSheet';
 import { getSchoolRankings } from './data/mockRankings';
 import { useMockGame } from './hooks/useMockGame';
@@ -46,7 +48,7 @@ import { Smartphone, Gamepad2, Layers, Trophy, ShoppingBag, MapPin, Image as Ima
 
 // [시연] 헤더 학교명 길이별 표시 확인용. 실제 학교 데이터가 아니라 목업 표시 테스트 값이다.
 /** Service flow screens (M5-D). Demo tools and design comparisons are left out of the 44px touch areas. */
-const SERVICE_VIEW_MODES = new Set<string>(['gameplay', 'signup', 'single_map', 'visiting', 'ranking', 'shop', 'alliance_apply', 'current_alliance', 'battle_apply', 'battle_status']);
+const SERVICE_VIEW_MODES = new Set<string>(['gameplay', 'signup', 'single_map', 'visiting', 'ranking', 'shop', 'alliance_apply', 'current_alliance', 'battle_apply', 'battle_status', 'support_guest']);
 
 const DEMO_SCHOOL_NAMES = [
   // 'default' shows the player's school (M4: set by the mock email verification).
@@ -57,7 +59,7 @@ const DEMO_SCHOOL_NAMES = [
 
 function AppContent() {
   // Mode: 'ranking_screens' (2-phone ranking comparison with infinite scroll) | 'our_guestbook_screens' | 'visiting_screens' | etc.
-  const [viewMode, setViewMode] = useState<'ranking_screens' | 'our_guestbook_screens' | 'visiting_screens' | 'chat_screens' | 'single_map' | 'visiting' | 'map_screens' | 'map_illustration' | 'shop' | 'ranking' | 'spritesheet' | 'onboarding' | 'signup' | 'gameplay' | 'alliance_apply' | 'current_alliance' | 'battle_apply' | 'battle_status'>('gameplay');
+  const [viewMode, setViewMode] = useState<'ranking_screens' | 'our_guestbook_screens' | 'visiting_screens' | 'chat_screens' | 'single_map' | 'visiting' | 'map_screens' | 'map_illustration' | 'shop' | 'ranking' | 'spritesheet' | 'onboarding' | 'signup' | 'gameplay' | 'alliance_apply' | 'current_alliance' | 'battle_apply' | 'battle_status' | 'support_guest'>('gameplay');
   const [isChatSheetOpen, setIsChatSheetOpen] = useState<boolean>(false);
   const [isOurGuestbookSheetOpen, setIsOurGuestbookSheetOpen] = useState<boolean>(false);
   const [isStatsSheetOpen, setIsStatsSheetOpen] = useState<boolean>(false);
@@ -308,6 +310,19 @@ function AppContent() {
         >
           <span>📊 대결 현황 (Battle Status)</span>
         </button>
+
+        {/* SCRUM-122: guest inquiry with the bot check. */}
+        <button
+          onClick={() => {
+            setViewMode('support_guest');
+            soundManager.playTabSound();
+          }}
+          className={`pixel-plaque px-2.5 py-1.5 text-xs font-pixel font-bold flex items-center gap-1.5 cursor-pointer ${
+            viewMode === 'support_guest' ? 'plaque-yellow' : 'plaque-parchment'
+          }`}
+        >
+          <span>📮 비회원 문의</span>
+        </button>
       </nav>
       <nav aria-label="[시연] 시안 비교·도구" className={`flex items-center gap-1.5 flex-wrap ${inSheet ? 'justify-start' : 'justify-end'}`}>
         <span className="font-pixel text-[10px] font-black text-[#8b5327]">[시연] 시안 비교·도구</span>
@@ -440,6 +455,11 @@ function AppContent() {
       <label className="font-pixel text-xs font-bold flex items-center gap-1">
         <input type="checkbox" checked={game.clickRejectDemo} onChange={(e) => game.setClickRejectDemo(e.target.checked)} />
         [시연] 서버 클릭 거절 응답
+      </label>
+      {/* SCRUM-121: stands in for the server's abuse flag. A click while on opens the bot check. */}
+      <label className="font-pixel text-xs font-bold flex items-center gap-1">
+        <input type="checkbox" checked={game.abuseFlagged} onChange={(e) => game.setAbuseFlagged(e.target.checked)} />
+        [시연] 어뷰징 의심 표시 (봇 확인 요구)
       </label>
     </section>
   );
@@ -687,6 +707,10 @@ function AppContent() {
               onNavigateToBattleApply={() => setViewMode('battle_apply')}
             />
           </div>
+        ) : viewMode === 'support_guest' ? (
+          <div className={viewWrap}>
+            <SupportGuestScreenPhone onBack={goToMySchool} />
+          </div>
         ) : viewMode === 'spritesheet' ? (
           <SpriteSheetViewer
             currentLevel={campusLevel}
@@ -857,6 +881,8 @@ function AppContent() {
         )}
         </div>
         </PhoneShellVariantContext.Provider>
+        {/* SCRUM-121: one bot check for every screen that sends my campus clicks. */}
+        {game.botCheckOpen && <BotCheckDialog onVerified={game.completeBotCheck} onClose={game.closeBotCheck} />}
       </div>
     </AllianceNavProvider>
   );

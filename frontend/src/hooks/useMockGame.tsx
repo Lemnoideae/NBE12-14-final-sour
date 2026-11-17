@@ -2,6 +2,8 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { DEFAULT_PLAYER, initialSchoolScore, makeStoreItems, resolveDepartmentId, type MockPlayerInfo, type MockStoreItem } from '../data/gameRules';
 import { MockAuthProvider } from './useMockAuth.tsx';
 import { MockRequestProvider } from './useMockRequest.tsx';
+import { TurnstileLoaderProvider } from './useTurnstileLoader.tsx';
+import type { TurnstileLoader } from '../utils/turnstile.ts';
 import { describeClickRejection, INITIAL_CLICK_GUARD, judgeClick, MOCK_CLICK_RULES, type ClickGuardRules, type ClickRejectReason } from '../utils/clickGuard.ts';
 import type { MockRequestMode } from '../utils/mockRequest.ts';
 import type { EnrolledProfile } from '../utils/mockAuth.ts';
@@ -91,10 +93,28 @@ function useGameController(
     if (!on) setClickRejection((current) => (current?.reason === 'forced' ? null : current));
   }, []);
 
+  // Abuse flag and bot check (SCRUM-121). The server flags a member who passed a click limit and answers every click
+  // with 403 ABUSE_VERIFICATION_REQUIRED until a bot check passes. [목업] The demo switch stands in for that flag.
+  const abuseFlagRef = useRef(false);
+  const [abuseFlagged, setAbuseFlaggedState] = useState(false);
+  const [botCheckOpen, setBotCheckOpen] = useState(false);
+  const setAbuseFlagged = useCallback((on: boolean) => {
+    abuseFlagRef.current = on;
+    setAbuseFlaggedState(on);
+    if (!on) setBotCheckOpen(false);
+  }, []);
+  const closeBotCheck = useCallback(() => setBotCheckOpen(false), []);
+  const completeBotCheck = useCallback(() => setAbuseFlagged(false), [setAbuseFlagged]);
+
   /** Returns the points added, or null when the click was refused. */
   const tap = useCallback((isCrit: boolean): number | null => {
     const timestamp = Date.now();
     setNow(timestamp);
+    // A flagged click is refused before the click checks, as the server checks the flag first.
+    if (abuseFlagRef.current) {
+      setBotCheckOpen(true);
+      return null;
+    }
     const judged = judgeClick(guardRef.current, timestamp, guardRules, rejectDemoRef.current);
     guardRef.current = judged.state;
     if (!judged.accepted) {
@@ -148,6 +168,7 @@ function useGameController(
   return {
     state, player, setPlayer, enroll, tap, buy, upgrade, previewCampus, shopConfig, storeItems,
     clickRejectDemo, setClickRejectDemo, clickNotice,
+    abuseFlagged, setAbuseFlagged, botCheckOpen, closeBotCheck, completeBotCheck,
     imageStore,
     clicker: getClicker(state.clickerId),
     nextClicker: getNextClicker(state.clickerId),
@@ -170,8 +191,11 @@ export function MockGameProvider({
   generateAuthCode,
   clickRules = MOCK_CLICK_RULES,
   initialRequestMode,
+  turnstileLoader,
 }: {
   children: React.ReactNode;
+  /** Turnstile script loader for the bot check (SCRUM-121). Tests pass a fake; the app loads the Cloudflare script. */
+  turnstileLoader?: TurnstileLoader;
   /** Fixed verification codes for tests. The app uses random six-digit codes. */
   generateAuthCode?: () => string;
   /** Mock click limits (M5 D2). Tests may pass other values; the app uses the defaults. */
@@ -189,7 +213,9 @@ export function MockGameProvider({
     <SharedImageProvider store={store}>
       <MockGameContext.Provider value={game}>
         <MockRequestProvider initialMode={initialRequestMode}>
-          <MockAuthProvider generateCode={generateAuthCode}>{children}</MockAuthProvider>
+          <TurnstileLoaderProvider loader={turnstileLoader}>
+            <MockAuthProvider generateCode={generateAuthCode}>{children}</MockAuthProvider>
+          </TurnstileLoaderProvider>
         </MockRequestProvider>
       </MockGameContext.Provider>
     </SharedImageProvider>
