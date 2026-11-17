@@ -79,6 +79,12 @@ public final class RawStompClient implements AutoCloseable {
         }
     }
 
+    /** 본문에 ':'가 들어가도 되도록 헤더와 본문을 따로 받는다 */
+    public void sendJson(String destination, String body) throws Exception {
+        this.session.sendMessage(new TextMessage(
+                "SEND\ndestination:" + destination + "\ncontent-type:application/json\n\n" + body + "\0"));
+    }
+
     public void subscribe(String id, String destination) throws Exception {
         send("SUBSCRIBE", "id:" + id, "destination:" + destination);
     }
