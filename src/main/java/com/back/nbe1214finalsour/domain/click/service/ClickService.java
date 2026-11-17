@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.click.service;
 
+import com.back.nbe1214finalsour.domain.abuse.service.AbuseVerificationService;
 import com.back.nbe1214finalsour.domain.click.dto.ClickApplyResponse;
 import com.back.nbe1214finalsour.domain.click.dto.ClickRequest;
 import com.back.nbe1214finalsour.domain.click.dto.ClickResponse;
@@ -25,6 +26,7 @@ public class ClickService {
     private final UserRepository userRepository;
     private final RedisHandler redisHandler;
     private final ClickActionGuard clickActionGuard;
+    private final AbuseVerificationService abuseVerificationService;
 
     private static final RedisScript<List> APPLY_CLICK = RedisScript.of(new ClassPathResource("redis/apply-click.lua"), List.class);
 
@@ -43,6 +45,9 @@ public class ClickService {
                     .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND))
                     .getDepartmentId();
         }
+
+        // 어뷰징 의심 표시가 있으면 봇 확인 전까지 막는다 (SCRUM-118). 중복 제출 확인보다 앞이라 막힌 요청은 submissionId를 쓰지 않는다
+        abuseVerificationService.requireNotFlagged(userId);
 
         // 아이템 적용 가져오기
         Double multiplier = redisHandler.getHash(RedisKey.USER_EFFECT.of(userId), "multiplier", Double.class)

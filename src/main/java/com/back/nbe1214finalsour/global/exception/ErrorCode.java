@@ -31,6 +31,8 @@ public enum ErrorCode {
     COMMON_INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "COMMON_INTERNAL_ERROR", "서버 오류가 발생했습니다."),
 
     COMMON_REDIS_MEMBER_NOT_NUMERIC(HttpStatus.INTERNAL_SERVER_ERROR, "COMMON_REDIS_MEMBER_NOT_NUMERIC", "서버 오류가 발생했습니다."),
+    /** 도메인 전용 코드가 없는 요청 횟수 초과. 문의 등록 한도가 먼저 쓴다 (추가 명세 §3-8, SCRUM-110) */
+    COMMON_TOO_MANY_REQUESTS(HttpStatus.TOO_MANY_REQUESTS, "COMMON_TOO_MANY_REQUESTS", "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."),
 
     // ===== AUTH (1번) =====
     AUTH_EMAIL_ALREADY_REGISTERED(HttpStatus.CONFLICT, "AUTH_EMAIL_ALREADY_REGISTERED", "이미 가입된 이메일입니다."),
@@ -55,10 +57,22 @@ public enum ErrorCode {
     USER_SUSPENDED(HttpStatus.FORBIDDEN, "USER_SUSPENDED", "이용이 제한된 계정입니다."),
     USER_INVALID_PASSWORD(HttpStatus.BAD_REQUEST, "USER_INVALID_PASSWORD", "비밀번호가 올바르지 않습니다."),
 
+    // ===== SUPPORT (1번, 추가 명세 §3-8·§3-9) =====
+    SUPPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "SUPPORT_NOT_FOUND", "문의를 찾을 수 없습니다."),
+    SUPPORT_NOT_OWNER(HttpStatus.FORBIDDEN, "SUPPORT_NOT_OWNER", "본인의 문의만 조회할 수 있습니다."),
+    SUPPORT_ALREADY_ANSWERED(HttpStatus.CONFLICT, "SUPPORT_ALREADY_ANSWERED", "이미 답변한 문의입니다."),
+    SUPPORT_ATTACHMENT_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "SUPPORT_ATTACHMENT_NOT_ALLOWED", "비회원 문의에는 파일을 첨부할 수 없습니다."),
+
     // ===== CLICK (2번) =====
     CLICK_DUPLICATE_SUBMISSION(HttpStatus.CONFLICT, "CLICK_DUPLICATE_SUBMISSION", "이미 처리한 제출입니다."),
     CLICK_TOO_FREQUENT(HttpStatus.TOO_MANY_REQUESTS, "CLICK_TOO_FREQUENT", "제출 요청이 너무 많습니다."),
     CLICK_COUNT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "CLICK_COUNT_EXCEEDED", "클릭 수가 너무 많습니다."),
+
+    // ===== ABUSE (어뷰징 의심 시 Turnstile 봇 확인, SCRUM-115) =====
+    /** 어뷰징이 의심되어 봇 확인이 필요함. 프론트는 Turnstile 위젯을 띄운다 */
+    ABUSE_VERIFICATION_REQUIRED(HttpStatus.FORBIDDEN, "ABUSE_VERIFICATION_REQUIRED", "자동 입력 방지 확인이 필요합니다."),
+    /** Cloudflare가 토큰을 거절함 (가짜·만료·재사용 토큰). Cloudflare에 닿지 못한 경우는 통과시키므로 이 코드가 아니다 */
+    ABUSE_VERIFICATION_FAILED(HttpStatus.FORBIDDEN, "ABUSE_VERIFICATION_FAILED", "자동 입력 방지 확인에 실패했습니다. 다시 시도해주세요."),
 
     // ===== UNIV / RANK (3번) =====
     UNIV_NOT_FOUND(HttpStatus.NOT_FOUND, "UNIV_NOT_FOUND", "학교를 찾을 수 없습니다."),
@@ -94,6 +108,8 @@ public enum ErrorCode {
     ITEM_NOT_ENOUGH_SCORE(HttpStatus.BAD_REQUEST, "ITEM_NOT_ENOUGH_SCORE", "아이템 구매에 필요한 기여도가 부족합니다."),
     ITEM_NOT_ENOUGH_CREDIT(HttpStatus.BAD_REQUEST, "ITEM_NOT_ENOUGH_CREDIT", "아이템 구매에 필요한 크레딧이 부족합니다."),
     ITEM_LOGO_IMAGE_REQUIRED(HttpStatus.BAD_REQUEST, "ITEM_LOGO_IMAGE_REQUIRED", "로고 아이템은 로고 이미지가 필요합니다."),
+    ITEM_LOGO_IMAGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "ITEM_LOGO_IMAGE_TOO_LARGE", "로고 이미지는 5MB 이하만 올릴 수 있습니다."),
+    ITEM_LOGO_IMAGE_INVALID_TYPE(HttpStatus.BAD_REQUEST, "ITEM_LOGO_IMAGE_INVALID_TYPE", "로고 이미지는 PNG, JPG, WEBP만 올릴 수 있습니다."),
 
     // ===== ATTACK =====
     ATTACK_OWN_UNIVERSITY(HttpStatus.BAD_REQUEST, "ATTACK_OWN_UNIVERSITY", "모교를 공격할 수 없습니다."),

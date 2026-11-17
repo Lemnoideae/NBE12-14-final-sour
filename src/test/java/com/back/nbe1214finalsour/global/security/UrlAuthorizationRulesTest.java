@@ -186,6 +186,18 @@ class UrlAuthorizationRulesTest {
         perform(admin, jwtProvider.createAccessToken(ADMIN, null)).andExpect(status().isOk());
     }
 
+    @Test
+    @DisplayName("문의 등록(추가 명세 §3-8, 선택)은 익명도 보안 규칙을 통과하고, 유효한 토큰이면 로그인 회원이 채워진다")
+    void supportCreateIsOptional() throws Exception {
+        Row create = new Row(HttpMethod.POST, "/api/v1/supports", Auth.OPTIONAL);
+        perform(create, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isEmpty());
+        perform(create, jwtProvider.createAccessToken(USER, null))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").value(42));
+    }
+
     @ParameterizedTest(name = "{0}")
     @MethodSource("notInSpec")
     @DisplayName("명세서 표에 없는 /api 경로·메서드는 로그인이 필요하다 (공개는 목록에 넣을 때만)")
@@ -203,6 +215,14 @@ class UrlAuthorizationRulesTest {
                 new Row(HttpMethod.POST, "/api/v1/clickers", Auth.REQUIRED),
                 new Row(HttpMethod.GET, "/api/v1/auth/login", Auth.REQUIRED),
                 new Row(HttpMethod.DELETE, "/api/v1/universities/12", Auth.REQUIRED),
+                new Row(HttpMethod.GET, "/api/v1/supports", Auth.REQUIRED),
+                // 문의 등록만 선택이고 조회는 필요 (추가 명세 §3-8)
+                new Row(HttpMethod.GET, "/api/v1/supports/me", Auth.REQUIRED),
+                new Row(HttpMethod.GET, "/api/v1/supports/88", Auth.REQUIRED),
+                // 공개 POST는 정확한 경로만
+                new Row(HttpMethod.POST, "/api/v1/supports/88", Auth.REQUIRED),
+                // 클릭 어뷰징 봇 확인은 로그인 회원만 (SCRUM-118)
+                new Row(HttpMethod.POST, "/api/v1/abuse/verification", Auth.REQUIRED),
                 // '*'는 경로 한 칸만
                 new Row(HttpMethod.GET, "/api/v1/universities/12/members", Auth.REQUIRED),
                 new Row(HttpMethod.GET, "/api/v1/rankings/universities/12/users/42", Auth.REQUIRED),

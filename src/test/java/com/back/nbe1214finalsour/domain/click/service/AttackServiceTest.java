@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.click.service;
 
+import com.back.nbe1214finalsour.domain.abuse.service.AbuseVerificationService;
 import com.back.nbe1214finalsour.domain.click.dto.AttackRequest;
 import com.back.nbe1214finalsour.domain.click.dto.AttackResponse;
 import com.back.nbe1214finalsour.domain.click.service.rival.RivalChecker;
@@ -71,6 +72,8 @@ class AttackServiceTest {
     private RivalChecker rivalChecker;
     @Mock
     private UniversityNameCache universityNameCache;
+    @Mock
+    private AbuseVerificationService abuseVerificationService;
 
     private AttackService attackService;
 
@@ -78,7 +81,7 @@ class AttackServiceTest {
     void setUp() {
         ClickActionGuard clickActionGuard = new ClickActionGuard(
                 stringRedisTemplate, userStatusCache, userRepository,
-                actionRateLimiter, clickCountLimiter, clickerService);
+                actionRateLimiter, clickCountLimiter, clickerService, abuseVerificationService);
         attackService = new AttackService(clickActionGuard, stringRedisTemplate, rivalChecker, universityNameCache);
     }
 

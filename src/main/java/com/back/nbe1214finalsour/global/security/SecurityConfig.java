@@ -31,8 +31,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     /**
-     * 로그인 없이 호출하는 POST (API 명세서 §2 인증 "불필요"·"쿠키"). 재발급은 access 토큰 대신 refresh 쿠키로 확인한다.
+     * 로그인 없이 호출하는 POST (API 명세서 §2 인증 "불필요"·"쿠키"·"선택"). 재발급은 access 토큰 대신 refresh 쿠키로 확인한다.
      * 경로는 URL 접두어 결정(회원 MVP 계획 Q1)에 따라 명세서의 {@code /api/...} 대신 {@code /api/v1/...}이다.
+     * 문의 등록은 "선택"이지만 틀린 토큰을 익명으로 넘기지 않고 컨트롤러가 401로 막는다 ({@code SupportController}).
      */
     static final String[] PUBLIC_POST = {
             "/api/v1/auth/email/code",
@@ -40,6 +41,7 @@ public class SecurityConfig {
             "/api/v1/auth/signup",
             "/api/v1/auth/login",
             "/api/v1/auth/reissue",
+            "/api/v1/supports",                                 // 선택 (추가 명세 §3-8)
     };
 
     /**

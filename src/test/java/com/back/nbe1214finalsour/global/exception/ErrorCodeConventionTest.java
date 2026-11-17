@@ -16,7 +16,12 @@ class ErrorCodeConventionTest {
 
     /** API 명세서(추가 기능 명세 포함)에 나온 도메인 접두어. 새 도메인을 추가하면 여기에도 추가한다. */
     private static final Set<String> ALLOWED_PREFIXES = Set.of(
+<<<<<<< HEAD
             "COMMON", "AUTH", "USER", "CLICK", "CLICKER", "ITEM", "UNIV", "ALLY", "MATCH", "GUEST", "PAY", "FILE", "ATTACK");
+=======
+            "COMMON", "AUTH", "USER", "CLICK", "CLICKER", "ITEM", "UNIV", "ALLY", "MATCH", "GUEST", "PAY", "FILE", "SUPPORT",
+            "ABUSE"); // 어뷰징 의심 시 봇 확인 (SCRUM-115)
+>>>>>>> 2950d7d8bef316f92cb4d1120db053e738b4e58b
 
     private static final Pattern UPPER_SNAKE = Pattern.compile("^[A-Z]+(_[A-Z0-9]+)+$");
 

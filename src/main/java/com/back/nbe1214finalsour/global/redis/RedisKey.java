@@ -77,8 +77,19 @@ public enum RedisKey {
     RATELIMIT_GUESTBOOK("ratelimit:guestbook:%s", Structure.STRING, ValueFormat.PLAIN),
     /** 채팅 한도. SET NX + TTL */
     RATELIMIT_CHAT("ratelimit:chat:%s", Structure.STRING, ValueFormat.PLAIN),
-    /** 비회원 문의 한도. of(ip), INCR */
-    RATELIMIT_SUPPORT("ratelimit:support:%s", Structure.STRING, ValueFormat.PLAIN),
+    /** 회원 문의 등록 한도 ({@code SupportRateLimiter}). of(userId). INCR, 처음 만들 때 TTL {@code support.rate-limit.window} */
+    RATELIMIT_SUPPORT_USER("ratelimit:support:user:%s", Structure.STRING, ValueFormat.PLAIN),
+    /** 비회원 문의 등록 한도. of(ipHash, {@code EmailHasher.hashClientIp} 값). INCR, TTL은 회원과 같다 */
+    RATELIMIT_SUPPORT_IP("ratelimit:support:ip:%s", Structure.STRING, ValueFormat.PLAIN),
+    /** 클릭 봇 확인 API 한도 ({@code AbuseVerificationService}). of(userId). INCR, 처음 만들 때 TTL {@code abuse.verification.attempt-window} */
+    RATELIMIT_ABUSE_VERIFY("ratelimit:abuse:verify:%s", Structure.STRING, ValueFormat.PLAIN),
+
+    // 어뷰징 (Abuse)
+    /**
+     * 클릭 어뷰징 의심 표시 (SCRUM-118). of(userId). 값 "1", TTL {@code abuse.verification.flag-ttl}.
+     * 클릭 한도를 넘으면 생기고, 봇 확인을 통과하면 지운다. 있는 동안 클릭은 403 {@code ABUSE_VERIFICATION_REQUIRED}
+     */
+    ABUSE_VERIFY_USER("abuse:verify:user:%s", Structure.STRING, ValueFormat.PLAIN),
 
     // 학교 (University)
     /** 커스텀 로고 이미지 URL */

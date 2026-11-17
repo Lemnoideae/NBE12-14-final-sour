@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.click.service;
 
+import com.back.nbe1214finalsour.domain.abuse.service.AbuseVerificationService;
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
 import com.back.nbe1214finalsour.domain.clicker.service.ClickerService;
 import com.back.nbe1214finalsour.domain.user.entity.User;
@@ -25,12 +26,21 @@ public class ClickActionGuard {
     private final ActionRateLimiter actionRateLimiter;
     private final ClickCountLimiter clickCountLimiter;
     private final ClickerService clickerService;
+    private final AbuseVerificationService abuseVerificationService;
 
     public long verifyAndGetBaseScore(Long userId, String submissionId, int clickCount) {
-        checkActive(userId);
-        checkDuplicate(userId, submissionId);
-        actionRateLimiter.check(userId);
-        clickCountLimiter.check(userId, clickCount);
+        try {
+            checkActive(userId);
+            checkDuplicate(userId, submissionId);
+            actionRateLimiter.check(userId);
+            clickCountLimiter.check(userId, clickCount);
+        } catch (BusinessException e) {
+        // 한도 초과를 어뷰징 의심 신호로 쓴다 (SCRUM-118). 넘은 요청 자체는 지금처럼 429
+        if (e.getErrorCode() == ErrorCode.CLICK_TOO_FREQUENT || e.getErrorCode() == ErrorCode.CLICK_COUNT_EXCEEDED) {
+            abuseVerificationService.flag(userId);
+        }
+        throw e;
+    }
         return loadBaseScore(userId, clickCount);
     }
 

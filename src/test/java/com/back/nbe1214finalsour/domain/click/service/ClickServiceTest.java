@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.click.service;
 
+import com.back.nbe1214finalsour.domain.abuse.service.AbuseVerificationService;
 import com.back.nbe1214finalsour.domain.click.dto.ClickRequest;
 import com.back.nbe1214finalsour.domain.click.dto.ClickResponse;
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
@@ -71,6 +72,8 @@ class ClickServiceTest {
     @Mock
     private UserStatusCache userStatusCache;
     @Mock
+    private AbuseVerificationService abuseVerificationService;
+    @Mock
     private User user;
 
     private ClickService clickService;
@@ -79,8 +82,8 @@ class ClickServiceTest {
     void setUp() {
         ClickActionGuard clickActionGuard = new ClickActionGuard(
                 stringRedisTemplate, userStatusCache, userRepository,
-                actionRateLimiter, clickCountLimiter, clickerService);
-        clickService = new ClickService(stringRedisTemplate, userRepository, redisHandler, clickActionGuard);
+                actionRateLimiter, clickCountLimiter, clickerService, abuseVerificationService);
+        clickService = new ClickService(stringRedisTemplate, userRepository, redisHandler, clickActionGuard, abuseVerificationService);
     }
 
     private ClickRequest request(int clickCount) {
@@ -144,6 +147,69 @@ class ClickServiceTest {
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
 
         verify(userStatusCache, never()).fillIfAbsent(anyLong(), any());
+    }
+
+    // --- 0.5단계: 어뷰징 의심 표시 (SCRUM-118) ---
+
+    @Test
+    @DisplayName("의심 표시가 있으면 ABUSE_VERIFICATION_REQUIRED, 중복 제출 키를 쓰지 않고 한도도 세지 않는다")
+    void click_flaggedUserBlockedBeforeDedupe() {
+        given(userStatusCache.find(USER_ID)).willReturn(Optional.of(UserStatus.ACTIVE));
+        willThrow(new BusinessException(ErrorCode.ABUSE_VERIFICATION_REQUIRED))
+                .given(abuseVerificationService).requireNotFlagged(USER_ID);
+
+        assertThatThrownBy(() -> clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3)))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.ABUSE_VERIFICATION_REQUIRED);
+
+        // 막힌 요청이 submissionId를 써 버리지 않도록 중복 검사보다 먼저다
+        verify(valueOperations, never()).setIfAbsent(anyString(), anyString(), any(Duration.class));
+        verify(actionRateLimiter, never()).check(anyLong());
+        verify(clickCountLimiter, never()).check(anyLong(), anyInt());
+    }
+
+    @Test
+    @DisplayName("요청 한도를 넘으면 의심 표시를 남기고 CLICK_TOO_FREQUENT를 그대로 던진다")
+    void click_actionLimitFlags() {
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
+        given(userStatusCache.find(USER_ID)).willReturn(Optional.of(UserStatus.ACTIVE));
+        given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(true);
+        willThrow(new BusinessException(ErrorCode.CLICK_TOO_FREQUENT)).given(actionRateLimiter).check(USER_ID);
+
+        assertThatThrownBy(() -> clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3)))
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.CLICK_TOO_FREQUENT);
+
+        verify(abuseVerificationService).flag(USER_ID);
+    }
+
+    @Test
+    @DisplayName("클릭 수 한도를 넘으면 의심 표시를 남기고 CLICK_COUNT_EXCEEDED를 그대로 던진다")
+    void click_clickCountLimitFlags() {
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
+        given(userStatusCache.find(USER_ID)).willReturn(Optional.of(UserStatus.ACTIVE));
+        given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(true);
+        willThrow(new BusinessException(ErrorCode.CLICK_COUNT_EXCEEDED)).given(clickCountLimiter).check(USER_ID, 3);
+
+        assertThatThrownBy(() -> clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3)))
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.CLICK_COUNT_EXCEEDED);
+
+        verify(abuseVerificationService).flag(USER_ID);
+    }
+
+    @Test
+    @DisplayName("한도 안이면 의심 표시를 남기지 않는다")
+    void click_withinLimitsDoesNotFlag() {
+        givenHappyPathBeforeScript();
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
+                .willReturn(SCRIPT_RESULT);
+
+        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
+
+        verify(abuseVerificationService).requireNotFlagged(USER_ID);
+        verify(abuseVerificationService, never()).flag(anyLong());
     }
 
     // --- 1단계: 중복 제출 ---

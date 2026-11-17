@@ -150,7 +150,11 @@ class RedisKeyTest {
                 "RATELIMIT_CLICK|ratelimit:click:%s|STRING|PLAIN",
                 "RATELIMIT_GUESTBOOK|ratelimit:guestbook:%s|STRING|PLAIN",
                 "RATELIMIT_CHAT|ratelimit:chat:%s|STRING|PLAIN",
-                "RATELIMIT_SUPPORT|ratelimit:support:%s|STRING|PLAIN",
+                "RATELIMIT_SUPPORT_USER|ratelimit:support:user:%s|STRING|PLAIN",
+                "RATELIMIT_SUPPORT_IP|ratelimit:support:ip:%s|STRING|PLAIN",
+                "RATELIMIT_ABUSE_VERIFY|ratelimit:abuse:verify:%s|STRING|PLAIN",
+                // 어뷰징 (Abuse)
+                "ABUSE_VERIFY_USER|abuse:verify:user:%s|STRING|PLAIN",
                 // 학교 (University)
                 "UNIV_CUSTOM_LOGO|univ:%s:custom-logo|STRING|PLAIN",
                 "UNIV_ALLIANCE|univ:%s:alliance|STRING|PLAIN",
