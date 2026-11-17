@@ -143,6 +143,7 @@ class RedisKeyTest {
                 "DIRTY_USER|dirty:user|SET|PLAIN",
                 // 클릭 (Click)
                 "CLICKS_UNIV_SECOND|clicks:univ:%s:%s|STRING|PLAIN",
+                "ATTACKS_UNIV_SECOND|attacks:univ:%s:%s|STRING|PLAIN",
                 "SUBMIT_DEDUPE|submit:%s:%s|STRING|PLAIN",
                 // 요청 한도 (RateLimit)
                 "RATELIMIT_ACTION|ratelimit:action:%s|STRING|PLAIN",
