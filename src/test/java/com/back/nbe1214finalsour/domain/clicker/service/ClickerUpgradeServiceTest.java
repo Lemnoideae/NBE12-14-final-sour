@@ -1,7 +1,6 @@
 package com.back.nbe1214finalsour.domain.clicker.service;
 
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
-import com.back.nbe1214finalsour.domain.clicker.event.ClickerUpgradedEvent;
 import com.back.nbe1214finalsour.domain.clicker.repository.UserClickerLevelCache;
 import com.back.nbe1214finalsour.domain.clicker.repository.UserClickerLevelStore;
 import com.back.nbe1214finalsour.domain.contribution.ContributionWallet;
@@ -14,7 +13,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataAccessResourceFailureException;
 
 import java.util.List;
@@ -22,7 +20,6 @@ import java.util.OptionalLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -51,10 +48,6 @@ public class ClickerUpgradeServiceTest {
     @Mock
     private ContributionWallet contributionWallet;
 
-    @Mock
-    private ApplicationEventPublisher eventPublisher;
-
-    // 아직 서비스가 쓰지 않는다 (4단계 이후 사용)
     @Mock
     private ClickerLevelUpdater clickerLevelUpdater;
 
@@ -197,7 +190,6 @@ public class ClickerUpgradeServiceTest {
             then(clickerLevelUpdater).should().changeLevel(USER_ID, 1L, 2L);
             then(contributionWallet).should().restore(USER_ID, UNIVERSITY_ID, 300L);
             then(userClickerLevelCache).should(never()).raiseLevel(anyLong(), anyLong());
-            then(eventPublisher).should(never()).publishEvent(any(ClickerUpgradedEvent.class));
         }
     }
 }

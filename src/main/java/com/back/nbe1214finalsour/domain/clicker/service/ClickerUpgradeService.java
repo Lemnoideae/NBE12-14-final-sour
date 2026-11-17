@@ -1,15 +1,13 @@
 package com.back.nbe1214finalsour.domain.clicker.service;
 
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
-import com.back.nbe1214finalsour.domain.clicker.event.ClickerUpgradedEvent;
+import com.back.nbe1214finalsour.domain.clicker.repository.UserClickerLevelCache;
 import com.back.nbe1214finalsour.domain.clicker.repository.UserClickerLevelStore;
 import com.back.nbe1214finalsour.domain.contribution.ContributionWallet;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -21,9 +19,8 @@ public class ClickerUpgradeService {
     private final UserClickerLevelStore userClickerLevelStore;
     private final ContributionWallet contributionWallet;
     private final ClickerLevelUpdater clickerLevelUpdater;
-    private final ApplicationEventPublisher eventPublisher;
+    private final UserClickerLevelCache userClickerLevelCache;
 
-    @Transactional
     public ClickerUpgradeResult upgrade(Long userId, Long universityId) {
         List<Clicker> levelTable = this.clickerService.getLevelTable();
         long currentLevel = this.userClickerLevelStore.findLevel(userId);
@@ -47,8 +44,8 @@ public class ClickerUpgradeService {
             throw e;
         }
 
-        // 커밋 후 리스너가 클릭 엔진용 레벨 캐시를 갱신한다 (롤백되면 전달되지 않음)
-        this.eventPublisher.publishEvent(new ClickerUpgradedEvent(userId, nextClicker.getId()));
+        // updater의 트랜잭션이 이미 커밋된 뒤이므로, 클릭 엔진용 레벨 캐시를 직접 갱신한다
+        this.userClickerLevelCache.raiseLevel(userId, nextClicker.getId());
 
         // 다음 레벨업에 필요한 기여도 계산, 이번 레벨업 결과가 최고 레벨이라면 null
         Long nextLevelRequiredScore = levelTable.stream()
