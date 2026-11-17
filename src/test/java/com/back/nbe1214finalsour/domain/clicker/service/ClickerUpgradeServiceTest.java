@@ -141,7 +141,7 @@ public class ClickerUpgradeServiceTest {
             assertThat(result.nextLevelRequiredScore()).isEqualTo(1000L);
             assertThat(result.remainingScore()).isEqualTo(700L);
 
-            then(eventPublisher).should().publishEvent(new ClickerUpgradedEvent(USER_ID, 2L));
+            then(userClickerLevelCache).should().raiseLevel(USER_ID, 2L);
             then(clickerLevelUpdater).should().changeLevel(USER_ID, 1L, 2L);
             then(contributionWallet).should(never()).restore(anyLong(), anyLong(), anyLong());
         }
