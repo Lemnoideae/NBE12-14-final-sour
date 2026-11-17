@@ -7,10 +7,12 @@ import com.back.nbe1214finalsour.domain.contribution.ContributionWallet;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ClickerUpgradeService {
@@ -40,7 +42,7 @@ public class ClickerUpgradeService {
             this.clickerLevelUpdater.changeLevel(userId, currentLevel, currentLevel + 1);
         } catch (RuntimeException e) {
             // 충돌·DB 예외 등 어떤 실패든 이 요청에서 차감한 기여도를 되돌린 뒤 원래 예외를 그대로 던진다
-            this.contributionWallet.restore(userId, universityId, nextClicker.getRequiredScore());
+            restoreContribution(userId, universityId, nextClicker.getRequiredScore(), e);
             throw e;
         }
 
@@ -59,5 +61,15 @@ public class ClickerUpgradeService {
                 nextLevelRequiredScore,
                 remainingScore
                 );
+    }
+
+    // 복구가 실패해도 원래 예외(원인)가 덮이지 않게 suppressed로 붙이고, 수동 보정용으로 로그만 남긴다
+    private void restoreContribution(Long userId, Long universityId, long amount, RuntimeException original) {
+        try {
+            this.contributionWallet.restore(userId, universityId, amount);
+        } catch (RuntimeException restoreEx) {
+            log.error("기여도 복구 실패 userId={}, universityId={}, amount={}", userId, universityId, amount, restoreEx);
+            original.addSuppressed(restoreEx);
+        }
     }
 }
