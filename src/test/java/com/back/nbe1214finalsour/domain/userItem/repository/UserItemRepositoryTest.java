@@ -81,5 +81,39 @@ public class UserItemRepositoryTest {
         assertThat(page.getContent()).extracting(UserItem::getId).containsExactly(third, second, first);
         assertThat(page.getTotalElements()).isEqualTo(3);
     }
+    @Test
+    @DisplayName("구매 시각이 같으면 나중에 저장된(id가 큰) 구매가 먼저 나온다")
+    void sameCreatedAt_laterIdFirst() {
+        // given: 같은 시각에 2건
+        long earlier = insertUserItem(me, BASE);
+        long later = insertUserItem(me, BASE);
 
+        // when
+        Page<UserItem> page = userItemRepository.findAllByUserIdOrderByCreatedAtDescIdDesc(me, PageRequest.of(0, 20));
+
+        // then
+        assertThat(page.getContent()).extracting(UserItem::getId).containsExactly(later, earlier);
+    }
+
+    @Test
+    @DisplayName("구매 내역을 요청한 크기로 나눠 돌려주고, 전체 개수와 다음 페이지 여부를 알려준다")
+    void paginates() {
+        // given: 3건
+        long first = insertUserItem(me, BASE);
+        long second = insertUserItem(me, BASE.plusHours(1));
+        long third = insertUserItem(me, BASE.plusHours(2));
+
+        // when: 2개씩
+        Page<UserItem> page0 = userItemRepository.findAllByUserIdOrderByCreatedAtDescIdDesc(me, PageRequest.of(0, 2));
+        Page<UserItem> page1 = userItemRepository.findAllByUserIdOrderByCreatedAtDescIdDesc(me, PageRequest.of(1, 2));
+
+        // then
+        assertThat(page0.getContent()).extracting(UserItem::getId).containsExactly(third, second);
+        assertThat(page0.getTotalElements()).isEqualTo(3);
+        assertThat(page0.hasNext()).isTrue();
+
+        assertThat(page1.getContent()).extracting(UserItem::getId).containsExactly(first);
+        assertThat(page1.hasNext()).isFalse();
+    }
 }
+
