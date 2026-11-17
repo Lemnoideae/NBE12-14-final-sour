@@ -87,6 +87,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/admin/**").hasRole(Role.ADMIN.name())
                         // 명세서 인증 "필요"와 표에 없는 API. 새 API는 여기에 걸리므로 공개하려면 위 목록에 넣는다
                         .requestMatchers("/api/**").authenticated()
+                        // 채팅 WebSocket 핸드셰이크. 인증은 STOMP CONNECT 프레임에서 한다 (ChatStompInterceptor, SCRUM-128)
+                        .requestMatchers(HttpMethod.GET, "/ws").permitAll()
                         .requestMatchers("/error", "/actuator/health").permitAll()
                         .anyRequest().denyAll());
         return http.build();
