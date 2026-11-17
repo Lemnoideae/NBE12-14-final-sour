@@ -83,7 +83,7 @@ class ClickServiceTest {
         ClickActionGuard clickActionGuard = new ClickActionGuard(
                 stringRedisTemplate, userStatusCache, userRepository,
                 actionRateLimiter, clickCountLimiter, clickerService, abuseVerificationService);
-        clickService = new ClickService(stringRedisTemplate, userRepository, redisHandler, clickActionGuard, abuseVerificationService);
+        clickService = new ClickService(stringRedisTemplate, userRepository, redisHandler, clickActionGuard);
     }
 
     private ClickRequest request(int clickCount) {

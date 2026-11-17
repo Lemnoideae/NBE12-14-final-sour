@@ -31,16 +31,18 @@ public class ClickActionGuard {
     public long verifyAndGetBaseScore(Long userId, String submissionId, int clickCount) {
         try {
             checkActive(userId);
+            // 어뷰징 의심 표시가 있으면 봇 확인 전까지 막는다 (SCRUM-118). 중복 제출 확인보다 앞이라 막힌 요청은 submissionId를 쓰지 않는다
+            abuseVerificationService.requireNotFlagged(userId);
             checkDuplicate(userId, submissionId);
             actionRateLimiter.check(userId);
             clickCountLimiter.check(userId, clickCount);
         } catch (BusinessException e) {
-        // 한도 초과를 어뷰징 의심 신호로 쓴다 (SCRUM-118). 넘은 요청 자체는 지금처럼 429
-        if (e.getErrorCode() == ErrorCode.CLICK_TOO_FREQUENT || e.getErrorCode() == ErrorCode.CLICK_COUNT_EXCEEDED) {
-            abuseVerificationService.flag(userId);
+            // 한도 초과를 어뷰징 의심 신호로 쓴다 (SCRUM-118). 넘은 요청 자체는 지금처럼 429
+            if (e.getErrorCode() == ErrorCode.CLICK_TOO_FREQUENT || e.getErrorCode() == ErrorCode.CLICK_COUNT_EXCEEDED) {
+                abuseVerificationService.flag(userId);
+            }
+            throw e;
         }
-        throw e;
-    }
         return loadBaseScore(userId, clickCount);
     }
 
