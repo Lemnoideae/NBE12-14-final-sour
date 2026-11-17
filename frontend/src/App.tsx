@@ -27,6 +27,7 @@ import { OurSchoolGuestbookBottomSheet } from './components/OurSchoolGuestbookBo
 import { ChatPreviewBar } from './components/ChatPreviewBar';
 import { ChatBottomSheet } from './components/ChatBottomSheet';
 import { BottomSheetDialog } from './components/BottomSheetDialog';
+import { BotCheckDialog } from './components/BotCheckDialog';
 import { CampusStatsSheet } from './components/CampusStatsSheet';
 import { getSchoolRankings } from './data/mockRankings';
 import { useMockGame } from './hooks/useMockGame';
@@ -440,6 +441,11 @@ function AppContent() {
       <label className="font-pixel text-xs font-bold flex items-center gap-1">
         <input type="checkbox" checked={game.clickRejectDemo} onChange={(e) => game.setClickRejectDemo(e.target.checked)} />
         [시연] 서버 클릭 거절 응답
+      </label>
+      {/* SCRUM-121: stands in for the server's abuse flag. A click while on opens the bot check. */}
+      <label className="font-pixel text-xs font-bold flex items-center gap-1">
+        <input type="checkbox" checked={game.abuseFlagged} onChange={(e) => game.setAbuseFlagged(e.target.checked)} />
+        [시연] 어뷰징 의심 표시 (봇 확인 요구)
       </label>
     </section>
   );
@@ -857,6 +863,8 @@ function AppContent() {
         )}
         </div>
         </PhoneShellVariantContext.Provider>
+        {/* SCRUM-121: one bot check for every screen that sends my campus clicks. */}
+        {game.botCheckOpen && <BotCheckDialog onVerified={game.completeBotCheck} onClose={game.closeBotCheck} />}
       </div>
     </AllianceNavProvider>
   );
