@@ -1,11 +1,5 @@
 package com.back.nbe1214finalsour.domain.click;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doThrow;
-
 import com.back.nbe1214finalsour.IntegrationTest;
 import com.back.nbe1214finalsour.domain.click.service.ScoreFlushService;
 import com.back.nbe1214finalsour.domain.university.entity.Department;
@@ -17,18 +11,24 @@ import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.domain.user.repository.projections.UserUniv;
 import com.back.nbe1214finalsour.global.crypto.EmailHasher;
 import com.back.nbe1214finalsour.global.redis.RedisKey;
-import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 
 /**
  * 1분 배치가 Redis 점수를 DB에 반영하는지 PostgreSQL·Redis(Testcontainers)로 확인한다.
@@ -51,7 +51,7 @@ class ScoreFlushIntegrationTest {
     @Autowired
     private DepartmentRepository departmentRepository;
     /** 배치 도중에 클릭이 들어오는 순간을 만들기 위해 감싼다. 따로 설정하지 않으면 실제 메서드가 그대로 돈다. */
-    @MockitoSpyBean
+    @Autowired
     private UserRepository userRepository;
     @Autowired
     private EmailHasher emailHasher;
