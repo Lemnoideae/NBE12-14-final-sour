@@ -113,6 +113,10 @@ public enum ErrorCode {
 
     // ===== ATTACK =====
     ATTACK_OWN_UNIVERSITY(HttpStatus.BAD_REQUEST, "ATTACK_OWN_UNIVERSITY", "모교를 공격할 수 없습니다."),
+
+    // ===== CHAT (1번, 추가 명세 §3-7) =====
+    /** 소속 학교가 아닌 채팅방 구독·조회 (SCRUM-128) */
+    CHAT_NOT_MEMBER(HttpStatus.FORBIDDEN, "CHAT_NOT_MEMBER", "소속 학교의 채팅방만 이용할 수 있습니다."),
     ;
 
     private final HttpStatus status;

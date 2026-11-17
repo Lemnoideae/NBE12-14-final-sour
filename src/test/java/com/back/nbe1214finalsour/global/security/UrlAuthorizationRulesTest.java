@@ -198,6 +198,16 @@ class UrlAuthorizationRulesTest {
                 .andExpect(jsonPath("$.data").value(42));
     }
 
+    @Test
+    @DisplayName("채팅 WebSocket 핸드셰이크 GET /ws만 토큰 없이 통과한다 (인증은 STOMP CONNECT, SCRUM-128)")
+    void websocketHandshakeIsPublic() throws Exception {
+        // 이 슬라이스에는 WebSocket 핸들러가 없으므로 보안 규칙을 통과하면 404다
+        perform(new Row(HttpMethod.GET, "/ws", Auth.PUBLIC), null).andExpect(status().isNotFound());
+        // 다른 메서드와 하위 경로는 denyAll
+        perform(new Row(HttpMethod.POST, "/ws", Auth.REQUIRED), null).andExpect(status().isUnauthorized());
+        perform(new Row(HttpMethod.GET, "/ws/info", Auth.REQUIRED), null).andExpect(status().isUnauthorized());
+    }
+
     @ParameterizedTest(name = "{0}")
     @MethodSource("notInSpec")
     @DisplayName("명세서 표에 없는 /api 경로·메서드는 로그인이 필요하다 (공개는 목록에 넣을 때만)")
