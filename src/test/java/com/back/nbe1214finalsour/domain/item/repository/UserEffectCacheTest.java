@@ -81,4 +81,33 @@ public class UserEffectCacheTest {
 
         assertThat(this.redisHandler.getHash(KEY, "multiplier", Double.class)).contains(4.0);
     }
+
+
+    @Test
+    @DisplayName("적용한 효과를 읽으면 itemId·multiplier·expiredAt을 그대로 돌려준다")
+    void find_returnsAppliedEffect() {
+        OffsetDateTime expiredAt = oneHourLater();
+        this.userEffectCache.apply(USER_ID, 2L, 4.0, expiredAt);
+
+        Optional<UserEffect> effect = this.userEffectCache.find(USER_ID);
+
+        assertThat(effect).isPresent();
+        assertThat(effect.get().itemId()).isEqualTo(2L);
+        assertThat(effect.get().multiplier()).isEqualTo(4.0);
+        assertThat(effect.get().expiredAt()).isAtSameInstantAs(expiredAt);
+    }
+
+    @Test
+    @DisplayName("효과 키가 없으면(구매 안 함·만료) empty")
+    void find_noEffect() {
+        assertThat(this.userEffectCache.find(USER_ID)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("필드가 빠진 깨진 효과는 empty (배율 없이 잘못된 효과를 보여 주지 않음)")
+    void find_brokenEffect() {
+        this.redisTemplate.opsForHash().put(KEY, "multiplier", "2.0");   // itemId·expiredAt 없음
+
+        assertThat(this.userEffectCache.find(USER_ID)).isEmpty();
+    }
 }
