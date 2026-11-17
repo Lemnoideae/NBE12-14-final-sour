@@ -20,6 +20,7 @@ public class ClickerUpgradeService {
     private final ClickerService clickerService;
     private final UserClickerLevelStore userClickerLevelStore;
     private final ContributionWallet contributionWallet;
+    private final ClickerLevelUpdater clickerLevelUpdater;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
@@ -37,14 +38,15 @@ public class ClickerUpgradeService {
         long remainingScore = this.contributionWallet.tryDeduct(userId, universityId, nextClicker.getRequiredScore())
                 .orElseThrow(() -> new BusinessException(ErrorCode.CLICKER_NOT_ENOUGH_SCORE));  // 잔액이 부족하면 차감하지 않고 예외
 
-        // 유지의 클리커 레벨을 다음 레벨로 변경
-        boolean changed = this.userClickerLevelStore.changeLevel(userId, currentLevel, currentLevel + 1);
-
-        // 현재 레벨일 때만 다음 레벨로 변경 (조건부 UPDATE). false면 다른 요청이 먼저 레벨을 바꾼 것
-        if (!changed) {
-            // 이 요청에서 차감한 기여도를 되돌린 뒤 충돌 예외
-            this.contributionWallet.restore(userId, universityId, nextClicker.getRequiredScore());
-            throw new BusinessException(ErrorCode.CLICKER_UPGRADE_CONFLICT);
+        // 현재 레벨일 때만 다음 레벨로 변경 (조건부 UPDATE). 다른 요청이 먼저 레벨을 바꿨다면 updater가 충돌 예외를 던진다
+        try {
+            this.clickerLevelUpdater.changeLevel(userId, currentLevel, currentLevel + 1);
+        } catch (BusinessException e) {
+            if (e.getErrorCode() == ErrorCode.CLICKER_UPGRADE_CONFLICT) {
+                // 이 요청에서 차감한 기여도를 되돌린 뒤 충돌 예외를 그대로 던진다
+                this.contributionWallet.restore(userId, universityId, nextClicker.getRequiredScore());
+            }
+            throw e;
         }
 
         // 커밋 후 리스너가 클릭 엔진용 레벨 캐시를 갱신한다 (롤백되면 전달되지 않음)

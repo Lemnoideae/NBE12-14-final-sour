@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
@@ -129,7 +130,6 @@ public class ClickerUpgradeServiceTest {
             given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
             given(userClickerLevelStore.findLevel(USER_ID)).willReturn(1L);
             given(contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 300L)).willReturn(OptionalLong.of(700L));
-            given(userClickerLevelStore.changeLevel(USER_ID, 1L, 2L)).willReturn(true);
 
             // when
             ClickerUpgradeResult result = clickerUpgradeService.upgrade(USER_ID, UNIVERSITY_ID);
@@ -141,7 +141,7 @@ public class ClickerUpgradeServiceTest {
             assertThat(result.remainingScore()).isEqualTo(700L);
 
             then(eventPublisher).should().publishEvent(new ClickerUpgradedEvent(USER_ID, 2L));
-            then(userClickerLevelStore).should().changeLevel(USER_ID, 1L, 2L);
+            then(clickerLevelUpdater).should().changeLevel(USER_ID, 1L, 2L);
             then(contributionWallet).should(never()).restore(anyLong(), anyLong(), anyLong());
         }
     }
@@ -157,20 +157,20 @@ public class ClickerUpgradeServiceTest {
             given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
             given(userClickerLevelStore.findLevel(USER_ID)).willReturn(1L);
             given(contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 300L)).willReturn(OptionalLong.of(700L));
-            given(userClickerLevelStore.changeLevel(USER_ID, 1L, 2L)).willReturn(false);
+            BusinessException conflict = new BusinessException(ErrorCode.CLICKER_UPGRADE_CONFLICT);
+            willThrow(conflict).given(clickerLevelUpdater).changeLevel(USER_ID, 1L, 2L);
 
             // when
             Throwable thrown = catchThrowable(
                     () -> clickerUpgradeService.upgrade(USER_ID, UNIVERSITY_ID));
 
             // then
-            assertThat(thrown)
-                    .isInstanceOf(BusinessException.class)
-                    .extracting("errorCode")
-                    .isEqualTo(ErrorCode.CLICKER_UPGRADE_CONFLICT);
+            assertThat(thrown).isSameAs(conflict);
 
-            then(eventPublisher).should(never()).publishEvent(any(ClickerUpgradedEvent.class));
+            then(clickerLevelUpdater).should().changeLevel(USER_ID, 1L, 2L);
             then(contributionWallet).should().restore(USER_ID, UNIVERSITY_ID, 300L);
+            then(userClickerLevelCache).should(never()).raiseLevel(anyLong(), anyLong());
+            then(eventPublisher).should(never()).publishEvent(any(ClickerUpgradedEvent.class));
         }
     }
 }
