@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.click.service;
 
+import com.back.nbe1214finalsour.domain.abuse.service.AbuseVerificationService;
 import com.back.nbe1214finalsour.domain.click.dto.ClickApplyResponse;
 import com.back.nbe1214finalsour.domain.click.dto.ClickRequest;
 import com.back.nbe1214finalsour.domain.click.dto.ClickResponse;
@@ -34,6 +35,7 @@ public class ClickService {
     private final UserRepository userRepository;
     private final UserStatusCache userStatusCache;
     private final RedisHandler redisHandler;
+    private final AbuseVerificationService abuseVerificationService;
 
     private static final RedisScript<List> APPLY_CLICK = RedisScript.of(new ClassPathResource("redis/apply-click.lua"), List.class);
 
@@ -55,6 +57,9 @@ public class ClickService {
             throw new BusinessException(ErrorCode.USER_SUSPENDED);
         }
 
+        // 어뷰징 의심 표시가 있으면 봇 확인 전까지 막는다 (SCRUM-118). 중복 제출 확인보다 앞이라 막힌 요청은 submissionId를 쓰지 않는다
+        abuseVerificationService.requireNotFlagged(userId);
+
         // 1. 중복 제출 확인 및 저장
         Boolean isRequested = stringRedisTemplate.opsForValue().setIfAbsent(RedisKey.SUBMIT_DEDUPE.of(userId, submissionId), submissionId, Duration.ofSeconds(10L));
 
@@ -64,8 +69,16 @@ public class ClickService {
         }
 
         // 2. 횟수·간격 검증 (클릭·공격·지원 모두 합쳐서 10초에 12회 요청이 왔는가?) + (1분 동안의 클릿 횟수가 900번 이하인가?)
-        actionRateLimiter.check(userId);
-        clickCountLimiter.check(userId, clickCount);
+        try {
+            actionRateLimiter.check(userId);
+            clickCountLimiter.check(userId, clickCount);
+        } catch (BusinessException e) {
+            // 한도 초과를 어뷰징 의심 신호로 쓴다 (SCRUM-118). 넘은 요청 자체는 지금처럼 429
+            if (e.getErrorCode() == ErrorCode.CLICK_TOO_FREQUENT || e.getErrorCode() == ErrorCode.CLICK_COUNT_EXCEEDED) {
+                abuseVerificationService.flag(userId);
+            }
+            throw e;
+        }
 
         // 3. 인정 점수
         int score = clickCount;
