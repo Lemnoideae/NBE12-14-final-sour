@@ -77,10 +77,11 @@ public class PurchaseHistoryServiceTest {
     void findHistory_paging() {
         // given: 전체 7건 중 2페이지(0부터 셈, 5개씩) → 마지막 페이지
         given(itemService.getItems()).willReturn(List.of(POTION));
-        UserItem potion = saved(UserItem.ofPotion(1L, POTION, NOW), 5530L, NOW);
+        // 7건을 5개씩 나눈 2페이지라 2건이 들어 있다
+        UserItem second = saved(UserItem.ofPotion(1L, POTION, NOW.plusHours(1)), 5531L, NOW.plusHours(1));
+        UserItem first = saved(UserItem.ofPotion(1L, POTION, NOW), 5530L, NOW);
         given(userItemRepository.findAllByUserIdOrderByCreatedAtDescIdDesc(1L, PageRequest.of(1, 5)))
-                .willReturn(new PageImpl<>(List.of(potion), PageRequest.of(1, 5), 7));
-
+                .willReturn(new PageImpl<>(List.of(second, first), PageRequest.of(1, 5), 7));
         // when
         Page<PurchaseHistory> result = purchaseHistoryService.findHistory(1L, 1, 5);
 
