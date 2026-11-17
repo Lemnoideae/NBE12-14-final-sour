@@ -3,6 +3,7 @@ package com.back.nbe1214finalsour.domain.click;
 import com.back.nbe1214finalsour.IntegrationTest;
 import com.back.nbe1214finalsour.domain.clicker.service.ClickerService;
 import com.back.nbe1214finalsour.domain.university.repository.UniversityNameCache;
+import com.back.nbe1214finalsour.domain.university.service.rival.RivalChecker;
 import com.back.nbe1214finalsour.domain.user.entity.User;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.global.crypto.EmailHasher;
@@ -22,6 +23,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.time.Instant;
@@ -30,6 +32,7 @@ import java.util.List;
 import java.util.stream.LongStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doReturn;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -38,7 +41,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 타 학교 공격 API를 PostgreSQL·Redis(Testcontainers)와 실제 HTTP 처리로 확인한다.
  * {@code apply-attack.lua}도 여기서 실제 Redis로 검증된다.
  *
- * <p>기본 클리커(레벨 1)의 clickPower는 1이고 경쟁 학교 설정이 아직 없으므로, 요청 피해량 = floor(clickCount * 0.3)이다.
+ * <p>기본 클리커(레벨 1)의 clickPower는 1이다. 테스트가 만든 학교는 {@code rivals.groups}에 없으므로
+ * 요청 피해량 = floor(clickCount * 0.3)이고, 경쟁 학교 공격은 {@link RivalChecker}를 스파이로 바꿔 확인한다.
  *
  * <p>학교는 서버가 뜬 뒤에 넣으므로 {@link UniversityNameCache}를 다시 불러와야 공격 대상으로 찾을 수 있다.
  */
@@ -63,6 +67,9 @@ class AttackIntegrationTest {
     private JwtProvider jwtProvider;
     @Autowired
     private ClickerService clickerService;
+    /** 테스트가 만든 학교는 설정 파일에 없으므로, 경쟁 학교 공격만 이 스파이로 경쟁 관계를 만든다 */
+    @MockitoSpyBean
+    private RivalChecker rivalChecker;
     @Autowired
     private UniversityNameCache universityNameCache;
 
@@ -183,6 +190,34 @@ class AttackIntegrationTest {
                 .andExpect(jsonPath("$.data.myAttackScore").value(2));
 
         assertThat(targetScore()).isEqualTo(0.0);
+    }
+
+    @Test
+    @DisplayName("경쟁 학교를 공격하면 1.1배를 더 곱하고 소수점은 버린다, 응답에 isRival=true·multiplier=1.1")
+    void rivalAttackAppliesMultiplier() throws Exception {
+        givenTargetScore(100);
+        doReturn(true).when(rivalChecker).isRival(universityId, targetUniversityId);
+
+        attack("sub-1", targetUniversityId, 19)
+                .andExpect(status().isOk())
+                // floor(19 * 1 * 0.3 * 1.1) = floor(6.27) = 6 (경쟁 학교가 아니면 floor(5.7) = 5)
+                .andExpect(jsonPath("$.data.damage").value(6))
+                .andExpect(jsonPath("$.data.multiplier").value(1.1))
+                .andExpect(jsonPath("$.data.isRival").value(true))
+                .andExpect(jsonPath("$.data.targetUniversity.totalScore").value(94))
+                .andExpect(jsonPath("$.data.myAttackScore").value(6));
+    }
+
+    @Test
+    @DisplayName("경쟁 학교가 아니면 배율 1.0, isRival=false")
+    void nonRivalAttackHasNoMultiplier() throws Exception {
+        givenTargetScore(100);
+
+        attack("sub-1", targetUniversityId, 19)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.damage").value(5))
+                .andExpect(jsonPath("$.data.multiplier").value(1.0))
+                .andExpect(jsonPath("$.data.isRival").value(false));
     }
 
     @Test
