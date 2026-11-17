@@ -3,9 +3,7 @@ package com.back.nbe1214finalsour.domain.item.controller;
 import com.back.nbe1214finalsour.domain.item.entity.Item;
 import com.back.nbe1214finalsour.domain.item.entity.ItemType;
 import com.back.nbe1214finalsour.domain.item.entity.PayType;
-import com.back.nbe1214finalsour.domain.item.service.ItemPurchaseResult;
-import com.back.nbe1214finalsour.domain.item.service.ItemPurchaseService;
-import com.back.nbe1214finalsour.domain.item.service.ItemService;
+import com.back.nbe1214finalsour.domain.item.service.*;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import com.back.nbe1214finalsour.global.exception.GlobalExceptionHandler;
@@ -27,6 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
@@ -79,6 +78,9 @@ public class ItemControllerTest {
 
     @MockitoBean
     private ItemPurchaseService itemPurchaseService;
+
+    @MockitoBean
+    private ActiveEffectService activeEffectService;
 
     private String bearerToken() {
         return "Bearer " + jwtProvider.createAccessToken(USER, null);
@@ -205,5 +207,46 @@ public class ItemControllerTest {
                         .header(HttpHeaders.AUTHORIZATION, bearerToken()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("ITEM_LOGO_IMAGE_TOO_LARGE"));
+    }
+
+    @Test
+    @DisplayName("[GET] /api/v1/items/me/active는 토큰이 없으면 401")
+    void getActiveEffect_requiresToken() throws Exception {
+        mockMvc.perform(get("/api/v1/items/me/active"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("COMMON_UNAUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("[GET] /api/v1/items/me/active는 토큰의 회원에게 적용 중인 효과를 200으로 응답")
+    void getActiveEffect() throws Exception {
+        // given: UTC 03:06:52(= KST 12:06:52)에 만료, 412초 남음
+        OffsetDateTime expiredAt = OffsetDateTime.of(2026, 11, 17, 3, 6, 52, 0, ZoneOffset.UTC);
+        given(activeEffectService.findActive(1L))
+                .willReturn(Optional.of(new ActiveEffect(2L, "4배 물약", 4.0, expiredAt, 412L)));
+
+        // when & then
+        mockMvc.perform(get("/api/v1/items/me/active")
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.itemId").value(2))
+                .andExpect(jsonPath("$.data.name").value("4배 물약"))
+                .andExpect(jsonPath("$.data.multiplier").value(4.0))
+                // API 명세 1: 시각은 KST 오프셋으로 응답
+                .andExpect(jsonPath("$.data.expiredAt").value("2026-11-17T12:06:52+09:00"))
+                .andExpect(jsonPath("$.data.remainingSeconds").value(412));
+    }
+
+    @Test
+    @DisplayName("[GET] /api/v1/items/me/active는 적용 중인 효과가 없으면 data를 null로 200 응답")
+    void getActiveEffect_none() throws Exception {
+        given(activeEffectService.findActive(1L)).willReturn(Optional.empty());
+
+        mockMvc.perform(get("/api/v1/items/me/active")
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data").value(nullValue()));
     }
 }
