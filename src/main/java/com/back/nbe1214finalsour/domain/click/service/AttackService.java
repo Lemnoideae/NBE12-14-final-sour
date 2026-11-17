@@ -3,7 +3,7 @@ package com.back.nbe1214finalsour.domain.click.service;
 import com.back.nbe1214finalsour.domain.click.dto.AttackApplyResponse;
 import com.back.nbe1214finalsour.domain.click.dto.AttackRequest;
 import com.back.nbe1214finalsour.domain.click.dto.AttackResponse;
-import com.back.nbe1214finalsour.domain.click.service.rival.RivalChecker;
+import com.back.nbe1214finalsour.domain.university.service.rival.RivalChecker;
 import com.back.nbe1214finalsour.domain.university.repository.UniversityNameCache;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
