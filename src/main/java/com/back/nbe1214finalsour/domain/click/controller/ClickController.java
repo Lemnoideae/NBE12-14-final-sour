@@ -21,7 +21,7 @@ public class ClickController {
     private final ClickService clickService;
 
     @PostMapping
-    public ApiResponse<?> batchClick(@AuthenticationPrincipal AuthUser user,
+    public ApiResponse<ClickResponse> batchClick(@AuthenticationPrincipal AuthUser user,
                                      @RequestBody @Valid ClickRequest request) {
         Long userId = user.userId();
         Long universityId = user.universityId();
