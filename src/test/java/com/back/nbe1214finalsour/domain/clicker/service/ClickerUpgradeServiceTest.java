@@ -15,6 +15,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import java.util.List;
 import java.util.OptionalLong;
@@ -143,6 +144,32 @@ public class ClickerUpgradeServiceTest {
             then(eventPublisher).should().publishEvent(new ClickerUpgradedEvent(USER_ID, 2L));
             then(clickerLevelUpdater).should().changeLevel(USER_ID, 1L, 2L);
             then(contributionWallet).should(never()).restore(anyLong(), anyLong(), anyLong());
+        }
+    }
+
+    @Nested
+    @DisplayName("레벨 변경 중 DB 예외가 날 때")
+    class WhenDbFailure {
+
+        @Test
+        @DisplayName("업그레이드하면 차감한 기여도를 복구하고 같은 예외를 던진다")
+        void upgrade_dbFailure() {
+            // given: 300 차감에 성공했지만 레벨 변경 중 DB 연결 장애
+            given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
+            given(userClickerLevelStore.findLevel(USER_ID)).willReturn(1L);
+            given(contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 300L)).willReturn(OptionalLong.of(700L));
+            DataAccessResourceFailureException dbFailure = new DataAccessResourceFailureException("DB 연결 실패");
+            willThrow(dbFailure).given(clickerLevelUpdater).changeLevel(USER_ID, 1L, 2L);
+
+            // when
+            Throwable thrown = catchThrowable(
+                    () -> clickerUpgradeService.upgrade(USER_ID, UNIVERSITY_ID));
+
+            // then
+            assertThat(thrown).isSameAs(dbFailure);
+
+            then(contributionWallet).should().restore(USER_ID, UNIVERSITY_ID, 300L);
+            then(userClickerLevelCache).should(never()).raiseLevel(anyLong(), anyLong());
         }
     }
 
