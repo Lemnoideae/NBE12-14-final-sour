@@ -4,6 +4,7 @@ import com.back.nbe1214finalsour.domain.click.dto.AttackApplyResponse;
 import com.back.nbe1214finalsour.domain.click.dto.AttackRequest;
 import com.back.nbe1214finalsour.domain.click.dto.AttackResponse;
 import com.back.nbe1214finalsour.domain.click.service.rival.RivalChecker;
+import com.back.nbe1214finalsour.domain.university.repository.UniversityNameCache;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import com.back.nbe1214finalsour.global.redis.RedisKey;
@@ -22,6 +23,7 @@ public class AttackService {
     private final ClickActionGuard clickActionGuard;
     private final StringRedisTemplate stringRedisTemplate;
     private final RivalChecker rivalChecker;
+    private final UniversityNameCache universityNameCache;
 
     private static final RedisScript<List> APPLY_ATTACK = RedisScript.of(new ClassPathResource("redis/apply-attack.lua"), List.class);
 
@@ -35,8 +37,7 @@ public class AttackService {
             throw new BusinessException(ErrorCode.ATTACK_OWN_UNIVERSITY);
         }
 
-        // TODO: 공격할 학교 Redis 조회 없으면 DB 조회
-        String targetName = "tempName";
+        String targetName = universityNameCache.getName(targetUniversityId);
 
         // 점수 구하기
         long base = clickActionGuard.verifyAndGetBaseScore(userId, submissionId, clickCount);
