@@ -11,10 +11,14 @@ import com.back.nbe1214finalsour.global.security.*;
 import com.back.nbe1214finalsour.global.security.jwt.JwtProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -78,6 +82,9 @@ public class ItemControllerTest {
 
     @MockitoBean
     private ItemPurchaseService itemPurchaseService;
+
+    @MockitoBean
+    private PurchaseHistoryService purchaseHistoryService;
 
     @MockitoBean
     private ActiveEffectService activeEffectService;
@@ -249,4 +256,102 @@ public class ItemControllerTest {
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data").value(nullValue()));
     }
+
+
+
+    @Test
+    @DisplayName("[GET] /api/v1/items/me/history는 토큰이 없으면 401")
+    void getPurchaseHistory_requiresToken() throws Exception {
+        mockMvc.perform(get("/api/v1/items/me/history"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("COMMON_UNAUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("[GET] /api/v1/items/me/history는 토큰의 회원 구매 내역을 기본 0페이지·20개로 200 응답")
+    void getPurchaseHistory() throws Exception {
+        // given: 로고(UTC 05:00 = KST 14:00 구매, 영구) → 물약(UTC 03:00 = KST 12:00 구매, 1시간 효과) 순서
+        OffsetDateTime logoAt = OffsetDateTime.of(2026, 11, 17, 5, 0, 0, 0, ZoneOffset.UTC);
+        OffsetDateTime potionAt = OffsetDateTime.of(2026, 11, 17, 3, 0, 0, 0, ZoneOffset.UTC);
+        given(purchaseHistoryService.findHistory(1L, 0, 20)).willReturn(new PageImpl<>(List.of(
+                new PurchaseHistory(7001L, UNIVERSITY_LOGO, 3900L, logoAt, null),
+                new PurchaseHistory(5530L, POTION, 1000L, potionAt, potionAt.plusHours(1))
+        ), PageRequest.of(0, 20), 2));
+
+        // when & then: page·size 없이 요청
+        mockMvc.perform(get("/api/v1/items/me/history")
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.items[0].userItemId").value(7001))
+                .andExpect(jsonPath("$.data.items[0].item.id").value(3))
+                .andExpect(jsonPath("$.data.items[0].item.name").value("학교 로고 변경권"))
+                .andExpect(jsonPath("$.data.items[0].item.payType").value("CREDIT"))
+                .andExpect(jsonPath("$.data.items[0].price").value(3900))
+                // API 명세 1: 시각은 KST 오프셋으로 응답
+                .andExpect(jsonPath("$.data.items[0].createdAt").value("2026-11-17T14:00:00+09:00"))
+                .andExpect(jsonPath("$.data.items[0].expiredAt").value(nullValue()))
+                .andExpect(jsonPath("$.data.items[1].userItemId").value(5530))
+                .andExpect(jsonPath("$.data.items[1].item.payType").value("CONTRIBUTION"))
+                .andExpect(jsonPath("$.data.items[1].price").value(1000))
+                .andExpect(jsonPath("$.data.items[1].createdAt").value("2026-11-17T12:00:00+09:00"))
+                .andExpect(jsonPath("$.data.items[1].expiredAt").value("2026-11-17T13:00:00+09:00"))
+                .andExpect(jsonPath("$.data.page").value(0))
+                .andExpect(jsonPath("$.data.size").value(20))
+                .andExpect(jsonPath("$.data.totalCount").value(2))
+                .andExpect(jsonPath("$.data.hasNext").value(false));
+    }
+
+    @Test
+    @DisplayName("[GET] /api/v1/items/me/history는 요청한 page·size로 조회하고 페이지 정보를 응답")
+    void getPurchaseHistory_paging() throws Exception {
+        // given: 전체 7건을 5개씩 나눈 2페이지(0부터 셈)라 2건이 있고, 마지막 페이지
+        OffsetDateTime at = OffsetDateTime.of(2026, 11, 17, 3, 0, 0, 0, ZoneOffset.UTC);
+        given(purchaseHistoryService.findHistory(1L, 1, 5)).willReturn(new PageImpl<>(List.of(
+                new PurchaseHistory(5531L, POTION, 1000L, at.plusHours(1), at.plusHours(2)),
+                new PurchaseHistory(5530L, POTION, 1000L, at, at.plusHours(1))
+        ), PageRequest.of(1, 5), 7));
+
+        // when & then
+        mockMvc.perform(get("/api/v1/items/me/history")
+                        .param("page", "1")
+                        .param("size", "5")
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.page").value(1))
+                .andExpect(jsonPath("$.data.size").value(5))
+                .andExpect(jsonPath("$.data.totalCount").value(7))
+                .andExpect(jsonPath("$.data.hasNext").value(false));
+    }
+
+    @Test
+    @DisplayName("[GET] /api/v1/items/me/history는 아이템 정보가 없는 구매면 item을 null로 응답")
+    void getPurchaseHistory_unknownItem() throws Exception {
+        OffsetDateTime at = OffsetDateTime.of(2026, 11, 17, 3, 0, 0, 0, ZoneOffset.UTC);
+        given(purchaseHistoryService.findHistory(1L, 0, 20)).willReturn(new PageImpl<>(List.of(
+                new PurchaseHistory(7001L, null, 3900L, at, null)
+        ), PageRequest.of(0, 20), 1));
+
+        mockMvc.perform(get("/api/v1/items/me/history")
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].userItemId").value(7001))
+                .andExpect(jsonPath("$.data.items[0].item").value(nullValue()));
+    }
+
+    @ParameterizedTest(name = "page={0}, size={1}이면 {2} 검증 실패")
+    @CsvSource({"0, 0, size", "0, 101, size", "-1, 20, page"})
+    @DisplayName("[GET] /api/v1/items/me/history는 page가 음수이거나 size가 1~100 밖이면 400 COMMON_INVALID_INPUT")
+    void getPurchaseHistory_invalidPaging(String page, String size, String field) throws Exception {
+        mockMvc.perform(get("/api/v1/items/me/history")
+                        .param("page", page)
+                        .param("size", size)
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("COMMON_INVALID_INPUT"))
+                .andExpect(jsonPath("$.data[0].field").value(field));
+    }
+
 }
