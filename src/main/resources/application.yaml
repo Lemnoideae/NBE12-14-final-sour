@@ -72,6 +72,9 @@ support:
   rate-limit:
     max-requests: 5
     window: 1h
+  # 비회원 문의 봇 확인 (SCRUM-119). Turnstile이 켜져 있을 때 같은 IP의 창 안에서 verify-from번째 문의부터 토큰을 요구한다
+  bot-check:
+    verify-from: 3
 
 turnstile:
   # 어뷰징 의심 시 Cloudflare Turnstile 봇 확인 (SCRUM-115). 꺼져 있으면 지금과 동작이 같다.

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.back.nbe1214finalsour.global.crypto.EmailHasher;
@@ -24,6 +25,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
 /**
  * 문의 등록 한도 (SCRUM-110). Lua({@code incr-with-ttl.lua})가 INCR한 뒤의 값을 받아 5를 넘겼을 때만 막는다.
@@ -36,6 +38,8 @@ class SupportRateLimiterTest {
     private StringRedisTemplate redis;
     @Mock
     private EmailHasher hasher;
+    @Mock
+    private ValueOperations<String, String> valueOperations;
 
     private SupportRateLimiter limiter;
 
@@ -84,6 +88,18 @@ class SupportRateLimiterTest {
         limiter.checkGuest("203.0.113.7");
 
         assertThat(capturedKeys()).containsExactly("ratelimit:support:ip:abc123");
+    }
+
+    @Test
+    @DisplayName("비회원 현재 건수는 세지 않고 읽기만 한다. 키가 없으면 0 (SCRUM-119)")
+    void guestCountReadsWithoutIncrement() {
+        given(hasher.hashClientIp("203.0.113.7")).willReturn("abc123");
+        given(redis.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("ratelimit:support:ip:abc123")).willReturn("2", (String) null);
+
+        assertThat(limiter.guestCount("203.0.113.7")).isEqualTo(2L);
+        assertThat(limiter.guestCount("203.0.113.7")).isZero();
+        verify(redis, never()).execute(any(), anyList(), any());
     }
 
     @SuppressWarnings("unchecked")
