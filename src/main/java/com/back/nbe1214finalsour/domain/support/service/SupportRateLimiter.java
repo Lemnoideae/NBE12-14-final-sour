@@ -46,6 +46,14 @@ public class SupportRateLimiter {
         check(RedisKey.RATELIMIT_SUPPORT_IP.of(hasher.hashClientIp(clientIp)), "비회원 IP");
     }
 
+    /**
+     * 같은 IP의 이번 창 비회원 등록 수. 세지 않고 읽기만 한다 (SCRUM-119 봇 확인 기준). 키가 없으면 0
+     */
+    public long guestCount(String clientIp) {
+        String value = redis.opsForValue().get(RedisKey.RATELIMIT_SUPPORT_IP.of(hasher.hashClientIp(clientIp)));
+        return value == null ? 0L : Long.parseLong(value);
+    }
+
     private void check(String key, String who) {
         Long count = redis.execute(INCR_WITH_TTL, List.of(key), String.valueOf(properties.window().toSeconds()));
         if (count != null && count > properties.maxRequests()) {

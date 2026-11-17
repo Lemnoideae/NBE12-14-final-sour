@@ -221,6 +221,8 @@ class UrlAuthorizationRulesTest {
                 new Row(HttpMethod.GET, "/api/v1/supports/88", Auth.REQUIRED),
                 // 공개 POST는 정확한 경로만
                 new Row(HttpMethod.POST, "/api/v1/supports/88", Auth.REQUIRED),
+                // 클릭 어뷰징 봇 확인은 로그인 회원만 (SCRUM-118)
+                new Row(HttpMethod.POST, "/api/v1/abuse/verification", Auth.REQUIRED),
                 // '*'는 경로 한 칸만
                 new Row(HttpMethod.GET, "/api/v1/universities/12/members", Auth.REQUIRED),
                 new Row(HttpMethod.GET, "/api/v1/rankings/universities/12/users/42", Auth.REQUIRED),

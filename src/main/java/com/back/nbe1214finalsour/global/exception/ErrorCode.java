@@ -68,6 +68,12 @@ public enum ErrorCode {
     CLICK_TOO_FREQUENT(HttpStatus.TOO_MANY_REQUESTS, "CLICK_TOO_FREQUENT", "제출 요청이 너무 많습니다."),
     CLICK_COUNT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "CLICK_COUNT_EXCEEDED", "클릭 수가 너무 많습니다."),
 
+    // ===== ABUSE (어뷰징 의심 시 Turnstile 봇 확인, SCRUM-115) =====
+    /** 어뷰징이 의심되어 봇 확인이 필요함. 프론트는 Turnstile 위젯을 띄운다 */
+    ABUSE_VERIFICATION_REQUIRED(HttpStatus.FORBIDDEN, "ABUSE_VERIFICATION_REQUIRED", "자동 입력 방지 확인이 필요합니다."),
+    /** Cloudflare가 토큰을 거절함 (가짜·만료·재사용 토큰). Cloudflare에 닿지 못한 경우는 통과시키므로 이 코드가 아니다 */
+    ABUSE_VERIFICATION_FAILED(HttpStatus.FORBIDDEN, "ABUSE_VERIFICATION_FAILED", "자동 입력 방지 확인에 실패했습니다. 다시 시도해주세요."),
+
     // ===== UNIV / RANK (3번) =====
     UNIV_NOT_FOUND(HttpStatus.NOT_FOUND, "UNIV_NOT_FOUND", "학교를 찾을 수 없습니다."),
     UNIV_DEPARTMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "UNIV_DEPARTMENT_NOT_FOUND", "학과를 찾을 수 없습니다."),
