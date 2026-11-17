@@ -14,6 +14,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.data.redis.RedisConnectionFailureException;
 
 import java.util.List;
 import java.util.OptionalLong;
@@ -163,6 +164,32 @@ public class ClickerUpgradeServiceTest {
 
             then(contributionWallet).should().restore(USER_ID, UNIVERSITY_ID, 300L);
             then(userClickerLevelCache).should(never()).raiseLevel(anyLong(), anyLong());
+        }
+    }
+
+    @Nested
+    @DisplayName("레벨 변경 실패 후 기여도 복구도 실패할 때")
+    class WhenRestoreFailure {
+
+        @Test
+        @DisplayName("업그레이드하면 원래 DB 예외를 던지고, 복구 예외는 suppressed로 남긴다")
+        void upgrade_restoreFailure() {
+            // given: 레벨 변경 중 DB 장애, 이어서 Redis 복구도 장애
+            given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
+            given(userClickerLevelStore.findLevel(USER_ID)).willReturn(1L);
+            given(contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 300L)).willReturn(OptionalLong.of(700L));
+            DataAccessResourceFailureException dbFailure = new DataAccessResourceFailureException("DB 연결 실패");
+            RedisConnectionFailureException redisFailure = new RedisConnectionFailureException("Redis 연결 실패");
+            willThrow(dbFailure).given(clickerLevelUpdater).changeLevel(USER_ID, 1L, 2L);
+            willThrow(redisFailure).given(contributionWallet).restore(USER_ID, UNIVERSITY_ID, 300L);
+
+            // when
+            Throwable thrown = catchThrowable(
+                    () -> clickerUpgradeService.upgrade(USER_ID, UNIVERSITY_ID));
+
+            // then
+            assertThat(thrown).isSameAs(dbFailure);
+            assertThat(thrown.getSuppressed()).containsExactly(redisFailure);
         }
     }
 
