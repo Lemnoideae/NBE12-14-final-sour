@@ -67,7 +67,7 @@ public class UserItemRepositoryTest {
 
     @Test
     @DisplayName("구매 내역은 내 구매만 구매 시각 최신 순으로 돌려준다.")
-    void findsOnlyMineLastestFirst(){
+    void findsOnlyMineLastestFirst() {
         // given: 구매 내역 3건, 다른 회원 구매 내역 1건(가장 최근)
         long first = insertUserItem(me, BASE);
         long third = insertUserItem(me, BASE.plusHours(2));
@@ -81,6 +81,5 @@ public class UserItemRepositoryTest {
         assertThat(page.getContent()).extracting(UserItem::getId).containsExactly(third, second, first);
         assertThat(page.getTotalElements()).isEqualTo(3);
     }
-
 
 }
