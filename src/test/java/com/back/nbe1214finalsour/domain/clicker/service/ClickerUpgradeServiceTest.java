@@ -194,6 +194,31 @@ public class ClickerUpgradeServiceTest {
     }
 
     @Nested
+    @DisplayName("레벨은 올랐지만 레벨 캐시 갱신이 실패할 때")
+    class WhenCacheFailure {
+
+        @Test
+        @DisplayName("업그레이드하면 예외 없이 결과를 반환하고 기여도는 복구하지 않는다")
+        void upgrade_cacheFailure() {
+            // given: 레벨 변경은 커밋됐고, 이어진 Redis 캐시 갱신만 장애
+            given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
+            given(userClickerLevelStore.findLevel(USER_ID)).willReturn(1L);
+            given(contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 300L)).willReturn(OptionalLong.of(700L));
+            willThrow(new RedisConnectionFailureException("Redis 연결 실패"))
+                    .given(userClickerLevelCache).raiseLevel(USER_ID, 2L);
+
+            // when
+            ClickerUpgradeResult result = clickerUpgradeService.upgrade(USER_ID, UNIVERSITY_ID);
+
+            // then
+            assertThat(result.upgradedClicker().getId()).isEqualTo(2L);
+            assertThat(result.remainingScore()).isEqualTo(700L);
+
+            then(contributionWallet).should(never()).restore(anyLong(), anyLong(), anyLong());
+        }
+    }
+
+    @Nested
     @DisplayName("레벨 변경이 충돌로 실패할 때")
     class WhenConflict {
 
