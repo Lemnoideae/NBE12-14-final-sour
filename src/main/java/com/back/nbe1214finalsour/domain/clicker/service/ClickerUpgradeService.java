@@ -41,11 +41,9 @@ public class ClickerUpgradeService {
         // 현재 레벨일 때만 다음 레벨로 변경 (조건부 UPDATE). 다른 요청이 먼저 레벨을 바꿨다면 updater가 충돌 예외를 던진다
         try {
             this.clickerLevelUpdater.changeLevel(userId, currentLevel, currentLevel + 1);
-        } catch (BusinessException e) {
-            if (e.getErrorCode() == ErrorCode.CLICKER_UPGRADE_CONFLICT) {
-                // 이 요청에서 차감한 기여도를 되돌린 뒤 충돌 예외를 그대로 던진다
-                this.contributionWallet.restore(userId, universityId, nextClicker.getRequiredScore());
-            }
+        } catch (RuntimeException e) {
+            // 충돌·DB 예외 등 어떤 실패든 이 요청에서 차감한 기여도를 되돌린 뒤 원래 예외를 그대로 던진다
+            this.contributionWallet.restore(userId, universityId, nextClicker.getRequiredScore());
             throw e;
         }
 
