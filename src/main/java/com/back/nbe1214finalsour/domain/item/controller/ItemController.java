@@ -3,12 +3,12 @@ package com.back.nbe1214finalsour.domain.item.controller;
 import com.back.nbe1214finalsour.domain.item.dto.ActiveEffectResponse;
 import com.back.nbe1214finalsour.domain.item.dto.ItemPurchaseResponse;
 import com.back.nbe1214finalsour.domain.item.dto.ItemResponse;
-import com.back.nbe1214finalsour.domain.item.service.ActiveEffectService;
-import com.back.nbe1214finalsour.domain.item.service.ItemPurchaseResult;
-import com.back.nbe1214finalsour.domain.item.service.ItemPurchaseService;
-import com.back.nbe1214finalsour.domain.item.service.ItemService;
+import com.back.nbe1214finalsour.domain.item.dto.PurchaseHistoryResponse;
+import com.back.nbe1214finalsour.domain.item.service.*;
 import com.back.nbe1214finalsour.global.response.ApiResponse;
 import com.back.nbe1214finalsour.global.security.AuthUser;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -25,6 +25,7 @@ public class ItemController {
     private final ItemService itemService;
     private final ItemPurchaseService itemPurchaseService;
     private final ActiveEffectService activeEffectService;
+    private final PurchaseHistoryService purchaseHistoryService;
 
     @GetMapping
     public ApiResponse<List<ItemResponse>> getItems(){
@@ -41,6 +42,18 @@ public class ItemController {
         return ApiResponse.ok(this.activeEffectService.findActive(user.userId())
                 .map(ActiveEffectResponse::from)
                 .orElse(null));
+    }
+
+    // 내 아이템 구매 내역. 최신순, 기본 0페이지 20개
+    @GetMapping("/me/history")
+    public ApiResponse<PurchaseHistoryResponse> getItemHistory(
+            @AuthenticationPrincipal AuthUser user,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
+    ) {
+        return ApiResponse.ok(PurchaseHistoryResponse.from(
+                this.purchaseHistoryService.findHistory(user.userId(), page, size)
+        ));
     }
 
     // 아이템 구매. 회원·학교는 토큰에서 꺼낸다 (학교 ID는 기여도 ZSET 키에 필요)
