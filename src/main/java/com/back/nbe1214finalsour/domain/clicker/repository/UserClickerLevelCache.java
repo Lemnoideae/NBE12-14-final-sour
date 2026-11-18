@@ -17,10 +17,13 @@ public class UserClickerLevelCache {
             RedisScript.of(new ClassPathResource("redis/clicker-level-redis.lua"), Long.class);
 
     private final StringRedisTemplate redisTemplate;
+    private final UserClickerLevelStore userClickerLevelStore;
 
-    // 빈 껍데기 (4단계에서 구현)
+    // 키가 없으면 DB 레벨로 채운다 (SET NX)
     public long loadIfAbsent(Long userId) {
-        return 0;
+        long dbLevel = userClickerLevelStore.findLevel(userId);
+        redisTemplate.opsForValue().setIfAbsent(RedisKey.USER_CLICKER.of(userId), String.valueOf(dbLevel));
+        return dbLevel;
     }
 
     // 현재 캐시 값보다 클 때만 갱신 (늦게 도착한 낮은 레벨은 무시)
