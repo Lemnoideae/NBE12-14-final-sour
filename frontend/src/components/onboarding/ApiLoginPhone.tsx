@@ -6,6 +6,7 @@ import { login, logout, useSessionRestore } from '../../api/auth';
 import { errorMessage, fieldErrorMap } from '../../api/errors';
 import { userKeys, useMyInfo } from '../../api/users';
 import { itemKeys } from '../../api/items';
+import { supportKeys } from '../../api/supports';
 import { LoginStep, PhoneFrame, SignedInStep } from './OnboardingSteps.tsx';
 
 // Login, logout and the session restore in API mode (SCRUM-152). The access token stays in memory (SCRUM-148); after
@@ -119,15 +120,17 @@ export const ApiSessionWatcher: React.FC<{ onEnded: () => void }> = ({ onEnded }
   useEffect(() => {
     if (session.status === 'signed-out') queryClient.getQueryCache().find({ queryKey: userKeys.me, exact: true })?.reset();
   }, [session.status, queryClient]);
-  // Subscribe synchronously: sign-out + another sign-in in one frame must still abort private history GETs.
+  // Subscribe synchronously: sign-out + another sign-in in one frame must still abort private history/support GETs.
   // Query.reset also cancels consumed signals, including the client's pre-HTTP fault delay, without refetching.
   useEffect(() => {
-    const clearHistory = () => {
+    const clearPrivateQueries = () => {
       if (client.session.getState().status !== 'signed-out') return;
-      for (const query of queryClient.getQueryCache().findAll({ queryKey: itemKeys.histories })) query.reset();
+      for (const queryKey of [itemKeys.histories, supportKeys.all]) {
+        for (const query of queryClient.getQueryCache().findAll({ queryKey })) query.reset();
+      }
     };
-    clearHistory();
-    return client.session.subscribe(clearHistory);
+    clearPrivateQueries();
+    return client.session.subscribe(clearPrivateQueries);
   }, [client, queryClient]);
   const onEndedRef = useRef(onEnded);
   onEndedRef.current = onEnded;

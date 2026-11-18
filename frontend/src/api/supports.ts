@@ -15,9 +15,55 @@ export interface GuestSupportRequest {
 }
 
 /** SupportCreateResponse. */
+export type SupportStatus = 'RECEIVED' | 'ANSWERED';
 export interface SupportCreated {
   supportId: number;
-  status: string;
+  status: SupportStatus;
+}
+export type MemberSupportRequest = Pick<GuestSupportRequest, 'recipientEmail' | 'title' | 'content'>;
+export interface SupportListItem {
+  supportId: number;
+  title: string;
+  status: SupportStatus;
+  createdAt: string;
+}
+export interface SupportListResponse {
+  items: SupportListItem[];
+  page: number;
+  size: number;
+  totalCount: number;
+  hasNext: boolean;
+}
+export interface SupportDetail extends SupportListItem {
+  content: string;
+  attachFileUrl: string | null;
+  answer: { title: string; content: string } | null;
+}
+export const supportKeys = {
+  all: ['supports', 'member'] as const,
+  lists: (userId: number) => ['supports', 'member', userId, 'list'] as const,
+  list: (userId: number, page: number) => ['supports', 'member', userId, 'list', page] as const,
+  detail: (userId: number, supportId: number) => ['supports', 'member', userId, 'detail', supportId] as const,
+};
+/** Never fall back to the guest endpoint if a member's session has ended. No upload contract exists yet. */
+export function createMemberSupport(client: ApiClient, request: MemberSupportRequest, signal?: AbortSignal): Promise<SupportCreated> {
+  if (client.session.getState().status !== 'signed-in') return Promise.reject(new Error('로그인이 필요합니다.'));
+  const { recipientEmail, title, content } = request;
+  return client.request('/supports', { method: 'POST', body: { recipientEmail: recipientEmail.trim(), title, content }, signal });
+}
+export function getMySupports(client: ApiClient, page = 0, signal?: AbortSignal): Promise<SupportListResponse> {
+  return client.get('/supports/me', { query: { page, size: 20 }, signal });
+}
+export function getSupportDetail(client: ApiClient, supportId: number, signal?: AbortSignal): Promise<SupportDetail> {
+  return client.get(`/supports/${supportId}`, { signal });
+}
+/** Do not turn a server-supplied attachment into an executable URL or embed arbitrary content. */
+export function safeSupportAttachment(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    return (parsed.protocol === 'https:' || parsed.protocol === 'http:') && !parsed.username && !parsed.password ? parsed.href : null;
+  } catch { return null; }
 }
 
 export function createGuestSupport(client: ApiClient, request: GuestSupportRequest, signal?: AbortSignal): Promise<SupportCreated> {
