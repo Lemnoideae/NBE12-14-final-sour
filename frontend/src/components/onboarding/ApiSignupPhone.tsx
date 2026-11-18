@@ -4,6 +4,7 @@ import { PhoneShellVariantContext } from '../PhoneShell.tsx';
 import { useApiClient } from '../../api/ApiProvider';
 import {
   checkNicknameAvailability,
+  login,
   nicknameProblem,
   NICKNAME_RULE,
   passwordProblem,
@@ -22,8 +23,9 @@ import { useDepartments } from '../../api/universities';
 import { REAL_UNIVERSITIES } from '../../data/universitiesData.ts';
 import { CodeStep, DoneStep, EmailStep, PasswordStep, PhoneFrame, ProfileStep, type OnboardingSchool } from './OnboardingSteps.tsx';
 
-// Sign-up against the backend (SCRUM-151): email → code → password → nickname and department → POST /auth/signup.
-// The mock onboarding (OnboardingPhone) stays for VITE_API_MODE=mock. Logging in after sign-up is SCRUM-152.
+// Sign-up against the backend (SCRUM-151): email → code → password → nickname and department → POST /auth/signup,
+// then a login with the same email and password (SignupResponse: "클라이언트는 이어서 로그인 API를 호출한다", SCRUM-152).
+// The mock onboarding (OnboardingPhone) stays for VITE_API_MODE=mock.
 
 /** Badge look from the frontend table; a school the table lacks still gets a plain badge. */
 export function schoolBadge(university: NamedRef): OnboardingSchool {
@@ -38,7 +40,8 @@ type Stage =
   | { step: 'code'; email: string; university: NamedRef; issuedAt: number; expiresAt: number; resendAt: number; attemptsLeft: number }
   | { step: 'password'; email: string; university: NamedRef; signupToken: string }
   | { step: 'profile'; email: string; university: NamedRef; signupToken: string; password: string }
-  | { step: 'done'; result: SignupResponse };
+  /** `signedIn`: the automatic login right after sign-up worked. */
+  | { step: 'done'; result: SignupResponse; signedIn: boolean };
 
 const NEW_CODE_NOTICE = '새 인증 코드를 보냈습니다. 이전 코드는 더 이상 쓸 수 없어요.';
 const NICKNAME_AVAILABLE = '사용할 수 있는 닉네임입니다.';
@@ -48,9 +51,11 @@ const codeOf = (error: unknown) => (isApiError(error) ? error.code : null);
 
 interface ApiSignupPhoneProps {
   onGoToCampus: () => void;
+  /** Link for members who already signed up. */
+  onGoToLogin?: () => void;
 }
 
-export const ApiSignupPhone: React.FC<ApiSignupPhoneProps> = ({ onGoToCampus }) => {
+export const ApiSignupPhone: React.FC<ApiSignupPhoneProps> = ({ onGoToCampus, onGoToLogin }) => {
   const client = useApiClient();
   const fullShell = useContext(PhoneShellVariantContext) === 'full';
   const [stage, setStage] = useState<Stage>({ step: 'email' });
@@ -68,7 +73,8 @@ export const ApiSignupPhone: React.FC<ApiSignupPhoneProps> = ({ onGoToCampus }) 
   const verify = useMutation({ mutationFn: (input: { email: string; code: string }) => verifyEmailCode(client, input.email, input.code) });
   const nicknameCheck = useMutation({ mutationFn: (value: string) => checkNicknameAvailability(client, value) });
   const enroll = useMutation({ mutationFn: (input: Parameters<typeof signup>[1]) => signup(client, input) });
-  const pending = codeRequest.isPending || verify.isPending || nicknameCheck.isPending || enroll.isPending;
+  const signIn = useMutation({ mutationFn: (input: { email: string; password: string }) => login(client, input.email, input.password) });
+  const pending = codeRequest.isPending || verify.isPending || nicknameCheck.isPending || enroll.isPending || signIn.isPending;
 
   const universityId = stage.step === 'profile' ? stage.university.id : null;
   const departments = useDepartments(universityId);
@@ -137,6 +143,7 @@ export const ApiSignupPhone: React.FC<ApiSignupPhoneProps> = ({ onGoToCampus }) 
         error={error}
         pending={pending}
         sampleEmails={[]}
+        onGoToLogin={onGoToLogin}
       />
     );
   } else if (stage.step === 'code') {
@@ -255,10 +262,15 @@ export const ApiSignupPhone: React.FC<ApiSignupPhoneProps> = ({ onGoToCampus }) 
           }
           enroll.mutate({ signupToken: stage.signupToken, nickname, password: stage.password, departmentId: Number(departmentId) }, {
             onSuccess: (result) => {
-              setStage({ step: 'done', result });
-              setPassword('');
-              setConfirm('');
-              show(null);
+              // The account exists now; a failed login only leaves the user to log in on the login screen.
+              signIn.mutate({ email: stage.email, password: stage.password }, {
+                onSettled: (_, loginError) => {
+                  setStage({ step: 'done', result, signedIn: !loginError });
+                  setPassword('');
+                  setConfirm('');
+                  show(null);
+                },
+              });
             },
             onError: (failure) => {
               const errorCode = codeOf(failure);
@@ -287,6 +299,7 @@ export const ApiSignupPhone: React.FC<ApiSignupPhoneProps> = ({ onGoToCampus }) 
         nickname={result.nickname}
         department={result.department.name}
         startedOver={null}
+        notice={stage.signedIn ? null : '가입은 끝났어요. 로그인하지 못했으니 로그인 화면에서 다시 로그인해 주세요.'}
         onGoToCampus={onGoToCampus}
         onRestart={() => {
           setEmailInput('');

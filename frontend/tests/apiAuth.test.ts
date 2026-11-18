@@ -5,11 +5,14 @@ import { createApiClient } from '../src/api/client';
 import { createApiFaults } from '../src/api/faults';
 import {
   checkNicknameAvailability,
+  login,
+  logout,
   nicknameProblem,
   NICKNAME_RULE,
   PASSWORD_PATTERN,
   passwordProblem,
   requestEmailCode,
+  restoreSession,
   signup,
   SIGNUP_ERROR_CODES,
   SIGNUP_SERVER_RULES,
@@ -105,4 +108,69 @@ test('가입 화면이 이름으로 다루는 오류 코드는 ErrorCode.java에
   const source = javaSource('global/exception/ErrorCode.java');
   const backendCodes = new Set([...source.matchAll(/^\s+([A-Z][A-Z0-9_]+)\(HttpStatus\./gm)].map((m) => m[1]));
   for (const code of Object.values(SIGNUP_ERROR_CODES)) assert.ok(backendCodes.has(code), `${code}가 ErrorCode.java에 없음`);
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// Login, logout and the session restore (SCRUM-152)
+// ---------------------------------------------------------------------------------------------------------------
+
+type Answer = (url: string, init?: RequestInit) => Response;
+const answer = (status: number, code: string, data: unknown = null) =>
+  new Response(JSON.stringify({ code, message: code === 'SUCCESS' ? '요청이 성공했습니다.' : `${code} 문구`, data }), { status });
+
+function scriptedClient(answers: Answer[]) {
+  const sent: Array<{ route: string; authorization: string | null }> = [];
+  const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    sent.push({ route: `${init?.method ?? 'GET'} ${String(input)}`, authorization: new Headers(init?.headers).get('Authorization') });
+    const next = answers.shift();
+    if (!next) throw new Error(`예상하지 않은 요청: ${String(input)}`);
+    return next(String(input), init);
+  }) as typeof globalThis.fetch;
+  return { client: createApiClient({ fetch, faults: createApiFaults({ delayMs: 0, failDelayMs: 0 }) }), sent };
+}
+
+const LOGIN_DATA = { accessToken: 'access-1', expiresInSeconds: 3600, user: { id: 3, nickname: '새내기', universityId: 8, role: 'USER' } };
+
+test('로그인은 토큰 없이 보내고, 받은 access 토큰으로 세션을 연다', async () => {
+  const { client, sent } = scriptedClient([() => answer(200, 'SUCCESS', LOGIN_DATA)]);
+  const response = await login(client, 'a@hanyang.ac.kr', 'abcd123!');
+  assert.equal(response.user.nickname, '새내기');
+  assert.deepEqual(sent, [{ route: 'POST /api/v1/auth/login', authorization: null }]);
+  assert.deepEqual(client.session.getState(), { status: 'signed-in', accessToken: 'access-1' });
+});
+
+test('로그인 실패는 서버 문구로 던지고 세션을 열지 않는다', async () => {
+  const { client } = scriptedClient([() => answer(401, 'AUTH_INVALID_CREDENTIALS')]);
+  await assert.rejects(login(client, 'a@hanyang.ac.kr', 'wrong'), { code: 'AUTH_INVALID_CREDENTIALS' });
+  assert.equal(client.session.getState().status, 'signed-out');
+});
+
+test('로그아웃은 토큰을 붙여 보내고 성공하면 세션을 닫는다. 실패하면 세션을 남긴다', async () => {
+  const { client, sent } = scriptedClient([
+    () => new Response(null, { status: 500 }),
+    () => new Response(null, { status: 204 }),
+  ]);
+  client.session.signIn('access-1');
+  await assert.rejects(logout(client));
+  assert.equal(client.session.getState().status, 'signed-in', '쿠키가 남아 있으면 새로 고칠 때 다시 로그인되므로 세션도 남긴다');
+
+  await logout(client);
+  assert.deepEqual(client.session.getState(), { status: 'signed-out', ended: null }, '스스로 로그아웃하면 안내 문구가 없다');
+  assert.deepEqual(sent.map((entry) => entry.authorization), ['Bearer access-1', 'Bearer access-1']);
+});
+
+test('세션 복구: reissue가 되면 true, 복구할 세션이 없으면 false, 연결 실패는 던진다', async () => {
+  const restored = scriptedClient([() => answer(200, 'SUCCESS', { accessToken: 'access-2', expiresInSeconds: 3600 })]);
+  assert.equal(await restoreSession(restored.client), true);
+  assert.deepEqual(restored.sent, [{ route: 'POST /api/v1/auth/reissue', authorization: null }]);
+  assert.equal(restored.client.session.getAccessToken(), 'access-2');
+
+  for (const code of ['AUTH_INVALID_REFRESH_TOKEN', 'AUTH_SESSION_REPLACED']) {
+    const none = scriptedClient([() => answer(401, code)]);
+    assert.equal(await restoreSession(none.client), false, code);
+    assert.deepEqual(none.client.session.getState(), { status: 'signed-out', ended: null }, '첫 방문에는 로그아웃 안내를 띄우지 않는다');
+  }
+
+  const offline = scriptedClient([() => new Response(null, { status: 502 })]);
+  await assert.rejects(restoreSession(offline.client), { kind: 'network' });
 });

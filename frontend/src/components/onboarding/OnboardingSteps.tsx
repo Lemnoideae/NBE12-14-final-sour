@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Mail, Check, RefreshCw, Clock, ArrowRight, Sparkles, CheckCircle2, Inbox, Hourglass, KeyRound } from 'lucide-react';
+import { Mail, Check, RefreshCw, Clock, ArrowRight, Sparkles, CheckCircle2, Inbox, Hourglass, KeyRound, LogIn, LogOut } from 'lucide-react';
 import { CampusLayoutScene } from '../CampusScene';
 import { PhoneShell } from '../PhoneShell';
 import { TITLE_LAYOUT } from '../../data/campusLayouts';
@@ -100,11 +100,13 @@ interface EmailStepProps {
   pending?: boolean;
   /** Quick-fill buttons; the API sign-up passes none, since the server decides which domains it knows. */
   sampleEmails?: readonly string[];
+  /** Shows a link to the login screen for members who already signed up (API mode). */
+  onGoToLogin?: () => void;
 }
 
 const PENDING_LABEL = '요청 중…';
 
-export const EmailStep: React.FC<EmailStepProps> = ({ email, onEmailChange, onRequestCode, error, pending = false, sampleEmails = MOCK_SAMPLE_EMAILS }) => (
+export const EmailStep: React.FC<EmailStepProps> = ({ email, onEmailChange, onRequestCode, error, pending = false, sampleEmails = MOCK_SAMPLE_EMAILS, onGoToLogin }) => (
   <>
     <TitleArt />
     <SchoolBelt />
@@ -157,6 +159,11 @@ export const EmailStep: React.FC<EmailStepProps> = ({ email, onEmailChange, onRe
         <span>{pending ? PENDING_LABEL : '인증 코드 받기'}</span>
         <ArrowRight className="w-3.5 h-3.5" />
       </button>
+      {onGoToLogin && (
+        <button type="button" onClick={onGoToLogin} className="min-h-6 self-center font-pixel text-[10px] text-[#8b5327] underline cursor-pointer">
+          이미 가입했어요 · 로그인
+        </button>
+      )}
     </form>
   </>
 );
@@ -533,9 +540,11 @@ interface DoneStepProps {
   startedOver: boolean | null;
   onGoToCampus: () => void;
   onRestart: () => void;
+  /** A line under the welcome, e.g. that the automatic login after sign-up failed. */
+  notice?: string | null;
 }
 
-export const DoneStep: React.FC<DoneStepProps> = ({ school, nickname, department, startedOver, onGoToCampus, onRestart }) => (
+export const DoneStep: React.FC<DoneStepProps> = ({ school, nickname, department, startedOver, onGoToCampus, onRestart, notice }) => (
   <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center">
     <div className="rpg-box p-5 bg-[#fef08a] w-full flex flex-col items-center gap-2">
       <span className="text-4xl" aria-hidden="true">🎉 🎓</span>
@@ -545,12 +554,109 @@ export const DoneStep: React.FC<DoneStepProps> = ({ school, nickname, department
       {startedOver !== null && (
         <p className="font-pixel text-[10px] text-[#261608]">{startedOver ? '새 기록으로 처음부터 시작합니다.' : '기존 진행을 그대로 이어 갑니다.'}</p>
       )}
+      {notice && <p role="status" className="font-pixel text-[10px] font-bold text-[#9a3412]">{notice}</p>}
     </div>
     <button type="button" onClick={onGoToCampus} className="pixel-plaque plaque-green w-full py-2.5 text-sm font-pixel font-black cursor-pointer">
       캠퍼스로 이동
     </button>
     <button type="button" onClick={onRestart} className="font-pixel text-[10px] text-[#8b5327] underline cursor-pointer">
       온보딩 다시 시작
+    </button>
+  </div>
+);
+
+// ---------------------------------------------------------------------------------------------------------
+// Login and the signed-in account (API mode, SCRUM-152)
+// ---------------------------------------------------------------------------------------------------------
+
+interface LoginStepProps {
+  email: string;
+  password: string;
+  onEmailChange: (email: string) => void;
+  onPasswordChange: (password: string) => void;
+  onLogin: () => void;
+  onGoToSignup: () => void;
+  /** Why the last session ended (another device, suspension, expiry), shown above the form. */
+  notice?: string | null;
+  error?: string | null;
+  pending?: boolean;
+}
+
+export const LoginStep: React.FC<LoginStepProps> = ({
+  email, password, onEmailChange, onPasswordChange, onLogin, onGoToSignup, notice, error, pending = false,
+}) => {
+  const inputClass = 'w-full bg-[#ffffff] border-2 border-[#261608] px-2.5 py-1.5 text-xs font-mono text-[#261608] placeholder:text-stone-400 focus:outline-none focus:bg-[#fef9c3] shadow-[inset_1px_1px_0px_#261608]';
+  return (
+    <>
+      <TitleArt />
+      <form
+        className="rpg-box p-3 mt-3 flex flex-col gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          soundManager.playBuySound();
+          onLogin();
+        }}
+      >
+        <div className="flex items-center gap-1.5 border-b-2 border-[#261608]/20 pb-1.5">
+          <LogIn className="w-4 h-4 text-[#8b5327]" />
+          <h2 className="font-pixel text-xs sm:text-sm font-bold text-[#261608]">로그인</h2>
+        </div>
+        {notice && (
+          <p role="status" className="font-pixel text-[10px] font-bold text-[#9a3412] bg-[#ffedd5] border border-[#9a3412] px-1.5 py-1 leading-tight">{notice}</p>
+        )}
+        <label className="font-pixel text-[10px] font-bold text-[#261608] flex flex-col gap-1">
+          학교 이메일 주소
+          <input type="email" autoComplete="username" value={email} onChange={(e) => onEmailChange(e.target.value)} placeholder="student@hanyang.ac.kr" className={inputClass} />
+        </label>
+        <label className="font-pixel text-[10px] font-bold text-[#261608] flex flex-col gap-1">
+          비밀번호
+          <input type="password" autoComplete="current-password" value={password} onChange={(e) => onPasswordChange(e.target.value)} maxLength={64} className={inputClass} />
+        </label>
+        <ErrorText message={error} />
+        <button
+          type="submit"
+          disabled={pending}
+          className="pixel-plaque plaque-yellow w-full py-2 mt-1 text-xs font-pixel font-bold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+        >
+          <span>{pending ? PENDING_LABEL : '로그인하기'}</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
+        <button type="button" onClick={onGoToSignup} className="min-h-6 self-center font-pixel text-[10px] text-[#8b5327] underline cursor-pointer">
+          처음이에요 · 학교 이메일로 가입하기
+        </button>
+      </form>
+    </>
+  );
+};
+
+interface SignedInStepProps {
+  /** Known right after login on this page; after a reload the profile comes from GET /users/me (SCRUM-153). */
+  nickname: string | null;
+  onGoToCampus: () => void;
+  onLogout: () => void;
+  error?: string | null;
+  pending?: boolean;
+}
+
+export const SignedInStep: React.FC<SignedInStepProps> = ({ nickname, onGoToCampus, onLogout, error, pending = false }) => (
+  <div data-testid="signed-in" className="flex-1 flex flex-col items-center justify-center gap-3 text-center">
+    <div className="rpg-box p-5 bg-[#dcfce7] w-full flex flex-col items-center gap-2">
+      <CheckCircle2 className="w-10 h-10 text-[#15803d]" aria-hidden="true" />
+      <h2 className="font-pixel text-lg font-bold text-[#261608]">{nickname ? `${nickname}님, 로그인되어 있어요` : '로그인되어 있어요'}</h2>
+      <p className="font-pixel text-[10px] text-[#15803d]">새로 고쳐도 로그인이 유지됩니다.</p>
+    </div>
+    <ErrorText message={error} />
+    <button type="button" onClick={onGoToCampus} className="pixel-plaque plaque-green w-full py-2.5 text-sm font-pixel font-black cursor-pointer">
+      캠퍼스로 이동
+    </button>
+    <button
+      type="button"
+      onClick={onLogout}
+      disabled={pending}
+      className="pixel-plaque plaque-parchment w-full py-2 text-xs font-pixel font-bold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+    >
+      <LogOut className="w-3.5 h-3.5" />
+      <span>{pending ? PENDING_LABEL : '로그아웃'}</span>
     </button>
   </div>
 );

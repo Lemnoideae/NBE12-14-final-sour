@@ -1,8 +1,14 @@
-// Sign-up through the backend (SCRUM-151): email code → verify → sign-up, plus the nickname check. Every call here is
-// public (SecurityConfig.PUBLIC_POST / PUBLIC_GET), so it goes `anonymous`: no token, no reissue, and its errors stay
-// with the form. Plan: .agents/01-PLAN/261118-1021-frontend_prototype_migration_plan.md §5 단계 1.
+// Sign-up and login through the backend. Sign-up (SCRUM-151): email code → verify → sign-up, plus the nickname check.
+// Those calls and login are public (SecurityConfig.PUBLIC_POST / PUBLIC_GET), so they go `anonymous`: no token, no
+// reissue, and their errors stay with the form. Login, logout and the session restore are SCRUM-152.
+// Plan: .agents/01-PLAN/261118-1021-frontend_prototype_migration_plan.md §5 단계 1.
 
+import { useQuery } from '@tanstack/react-query';
+import { useApiClient } from './ApiProvider';
 import type { ApiClient } from './client';
+import { isApiError } from './errors';
+import { QUERY_DEFAULTS } from './queryClient';
+import { sessionEndReason } from './session';
 
 /** UniversitySummary / DepartmentSummary in the auth responses ({id, name}). */
 export interface NamedRef {
@@ -81,6 +87,73 @@ export function signup(client: ApiClient, request: SignupRequest): Promise<Signu
 
 export function checkNicknameAvailability(client: ApiClient, nickname: string): Promise<NicknameAvailability> {
   return client.request('/users/nickname/availability', { query: { nickname }, anonymous: true });
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Login, logout and the session restore (SCRUM-152)
+// ---------------------------------------------------------------------------------------------------------------
+
+/** Role.java */
+export type UserRole = 'USER' | 'ADMIN';
+
+/** LoginResponse. The refresh token is not in the body: it comes as the HttpOnly `refreshToken` cookie. */
+export interface LoginResponse {
+  accessToken: string;
+  expiresInSeconds: number;
+  user: { id: number; nickname: string; universityId: number; role: UserRole };
+}
+
+/** POST /auth/login, then signs the session in with the access token (kept in memory only). */
+export async function login(client: ApiClient, email: string, password: string): Promise<LoginResponse> {
+  const response = await client.request<LoginResponse>('/auth/login', { method: 'POST', body: { email, password }, anonymous: true });
+  client.session.signIn(response.accessToken);
+  return response;
+}
+
+/**
+ * POST /auth/logout (needs the token), then signs the session out. The server deletes the refresh token and expires
+ * the cookie. When the call fails the session stays: signing out only here would leave the cookie, and the next
+ * reload would sign the user back in.
+ */
+export async function logout(client: ApiClient): Promise<void> {
+  await client.request<void>('/auth/logout', { method: 'POST' });
+  client.session.signOut();
+}
+
+/**
+ * Gets the session back after a reload with the refresh cookie (POST /auth/reissue). False when there is nothing to
+ * restore (no cookie, used or expired, replaced by another login); other failures, such as no connection, throw.
+ */
+export async function restoreSession(client: ApiClient): Promise<boolean> {
+  try {
+    await client.reissue();
+    return true;
+  } catch (error) {
+    if (isApiError(error) && error.kind === 'http' && sessionEndReason(error.code)) return false;
+    throw error;
+  }
+}
+
+export const authKeys = {
+  restore: ['auth', 'restore'] as const,
+};
+
+/**
+ * The session restore, run once per page load: every caller shares one query, so a second component or React's
+ * double effect in development sends no second reissue (the refresh token is used once).
+ */
+export function useSessionRestore() {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: authKeys.restore,
+    queryFn: () => restoreSession(client),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    // The refresh token works once. Retry only when a proxy answered for a backend it could not reach, so the
+    // request surely never arrived; a lost answer could have used the token already.
+    retry: (failureCount, error) => failureCount < QUERY_DEFAULTS.maxRetries
+      && isApiError(error) && error.kind === 'network' && error.status !== null,
+  });
 }
 
 // ---------------------------------------------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { SchoolId } from './data/schoolIds';
 import { TopHUD } from './components/TopHUD';
 import { CampusView } from './components/CampusView';
@@ -20,7 +20,8 @@ import { VisitingScreen1Phone } from './components/VisitingScreen1Phone';
 import { VisitingScreen2Phone } from './components/VisitingScreen2Phone';
 import { OnboardingPhone } from './components/onboarding/OnboardingPhone';
 import { ApiSignupPhone } from './components/onboarding/ApiSignupPhone';
-import { selectByMode } from './api/mode';
+import { ApiAccountNavLabel, ApiLoginPhone, ApiSessionWatcher } from './components/onboarding/ApiLoginPhone';
+import { API_MODE, selectByMode } from './api/mode';
 import { useMySchool } from './hooks/useSchoolViews';
 import { TwoPhoneChatComparison } from './components/TwoPhoneChatComparison';
 import { TwoPhoneVisitingComparison } from './components/TwoPhoneVisitingComparison';
@@ -51,9 +52,9 @@ import { Smartphone, Gamepad2, Layers, Trophy, ShoppingBag, MapPin, Image as Ima
 
 // [시연] 헤더 학교명 길이별 표시 확인용. 실제 학교 데이터가 아니라 목업 표시 테스트 값이다.
 /** Service flow screens (M5-D). Demo tools and design comparisons are left out of the 44px touch areas. */
-const SERVICE_VIEW_MODES = new Set<string>(['gameplay', 'signup', 'single_map', 'visiting', 'ranking', 'shop', 'alliance_apply', 'current_alliance', 'battle_apply', 'battle_status', 'support_guest']);
+const SERVICE_VIEW_MODES = new Set<string>(['gameplay', 'signup', 'login', 'single_map', 'visiting', 'ranking', 'shop', 'alliance_apply', 'current_alliance', 'battle_apply', 'battle_status', 'support_guest']);
 /** Sign-up: the backend in API mode (SCRUM-151), the mock onboarding otherwise. */
-const SignupScreen = selectByMode({ api: ApiSignupPhone, mock: OnboardingPhone });
+const SignupScreen = selectByMode<React.FC<{ onGoToCampus: () => void; onGoToLogin?: () => void }>>({ api: ApiSignupPhone, mock: OnboardingPhone });
 
 const DEMO_SCHOOL_NAMES = [
   // 'default' shows the player's school (M4: set by the mock email verification).
@@ -64,7 +65,7 @@ const DEMO_SCHOOL_NAMES = [
 
 function AppContent() {
   // Mode: 'ranking_screens' (2-phone ranking comparison with infinite scroll) | 'our_guestbook_screens' | 'visiting_screens' | etc.
-  const [viewMode, setViewMode] = useState<'ranking_screens' | 'our_guestbook_screens' | 'visiting_screens' | 'chat_screens' | 'single_map' | 'visiting' | 'map_screens' | 'map_illustration' | 'shop' | 'ranking' | 'spritesheet' | 'onboarding' | 'signup' | 'gameplay' | 'alliance_apply' | 'current_alliance' | 'battle_apply' | 'battle_status' | 'support_guest'>('gameplay');
+  const [viewMode, setViewMode] = useState<'ranking_screens' | 'our_guestbook_screens' | 'visiting_screens' | 'chat_screens' | 'single_map' | 'visiting' | 'map_screens' | 'map_illustration' | 'shop' | 'ranking' | 'spritesheet' | 'onboarding' | 'signup' | 'login' | 'gameplay' | 'alliance_apply' | 'current_alliance' | 'battle_apply' | 'battle_status' | 'support_guest'>('gameplay');
   const [isChatSheetOpen, setIsChatSheetOpen] = useState<boolean>(false);
   const [isOurGuestbookSheetOpen, setIsOurGuestbookSheetOpen] = useState<boolean>(false);
   const [isStatsSheetOpen, setIsStatsSheetOpen] = useState<boolean>(false);
@@ -228,6 +229,21 @@ function AppContent() {
           <Smartphone className="w-3.5 h-3.5 text-[#261608]" />
           <span>📱 순차 온보딩 (Single Phone)</span>
         </button>
+
+        {/* Login exists only with the backend (SCRUM-152); the mock has no accounts. */}
+        {API_MODE === 'api' && (
+          <button
+            onClick={() => {
+              setViewMode('login');
+              soundManager.playTabSound();
+            }}
+            className={`pixel-plaque px-2.5 py-1.5 text-xs font-pixel font-bold flex items-center gap-1.5 cursor-pointer ${
+              viewMode === 'login' ? 'plaque-yellow' : 'plaque-parchment'
+            }`}
+          >
+            <ApiAccountNavLabel />
+          </button>
+        )}
 
         <button
           onClick={() => {
@@ -472,6 +488,7 @@ function AppContent() {
   return (
     <AllianceNavProvider value={allianceNav}>
       <div className={`w-full bg-[#f1f5f9] flex flex-col items-center justify-start select-none text-[#261608] ${isPhone ? 'device-full min-h-dvh' : 'min-h-screen p-2 sm:p-5'}`}>
+        {API_MODE === 'api' && <ApiSessionWatcher onEnded={() => setViewMode('login')} />}
         {/* [목업] Phone: the presentation header, view menus and demo tools move into a sheet behind this bar (Q5). Not part of the real service. */}
         {isPhone && (
           <div className="mock-menu-bar w-full shrink-0 flex items-center justify-end gap-2 bg-[#fffbeb] border-b-2 border-dashed border-[#8b5327]">
@@ -727,7 +744,9 @@ function AppContent() {
         ) : viewMode === 'onboarding' ? (
           <OnboardingFlow onStartSequential={() => setViewMode('signup')} />
         ) : viewMode === 'signup' ? (
-          <SignupScreen onGoToCampus={goToMySchool} />
+          <SignupScreen onGoToCampus={goToMySchool} onGoToLogin={() => setViewMode('login')} />
+        ) : viewMode === 'login' ? (
+          <ApiLoginPhone onGoToSignup={() => setViewMode('signup')} onGoToCampus={goToMySchool} />
         ) : (
           /* Single Phone Gameplay View */
           <div className={viewWrap}>

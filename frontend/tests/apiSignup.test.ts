@@ -71,6 +71,9 @@ function mount(overrides: Record<string, Handler> = {}) {
     'POST /api/v1/auth/signup': (body) => (body.nickname === TAKEN_NICKNAME
       ? fail(409, 'USER_NICKNAME_DUPLICATED', '이미 사용 중인 닉네임입니다.')
       : ok({ userId: 1, nickname: body.nickname, university: HANYANG, department: DEPARTMENTS.find((d) => d.id === body.departmentId) }, 201)),
+    'POST /api/v1/auth/login': (body) => (body.password === PASSWORD
+      ? ok({ accessToken: 'login-token', expiresInSeconds: 3600, user: { id: 1, nickname: '새내기', universityId: 8, role: 'USER' } })
+      : fail(401, 'AUTH_INVALID_CREDENTIALS', '이메일 또는 비밀번호가 올바르지 않습니다.')),
     ...overrides,
   };
   const calls: Array<{ route: string; body: Record<string, unknown> }> = [];
@@ -85,12 +88,16 @@ function mount(overrides: Record<string, Handler> = {}) {
   const queryClient = createQueryClient();
   queryClients.push(queryClient);
   const goneToCampus: string[] = [];
+  const client = createApiClient({ fetch, faults: createApiFaults({ delayMs: 0, failDelayMs: 0 }) });
   render(React.createElement(ApiProvider, {
-    client: createApiClient({ fetch, faults: createApiFaults({ delayMs: 0, failDelayMs: 0 }) }),
+    client,
     queryClient,
-    children: React.createElement(ApiSignupPhone, { onGoToCampus: () => goneToCampus.push('campus') }),
+    children: React.createElement(ApiSignupPhone, {
+      onGoToCampus: () => goneToCampus.push('campus'),
+      onGoToLogin: () => goneToCampus.push('login'),
+    }),
   }));
-  return { calls, routes: () => calls.map((call) => call.route), goneToCampus };
+  return { client, calls, routes: () => calls.map((call) => call.route), goneToCampus };
 }
 
 async function requestCode(email = 'student@hanyang.ac.kr') {
@@ -119,8 +126,8 @@ async function fillProfile(nickname: string) {
 
 const alertText = async () => (await screen.findByRole('alert')).textContent ?? '';
 
-test('가입 성공: 이메일 → 코드 → 비밀번호 → 닉네임·학과 → 가입 완료', async () => {
-  const { calls, routes, goneToCampus } = mount();
+test('가입 성공: 이메일 → 코드 → 비밀번호 → 닉네임·학과 → 가입 → 같은 계정으로 자동 로그인', async () => {
+  const { client, calls, routes, goneToCampus } = mount();
   assertAbsent(screen.queryByLabelText('목업 샘플 이메일'), 'API 모드는 목업 샘플 도메인을 보이지 않는다');
 
   await requestCode(' student@hanyang.ac.kr ');
@@ -144,9 +151,13 @@ test('가입 성공: 이메일 → 코드 → 비밀번호 → 닉네임·학과
     'GET /api/v1/universities/8/departments',
     'GET /api/v1/users/nickname/availability',
     'POST /api/v1/auth/signup',
+    'POST /api/v1/auth/login',
   ]);
   assert.deepEqual(calls[0].body, { email: 'student@hanyang.ac.kr' }, '앞뒤 공백 없이 보낸다');
   assert.deepEqual(calls[4].body, { signupToken: 'signup-token', nickname: '새내기', password: PASSWORD, departmentId: 302 });
+  assert.deepEqual(calls[5].body, { email: 'student@hanyang.ac.kr', password: PASSWORD });
+  assert.equal(client.session.getAccessToken(), 'login-token');
+  assertAbsent(screen.queryByRole('status'), '로그인까지 되면 안내 문구가 없다');
 
   fireEvent.click(screen.getByRole('button', { name: '캠퍼스로 이동' }));
   assert.deepEqual(goneToCampus, ['campus']);
@@ -251,4 +262,23 @@ test('학과 목록을 못 받으면 알리고, 다시 시도로 불러온다. �
   fireEvent.click(screen.getByRole('button', { name: /입학하기/ }));
   assert.equal(await alertText(), '학과를 선택해 주세요.');
   assert.equal(routes().includes('POST /api/v1/auth/signup'), false);
+});
+
+test('가입 뒤 자동 로그인이 실패해도 가입 완료를 보이고 로그인 화면을 안내한다', async () => {
+  const { client } = mount({ 'POST /api/v1/auth/login': () => fail(500, 'COMMON_INTERNAL_ERROR', '서버 오류가 발생했습니다.') });
+  await requestCode();
+  await enterCode(RIGHT_CODE);
+  await setPassword();
+  await fillProfile('새내기');
+  fireEvent.click(screen.getByRole('button', { name: /입학하기/ }));
+
+  await screen.findByText('한양대학교 입학을 환영합니다!');
+  assert.match(screen.getByRole('status').textContent ?? '', /로그인 화면에서 다시 로그인해 주세요/);
+  assert.equal(client.session.getState().status, 'signed-out');
+});
+
+test('이메일 단계에 이미 가입한 회원을 위한 로그인 링크가 있다', () => {
+  const { goneToCampus } = mount();
+  fireEvent.click(screen.getByRole('button', { name: '이미 가입했어요 · 로그인' }));
+  assert.deepEqual(goneToCampus, ['login']);
 });
