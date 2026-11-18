@@ -33,6 +33,7 @@ import { ChatPreviewBar } from './components/ChatPreviewBar';
 import { ChatBottomSheet } from './components/ChatBottomSheet';
 import { BottomSheetDialog } from './components/BottomSheetDialog';
 import { BotCheckDialog } from './components/BotCheckDialog';
+import { ApiBotCheckDialog } from './components/ApiBotCheckDialog';
 import { SupportGuestScreenPhone } from './components/SupportGuestScreenPhone';
 import { CampusStatsSheet } from './components/CampusStatsSheet';
 import { getSchoolRankings } from './data/mockRankings';
@@ -494,9 +495,15 @@ function AppContent() {
         {API_MODE === 'api' && <ApiSessionWatcher onEnded={() => setViewMode('login')} />}
         {API_MODE === 'api' && <ApiPlayerSync getPendingScore={campusClicks.getPendingScore} />}
         {campusClicks.notice && (
-          <p role="alert" className="w-full max-w-3xl border-2 border-[#8b5327] bg-[#fffbeb] p-3 text-sm font-pixel">
-            {campusClicks.notice}
-          </p>
+          <div role="alert" className="w-full max-w-3xl border-2 border-[#8b5327] bg-[#fffbeb] p-3 text-sm font-pixel">
+            <p>{campusClicks.notice}</p>
+            {campusClicks.retryLimited && (
+              <button type="button" onClick={campusClicks.retryLimited} className="pixel-plaque plaque-yellow min-h-12 mt-2 px-3 py-2 text-xs font-bold cursor-pointer">거절된 배치를 제외하고 클릭 재개</button>
+            )}
+            {campusClicks.botCheck && (
+              <button type="button" onClick={campusClicks.botCheck.onOpen} className="pixel-plaque plaque-yellow min-h-12 mt-2 px-3 py-2 text-xs font-bold cursor-pointer">자동 입력 방지 확인</button>
+            )}
+          </div>
         )}
         {/* [목업] Phone: the presentation header, view menus and demo tools move into a sheet behind this bar (Q5). Not part of the real service. */}
         {isPhone && (
@@ -915,7 +922,8 @@ function AppContent() {
         </div>
         </PhoneShellVariantContext.Provider>
         {/* SCRUM-121: one bot check for every screen that sends my campus clicks. */}
-        {game.botCheckOpen && <BotCheckDialog onVerified={game.completeBotCheck} onClose={game.closeBotCheck} />}
+        {API_MODE === 'mock' && game.botCheckOpen && <BotCheckDialog onVerified={game.completeBotCheck} onClose={game.closeBotCheck} />}
+        {campusClicks.botCheck?.open && <ApiBotCheckDialog onVerified={campusClicks.botCheck.onVerified} onClose={campusClicks.botCheck.onClose} />}
       </div>
     </AllianceNavProvider>
   );

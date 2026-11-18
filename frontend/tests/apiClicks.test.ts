@@ -6,6 +6,8 @@ import { JSDOM } from 'jsdom';
 import { assertAbsent } from './helpers/domAssert';
 import type { ClickRequest, ClickResponse } from '../src/api/clicks';
 import type { MyInfo } from '../src/api/users';
+import type { TurnstileApi, TurnstileLoader, TurnstileRenderOptions } from '../src/utils/turnstile';
+import { installDialogStub } from './helpers/dialogStub';
 
 const assets = registerHooks({
   load(url, context, nextLoad) {
@@ -21,7 +23,9 @@ for (const [key, value] of Object.entries({
   HTMLElement: dom.window.HTMLElement, Node: dom.window.Node, IS_REACT_ACT_ENVIRONMENT: true,
 })) Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
 
-const { render, screen, fireEvent, cleanup, act, waitFor } = await import('@testing-library/react');
+installDialogStub(dom.window);
+
+const { render, screen, within, fireEvent, cleanup, act, waitFor } = await import('@testing-library/react');
 const { ApiProvider } = await import('../src/api/ApiProvider');
 const { createApiClient } = await import('../src/api/client');
 const { createQueryClient } = await import('../src/api/queryClient');
@@ -29,6 +33,7 @@ const { userKeys } = await import('../src/api/users');
 const { MockGameProvider, useMockGame } = await import('../src/hooks/useMockGame');
 const { useApiCampusClicks, useCampusClicks } = await import('../src/hooks/useCampusClicks');
 const { ApiPlayerSync } = await import('../src/components/ApiPlayerSync');
+const { ApiBotCheckDialog } = await import('../src/components/ApiBotCheckDialog');
 const { ApiSessionWatcher } = await import('../src/components/onboarding/ApiLoginPhone');
 const clients: Array<ReturnType<typeof createQueryClient>> = [];
 afterEach(() => {
@@ -62,13 +67,30 @@ function Probe() {
     React.createElement(ApiPlayerSync, { getPendingScore: clicks.getPendingScore }),
     React.createElement('output', { 'data-testid': 'game' }, JSON.stringify(game.state)),
     clicks.notice && React.createElement('p', { role: 'alert' }, clicks.notice),
+    clicks.retryLimited && React.createElement('button', { onClick: clicks.retryLimited }, '거절 배치 제외'),
+    clicks.botCheck && React.createElement('button', { onClick: clicks.botCheck.onOpen }, '확인 열기'),
+    clicks.botCheck?.open && React.createElement(ApiBotCheckDialog, { onVerified: clicks.botCheck.onVerified, onClose: clicks.botCheck.onClose }),
     onCampus && React.createElement('button', { onClick: () => clicks.tap(false) }, '클릭'),
     React.createElement('button', { onClick: () => clicks.tap(true) }, '치명타'),
     React.createElement('button', { onClick: () => setOnCampus((value) => !value) }, '탭 전환'),
   );
 }
 
-function mount(send: (request: ClickRequest) => Promise<Response> = async () => ok(RESPONSE), signedIn = true) {
+const idleLoader: TurnstileLoader = async () => ({ render: () => 'idle', reset: () => undefined, remove: () => undefined });
+function fakeTurnstile() {
+  const widgets: TurnstileRenderOptions[] = [];
+  const resets: string[] = [];
+  const removed: string[] = [];
+  const api: TurnstileApi = {
+    render: (_container, options) => { widgets.push(options); return String(widgets.length); },
+    reset: (id) => { resets.push(id ?? ''); },
+    remove: (id) => { removed.push(id ?? ''); },
+  };
+  return { widgets, resets, removed, loader: async () => api };
+}
+
+function mount(send: (request: ClickRequest) => Promise<Response> = async () => ok(RESPONSE), signedIn = true,
+  options: { loader?: TurnstileLoader; verify?: (token: string, signal?: AbortSignal | null) => Promise<Response> } = {}) {
   const sent: ClickRequest[] = [];
   const tokens: Array<string | null> = [];
   const client = createApiClient({ fetch: (async (input, init) => {
@@ -80,6 +102,10 @@ function mount(send: (request: ClickRequest) => Promise<Response> = async () => 
       tokens.push(new Headers(init?.headers).get('Authorization'));
       return send(body);
     }
+    if (path.endsWith('/abuse/verification')) {
+      if (!options.verify) throw new Error('Unexpected bot verification');
+      return options.verify((JSON.parse(String(init?.body)) as { turnstileToken: string }).turnstileToken, init?.signal);
+    }
     if (path.endsWith('/auth/reissue')) return signedIn
       ? ok({ accessToken: 'member-a', expiresInSeconds: 3600 })
       : fail(401, 'AUTH_INVALID_REFRESH_TOKEN');
@@ -90,6 +116,7 @@ function mount(send: (request: ClickRequest) => Promise<Response> = async () => 
   clients.push(queryClient);
   render(React.createElement(React.StrictMode, null, React.createElement(ApiProvider, {
     client, queryClient, children: React.createElement(MockGameProvider, {
+      turnstileLoader: options.loader ?? idleLoader,
       children: [React.createElement(ApiSessionWatcher, { key: 'watcher', onEnded: () => undefined }), React.createElement(Probe, { key: 'probe' })],
     }),
   })));
@@ -160,6 +187,155 @@ for (const [status, code] of [[429, 'CLICK_COUNT_EXCEEDED'], [403, 'ABUSE_VERIFI
     assert.equal(sent.length, 1);
   });
 }
+
+test('429 명시적 재개는 거절된 20회 점수만 롤백하고 남은 5회는 적립한다', async () => {
+  let calls = 0;
+  const { sent } = mount(async () => ++calls === 1 ? fail(429, 'CLICK_COUNT_EXCEEDED') : ok({
+    ...RESPONSE, myContribScore: 20, university: { ...RESPONSE.university, totalScore: 110 }, department: { id: 7, totalScore: 30 },
+  }));
+  await ready();
+  for (let i = 0; i < 25; i++) click();
+  assert.equal(readGame().contribution, 60);
+  await screen.findByRole('button', { name: '거절 배치 제외' }, { timeout: 2500 });
+  fireEvent.click(screen.getByRole('button', { name: '거절 배치 제외' }));
+  assert.equal(readGame().contribution, 20);
+  assert.match(screen.getByRole('alert').textContent ?? '', /거절한 20회는 적립되지 않았습니다/);
+  await waitFor(() => assert.equal(sent.length, 2), { timeout: 2500 });
+  assert.equal(sent[0].clickCount, 20);
+  assert.equal(sent[1].clickCount, 5);
+  assert.notEqual(sent[1].submissionId, sent[0].submissionId);
+  await waitFor(() => assert.equal(readGame().schoolScore, 110));
+  assert.equal(readGame().departmentScore, 30);
+  assertAbsent(screen.queryByRole('alert'));
+});
+
+test('403은 자동으로 확인창을 열고 204 전에는 보류하며 성공 뒤 같은 ID로 클릭을 재개한다', async () => {
+  const widget = fakeTurnstile();
+  const verified: string[] = [];
+  let finish!: (response: Response) => void;
+  let calls = 0;
+  const { sent } = mount(async () => ++calls === 1 ? fail(403, 'ABUSE_VERIFICATION_REQUIRED') : ok(RESPONSE), true, {
+    loader: widget.loader,
+    verify: async (token) => { verified.push(token); return new Promise((resolve) => { finish = resolve; }); },
+  });
+  await ready();
+  click(); click();
+  await screen.findByRole('dialog', { name: '자동 입력 방지 확인' }, { timeout: 2500 });
+  await waitFor(() => assert.equal(widget.widgets.length, 1));
+  assert.equal(widget.widgets[0].action, 'abuse_click');
+  await act(async () => { widget.widgets[0].callback?.('fresh-token'); widget.widgets[0].callback?.('fresh-token'); });
+  assert.deepEqual(verified, ['fresh-token'], '동일·동시 콜백은 확인 API를 중복 호출하지 않는다');
+  assert.equal(sent.length, 1);
+  assert.match(within(screen.getByRole('dialog')).getByRole('status').textContent ?? '', /서버에 확인 중/);
+  await act(async () => { finish(new Response(null, { status: 204 })); });
+  assertAbsent(screen.queryByRole('dialog'));
+  await waitFor(() => assert.equal(sent.length, 2), { timeout: 2500 });
+  assert.deepEqual(sent[1], sent[0]);
+  await waitFor(() => assert.equal(readGame().schoolScore, 104));
+  assertAbsent(screen.queryByRole('alert'));
+  click();
+  assert.equal(readGame().contribution, 16);
+});
+
+for (const rejection of ['denied', 'limited', 'network'] as const) {
+  test(`봇 확인 ${rejection}: 클릭은 보류하고 사용한 토큰 대신 새 토큰으로 명시적으로 재시도한다`, async () => {
+    const widget = fakeTurnstile();
+    const verified: string[] = [];
+    let calls = 0;
+    const { sent } = mount(async () => ++calls === 1 ? fail(403, 'ABUSE_VERIFICATION_REQUIRED') : ok(RESPONSE), true, {
+      loader: widget.loader,
+      verify: async (token) => {
+        verified.push(token);
+        if (verified.length > 1) return new Response(null, { status: 204 });
+        if (rejection === 'network') throw new TypeError('offline');
+        return rejection === 'denied' ? fail(403, 'ABUSE_VERIFICATION_FAILED') : fail(429, 'COMMON_TOO_MANY_REQUESTS');
+      },
+    });
+    await ready();
+    click();
+    await screen.findByRole('dialog', {}, { timeout: 2500 });
+    await waitFor(() => assert.equal(widget.widgets.length, 1));
+    await act(async () => { widget.widgets[0].callback?.('spent-token'); });
+    await screen.findByRole('button', { name: '다시 시도' });
+    assert.equal(sent.length, 1);
+    assert.equal(readGame().contribution, 12);
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    assert.equal(widget.resets.length, 1);
+    await act(async () => { widget.widgets[0].callback?.('spent-token'); });
+    assert.deepEqual(verified, ['spent-token'], '재설정 뒤에도 이전 토큰은 다시 보내지 않는다');
+    await act(async () => { widget.widgets[0].callback?.('new-token'); });
+    assert.deepEqual(verified, ['spent-token', 'new-token']);
+    await waitFor(() => assert.equal(sent.length, 2), { timeout: 2500 });
+    assert.deepEqual(sent[1], sent[0]);
+  });
+}
+
+test('위젯 로더 실패도 서버 확인 없이 통과하지 않고 빈 토큰 확인이 204여야 재개한다', async () => {
+  const verified: string[] = [];
+  let finish!: (response: Response) => void;
+  let calls = 0;
+  const { sent } = mount(async () => ++calls === 1 ? fail(403, 'ABUSE_VERIFICATION_REQUIRED') : ok(RESPONSE), true, {
+    loader: async () => { throw new Error('script blocked'); },
+    verify: async (token) => { verified.push(token); return new Promise((resolve) => { finish = resolve; }); },
+  });
+  await ready();
+  click();
+  await waitFor(() => assert.deepEqual(verified, ['']), { timeout: 2500 });
+  assert.equal(sent.length, 1);
+  await act(async () => { finish(new Response(null, { status: 204 })); });
+  await waitFor(() => assert.equal(sent.length, 2), { timeout: 2500 });
+  assert.deepEqual(sent[1], sent[0]);
+});
+
+test('확인 중 닫기는 요청을 취소하고 늦은 성공을 무시하며 다음 클릭으로 다시 확인을 열 수 있다', async () => {
+  const widget = fakeTurnstile();
+  let finish!: (response: Response) => void;
+  let signal: AbortSignal | null | undefined;
+  const { sent } = mount(async () => fail(403, 'ABUSE_VERIFICATION_REQUIRED'), true, {
+    loader: widget.loader,
+    verify: async (_token, pendingSignal) => { signal = pendingSignal; return new Promise((resolve) => { finish = resolve; }); },
+  });
+  await ready();
+  click();
+  await screen.findByRole('dialog', {}, { timeout: 2500 });
+  await waitFor(() => assert.equal(widget.widgets.length, 1));
+  await act(async () => { widget.widgets[0].callback?.('old-token'); });
+  fireEvent.click(screen.getByRole('button', { name: '▼ 터치하여 닫기' }));
+  assert.equal(signal?.aborted, true);
+  await act(async () => { finish(new Response(null, { status: 204 })); });
+  assertAbsent(screen.queryByRole('dialog'));
+  assert.equal(sent.length, 1);
+  click();
+  assert.ok(screen.getByRole('dialog'));
+  assert.equal(readGame().contribution, 12);
+  assert.equal(widget.removed.length, 1);
+});
+
+test('로그아웃 중 확인 성공이 늦게 도착해도 다음 세션의 큐를 재개하지 않는다', async () => {
+  const widget = fakeTurnstile();
+  let finish!: (response: Response) => void;
+  let signal: AbortSignal | null | undefined;
+  const { client, sent, queryClient } = mount(async () => fail(403, 'ABUSE_VERIFICATION_REQUIRED'), true, {
+    loader: widget.loader,
+    verify: async (_token, pendingSignal) => { signal = pendingSignal; return new Promise((resolve) => { finish = resolve; }); },
+  });
+  await ready();
+  click();
+  await screen.findByRole('dialog', {}, { timeout: 2500 });
+  await waitFor(() => assert.equal(widget.widgets.length, 1));
+  await act(async () => { widget.widgets[0].callback?.('old-token'); });
+  await act(async () => {
+    client.session.signOut();
+    client.session.signIn('member-b');
+    queryClient.setQueryData<MyInfo>(userKeys.me, { ...ME, id: 11 });
+  });
+  assert.equal(signal?.aborted, true);
+  assertAbsent(screen.queryByRole('dialog'));
+  await act(async () => { finish(new Response(null, { status: 204 })); });
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 1100)); });
+  assert.equal(sent.length, 1);
+  assertAbsent(screen.queryByRole('button', { name: '확인 열기' }));
+});
 
 test('미로그인 상태는 점수를 적립하지 않고 클릭 API도 보내지 않는다', async () => {
   const { sent } = mount(undefined, false);

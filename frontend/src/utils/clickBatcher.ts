@@ -1,11 +1,13 @@
 import { CLICK_BATCH_WINDOW_MS, MAX_CLICK_BATCH_SIZE, type ClickRequest, type ClickResponse } from '../api/clicks';
 import { isApiError } from '../api/errors';
+import { isClickLimitError, requiresClickVerification } from '../api/abuse';
 
 export interface ClickBatchSnapshot {
   pendingClicks: number;
   pendingScore: number;
   sending: boolean;
   error: unknown | null;
+  recoverable: boolean;
 }
 
 export interface ClickBatcherOptions {
@@ -38,6 +40,7 @@ export function createClickBatcher(options: ClickBatcherOptions) {
     pendingScore: [...queue, ...(batch?.points ?? [])].reduce((sum, points) => sum + points, 0),
     sending,
     error,
+    recoverable: batch !== null && !batch.retried && (isClickLimitError(error) || requiresClickVerification(error)),
   });
   const publish = () => { if (!disposed) options.onChange(getSnapshot()); };
 
@@ -94,6 +97,27 @@ export function createClickBatcher(options: ClickBatcherOptions) {
 
   return {
     getSnapshot,
+    resumeAfterVerification(): boolean {
+      if (disposed || !batch || batch.retried || !requiresClickVerification(error)) return false;
+      // A first-attempt 403 is checked before dedupe, so the server has never consumed this ID or applied it.
+      // An earlier network failure would make that unknowable; those batches must remain paused.
+      batch.startedAt = now();
+      error = null;
+      publish();
+      arm();
+      return true;
+    },
+    discardRateLimitedBatch(): { clicks: number; score: number } | null {
+      if (disposed || !batch || batch.retried || !isClickLimitError(error)) return null;
+      // A first-attempt 429 consumed the ID but applied no score. Explicitly discard just that rejected batch;
+      // keep its successors. Never replay it under a new ID as a way around server protection.
+      const rejected = { clicks: batch.points.length, score: batch.points.reduce((sum, points) => sum + points, 0) };
+      batch = null;
+      error = null;
+      publish();
+      arm();
+      return rejected;
+    },
     enqueue(points: number): boolean {
       if (disposed || error) return false;
       queue.push(points);

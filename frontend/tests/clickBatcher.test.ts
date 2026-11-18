@@ -142,6 +142,82 @@ for (const [status, code] of [
   });
 }
 
+test('최초 403은 확인 뒤 같은 ID·횟수로 재개하고 20회 뒤의 대기 클릭도 보존한다', async () => {
+  let calls = 0;
+  const f = fixture(async () => {
+    if (++calls === 1) throw new ApiError({ kind: 'http', status: 403, code: 'ABUSE_VERIFICATION_REQUIRED' });
+    return response;
+  });
+  for (let i = 0; i < 25; i++) f.controller.enqueue(2);
+  await f.advance(1000);
+  assert.equal(f.controller.getSnapshot().recoverable, true);
+  assert.equal(f.controller.getSnapshot().pendingClicks, 25);
+  await f.advance(20000); // Solving the challenge may outlive the original dedupe window: 403 consumed no ID.
+  assert.equal(f.controller.resumeAfterVerification(), true);
+  await f.advance(1000);
+  assert.deepEqual(f.sent[1], f.sent[0]);
+  assert.equal(f.controller.getSnapshot().pendingClicks, 5);
+  await f.advance(1000);
+  assert.equal(f.sent[2].clickCount, 5);
+  assert.notEqual(f.sent[2].submissionId, f.sent[0].submissionId);
+  assert.equal(f.controller.getSnapshot().pendingClicks, 0);
+});
+
+for (const code of ['CLICK_TOO_FREQUENT', 'CLICK_COUNT_EXCEEDED']) {
+  test(`${code}: 명시적 재개는 거절 배치만 제외하고 후속 대기분을 새 배치로 전송한다`, async () => {
+    let calls = 0;
+    const f = fixture(async () => {
+      if (++calls === 1) throw new ApiError({ kind: 'http', status: 429, code });
+      return response;
+    });
+    for (let i = 0; i < 25; i++) f.controller.enqueue(2);
+    await f.advance(1000);
+    assert.equal(f.controller.resumeAfterVerification(), false);
+    assert.deepEqual(f.controller.discardRateLimitedBatch(), { clicks: 20, score: 40 });
+    assert.equal(f.controller.getSnapshot().pendingClicks, 5);
+    assert.equal(f.controller.discardRateLimitedBatch(), null, '같은 배치를 두 번 제외하지 않는다');
+    await f.advance(1000);
+    assert.equal(f.sent[1].clickCount, 5);
+    assert.notEqual(f.sent[1].submissionId, f.sent[0].submissionId);
+    assert.equal(f.controller.getSnapshot().pendingScore, 0);
+  });
+}
+
+for (const [status, code] of [[403, 'ABUSE_VERIFICATION_REQUIRED'], [429, 'CLICK_TOO_FREQUENT'], [409, 'CLICK_DUPLICATE_SUBMISSION']] as const) {
+  test(`통신 실패 뒤 ${status}는 최초 요청의 처리 여부가 불명확해 복구 API도 재전송하지 않는다`, async () => {
+    let calls = 0;
+    const f = fixture(async () => {
+      if (++calls === 1) throw network();
+      throw new ApiError({ kind: 'http', status, code });
+    });
+    f.controller.enqueue(2);
+    await f.advance(2000);
+    assert.deepEqual(f.sent[0], f.sent[1]);
+    assert.equal(f.controller.getSnapshot().recoverable, false);
+    assert.equal(f.controller.resumeAfterVerification(), false);
+    assert.equal(f.controller.discardRateLimitedBatch(), null);
+    await f.advance(20000);
+    assert.equal(f.sent.length, 2);
+    assert.equal(f.controller.getSnapshot().pendingScore, 2);
+  });
+}
+
+test('성공·진행 중·다른 429·폐기된 큐에는 복구 명령을 적용하지 않는다', async () => {
+  const active = fixture(() => new Promise(() => undefined));
+  active.controller.enqueue(1);
+  await active.advance(1000);
+  assert.equal(active.controller.resumeAfterVerification(), false);
+  assert.equal(active.controller.discardRateLimitedBatch(), null);
+  active.controller.dispose();
+  const other = fixture(async () => { throw new ApiError({ kind: 'http', status: 429, code: 'COMMON_TOO_MANY_REQUESTS' }); });
+  other.controller.enqueue(1);
+  await other.advance(1000);
+  assert.equal(other.controller.getSnapshot().recoverable, false);
+  assert.equal(other.controller.discardRateLimitedBatch(), null);
+  other.controller.dispose();
+  assert.equal(other.controller.resumeAfterVerification(), false);
+});
+
 test('응답 유실 뒤 409는 성공으로 간주하지 않고 미확정 클릭을 보존한다', async () => {
   let calls = 0;
   const f = fixture(async () => {
