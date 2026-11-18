@@ -108,6 +108,23 @@ public class RedisClickerUpgraderTest {
         assertThat(isMember(DIRTY_CLICKER_KEY)).isFalse();
     }
 
+    @Test
+    @DisplayName("기여도 기록이 없으면 에러 없이 -1을 반환하고 아무것도 바꾸지 않는다")
+    void upgrade_noMember() {
+        // given (순위표에서 유저 기록이 사라짐)
+        redisTemplate.opsForZSet().remove(RANK_KEY, USER_ID.toString());
+
+        // when
+        long result = clickerUpgrader.upgrade(USER_ID, UNIVERSITY_ID, 1L, 300L);
+
+        // then
+        assertThat(result).isEqualTo(-1L);
+        assertThat(redisTemplate.opsForZSet().score(RANK_KEY, USER_ID.toString())).isNull();
+        assertThat(redisTemplate.opsForValue().get(LEVEL_KEY)).isEqualTo("1");
+        assertThat(isMember(DIRTY_USER_KEY)).isFalse();
+        assertThat(isMember(DIRTY_CLICKER_KEY)).isFalse();
+    }
+
     private boolean isMember(String setKey) {
         return Boolean.TRUE.equals(redisTemplate.opsForSet().isMember(setKey, USER_ID.toString()));
     }
