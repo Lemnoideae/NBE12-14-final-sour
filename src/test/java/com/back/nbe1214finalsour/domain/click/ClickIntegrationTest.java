@@ -2,6 +2,7 @@ package com.back.nbe1214finalsour.domain.click;
 
 import com.back.nbe1214finalsour.IntegrationTest;
 import com.back.nbe1214finalsour.domain.clicker.service.ClickerService;
+import com.back.nbe1214finalsour.domain.university.repository.UniversityCache;
 import com.back.nbe1214finalsour.domain.user.entity.User;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.global.crypto.EmailHasher;
@@ -40,6 +41,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 클릭 제출 API를 PostgreSQL·Redis(Testcontainers)와 실제 HTTP 처리로 확인한다.
  *
  * <p>기본 클리커(레벨 1)의 clickPower는 1이라, 배율이 없으면 인정 점수 = clickCount다.
+ *
+ * <p>테스트 학교는 서버가 뜬 뒤 만들어지므로 setUp에서 {@link UniversityCache}를 다시 불러오고,
+ * 도서관 보너스 테스트는 좌표를 넣은 뒤 한 번 더 불러온다. 캐시는 공유 싱글턴이라 tearDown에서 학교를 지운 뒤
+ * 다시 불러와 다른 테스트에 남기지 않는다.
  */
 @IntegrationTest
 @AutoConfigureMockMvc
@@ -65,6 +70,12 @@ class ClickIntegrationTest {
     private JwtProperties jwtProperties;
     @Autowired
     private ClickerService clickerService;
+    @Autowired
+    private UniversityCache universityCache;
+
+    /** 도서관 보너스 테스트에서 테스트 학교에 넣는 중앙도서관 좌표 (연세대 시드 좌표와 같은 값) */
+    private static final double LIB_LAT = 37.563764;
+    private static final double LIB_LNG = 126.937012;
 
     private long universityId;
     private long departmentId;
@@ -83,6 +94,8 @@ class ClickIntegrationTest {
         departmentId = jdbcTemplate.queryForObject(
                 "INSERT INTO department (university_id, name) VALUES (?, '컴퓨터공학과') RETURNING id", Long.class,
                 universityId);
+        // 운영에서는 학교가 마이그레이션으로만 들어가 서버가 뜰 때 캐시에 있다. 테스트 학교도 그 상태로 맞춘다
+        universityCache.load();
         user = userRepository.saveAndFlush(User.create(universityId, departmentId, "클릭왕", EMAIL,
                 emailHasher.hash(EMAIL), "{noop}unused", OffsetDateTime.now()));
         token = jwtProvider.createAccessToken(new AuthUser(user.getId(), universityId, departmentId, Role.USER), null);
@@ -115,6 +128,7 @@ class ClickIntegrationTest {
         jdbcTemplate.update("DELETE FROM users WHERE university_id = ?", universityId);
         jdbcTemplate.update("DELETE FROM department WHERE university_id = ?", universityId);
         jdbcTemplate.update("DELETE FROM university WHERE id = ?", universityId);
+        universityCache.load();
     }
 
     @Test
@@ -355,6 +369,87 @@ class ClickIntegrationTest {
         click("  ", 3)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("COMMON_INVALID_INPUT"));
+    }
+
+    // --- 도서관 이스터에그 ---
+
+    @Test
+    @DisplayName("도서관 반경 안에서 클릭하면 1.2배가 붙고 libraryBonus가 true다")
+    void clickInsideLibraryGetsBonus() throws Exception {
+        givenLibraryOfMyUniversity();
+
+        clickAt("sub-1", 10, LIB_LAT, LIB_LNG)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.earnedScore").value(12)) // 10 * 1 * 1.2
+                .andExpect(jsonPath("$.data.multiplier").value(1.2))
+                .andExpect(jsonPath("$.data.libraryBonus").value(true))
+                .andExpect(jsonPath("$.data.university.totalScore").value(12));
+
+        assertThat(redis.opsForZSet().score(RedisKey.RANK_UNIV.of(), String.valueOf(universityId)))
+                .isEqualTo(12.0);
+    }
+
+    @Test
+    @DisplayName("도서관에서 약 111m(위도 +0.0010°) 떨어져 클릭하면 보너스가 없다")
+    void clickOutsideLibraryGetsNoBonus() throws Exception {
+        givenLibraryOfMyUniversity();
+
+        clickAt("sub-1", 10, LIB_LAT + 0.0010, LIB_LNG)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.earnedScore").value(10))
+                .andExpect(jsonPath("$.data.multiplier").value(1.0))
+                .andExpect(jsonPath("$.data.libraryBonus").value(false));
+    }
+
+    @Test
+    @DisplayName("위치를 보내지 않으면 도서관 좌표가 있는 학교여도 보너스가 없다")
+    void clickWithoutLocationGetsNoBonus() throws Exception {
+        givenLibraryOfMyUniversity();
+
+        click("sub-1", 10)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.earnedScore").value(10))
+                .andExpect(jsonPath("$.data.libraryBonus").value(false));
+    }
+
+    @Test
+    @DisplayName("내 학교에 도서관 좌표가 없으면 그 자리에서 클릭해도 보너스가 없다")
+    void clickAtUniversityWithoutLibraryGetsNoBonus() throws Exception {
+        // 테스트 학교는 좌표 없이 만들어진다
+        clickAt("sub-1", 10, LIB_LAT, LIB_LNG)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.earnedScore").value(10))
+                .andExpect(jsonPath("$.data.libraryBonus").value(false));
+    }
+
+    @Test
+    @DisplayName("아이템 1.5배와 도서관 보너스가 겹치면 multiplier는 1.8이다")
+    void libraryBonusStacksWithItemMultiplier() throws Exception {
+        givenLibraryOfMyUniversity();
+        redisHandler.setHash(RedisKey.USER_EFFECT.of(user.getId()), "multiplier", 1.5);
+
+        clickAt("sub-1", 10, LIB_LAT, LIB_LNG)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.earnedScore").value(18)) // 10 * 1 * 1.5 * 1.2
+                .andExpect(jsonPath("$.data.multiplier").value(1.8))
+                .andExpect(jsonPath("$.data.libraryBonus").value(true));
+    }
+
+    private void givenLibraryOfMyUniversity() {
+        jdbcTemplate.update("UPDATE university SET library_lat = ?, library_lng = ? WHERE id = ?",
+                LIB_LAT, LIB_LNG, universityId);
+        universityCache.load();
+    }
+
+    /** 명세(도서관 이스터에그)의 요청 필드 이름 latitude·longitude로 보낸다 */
+    private ResultActions clickAt(String submissionId, int clickCount, double latitude, double longitude)
+            throws Exception {
+        return mockMvc.perform(post("/api/v1/clicks")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"submissionId":"%s","clickCount":%d,"latitude":%s,"longitude":%s}"""
+                        .formatted(submissionId, clickCount, latitude, longitude)));
     }
 
     private ResultActions click(String submissionId, int clickCount) throws Exception {

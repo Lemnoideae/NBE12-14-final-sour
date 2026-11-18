@@ -7,9 +7,10 @@ public record ClickResponse(
         Long myContribScore,
         ClickUniversityResponse university,
         ClickDepartmentResponse department,
-        Long schoolClicksLastSecond
+        Long schoolClicksLastSecond,
+        Boolean libraryBonus
 ) {
-    public static ClickResponse from(ClickApplyResponse clickApplyResponse, int clickCount, long score, Double multiplier, Long universityId, Long departmentId) {
+    public static ClickResponse from(ClickApplyResponse clickApplyResponse, int clickCount, long score, Double multiplier, Long universityId, Long departmentId, boolean libraryBonus) {
         // TODO: 대학 로고 URL 수정
         return new ClickResponse(
                 (long) clickCount,
@@ -18,7 +19,8 @@ public record ClickResponse(
                 clickApplyResponse.myContrib(),
                 new ClickUniversityResponse(universityId, clickApplyResponse.univTotal(), clickApplyResponse.univRank(), "tempUrl"),
                 new ClickDepartmentResponse(departmentId, clickApplyResponse.deptTotal()),
-                clickApplyResponse.lastSecond()
+                clickApplyResponse.lastSecond(),
+                libraryBonus
         );
     }
 
