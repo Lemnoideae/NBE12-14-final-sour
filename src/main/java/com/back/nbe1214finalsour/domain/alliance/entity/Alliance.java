@@ -67,6 +67,18 @@ public class Alliance extends BaseTimeEntity {
         return alliance;
     }
 
+    // 만료 정리 서비스가 연합 행을 잠근 상태에서 호출한다.
+    public void expire(OffsetDateTime now) {
+        if (now == null || expiredAt == null || expiredAt.isAfter(now)) {
+            throw new IllegalStateException("아직 만료 시각이 되지 않았습니다.");
+        }
+        if (status == AllianceStatus.EXPIRED) return;
+        if (status != AllianceStatus.ACTIVE) {
+            throw new IllegalStateException("진행 중인 대결을 먼저 정산해야 합니다.");
+        }
+        status = AllianceStatus.EXPIRED;
+    }
+
     // 잠금 획득 후 호출한다. JPA 변경 감지로 상태가 저장된다.
     public void startMatch(OffsetDateTime now) {
         if (now == null) throw new IllegalArgumentException("현재 시각은 필수입니다.");
@@ -75,5 +87,14 @@ public class Alliance extends BaseTimeEntity {
             throw new IllegalStateException("현재 대결을 시작할 수 없는 연합입니다.");
         }
         status = AllianceStatus.IN_MATCH;
+    }
+
+    // 잠금 획득 후 호출한다. JPA 변경 감지로 상태가 저장된다.
+    public void finishMatch() {
+        if (status != AllianceStatus.IN_MATCH || deletedAt != null) {
+            throw new IllegalStateException("대결 중인 연합만 종료할 수 있습니다.");
+        }
+
+        status = AllianceStatus.ACTIVE;
     }
 }
