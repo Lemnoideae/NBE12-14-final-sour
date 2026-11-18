@@ -1,5 +1,6 @@
 import { DialogPanel } from './DialogPanel';
 import { useMockGame } from '../hooks/useMockGame';
+import { useClicker } from '../hooks/useClicker';
 
 /**
  * Body of the campus stats sheet (T5, docs/261110-1005-mockup_remaining_tasks_plan.md §8): the campus stage with
@@ -7,7 +8,8 @@ import { useMockGame } from '../hooks/useMockGame';
  * mock game values as they are; no new calculation.
  */
 export function CampusStatsSheet({ onGoToShop }: { onGoToShop: () => void }) {
-  const { campus, clicker, state } = useMockGame();
+  const { campus, state } = useMockGame();
+  const clicker = useClicker();
   return (
     <div className="p-3 flex flex-col gap-2 bg-[#fdf5df] text-[#261608]">
       <h2 className="font-pixel text-sm font-black">상세 스탯</h2>

@@ -8,6 +8,7 @@ export interface ClickBatchSnapshot {
   sending: boolean;
   error: unknown | null;
   recoverable: boolean;
+  locked: boolean;
 }
 
 export interface ClickBatcherOptions {
@@ -34,11 +35,13 @@ export function createClickBatcher(options: ClickBatcherOptions) {
   let sending = false;
   let error: unknown | null = null;
   let nextSendAt = 0;
+  let locked = false;
 
   const getSnapshot = (): ClickBatchSnapshot => ({
     pendingClicks: queue.length + (batch?.points.length ?? 0),
     pendingScore: [...queue, ...(batch?.points ?? [])].reduce((sum, points) => sum + points, 0),
     sending,
+    locked,
     error,
     recoverable: batch !== null && !batch.retried && (isClickLimitError(error) || requiresClickVerification(error)),
   });
@@ -97,6 +100,18 @@ export function createClickBatcher(options: ClickBatcherOptions) {
 
   return {
     getSnapshot,
+    acquireIdleLock(): (() => void) | null {
+      if (disposed || locked || sending || batch || queue.length || error) return null;
+      locked = true;
+      publish();
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        locked = false;
+        publish();
+      };
+    },
     resumeAfterVerification(): boolean {
       if (disposed || !batch || batch.retried || !requiresClickVerification(error)) return false;
       // A first-attempt 403 is checked before dedupe, so the server has never consumed this ID or applied it.
@@ -119,7 +134,7 @@ export function createClickBatcher(options: ClickBatcherOptions) {
       return rejected;
     },
     enqueue(points: number): boolean {
-      if (disposed || error) return false;
+      if (disposed || error || locked) return false;
       queue.push(points);
       publish();
       arm();

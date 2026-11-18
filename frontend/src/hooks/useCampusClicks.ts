@@ -9,7 +9,12 @@ import { userKeys, useMyInfo, type MyInfo } from '../api/users';
 import { createClickBatcher, type ClickBatchSnapshot } from '../utils/clickBatcher';
 import { useMockGame } from './useMockGame';
 
-interface CampusClicks {
+export interface ClickUpgradeGate {
+  upgradeBlocked: boolean;
+  beginUpgrade: () => (() => void) | null;
+}
+
+interface CampusClicks extends ClickUpgradeGate {
   tap: (isCrit: boolean) => number | null;
   notice: string | null;
   getPendingScore: () => number;
@@ -17,11 +22,11 @@ interface CampusClicks {
   botCheck: { open: boolean; onOpen: () => void; onClose: () => void; onVerified: () => void } | null;
 }
 const noPendingScore = () => 0;
-const EMPTY_BATCH: ClickBatchSnapshot = { pendingClicks: 0, pendingScore: 0, sending: false, error: null, recoverable: false };
+const EMPTY_BATCH: ClickBatchSnapshot = { pendingClicks: 0, pendingScore: 0, sending: false, error: null, recoverable: false, locked: false };
 
 function useMockCampusClicks(): CampusClicks {
   const { tap } = useMockGame();
-  return { tap, notice: null, getPendingScore: noPendingScore, retryLimited: null, botCheck: null };
+  return { tap, notice: null, getPendingScore: noPendingScore, retryLimited: null, botCheck: null, upgradeBlocked: false, beginUpgrade: () => null };
 }
 
 /** Mounted at the app root, not on the campus screen: changing tabs must not cancel a collected batch. */
@@ -99,13 +104,16 @@ export function useApiCampusClicks(): CampusClicks {
       return null;
     }
     // The click endpoint has no critical-hit field; its score uses the signed-in member's actual click power.
-    const points = me.clicker.clickPower;
+    const current = queryClient.getQueryData<MyInfo>(userKeys.me);
+    if (!current || current.id !== me.id) return null;
+    const points = current.clicker.clickPower;
     if (!batcher.current.enqueue(points)) return null;
     setCancelledClicks(0);
     applyApiTap(points);
     return points;
-  }, [ready, me, applyApiTap]);
+  }, [ready, me, applyApiTap, queryClient]);
 
+  const beginUpgrade = useCallback(() => batcher.current?.acquireIdleLock() ?? null, []);
   const retryLimited = useCallback(() => {
     const rejected = batcher.current?.discardRateLimitedBatch();
     if (!rejected) return;
@@ -127,9 +135,12 @@ export function useApiCampusClicks(): CampusClicks {
       ? `세션 종료로 미확정 ${cancelledClicks}회 전송을 중단했습니다. 이미 전송한 요청은 반영되었을 수 있으므로 다시 로그인해 점수를 확인해 주세요.`
       : !signedIn
         ? '클릭 점수를 적립하려면 로그인해 주세요.'
-        : !ready ? '내 정보를 불러온 뒤 클릭할 수 있습니다.' : recoveryNotice;
+        : !ready ? '내 정보를 불러온 뒤 클릭할 수 있습니다.'
+          : snapshot.locked ? '클리커 강화 결과를 확인하는 동안 클릭을 잠시 멈춥니다.' : recoveryNotice;
   return {
     tap, notice, getPendingScore,
+    upgradeBlocked: snapshot.pendingClicks > 0 || snapshot.locked,
+    beginUpgrade,
     retryLimited: canRetryLimited ? retryLimited : null,
     botCheck: needsVerification ? { open: botCheckOpen, onOpen: openBotCheck, onClose: closeBotCheck, onVerified: completeBotCheck } : null,
   };

@@ -48,6 +48,45 @@ function fixture(send: (request: ClickRequest) => Promise<ClickResponse> = async
   return { controller, sent, accepted, snapshots, advance, tasks, suspend: (ms: number) => { time += ms; } };
 }
 
+test('idle 잠금은 같은 프레임의 클릭·중복 강화를 막고 이전 release가 다음 잠금을 풀지 못한다', () => {
+  const f = fixture();
+  const release = f.controller.acquireIdleLock();
+  assert.ok(release);
+  assert.equal(f.controller.getSnapshot().locked, true);
+  assert.equal(f.controller.enqueue(1), false);
+  assert.equal(f.controller.acquireIdleLock(), null);
+  release();
+  const releaseNext = f.controller.acquireIdleLock();
+  assert.ok(releaseNext);
+  release();
+  assert.equal(f.controller.getSnapshot().locked, true, '이전 release는 멱등이며 새 잠금을 건드리지 않는다');
+  releaseNext();
+  assert.equal(f.controller.enqueue(1), true);
+  f.controller.dispose();
+});
+
+test('수집·전송·오류 보류·폐기 상태에서는 강화용 잠금을 얻을 수 없다', async () => {
+  let resolve!: (value: ClickResponse) => void;
+  const f = fixture(() => new Promise((done) => { resolve = done; }));
+  f.controller.enqueue(2);
+  assert.equal(f.controller.acquireIdleLock(), null);
+  await f.advance(1000);
+  assert.equal(f.controller.acquireIdleLock(), null);
+  resolve(response);
+  await f.advance(0);
+  const release = f.controller.acquireIdleLock();
+  assert.ok(release);
+  f.controller.dispose();
+  release();
+  assert.equal(f.controller.acquireIdleLock(), null);
+  const paused = fixture(async () => { throw new ApiError({ kind: 'http', status: 403, code: 'ABUSE_VERIFICATION_REQUIRED' }); });
+  paused.controller.enqueue(1);
+  await paused.advance(1000);
+  assert.equal(paused.controller.acquireIdleLock(), null);
+  assert.equal(paused.controller.getSnapshot().pendingClicks, 1);
+  paused.controller.dispose();
+});
+
 test('첫 클릭부터 1초 모으며 연속 클릭은 타이머를 미루지 않는다; 빈 배치는 보내지 않는다', async () => {
   const f = fixture();
   await f.advance(5000);

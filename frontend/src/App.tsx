@@ -39,6 +39,7 @@ import { CampusStatsSheet } from './components/CampusStatsSheet';
 import { getSchoolRankings } from './data/mockRankings';
 import { useMockGame } from './hooks/useMockGame';
 import { useCampusClicks } from './hooks/useCampusClicks';
+import { ClickerProvider, useClickerController } from './hooks/useClicker';
 import { useMockRequest } from './hooks/useMockRequest';
 import { MOCK_REQUEST_MODES, type MockRequestMode } from './utils/mockRequest';
 import { MockLoadGate } from './components/MockLoadGate';
@@ -86,6 +87,7 @@ function AppContent() {
   const viewWrap = shellVariant === 'full' ? 'w-full flex flex-col' : 'w-full flex flex-col items-center py-2 animate-fadeIn';
   const game = useMockGame();
   const campusClicks = useCampusClicks();
+  const clicker = useClickerController(campusClicks);
   const request = useMockRequest();
   const playerInfo = game.player;
   const schoolScore = game.state.schoolScore;
@@ -132,8 +134,8 @@ function AppContent() {
   const [_feverGauge, setFeverGauge] = useState<number>(35);
   const [isFever, setIsFever] = useState<boolean>(false);
   const shopItems = game.storeItems;
-  const basePower = game.normalPower;
-  const clickPower = game.criticalPower;
+  const basePower = clicker.normalPower;
+  const clickPower = clicker.criticalPower;
 
   const handleToggleSound = () => {
     const next = !soundEnabled;
@@ -200,7 +202,7 @@ function AppContent() {
   );
 
   const hasAffordableShopItem = shopItems.some((item) => !item.previewOnly && myContribution >= item.cost)
-    || (game.clicker.upgradeCost !== null && myContribution >= game.clicker.upgradeCost);
+    || (clicker.upgradeCost !== null && myContribution >= clicker.upgradeCost);
 
   // View menus and demo tools: in the desktop header, or in the mock menu sheet on a phone (T2, plan §5, Q5).
   // View switcher (M5-D): service flow screens and design comparisons/demo tools are kept apart.
@@ -490,6 +492,7 @@ function AppContent() {
   );
 
   return (
+    <ClickerProvider value={clicker}>
     <AllianceNavProvider value={allianceNav}>
       <div className={`w-full bg-[#f1f5f9] flex flex-col items-center justify-start select-none text-[#261608] ${isPhone ? 'device-full min-h-dvh' : 'min-h-screen p-2 sm:p-5'}`}>
         {API_MODE === 'api' && <ApiSessionWatcher onEnded={() => setViewMode('login')} />}
@@ -926,6 +929,7 @@ function AppContent() {
         {campusClicks.botCheck?.open && <ApiBotCheckDialog onVerified={campusClicks.botCheck.onVerified} onClose={campusClicks.botCheck.onClose} />}
       </div>
     </AllianceNavProvider>
+    </ClickerProvider>
   );
 }
 
