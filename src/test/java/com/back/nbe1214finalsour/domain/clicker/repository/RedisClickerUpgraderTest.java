@@ -75,6 +75,23 @@ public class RedisClickerUpgraderTest {
         assertThat(isMember(DIRTY_CLICKER_KEY)).isFalse();
     }
 
+    @Test
+    @DisplayName("레벨 키가 없으면 -2를 반환하고 아무것도 바꾸지 않는다 (INCR로 키가 생기지 않는다)")
+    void upgrade_noLevelKey() {
+        // given (재시작·eviction으로 레벨 키가 사라짐)
+        redisTemplate.delete(LEVEL_KEY);
+
+        // when
+        long result = clickerUpgrader.upgrade(USER_ID, UNIVERSITY_ID, 1L, 300L);
+
+        // then
+        assertThat(result).isEqualTo(-2L);
+        assertThat(redisTemplate.opsForZSet().score(RANK_KEY, USER_ID.toString())).isEqualTo(1000.0);
+        assertThat(redisTemplate.hasKey(LEVEL_KEY)).isFalse();
+        assertThat(isMember(DIRTY_USER_KEY)).isFalse();
+        assertThat(isMember(DIRTY_CLICKER_KEY)).isFalse();
+    }
+
     private boolean isMember(String setKey) {
         return Boolean.TRUE.equals(redisTemplate.opsForSet().isMember(setKey, USER_ID.toString()));
     }
