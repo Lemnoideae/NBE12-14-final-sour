@@ -278,6 +278,28 @@ class ScoreFlushIntegrationTest {
         assertThat(clickerLevelOf(user.getId())).isEqualTo(2L);
     }
 
+    @Test
+    @DisplayName("DB 레벨이 Redis 레벨보다 높으면 DB 레벨을 낮추지 않는다")
+    void doesNotLowerClickerLevel() {
+        // given
+        ensureClickerLevels();
+        University university = universityRepository.saveAndFlush(new University("배치테스트대학교"));
+        Department department = departmentRepository.saveAndFlush(new Department(university, "배치학과"));
+        User user = saveUser(university, department, "레벨회원", "flush-level-keep@test.ac.kr");
+        jdbcTemplate.update("UPDATE users SET clicker_id = 3 WHERE id = ?", user.getId());
+
+        String levelKey = RedisKey.USER_CLICKER.of(user.getId());
+        usedKeys.add(levelKey);
+        stringRedisTemplate.opsForValue().set(levelKey, "2");
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_CLICKER.of(), String.valueOf(user.getId()));
+
+        // when
+        scoreFlushService.flush();
+
+        // then
+        assertThat(clickerLevelOf(user.getId())).isEqualTo(3L);
+    }
+
     /** DB 레벨 2·3이 FK(users.clicker_id → clicker.id)를 통과하도록 한다. 시드에 있으면 건너뛰고, 트랜잭션 롤백으로 사라진다. */
     private void ensureClickerLevels() {
         jdbcTemplate.update("""
