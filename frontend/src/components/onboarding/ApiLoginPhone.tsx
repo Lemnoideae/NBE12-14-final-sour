@@ -1,9 +1,10 @@
 import React, { useContext, useEffect, useRef, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { PhoneShellVariantContext } from '../PhoneShell.tsx';
 import { useApiClient, useAuthSession } from '../../api/ApiProvider';
 import { login, logout, useSessionRestore } from '../../api/auth';
 import { errorMessage, fieldErrorMap } from '../../api/errors';
+import { userKeys, useMyInfo } from '../../api/users';
 import { LoginStep, PhoneFrame, SignedInStep } from './OnboardingSteps.tsx';
 
 // Login, logout and the session restore in API mode (SCRUM-152). The access token stays in memory (SCRUM-148); after
@@ -19,6 +20,7 @@ export const ApiLoginPhone: React.FC<ApiLoginPhoneProps> = ({ onGoToSignup, onGo
   const client = useApiClient();
   const session = useAuthSession();
   const restore = useSessionRestore();
+  const me = useMyInfo();
   const fullShell = useContext(PhoneShellVariantContext) === 'full';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,9 +33,9 @@ export const ApiLoginPhone: React.FC<ApiLoginPhoneProps> = ({ onGoToSignup, onGo
   if (session.status === 'signed-in') {
     content = (
       <SignedInStep
-        nickname={nickname}
+        nickname={me.data?.nickname ?? nickname}
         onGoToCampus={onGoToCampus}
-        error={error}
+        error={error ?? (me.isError ? `내 정보를 불러오지 못했습니다. ${errorMessage(me.error)}` : null)}
         pending={signOut.isPending}
         onLogout={() => {
           setError(null);
@@ -100,11 +102,18 @@ export const ApiLoginPhone: React.FC<ApiLoginPhoneProps> = ({ onGoToSignup, onGo
 /**
  * Mounted once at the app root in API mode: restores the session when the app starts, and calls `onEnded` when a
  * signed-in session ends by itself (another device logged in, suspension, refresh expired), so the app can show
- * the login screen with the reason. A logout by choice does not call it.
+ * the login screen with the reason. A logout by choice does not call it. Signing out also drops the cached profile.
  */
 export const ApiSessionWatcher: React.FC<{ onEnded: () => void }> = ({ onEnded }) => {
   useSessionRestore();
   const session = useAuthSession();
+  const queryClient = useQueryClient();
+  // The profile belongs to whoever was signed in; the next login must not show it, even for a moment.
+  // Query.reset() only clears it. removeQueries would orphan a query a screen still watches (its gc timer can then
+  // never be cleared), and resetQueries refetches it at once, before the screens see the session ended.
+  useEffect(() => {
+    if (session.status === 'signed-out') queryClient.getQueryCache().find({ queryKey: userKeys.me, exact: true })?.reset();
+  }, [session.status, queryClient]);
   const onEndedRef = useRef(onEnded);
   onEndedRef.current = onEnded;
   // Runs when the state changes, not on every render: the user may leave the login screen while `ended` stays set.

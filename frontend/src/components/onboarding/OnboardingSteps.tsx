@@ -630,7 +630,7 @@ export const LoginStep: React.FC<LoginStepProps> = ({
 };
 
 interface SignedInStepProps {
-  /** Known right after login on this page; after a reload the profile comes from GET /users/me (SCRUM-153). */
+  /** From GET /users/me (SCRUM-153), or the login response until the profile arrives. Null shows a plain heading. */
   nickname: string | null;
   onGoToCampus: () => void;
   onLogout: () => void;

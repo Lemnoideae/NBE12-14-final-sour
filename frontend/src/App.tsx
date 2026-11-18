@@ -21,6 +21,7 @@ import { VisitingScreen2Phone } from './components/VisitingScreen2Phone';
 import { OnboardingPhone } from './components/onboarding/OnboardingPhone';
 import { ApiSignupPhone } from './components/onboarding/ApiSignupPhone';
 import { ApiAccountNavLabel, ApiLoginPhone, ApiSessionWatcher } from './components/onboarding/ApiLoginPhone';
+import { ApiPlayerSync } from './components/ApiPlayerSync';
 import { API_MODE, selectByMode } from './api/mode';
 import { useMySchool } from './hooks/useSchoolViews';
 import { TwoPhoneChatComparison } from './components/TwoPhoneChatComparison';
@@ -489,6 +490,7 @@ function AppContent() {
     <AllianceNavProvider value={allianceNav}>
       <div className={`w-full bg-[#f1f5f9] flex flex-col items-center justify-start select-none text-[#261608] ${isPhone ? 'device-full min-h-dvh' : 'min-h-screen p-2 sm:p-5'}`}>
         {API_MODE === 'api' && <ApiSessionWatcher onEnded={() => setViewMode('login')} />}
+        {API_MODE === 'api' && <ApiPlayerSync />}
         {/* [목업] Phone: the presentation header, view menus and demo tools move into a sheet behind this bar (Q5). Not part of the real service. */}
         {isPhone && (
           <div className="mock-menu-bar w-full shrink-0 flex items-center justify-end gap-2 bg-[#fffbeb] border-b-2 border-dashed border-[#8b5327]">

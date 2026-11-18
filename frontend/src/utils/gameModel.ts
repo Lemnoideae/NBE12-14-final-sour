@@ -28,7 +28,12 @@ export type GameAction =
   | { type: 'expire'; now: number }
   | { type: 'preview-campus'; level: number }
   /** Start over at a school (M4 D2): everything back to the start, school score from that school. */
-  | { type: 'reset'; schoolScore: number };
+  | { type: 'reset'; schoolScore: number }
+  /**
+   * The member's own values from the server (SCRUM-153). With `schoolScore` the player is at another school than
+   * before, so the game starts over there as in `reset`; without it only contribution and clicker change.
+   */
+  | { type: 'account'; contribution: number; clickerId: number; schoolScore: number | null };
 
 export function getClicker(id: number) {
   return CLICKERS.find((clicker) => clicker.id === id) ?? CLICKERS[0];
@@ -94,6 +99,10 @@ export function gameReducer(state: MockGameState, action: GameAction, buffs: rea
     }
     case 'reset':
       return { ...INITIAL_GAME_STATE, schoolScore: action.schoolScore };
+    case 'account': {
+      const base = action.schoolScore === null ? state : { ...INITIAL_GAME_STATE, schoolScore: action.schoolScore };
+      return { ...base, contribution: action.contribution, clickerId: action.clickerId };
+    }
     default: {
       const unsupported: never = action;
       throw new Error(`지원하지 않는 목업 동작: ${JSON.stringify(unsupported)}`);

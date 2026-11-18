@@ -52,6 +52,11 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 const ok = (data: unknown) => json(200, { code: 'SUCCESS', message: '요청이 성공했습니다.', data });
 const fail = (status: number, code: string, message: string) => json(status, { code, message, data: null });
 const REPLACED_MESSAGE = '다른 기기에서 로그인해 로그아웃되었습니다. 다시 로그인해주세요.';
+const PROFILE = {
+  id: 3, nickname: '새내기', email: EMAIL, role: 'USER', status: 'ACTIVE', profileImageUrl: null,
+  university: { id: 8, name: '한양대학교', logoUrl: null }, department: { id: 7, name: '컴퓨터소프트웨어학부' },
+  clicker: { level: 1, clickPower: 1, nextLevelRequiredScore: null }, totalContribScore: 0, totalAttackScore: 0,
+};
 
 type Handler = (body: Record<string, unknown>) => Response | Promise<Response>;
 
@@ -66,6 +71,8 @@ function mount({ restore = true, overrides = {} }: { restore?: boolean; override
       ? ok({ accessToken: 'login-token', expiresInSeconds: 3600, user: { id: 3, nickname: '새내기', universityId: 8, role: 'USER' } })
       : fail(401, 'AUTH_INVALID_CREDENTIALS', '이메일 또는 비밀번호가 올바르지 않습니다.')),
     'POST /api/v1/auth/logout': () => new Response(null, { status: 204 }),
+    // The account screen shows the nickname from the profile (SCRUM-153); apiMyInfo.test.ts covers the profile itself.
+    'GET /api/v1/users/me': () => ok(PROFILE),
     ...overrides,
   };
   const calls: Array<{ route: string; authorization: string | null }> = [];
@@ -109,8 +116,8 @@ test('앱을 열면 refresh 쿠키로 세션을 복구한다. 컴포넌트가 �
   const { routes, events } = mount();
   assert.ok(screen.queryByText('로그인 상태를 확인하는 중…') !== null, '확인하는 동안 로그인 폼을 보이지 않는다');
   await screen.findByTestId('signed-in');
-  assert.equal(screen.getByRole('heading', { level: 2 }).textContent, '로그인되어 있어요');
-  assert.deepEqual(routes(), ['POST /api/v1/auth/reissue']);
+  await screen.findByRole('heading', { level: 2, name: '새내기님, 로그인되어 있어요' });
+  assert.deepEqual(routes(), ['POST /api/v1/auth/reissue', 'GET /api/v1/users/me']);
   assert.equal(navLabel(), '🔑 내 계정 (로그인됨)');
   assert.equal(events.ended, 0);
 
@@ -138,6 +145,7 @@ test('복구할 세션이 없으면 안내 없이 로그인 폼을 보이고, �
   assert.deepEqual(calls.slice(1).map((call) => [call.route, call.authorization]), [
     ['POST /api/v1/auth/login', null],
     ['POST /api/v1/auth/login', null],
+    ['GET /api/v1/users/me', 'Bearer login-token'],
   ]);
   assert.equal(navLabel(), '🔑 내 계정 (로그인됨)');
   assert.equal(events.ended, 0);
@@ -169,12 +177,13 @@ test('로그아웃: 토큰을 붙여 보내고 로그인 폼으로 돌아간다.
 
 test('다른 기기 로그인으로 세션이 끝나면 앱에 알리고 로그인 화면에 이유를 보인다', async () => {
   const { client, events } = mount({
-    overrides: { 'GET /api/v1/users/me': () => fail(401, 'AUTH_SESSION_REPLACED', REPLACED_MESSAGE) },
+    // Any signed-in request may be the one that finds the session replaced; this path stands for it.
+    overrides: { 'GET /api/v1/replaced-probe': () => fail(401, 'AUTH_SESSION_REPLACED', REPLACED_MESSAGE) },
   });
   await screen.findByTestId('signed-in');
 
   await act(async () => {
-    await client.get('/users/me').catch(() => undefined);
+    await client.get('/replaced-probe').catch(() => undefined);
   });
   assert.equal((await screen.findByRole('status')).textContent, REPLACED_MESSAGE);
   assert.equal(events.ended, 1);

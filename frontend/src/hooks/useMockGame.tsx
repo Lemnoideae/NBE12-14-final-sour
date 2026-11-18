@@ -7,6 +7,7 @@ import type { TurnstileLoader } from '../utils/turnstile.ts';
 import { describeClickRejection, INITIAL_CLICK_GUARD, judgeClick, MOCK_CLICK_RULES, type ClickGuardRules, type ClickRejectReason } from '../utils/clickGuard.ts';
 import type { MockRequestMode } from '../utils/mockRequest.ts';
 import type { EnrolledProfile } from '../utils/mockAuth.ts';
+import type { AccountProfile } from '../api/users.ts';
 import { MOCK_SHOP_CONFIG, type MockShopConfig } from '../data/mockShopConfig.ts';
 import { SharedImageProvider, MOCK_IMAGE_DIRECTORY, type SharedImageStore } from './useSharedImages.tsx';
 import { createSharedImageStore } from '../utils/sharedImages.ts';
@@ -163,10 +164,31 @@ function useGameController(
     setPlayer({ ...profile });
     return startOver;
   }, [commit, setPlayer, player.schoolId]);
+  /**
+   * Apply the signed-in member's own values from GET /users/me (SCRUM-153). Another school starts over there as in
+   * `enroll`; the server's contribution and clicker level replace the local ones.
+   */
+  const applyAccount = useCallback((account: AccountProfile) => {
+    const startOver = account.schoolId !== player.schoolId;
+    commit({
+      type: 'account',
+      contribution: account.contribution,
+      clickerId: account.clickerLevel,
+      schoolScore: startOver ? initialSchoolScore(account.schoolId) : null,
+    });
+    setPlayer({
+      userId: account.userId,
+      schoolId: account.schoolId,
+      departmentId: resolveDepartmentId(account.department, account.schoolId),
+      department: account.department,
+      nickname: account.nickname,
+      email: account.email,
+    });
+  }, [commit, setPlayer, player.schoolId]);
   const activeBuff = getActiveBuff(state, now, engineBuffs);
 
   return {
-    state, player, setPlayer, enroll, tap, buy, upgrade, previewCampus, shopConfig, storeItems,
+    state, player, setPlayer, enroll, applyAccount, tap, buy, upgrade, previewCampus, shopConfig, storeItems,
     clickRejectDemo, setClickRejectDemo, clickNotice,
     abuseFlagged, setAbuseFlagged, botCheckOpen, closeBotCheck, completeBotCheck,
     imageStore,

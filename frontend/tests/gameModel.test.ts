@@ -179,3 +179,12 @@ test('온보딩 닉네임·학과 변경을 개인과 학과 순위에 반영한
   assert.equal(rankings.personal.find((row) => row.id === 'me')?.name, '가나다');
   assert.equal(rankings.dept.find((row) => row.id === 'my-department')?.name, '새학과');
 });
+
+test('서버 내 정보 반영(account): 같은 학교면 기여도·클리커만 바꾸고, 다른 학교면 그 학교에서 새로 시작한다', () => {
+  const playing = { ...seed(), contribution: 5000, clickerId: 6, schoolScore: 9_999_999, departmentScore: 777, activeBuff: { itemId: STORE_ITEMS[0].id, expiresAt: 10_000 } };
+  const same = gameReducer(playing, { type: 'account', contribution: 120, clickerId: 1, schoolScore: null });
+  assert.deepEqual(same, { ...playing, contribution: 120, clickerId: 1 });
+
+  const moved = gameReducer(playing, { type: 'account', contribution: 0, clickerId: 2, schoolScore: 4321 });
+  assert.deepEqual(moved, { ...INITIAL_GAME_STATE, schoolScore: 4321, contribution: 0, clickerId: 2 });
+});
