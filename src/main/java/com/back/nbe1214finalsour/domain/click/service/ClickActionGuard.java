@@ -2,6 +2,7 @@ package com.back.nbe1214finalsour.domain.click.service;
 
 import com.back.nbe1214finalsour.domain.abuse.service.AbuseVerificationService;
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
+import com.back.nbe1214finalsour.domain.clicker.repository.UserClickerLevelCache;
 import com.back.nbe1214finalsour.domain.clicker.service.ClickerService;
 import com.back.nbe1214finalsour.domain.user.entity.User;
 import com.back.nbe1214finalsour.domain.user.entity.UserStatus;
@@ -27,6 +28,7 @@ public class ClickActionGuard {
     private final ClickCountLimiter clickCountLimiter;
     private final ClickerService clickerService;
     private final AbuseVerificationService abuseVerificationService;
+    private final UserClickerLevelCache userClickerLevelCache;
 
     public long verifyAndGetBaseScore(Long userId, String submissionId, int clickCount) {
         try {
@@ -49,18 +51,10 @@ public class ClickActionGuard {
     private Long loadBaseScore(Long userId, int clickCount) {
         long score = clickCount;
 
-        // 클리커 데미지 가져오기
-        String clickerLevel = stringRedisTemplate.opsForValue().get(RedisKey.USER_CLICKER.of(userId));
+        // 레벨 원본은 Redis. 키가 없을 때만 DB 레벨로 채운다 (원본을 덮어쓰지 않는다)
+        long clickerLevel = userClickerLevelCache.loadIfAbsent(userId);
 
-        // 회원은 레벨 캐시가 없을 때만 DB에서 읽는다
-        if (clickerLevel == null) {
-            User user = userRepository.findById(userId).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-            // 레디스에 정보가 없으면 레디스에 저장
-            stringRedisTemplate.opsForValue().set(RedisKey.USER_CLICKER.of(userId), String.valueOf(user.getClickerId()));
-            clickerLevel = String.valueOf(user.getClickerId());
-        }
-
-        Clicker clicker = clickerService.getClickerById(Long.valueOf(clickerLevel));
+        Clicker clicker = clickerService.getClickerById(clickerLevel);
 
         score *= clicker.getClickPower();
 
