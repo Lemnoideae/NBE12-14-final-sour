@@ -19,9 +19,10 @@ interface MyInfoScreenPhoneProps {
   onBack: () => void;
   /** Signed out: the screen offers the login screen. */
   onGoToLogin: () => void;
+  onOpenPurchaseHistory?: () => void;
 }
 
-export function MyInfoScreenPhone({ onBack, onGoToLogin }: MyInfoScreenPhoneProps) {
+export function MyInfoScreenPhone({ onBack, onGoToLogin, onOpenPurchaseHistory }: MyInfoScreenPhoneProps) {
   const signedIn = useAuthSession().status === 'signed-in';
   const me = useMyInfo();
 
@@ -57,6 +58,8 @@ export function MyInfoScreenPhone({ onBack, onGoToLogin }: MyInfoScreenPhoneProp
         {signedIn && me.data ? (
           <>
             <ProfileCard info={me.data} />
+            {onOpenPurchaseHistory && <button type="button" onClick={onOpenPurchaseHistory}
+              className="pixel-plaque plaque-yellow min-h-11 px-3 py-2 text-xs font-bold cursor-pointer">아이템 구매 내역</button>}
             {/* A new member (another login) starts a new form. */}
             <NicknameForm key={me.data.id} current={me.data.nickname} />
             <PasswordChangeForm key={`password-${me.data.id}`} />

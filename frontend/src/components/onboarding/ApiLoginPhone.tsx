@@ -5,6 +5,7 @@ import { useApiClient, useAuthSession } from '../../api/ApiProvider';
 import { login, logout, useSessionRestore } from '../../api/auth';
 import { errorMessage, fieldErrorMap } from '../../api/errors';
 import { userKeys, useMyInfo } from '../../api/users';
+import { itemKeys } from '../../api/items';
 import { LoginStep, PhoneFrame, SignedInStep } from './OnboardingSteps.tsx';
 
 // Login, logout and the session restore in API mode (SCRUM-152). The access token stays in memory (SCRUM-148); after
@@ -109,6 +110,7 @@ export const ApiLoginPhone: React.FC<ApiLoginPhoneProps> = ({ onGoToSignup, onGo
  */
 export const ApiSessionWatcher: React.FC<{ onEnded: () => void }> = ({ onEnded }) => {
   useSessionRestore();
+  const client = useApiClient();
   const session = useAuthSession();
   const queryClient = useQueryClient();
   // The profile belongs to whoever was signed in; the next login must not show it, even for a moment.
@@ -117,6 +119,16 @@ export const ApiSessionWatcher: React.FC<{ onEnded: () => void }> = ({ onEnded }
   useEffect(() => {
     if (session.status === 'signed-out') queryClient.getQueryCache().find({ queryKey: userKeys.me, exact: true })?.reset();
   }, [session.status, queryClient]);
+  // Subscribe synchronously: sign-out + another sign-in in one frame must still abort private history GETs.
+  // Query.reset also cancels consumed signals, including the client's pre-HTTP fault delay, without refetching.
+  useEffect(() => {
+    const clearHistory = () => {
+      if (client.session.getState().status !== 'signed-out') return;
+      for (const query of queryClient.getQueryCache().findAll({ queryKey: itemKeys.histories })) query.reset();
+    };
+    clearHistory();
+    return client.session.subscribe(clearHistory);
+  }, [client, queryClient]);
   const onEndedRef = useRef(onEnded);
   onEndedRef.current = onEnded;
   // Runs when the state changes, not on every render: the user may leave the login screen while `ended` stays set.
