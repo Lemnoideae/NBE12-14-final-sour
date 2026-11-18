@@ -23,7 +23,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.time.Instant;
@@ -68,7 +67,7 @@ class AttackIntegrationTest {
     @Autowired
     private ClickerService clickerService;
     /** 테스트가 만든 학교는 설정 파일에 없으므로, 경쟁 학교 공격만 이 스파이로 경쟁 관계를 만든다 */
-    @MockitoSpyBean
+    @Autowired
     private RivalChecker rivalChecker;
     @Autowired
     private UniversityNameCache universityNameCache;
