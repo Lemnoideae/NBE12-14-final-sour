@@ -35,7 +35,7 @@ class AllianceMatchControllerTest {
     @Test
     void requestMatch_returnsCreated() throws Exception {
         AllianceMatch match = AllianceMatch.request(10L, 20L, 6, OffsetDateTime.now().plusHours(12));
-        given(service.requestMatch(1L, 10L, 20L, 6)).willReturn(match);
+        given(service.requestMatch(1L, 10L, 20L, 6, null)).willReturn(match);
         mvc.perform(post("/api/v1/alliances/10/matches")
                         .header(HttpHeaders.AUTHORIZATION, token())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -43,7 +43,22 @@ class AllianceMatchControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.status").value("REQUESTED"));
-        verify(service).requestMatch(1L, 10L, 20L, 6);
+        verify(service).requestMatch(1L, 10L, 20L, 6, null);
+    }
+
+    @Test
+    void requestMatch_withScheduledStartAt_returnsReservationTime() throws Exception {
+        OffsetDateTime scheduledAt = OffsetDateTime.parse("2026-11-18T20:00:00+09:00");
+        AllianceMatch match = AllianceMatch.request(10L, 20L, 2,
+                scheduledAt.minusHours(1), scheduledAt);
+        given(service.requestMatch(1L, 10L, 20L, 2, scheduledAt)).willReturn(match);
+        mvc.perform(post("/api/v1/alliances/10/matches")
+                        .header(HttpHeaders.AUTHORIZATION, token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"opponentAllianceId\":20,\"durationHours\":2,\"scheduledStartAt\":\"2026-11-18T20:00:00+09:00\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.scheduledStartAt").value("2026-11-18T20:00:00+09:00"));
+        verify(service).requestMatch(1L, 10L, 20L, 2, scheduledAt);
     }
 
     @Test

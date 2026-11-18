@@ -25,6 +25,9 @@ public class AllianceMatch extends BaseTimeEntity {
     @Column(name = "winner_alliance_id")
     private Long winnerAllianceId;
 
+    @Column(name = "scheduled_start_at")
+    private OffsetDateTime scheduledStartAt;
+
     @Column(name = "started_at")
     private OffsetDateTime startedAt;
 
@@ -75,6 +78,42 @@ public class AllianceMatch extends BaseTimeEntity {
         return match;
     }
 
+    public static AllianceMatch request(Long allianceAId, Long allianceBId,
+                                        int durationHours, OffsetDateTime requestExpiredAt,
+                                        OffsetDateTime scheduledStartAt) {
+        AllianceMatch match = request(allianceAId, allianceBId, durationHours, requestExpiredAt);
+        match.scheduledStartAt = scheduledStartAt;
+        return match;
+    }
+
+    public void schedule(OffsetDateTime acceptedAt) {
+        if (scheduledStartAt == null || acceptedAt == null || !acceptedAt.isBefore(scheduledStartAt)) {
+            throw new IllegalStateException("예약 시작 시각이 유효하지 않습니다.");
+        }
+        if (status != AllianceMatchStatus.REQUESTED || deletedAt != null
+                || !acceptedAt.isBefore(requestExpiredAt)) {
+            throw new IllegalStateException("유효한 대결 신청만 예약할 수 있습니다.");
+        }
+        status = AllianceMatchStatus.SCHEDULED;
+    }
+
+    public void startScheduled(OffsetDateTime now) {
+        if (now == null || scheduledStartAt == null || now.isBefore(scheduledStartAt)
+                || status != AllianceMatchStatus.SCHEDULED || deletedAt != null) {
+            throw new IllegalStateException("예약 시작 조건이 충족되지 않았습니다.");
+        }
+        startedAt = now;
+        endedAt = now.plusHours(durationHours);
+        status = AllianceMatchStatus.IN_PROGRESS;
+    }
+
+    public void cancelScheduled() {
+        if (status != AllianceMatchStatus.SCHEDULED || deletedAt != null) {
+            throw new IllegalStateException("예약된 대결만 취소할 수 있습니다.");
+        }
+        status = AllianceMatchStatus.CANCELED;
+    }
+
     public void accept(OffsetDateTime acceptedAt) {
         if (acceptedAt == null) {
             throw new IllegalArgumentException("대결 수락 시각은 필수입니다.");
@@ -96,5 +135,33 @@ public class AllianceMatch extends BaseTimeEntity {
             throw new IllegalStateException("대기 중인 대결 신청만 취소할 수 있습니다.");
         }
         this.status = AllianceMatchStatus.CANCELED;
+    }
+
+    public void finish(OffsetDateTime finishedAt, long aScore, long bScore) {
+        if (finishedAt == null) {
+            throw new IllegalArgumentException("대결 종료 시각은 필수입니다.");
+        }
+        if (status != AllianceMatchStatus.IN_PROGRESS || deletedAt != null) {
+            throw new IllegalStateException("진행 중인 대결만 종료할 수 있습니다.");
+        }
+        if (endedAt == null || finishedAt.isBefore(endedAt)) {
+            throw new IllegalStateException("대결 종료 시각이 지나지 않았습니다.");
+        }
+        if (aScore < 0 || bScore < 0) {
+            throw new IllegalArgumentException("대결 점수는 음수일 수 없습니다.");
+        }
+
+        this.aScore = aScore;
+        this.bScore = bScore;
+
+        if (aScore > bScore) {
+            this.winnerAllianceId = allianceAId;
+        } else if (bScore > aScore) {
+            this.winnerAllianceId = allianceBId;
+        } else {
+            this.winnerAllianceId = null;
+        }
+
+        this.status = AllianceMatchStatus.FINISHED;
     }
 }

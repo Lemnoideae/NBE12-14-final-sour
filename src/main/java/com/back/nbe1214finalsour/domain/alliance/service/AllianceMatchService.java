@@ -26,6 +26,13 @@ public class AllianceMatchService {
     @Transactional
     public AllianceMatch requestMatch(Long userId, Long allianceAId,
                                       Long allianceBId, int durationHours) {
+        return requestMatch(userId, allianceAId, allianceBId, durationHours, null);
+    }
+
+    @Transactional
+    public AllianceMatch requestMatch(Long userId, Long allianceAId,
+                                      Long allianceBId, int durationHours,
+                                      OffsetDateTime scheduledStartAt) {
         if (allianceAId == null || allianceBId == null || allianceAId <= 0 || allianceBId <= 0
                 || allianceAId.equals(allianceBId) || durationHours < 1 || durationHours > 24) {
             throw invalid();
@@ -44,14 +51,20 @@ public class AllianceMatchService {
         if (allianceMatchRepository.existsRequestedBetween(allianceAId, allianceBId)) {
             throw new BusinessException(ErrorCode.MATCH_ALREADY_REQUESTED);
         }
+        validateNoScheduledMatch(allianceAId, allianceBId);
         OffsetDateTime earliestExpiry = earlier(a.getExpiredAt(), b.getExpiredAt());
         OffsetDateTime latestStart = earliestExpiry.minusHours(durationHours);
+        if (scheduledStartAt != null && (!scheduledStartAt.isAfter(now)
+                || scheduledStartAt.plusHours(durationHours).isAfter(earliestExpiry))) {
+            throw new BusinessException(ErrorCode.MATCH_INVALID_SCHEDULE);
+        }
         if (!latestStart.isAfter(now)) {
             throw new BusinessException(ErrorCode.MATCH_INSUFFICIENT_TIME);
         }
         OffsetDateTime deadline = earlier(now.plusHours(24), latestStart);
+        if (scheduledStartAt != null) deadline = earlier(deadline, scheduledStartAt);
         return allianceMatchRepository.save(AllianceMatch.request(
-                allianceAId, allianceBId, durationHours, deadline));
+                allianceAId, allianceBId, durationHours, deadline, scheduledStartAt));
     }
 
     @Transactional
@@ -74,6 +87,16 @@ public class AllianceMatchService {
         List<AllianceUniversity> membersB = members(match.getAllianceBId());
         validateMemberCount(membersA, membersB);
         validateMembership(user, membersB); // 수락은 반드시 B 연합 회원만
+        validateNoScheduledMatch(match.getAllianceAId(), match.getAllianceBId());
+        if (match.getScheduledStartAt() != null) {
+            if (!now.isBefore(match.getScheduledStartAt())
+                    || match.getScheduledStartAt().plusHours(match.getDurationHours()).isAfter(
+                            earlier(pair[0].getExpiredAt(), pair[1].getExpiredAt()))) {
+                throw new BusinessException(ErrorCode.MATCH_INVALID_SCHEDULE);
+            }
+            match.schedule(now);
+            return match;
+        }
         if (now.plusHours(match.getDurationHours()).isAfter(
                 earlier(pair[0].getExpiredAt(), pair[1].getExpiredAt()))) {
             throw new BusinessException(ErrorCode.MATCH_INSUFFICIENT_TIME);
@@ -82,6 +105,42 @@ public class AllianceMatchService {
         pair[0].startMatch(now);
         pair[1].startMatch(now);
         return match;
+    }
+
+    // 각 호출을 별도 트랜잭션에서 처리하고, 수락과 동일한 락 순서를 지킨다.
+    @Transactional
+    public void startScheduledMatch(Long matchId) {
+        if (matchId == null || matchId <= 0) return;
+        AllianceMatchPair pairIds = allianceMatchRepository.findPairById(matchId).orElse(null);
+        if (pairIds == null) return;
+        Alliance[] pair = lockAlliances(pairIds.allianceAId(), pairIds.allianceBId());
+        AllianceMatch match = allianceMatchRepository.findByIdForUpdate(matchId).orElse(null);
+        if (match == null) return;
+        ensureSamePair(pairIds, match);
+        OffsetDateTime now = OffsetDateTime.now();
+        if (match.getDeletedAt() != null || match.getStatus() != AllianceMatchStatus.SCHEDULED
+                || match.getScheduledStartAt() == null || now.isBefore(match.getScheduledStartAt())) return;
+        // 서버 중단 등으로 시작이 늦어져 연합 만료를 넘기면 시작하지 않는다.
+        if (pair[0].getStatus() != AllianceStatus.ACTIVE || pair[1].getStatus() != AllianceStatus.ACTIVE
+                || pair[0].getDeletedAt() != null || pair[1].getDeletedAt() != null
+                || pair[0].getExpiredAt() == null || pair[1].getExpiredAt() == null
+                || now.plusHours(match.getDurationHours()).isAfter(
+                        earlier(pair[0].getExpiredAt(), pair[1].getExpiredAt()))
+                || members(match.getAllianceAId()).size() != REQUIRED_MEMBER_COUNT
+                || members(match.getAllianceBId()).size() != REQUIRED_MEMBER_COUNT) {
+            match.cancelScheduled();
+            return;
+        }
+        match.startScheduled(now);
+        pair[0].startMatch(now);
+        pair[1].startMatch(now);
+    }
+
+    private void validateNoScheduledMatch(Long aId, Long bId) {
+        if (allianceMatchRepository.existsScheduledForAlliance(aId)
+                || allianceMatchRepository.existsScheduledForAlliance(bId)) {
+            throw new BusinessException(ErrorCode.MATCH_SCHEDULE_CONFLICT);
+        }
     }
 
     // A는 '취소', B는 '거절'. 모두 요청 대기 중일 때만 가능하다.
@@ -120,6 +179,20 @@ public class AllianceMatchService {
                 && !match.getRequestExpiredAt().isAfter(OffsetDateTime.now())) {
             match.cancelRequested();
         }
+    }
+
+    // 연합 자체 만료 시 요청 대기 건을 닫는다. 일반적인 요청 만료 시간과는 별개.
+    @Transactional
+    public void cancelRequestedForAllianceExpiry(Long matchId, Long expiringAllianceId) {
+        AllianceMatchPair ids = allianceMatchRepository.findPairById(matchId).orElse(null);
+        if (ids == null || (!ids.allianceAId().equals(expiringAllianceId)
+                && !ids.allianceBId().equals(expiringAllianceId))) return;
+        Alliance[] pair = lockAlliances(ids.allianceAId(), ids.allianceBId());
+        Alliance expiring = ids.allianceAId().equals(expiringAllianceId) ? pair[0] : pair[1];
+        if (expiring.getExpiredAt() == null || expiring.getExpiredAt().isAfter(OffsetDateTime.now())) return;
+        AllianceMatch match = allianceMatchRepository.findByIdForUpdate(matchId).orElse(null);
+        if (match != null && match.getDeletedAt() == null
+                && match.getStatus() == AllianceMatchStatus.REQUESTED) match.cancelRequested();
     }
 
     @Transactional(readOnly = true)
