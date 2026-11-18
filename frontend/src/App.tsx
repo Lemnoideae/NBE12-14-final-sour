@@ -19,6 +19,8 @@ import { MapScreenPhone, INITIAL_MAP_CONTEXT, type MapContext } from './componen
 import { VisitingScreen1Phone } from './components/VisitingScreen1Phone';
 import { VisitingScreen2Phone } from './components/VisitingScreen2Phone';
 import { OnboardingPhone } from './components/onboarding/OnboardingPhone';
+import { ApiSignupPhone } from './components/onboarding/ApiSignupPhone';
+import { selectByMode } from './api/mode';
 import { useMySchool } from './hooks/useSchoolViews';
 import { TwoPhoneChatComparison } from './components/TwoPhoneChatComparison';
 import { TwoPhoneVisitingComparison } from './components/TwoPhoneVisitingComparison';
@@ -50,6 +52,8 @@ import { Smartphone, Gamepad2, Layers, Trophy, ShoppingBag, MapPin, Image as Ima
 // [시연] 헤더 학교명 길이별 표시 확인용. 실제 학교 데이터가 아니라 목업 표시 테스트 값이다.
 /** Service flow screens (M5-D). Demo tools and design comparisons are left out of the 44px touch areas. */
 const SERVICE_VIEW_MODES = new Set<string>(['gameplay', 'signup', 'single_map', 'visiting', 'ranking', 'shop', 'alliance_apply', 'current_alliance', 'battle_apply', 'battle_status', 'support_guest']);
+/** Sign-up: the backend in API mode (SCRUM-151), the mock onboarding otherwise. */
+const SignupScreen = selectByMode({ api: ApiSignupPhone, mock: OnboardingPhone });
 
 const DEMO_SCHOOL_NAMES = [
   // 'default' shows the player's school (M4: set by the mock email verification).
@@ -723,7 +727,7 @@ function AppContent() {
         ) : viewMode === 'onboarding' ? (
           <OnboardingFlow onStartSequential={() => setViewMode('signup')} />
         ) : viewMode === 'signup' ? (
-          <OnboardingPhone onGoToCampus={goToMySchool} />
+          <SignupScreen onGoToCampus={goToMySchool} />
         ) : (
           /* Single Phone Gameplay View */
           <div className={viewWrap}>

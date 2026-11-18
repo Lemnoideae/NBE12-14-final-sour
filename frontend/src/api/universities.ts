@@ -23,10 +23,31 @@ export function searchUniversities(
   return client.get<UniversitySummary[]>('/universities', { query: { keyword, size }, signal });
 }
 
+/** DepartmentResponse of GET /api/v1/universities/{id}/departments (public). */
+export interface DepartmentSummary {
+  id: number;
+  name: string;
+}
+
+export function getDepartments(client: ApiClient, universityId: number, { signal }: { signal?: AbortSignal } = {}): Promise<DepartmentSummary[]> {
+  return client.get<DepartmentSummary[]>(`/universities/${universityId}/departments`, { signal, anonymous: true });
+}
+
 export const universityKeys = {
   all: ['universities'] as const,
   search: (keyword: string, size: number) => [...universityKeys.all, 'search', { keyword, size }] as const,
+  departments: (universityId: number) => [...universityKeys.all, universityId, 'departments'] as const,
 };
+
+/** The school's departments; nothing is sent while `universityId` is null. */
+export function useDepartments(universityId: number | null) {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: universityKeys.departments(universityId ?? -1),
+    queryFn: ({ signal }) => getDepartments(client, universityId!, { signal }),
+    enabled: universityId !== null,
+  });
+}
 
 /** Search results for a trimmed keyword. A blank keyword sends nothing: the backend rejects it (@NotBlank). */
 export function useUniversitySearch(keyword: string, size = UNIVERSITY_SEARCH_SIZE) {
