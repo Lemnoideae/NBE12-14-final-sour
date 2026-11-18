@@ -138,8 +138,10 @@ public class ScoreFlushService {
         List<Long> ids = new ArrayList<>();
         List<Long> levels = new ArrayList<>();
         for (int i = 0; i < userIds.size(); i++) {
+            String v = values.get(i);
+            if (v == null) continue;
             ids.add(userIds.get(i));
-            levels.add(Long.parseLong(values.get(i)));
+            levels.add(Long.parseLong(v));
         }
 
         if (ids.isEmpty()) return;
