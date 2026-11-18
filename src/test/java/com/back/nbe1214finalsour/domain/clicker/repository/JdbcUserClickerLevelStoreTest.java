@@ -43,8 +43,15 @@ public class JdbcUserClickerLevelStoreTest {
     }
 
     @Test
-    @DisplayName("유저의 현재 클리커 레벨을 조회")
+    @DisplayName("유저의 현재 클리커 레벨을 DB에서 조회한다")
     void findLevel() {
-        assertThat(userClickerLevelStore.findLevel(userId)).isEqualTo(1L);
+        // given: 기본값(1)이 아닌 레벨로 바꿔 둔다
+        jdbcTemplate.update("UPDATE users SET clicker_id = 2 WHERE id = ?", userId);
+
+        // when
+        long level = userClickerLevelStore.findLevel(userId);
+
+        // then
+        assertThat(level).isEqualTo(2L);
     }
 }
