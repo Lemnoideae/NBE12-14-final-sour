@@ -88,7 +88,7 @@ class ChatStompIntegrationTest {
     }
 
     private String universityTopic(long id) {
-        return ChatStompInterceptor.UNIVERSITY_TOPIC_PREFIX + id;
+        return ChatDestinations.university(id);
     }
 
     // ===== CONNECT =====
@@ -200,7 +200,7 @@ class ChatStompIntegrationTest {
     @DisplayName("내 에러 큐(/user/queue/errors)는 구독할 수 있다")
     void subscribe_errorQueue() throws Exception {
         try (RawStompClient client = connected()) {
-            client.subscribe("sub-0", ChatStompInterceptor.ERROR_QUEUE);
+            client.subscribe("sub-0", ChatDestinations.ERROR_QUEUE);
 
             assertThat(client.nextFrame(Duration.ofMillis(500))).isNull();
             assertThat(client.awaitClose(Duration.ofMillis(100))).isNull();

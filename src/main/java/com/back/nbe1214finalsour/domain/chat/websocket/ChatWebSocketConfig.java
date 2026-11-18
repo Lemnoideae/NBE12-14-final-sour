@@ -21,8 +21,9 @@ import org.springframework.web.socket.config.annotation.WebSocketTransportRegist
  *   <li>구독 {@code /topic/**}, 사용자 큐 {@code /user/queue/**}, 발행 {@code /app/**}. 인증과 목적지 권한은 {@link ChatStompInterceptor}</li>
  *   <li>SimpleBroker heartbeat 10초 (D14, 명세서 §3-7: ALB 유휴 타임아웃 60초보다 짧게)</li>
  *   <li>전송 한도는 {@link ChatWebSocketProperties} (D23)</li>
+ *   <li>같은 세션에는 발행 순서대로 보낸다 ({@code preservePublishOrder})</li>
  * </ul>
- * 서버 간 전달(Redis Pub/Sub)은 3단계에서 붙인다.
+ * 서버 간 전달(Redis Pub/Sub)은 {@code ChatRelayConfig}.
  */
 @Configuration
 @EnableWebSocketMessageBroker
@@ -64,6 +65,8 @@ public class ChatWebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void configureMessageBroker(MessageBrokerRegistry registry) {
         registry.setApplicationDestinationPrefixes("/app");
         registry.setUserDestinationPrefix("/user");
+        // 같은 세션에는 발행 순서대로 보낸다. 기본값(false)이면 clientOutboundChannel 스레드 풀에서 순서가 섞일 수 있다
+        registry.setPreservePublishOrder(true);
         registry.enableSimpleBroker("/topic", "/queue")
                 .setHeartbeatValue(HEARTBEAT_MILLIS)
                 .setTaskScheduler(this.messageBrokerTaskScheduler);
