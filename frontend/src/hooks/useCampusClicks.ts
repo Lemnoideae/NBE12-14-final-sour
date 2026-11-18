@@ -7,6 +7,7 @@ import { errorMessage } from '../api/errors';
 import { selectByMode } from '../api/mode';
 import { userKeys, useMyInfo, type MyInfo } from '../api/users';
 import { createClickBatcher, type ClickBatchSnapshot } from '../utils/clickBatcher';
+import { createOtherClicksEstimator, createOtherClicksFeed, type OtherClicksFeed } from '../utils/otherClicksFeed';
 import { useMockGame } from './useMockGame';
 
 export interface ClickUpgradeGate {
@@ -20,13 +21,15 @@ interface CampusClicks extends ClickUpgradeGate {
   getPendingScore: () => number;
   retryLimited: (() => void) | null;
   botCheck: { open: boolean; onOpen: () => void; onClose: () => void; onVerified: () => void } | null;
+  /** API mode: other students' click estimates from click responses (SCRUM-159). Null keeps the mock polling. */
+  otherClicksFeed: OtherClicksFeed | null;
 }
 const noPendingScore = () => 0;
 const EMPTY_BATCH: ClickBatchSnapshot = { pendingClicks: 0, pendingScore: 0, sending: false, error: null, recoverable: false, locked: false };
 
 function useMockCampusClicks(): CampusClicks {
   const { tap } = useMockGame();
-  return { tap, notice: null, getPendingScore: noPendingScore, retryLimited: null, botCheck: null, upgradeBlocked: false, beginUpgrade: () => null };
+  return { tap, notice: null, getPendingScore: noPendingScore, retryLimited: null, botCheck: null, upgradeBlocked: false, beginUpgrade: () => null, otherClicksFeed: null };
 }
 
 /** Mounted at the app root, not on the campus screen: changing tabs must not cancel a collected batch. */
@@ -42,15 +45,19 @@ export function useApiCampusClicks(): CampusClicks {
   const [queueGeneration, setQueueGeneration] = useState(0);
   const [botCheckOpen, setBotCheckOpen] = useState(false);
   const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
+  const [otherClicksFeed] = useState(createOtherClicksFeed);
   const userId = signedIn ? me?.id : undefined;
 
   useEffect(() => {
     if (userId === undefined) return;
+    // One per queue: own batches of a previous member or session must not be subtracted from this one's counts.
+    const otherClicks = createOtherClicksEstimator();
     const controller = createClickBatcher({
       send: (body) => submitClicks(client, body),
       onChange: setSnapshot,
-      onAccepted(response, pendingScore) {
+      onAccepted(response, pendingScore, { request, sentAt }) {
         setRecoveryNotice(null);
+        otherClicksFeed.publish(otherClicks.accept(response.schoolClicksLastSecond, request.clickCount, sentAt));
         applyApiScores({
           contribution: response.myContribScore + pendingScore,
           schoolScore: response.university.totalScore + pendingScore,
@@ -81,7 +88,7 @@ export function useApiCampusClicks(): CampusClicks {
       controller.dispose();
       if (batcher.current === controller) batcher.current = null;
     };
-  }, [client, queryClient, userId, applyApiScores, queueGeneration]);
+  }, [client, queryClient, userId, applyApiScores, queueGeneration, otherClicksFeed]);
 
   useEffect(() => {
     if (signedIn && requiresClickVerification(snapshot.error)) setBotCheckOpen(true);
@@ -150,6 +157,7 @@ export function useApiCampusClicks(): CampusClicks {
     beginUpgrade,
     retryLimited: canRetryLimited ? retryLimited : null,
     botCheck: needsVerification ? { open: botCheckOpen, onOpen: openBotCheck, onClose: closeBotCheck, onVerified: completeBotCheck } : null,
+    otherClicksFeed,
   };
 }
 

@@ -41,6 +41,7 @@ import { useMockGame } from './hooks/useMockGame';
 import { useCampusClicks } from './hooks/useCampusClicks';
 import { ClickerProvider, useClickerController } from './hooks/useClicker';
 import { ItemShopProvider, useItemShopController } from './hooks/useItemShop';
+import { OtherClicksFeedContext } from './hooks/otherClicksFeedContext';
 import { useMockRequest } from './hooks/useMockRequest';
 import { MOCK_REQUEST_MODES, type MockRequestMode } from './utils/mockRequest';
 import { MockLoadGate } from './components/MockLoadGate';
@@ -498,6 +499,7 @@ function AppContent() {
   return (
     <ClickerProvider value={clicker}>
     <ItemShopProvider value={itemShop}>
+    <OtherClicksFeedContext.Provider value={campusClicks.otherClicksFeed}>
     <AllianceNavProvider value={allianceNav}>
       <div className={`w-full bg-[#f1f5f9] flex flex-col items-center justify-start select-none text-[#261608] ${isPhone ? 'device-full min-h-dvh' : 'min-h-screen p-2 sm:p-5'}`}>
         {API_MODE === 'api' && <ApiSessionWatcher onEnded={() => setViewMode('login')} />}
@@ -934,6 +936,7 @@ function AppContent() {
         {campusClicks.botCheck?.open && <ApiBotCheckDialog onVerified={campusClicks.botCheck.onVerified} onClose={campusClicks.botCheck.onClose} />}
       </div>
     </AllianceNavProvider>
+    </OtherClicksFeedContext.Provider>
     </ItemShopProvider>
     </ClickerProvider>
   );

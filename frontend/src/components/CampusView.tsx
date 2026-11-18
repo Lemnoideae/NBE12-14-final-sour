@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { CampusStage, CampusSignButton, GuestbookBoardButton } from './CampusStage';
 import { useReducedMotion } from './CampusAmbience';
 import { useCampusTimePhase } from '../hooks/useCampusTimePhase';
-import { useMockOtherClicks, type OtherClickScheduler } from '../hooks/useMockOtherClicks';
+import { useOtherClicks, type OtherClickScheduler } from '../hooks/useMockOtherClicks';
+import { useOtherClicksFeed } from '../hooks/otherClicksFeedContext';
 import { MOCK_REALTIME_CONFIG, type MockRealtimeConfig, type OtherClicksSource } from '../data/mockRealtime';
 import { useMockGame } from '../hooks/useMockGame';
 import { useMySchool } from '../hooks/useSchoolViews';
@@ -57,12 +58,17 @@ export const CampusView: React.FC<CampusViewProps> = ({
   const effectSequence = useRef(0);
   const ownClicks = useRef(0);
   const getMyClicksSinceLastTick = useCallback(() => { const count = ownClicks.current; ownClicks.current = 0; return count; }, []);
-  const { particles: otherParticles, otherClicks } = useMockOtherClicks({ getMyClicksSinceLastTick, config: realtimeConfig, source: otherClicksSource, scheduler: realtimeScheduler });
+  // API mode pushes estimates from click responses; without a feed (mock mode) the mock source is polled.
+  const otherClicksFeed = useOtherClicksFeed();
+  const { particles: otherParticles, otherClicks } = useOtherClicks({ getMyClicksSinceLastTick, config: realtimeConfig, source: otherClicksSource, scheduler: realtimeScheduler, feed: otherClicksFeed });
   const ambience = useCampusTimePhase();
   const reducedMotion = useReducedMotion();
   const [floatingNumbers, setFloatingNumbers] = useState<FloatingNumber[]>([]);
   const [sparkles, setSparkles] = useState<Sparkle[]>([]);
-  const bubbleMessage = otherClicks === null ? '동시 접속 표시는 목업용 샘플입니다.' : `[시연] ${activeStudents}명 접속 · ${ambience.phase === 'night' ? '밤샘 ' : ''}다른 사용자 ${otherClicks}회 클릭 · 점수 미반영`;
+  const mockBubble = otherClicks === null ? '동시 접속 표시는 목업용 샘플입니다.' : `[시연] ${activeStudents}명 접속 · ${ambience.phase === 'night' ? '밤샘 ' : ''}다른 사용자 ${otherClicks}회 클릭 · 점수 미반영`;
+  // The API count is a lower bound: own clicks that may be in the server's previous-second bucket are subtracted.
+  const apiBubble = otherClicks === null ? '클릭하면 같은 학교 학생들의 직전 1초 클릭이 함께 보입니다.' : `직전 1초 다른 학생 약 ${otherClicks}회 클릭`;
+  const bubbleMessage = otherClicksFeed ? apiBubble : mockBubble;
   const [showDemoHand, setShowDemoHand] = useState<boolean>(true);
   const [studentWhisper, setStudentWhisper] = useState<{ text: string; x: number; y: number } | null>({
     text: cheer,

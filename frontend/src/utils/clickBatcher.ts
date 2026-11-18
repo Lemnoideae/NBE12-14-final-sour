@@ -13,7 +13,8 @@ export interface ClickBatchSnapshot {
 
 export interface ClickBatcherOptions {
   send: (request: ClickRequest) => Promise<ClickResponse>;
-  onAccepted: (response: ClickResponse, pendingScore: number) => void;
+  /** `sentAt` is when the attempt that succeeded was sent (`now()`), so callers can relate it to earlier batches. */
+  onAccepted: (response: ClickResponse, pendingScore: number, accepted: { request: ClickRequest; sentAt: number }) => void;
   onChange: (snapshot: ClickBatchSnapshot) => void;
   createId?: () => string;
   now?: () => number;
@@ -71,14 +72,15 @@ export function createClickBatcher(options: ClickBatcherOptions) {
       return;
     }
     sending = true;
-    nextSendAt = now() + CLICK_BATCH_WINDOW_MS;
+    const sentAt = now();
+    nextSendAt = sentAt + CLICK_BATCH_WINDOW_MS;
     publish();
     try {
       const response = await options.send(submitted.request);
       if (disposed) return;
       batch = null;
       sending = false;
-      options.onAccepted(response, getSnapshot().pendingScore);
+      options.onAccepted(response, getSnapshot().pendingScore, { request: submitted.request, sentAt });
       publish();
       arm();
     } catch (caught) {
