@@ -149,6 +149,7 @@ public class ScoreFlushService {
                 set clicker_id = x.level
                 from unnest(?::bigint[], ?::bigint[]) as x(id, level)
                 where u.id = x.id
+                    and u.clicker_id < x.level
                 """, ids.toArray(Long[]::new), levels.toArray(Long[]::new));
     }
 
