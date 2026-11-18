@@ -52,7 +52,7 @@ public class ScoreFlushService {
         }
 
         // 기존 dirty 제거
-        stringRedisTemplate.delete(List.of(newUserDirtyKey, newUnivDirtyKey, newDeptDirtyKey));
+        stringRedisTemplate.delete(List.of(newUserDirtyKey, newUnivDirtyKey, newDeptDirtyKey, newClickerDirtyKey));
     }
 
     private boolean detach(String dirtyKey, String flushingKey) {
