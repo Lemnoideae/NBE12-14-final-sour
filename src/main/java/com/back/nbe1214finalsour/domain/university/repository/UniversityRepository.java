@@ -1,7 +1,7 @@
 package com.back.nbe1214finalsour.domain.university.repository;
 
 import com.back.nbe1214finalsour.domain.university.entity.University;
-import com.back.nbe1214finalsour.domain.university.repository.projections.UnivName;
+import com.back.nbe1214finalsour.domain.university.repository.projections.UnivCacheRow;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -16,6 +16,6 @@ public interface UniversityRepository extends JpaRepository<University, Long> {
     // 학교 이름 부분 검색 + 이름순 정렬
     List<University> findByNameContainingIgnoreCaseOrderByNameAsc(String keyword,  Pageable pageable);
 
-    @Query("select u.id, u.name from University u")
-    List<UnivName> findAllNames();
+    @Query("select u.id, u.name, u.libraryLat, u.libraryLng from University u")
+    List<UnivCacheRow> findAllForCache();
 }

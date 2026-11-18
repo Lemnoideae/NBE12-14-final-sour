@@ -5,6 +5,7 @@ import com.back.nbe1214finalsour.domain.click.dto.ClickRequest;
 import com.back.nbe1214finalsour.domain.click.dto.ClickResponse;
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
 import com.back.nbe1214finalsour.domain.clicker.service.ClickerService;
+import com.back.nbe1214finalsour.domain.university.service.library.LibraryBonusChecker;
 import com.back.nbe1214finalsour.domain.user.entity.User;
 import com.back.nbe1214finalsour.domain.user.entity.UserStatus;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
@@ -40,7 +41,8 @@ import static org.mockito.Mockito.verify;
 /**
  * 점수 계산과 호출 순서를 검증한다. Redis·DB는 모두 목이므로 Lua 자체는 여기서 검증하지 않는다.
  *
- * <p>인정 점수 = {@code floor(clickCount * clicker.clickPower * multiplier)}
+ * <p>인정 점수 = {@code floor(clickCount * clicker.clickPower * 아이템 배율 * 도서관 배율)}. 버림은 모두 곱한 뒤 한 번만 한다.
+ * 도서관 배율은 반경 안이면 1.2, 아니면 1.0이고, 응답의 {@code multiplier}는 두 배율을 곱한 값이다.
  */
 @ExtendWith(MockitoExtension.class)
 class ClickServiceTest {
@@ -51,6 +53,11 @@ class ClickServiceTest {
     private static final String SUBMISSION_ID = "sub-1";
 
     private static final Clicker CLICKER_LV3 = new Clicker(3L, 10, 1000L);
+    private static final Clicker CLICKER_LV1 = new Clicker(1L, 1, 0L);
+
+    /** 클릭한 위치. 반경 판정 자체는 {@code LibraryBonusCheckerTest}에서 보고, 여기서는 판정 결과만 목으로 정한다 */
+    private static final Double LAT = 37.563764;
+    private static final Double LNG = 126.937012;
 
     /** apply-click.lua 반환: univTotal, deptTotal, myContrib, univRank, lastSecond */
     private static final List<String> SCRIPT_RESULT = List.of("100", "50", "30", "4", "7");
@@ -74,6 +81,8 @@ class ClickServiceTest {
     @Mock
     private AbuseVerificationService abuseVerificationService;
     @Mock
+    private LibraryBonusChecker libraryBonusChecker;
+    @Mock
     private User user;
 
     private ClickService clickService;
@@ -83,20 +92,38 @@ class ClickServiceTest {
         ClickActionGuard clickActionGuard = new ClickActionGuard(
                 stringRedisTemplate, userStatusCache, userRepository,
                 actionRateLimiter, clickCountLimiter, clickerService, abuseVerificationService);
-        clickService = new ClickService(stringRedisTemplate, userRepository, redisHandler, clickActionGuard);
+        clickService = new ClickService(stringRedisTemplate, userRepository, redisHandler, clickActionGuard,
+                libraryBonusChecker);
     }
 
     private ClickRequest request(int clickCount) {
-        return new ClickRequest(SUBMISSION_ID, clickCount);
+        return new ClickRequest(SUBMISSION_ID, clickCount, null, null);
+    }
+
+    private ClickRequest requestAt(int clickCount, Double lat, Double lng) {
+        return new ClickRequest(SUBMISSION_ID, clickCount, lat, lng);
     }
 
     /** 활성 회원 → 중복 아님 → 레벨 캐시 히트(3레벨) → 유저 조회 성공까지의 공통 경로 */
     private void givenHappyPathBeforeScript() {
+        givenHappyPathBeforeScript(CLICKER_LV3);
+    }
+
+    private void givenHappyPathBeforeScript(Clicker clicker) {
         given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
         given(userStatusCache.find(USER_ID)).willReturn(Optional.of(UserStatus.ACTIVE));
         given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(true);
-        given(valueOperations.get("user:1:clicker")).willReturn("3");
-        given(clickerService.getClickerById(3L)).willReturn(CLICKER_LV3);
+        given(valueOperations.get("user:1:clicker")).willReturn(String.valueOf(clicker.getId()));
+        given(clickerService.getClickerById(clicker.getId())).willReturn(clicker);
+    }
+
+    private void givenItemMultiplier(Double multiplier) {
+        given(redisHandler.getHash("user:1:effect", "multiplier", Double.class)).willReturn(Optional.ofNullable(multiplier));
+    }
+
+    private void givenScriptResult() {
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
+                .willReturn(SCRIPT_RESULT);
     }
 
     // --- 0단계: 회원 상태 ---
@@ -428,6 +455,97 @@ class ClickServiceTest {
 
         // 3 * 10 * 1.09 = 32.7 → 32
         assertThat(response.earnedScore()).isEqualTo(32L);
+    }
+
+    // --- 4.5단계: 도서관 보너스 ---
+
+    @Test
+    @DisplayName("도서관 반경 안이면 1.2배를 곱하고 libraryBonus가 true, multiplier는 1.2다")
+    void click_libraryBonusMultipliesScore() {
+        givenHappyPathBeforeScript();
+        givenItemMultiplier(null);
+        given(libraryBonusChecker.isInLibrary(UNIVERSITY_ID, LAT, LNG)).willReturn(true);
+        givenScriptResult();
+
+        ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, requestAt(3, LAT, LNG));
+
+        assertThat(response.libraryBonus()).isTrue();
+        assertThat(response.multiplier()).isEqualTo(1.2);
+        assertThat(response.earnedScore()).isEqualTo(36L); // 3 * 10 * 1.2
+    }
+
+    @Test
+    @DisplayName("도서관 반경 밖이면 보너스 없이 libraryBonus가 false다")
+    void click_outsideLibraryHasNoBonus() {
+        givenHappyPathBeforeScript();
+        givenItemMultiplier(null);
+        given(libraryBonusChecker.isInLibrary(UNIVERSITY_ID, LAT, LNG)).willReturn(false);
+        givenScriptResult();
+
+        ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, requestAt(3, LAT, LNG));
+
+        assertThat(response.libraryBonus()).isFalse();
+        assertThat(response.multiplier()).isEqualTo(1.0);
+        assertThat(response.earnedScore()).isEqualTo(30L);
+    }
+
+    @Test
+    @DisplayName("판정에는 토큰의 학교 ID와 요청의 위치를 그대로 넘긴다")
+    void click_passesUniversityAndLocationToLibraryCheck() {
+        givenHappyPathBeforeScript();
+        givenItemMultiplier(null);
+        givenScriptResult();
+
+        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, requestAt(3, LAT, LNG));
+
+        verify(libraryBonusChecker).isInLibrary(UNIVERSITY_ID, LAT, LNG);
+    }
+
+    @Test
+    @DisplayName("아이템 1.5배와 겹치면 multiplier는 1.8이고 점수는 54다 (부동소수점 1.7999...로 53이 되면 안 된다)")
+    void click_libraryBonusStacksWithItemMultiplier() {
+        givenHappyPathBeforeScript();
+        givenItemMultiplier(1.5);
+        given(libraryBonusChecker.isInLibrary(UNIVERSITY_ID, LAT, LNG)).willReturn(true);
+        givenScriptResult();
+
+        ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, requestAt(3, LAT, LNG));
+
+        assertThat(response.multiplier()).isEqualTo(1.8);
+        assertThat(response.earnedScore()).isEqualTo(54L); // 3 * 10 * 1.5 * 1.2 = 54
+    }
+
+    @Test
+    @DisplayName("배율을 모두 곱한 뒤 한 번만 버린다 (단계마다 버리지 않는다)")
+    void click_flooredOnceAfterAllMultipliers() {
+        givenHappyPathBeforeScript(CLICKER_LV1);
+        givenItemMultiplier(2.0);
+        given(libraryBonusChecker.isInLibrary(UNIVERSITY_ID, LAT, LNG)).willReturn(true);
+        givenScriptResult();
+
+        ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, requestAt(3, LAT, LNG));
+
+        // 3 * 1 * 2.0 * 1.2 = 7.2 → 7. 단계마다 버리면 floor(3.6)=3 → 3 * 2.0 = 6
+        assertThat(response.earnedScore()).isEqualTo(7L);
+    }
+
+    @Test
+    @DisplayName("Redis에 반영하는 점수도 도서관 보너스가 붙은 값이다")
+    void click_passesBonusScoreToScript() {
+        givenHappyPathBeforeScript();
+        givenItemMultiplier(null);
+        given(libraryBonusChecker.isInLibrary(UNIVERSITY_ID, LAT, LNG)).willReturn(true);
+        givenScriptResult();
+
+        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, requestAt(3, LAT, LNG));
+
+        ArgumentCaptor<Object> argsCaptor = ArgumentCaptor.captor();
+        verify(stringRedisTemplate).execute(any(), anyList(),
+                argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(),
+                argsCaptor.capture(), argsCaptor.capture());
+
+        // ARGV: universityId, departmentId, userId, earnedScore, clickCount
+        assertThat(argsCaptor.getAllValues()).containsExactly("12", "5", "1", "36", "3");
     }
 
     // --- 5단계: 스크립트 호출과 응답 매핑 ---
