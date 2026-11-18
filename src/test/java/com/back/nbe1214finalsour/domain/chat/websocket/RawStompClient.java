@@ -18,7 +18,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
  * 테스트용 STOMP 클라이언트. 프레임을 문자열 그대로 주고받아 ERROR 프레임의 헤더·본문과 연결 종료를 직접 확인한다.
  * ({@code WebSocketStompClient}는 ERROR 프레임과 종료를 콜백 안으로 감춘다)
  */
-final class RawStompClient implements AutoCloseable {
+public final class RawStompClient implements AutoCloseable {
 
     private final WebSocketSession session;
     private final BlockingQueue<String> frames;
@@ -30,7 +30,7 @@ final class RawStompClient implements AutoCloseable {
         this.closed = closed;
     }
 
-    static RawStompClient open(int port, String origin) throws Exception {
+    public static RawStompClient open(int port, String origin) throws Exception {
         BlockingQueue<String> frames = new LinkedBlockingQueue<>();
         CompletableFuture<CloseStatus> closed = new CompletableFuture<>();
         TextWebSocketHandler handler = new TextWebSocketHandler() {
@@ -56,7 +56,7 @@ final class RawStompClient implements AutoCloseable {
         return new RawStompClient(session, frames, closed);
     }
 
-    void send(String command, String... headersThenBody) throws Exception {
+    public void send(String command, String... headersThenBody) throws Exception {
         StringBuilder frame = new StringBuilder(command).append('\n');
         String body = "";
         for (String part : headersThenBody) {
@@ -70,7 +70,7 @@ final class RawStompClient implements AutoCloseable {
         this.session.sendMessage(new TextMessage(frame.toString()));
     }
 
-    void connect(@Nullable String accessToken) throws Exception {
+    public void connect(@Nullable String accessToken) throws Exception {
         if (accessToken == null) {
             send("CONNECT", "accept-version:1.2", "host:localhost", "heart-beat:10000,10000");
         } else {
@@ -79,16 +79,22 @@ final class RawStompClient implements AutoCloseable {
         }
     }
 
-    void subscribe(String id, String destination) throws Exception {
+    /** 본문에 ':'가 들어가도 되도록 헤더와 본문을 따로 받는다 */
+    public void sendJson(String destination, String body) throws Exception {
+        this.session.sendMessage(new TextMessage(
+                "SEND\ndestination:" + destination + "\ncontent-type:application/json\n\n" + body + "\0"));
+    }
+
+    public void subscribe(String id, String destination) throws Exception {
         send("SUBSCRIBE", "id:" + id, "destination:" + destination);
     }
 
     /** 다음 프레임. 시간 안에 없으면 null */
-    @Nullable String nextFrame(Duration timeout) throws InterruptedException {
+    public @Nullable String nextFrame(Duration timeout) throws InterruptedException {
         return this.frames.poll(timeout.toMillis(), TimeUnit.MILLISECONDS);
     }
 
-    String requireFrame() throws InterruptedException {
+    public String requireFrame() throws InterruptedException {
         String frame = nextFrame(Duration.ofSeconds(5));
         if (frame == null) {
             throw new AssertionError("5초 안에 받은 STOMP 프레임 없음");
@@ -97,7 +103,7 @@ final class RawStompClient implements AutoCloseable {
     }
 
     /** 서버가 연결을 끊을 때까지 기다린다. 끊지 않으면 null */
-    @Nullable CloseStatus awaitClose(Duration timeout) {
+    public @Nullable CloseStatus awaitClose(Duration timeout) {
         try {
             return this.closed.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (Exception e) {

@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.chat.websocket;
 
+import com.back.nbe1214finalsour.domain.chat.dto.ChatErrorResponse;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +23,7 @@ import tools.jackson.databind.json.JsonMapper;
  * <p>ERROR 프레임의 {@code message} 헤더와 본문 {@code {"code","message"}}에 오류 코드를 담는다. 클라이언트는 코드로 다음 행동을 고른다.
  * 예: {@code COMMON_EXPIRED_TOKEN}이면 토큰을 재발급하고 다시 연결한다. {@code AUTH_SESSION_REPLACED}면 로그인 화면으로 간다.
  *
- * <p>메시지 처리({@code @MessageMapping}) 중 난 에러는 연결을 끊지 않고 {@code /user/queue/errors}로 보낸다(계획 D15, 4단계).
+ * <p>메시지 처리({@code @MessageMapping}) 중 난 에러는 연결을 끊지 않고 {@code /user/queue/errors}로 보낸다(계획 D15, {@code ChatMessageController}).
  */
 @Slf4j
 @Component
@@ -43,7 +44,7 @@ public class StompErrorFrameHandler extends StompSubProtocolErrorHandler {
         accessor.setMessage(errorCode.getCode());
         accessor.setContentType(MimeTypeUtils.APPLICATION_JSON);
         accessor.setLeaveMutable(true);
-        byte[] body = this.jsonMapper.writeValueAsBytes(new ErrorFrameBody(errorCode.getCode(), errorCode.getMessage()));
+        byte[] body = this.jsonMapper.writeValueAsBytes(ChatErrorResponse.of(errorCode));
         MessageHeaders headers = accessor.getMessageHeaders();
         return MessageBuilder.createMessage(body, headers);
     }
@@ -89,9 +90,5 @@ public class StompErrorFrameHandler extends StompSubProtocolErrorHandler {
             }
         }
         return null;
-    }
-
-    /** ERROR 프레임 본문. {@code /user/queue/errors}의 본문과 같은 모양이다 */
-    record ErrorFrameBody(String code, String message) {
     }
 }
