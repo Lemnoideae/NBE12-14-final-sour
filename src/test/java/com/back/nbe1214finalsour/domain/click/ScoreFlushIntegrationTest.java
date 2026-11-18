@@ -322,6 +322,31 @@ class ScoreFlushIntegrationTest {
         assertThat(stringRedisTemplate.hasKey(RedisKey.DIRTY_CLICKER.of() + ":flushing")).isFalse();
     }
 
+    @Test
+    @DisplayName("Redis 레벨이 없는 dirty:clicker 회원은 건너뛰고 나머지 회원은 반영한다")
+    void skipsUsersMissingClickerLevel() {
+        // given
+        ensureClickerLevels();
+        University university = universityRepository.saveAndFlush(new University("배치테스트대학교"));
+        Department department = departmentRepository.saveAndFlush(new Department(university, "배치학과"));
+        User scored = saveUser(university, department, "레벨있는회원", "flush-level-a@test.ac.kr");
+        User missing = saveUser(university, department, "레벨없는회원", "flush-level-b@test.ac.kr");
+
+        String scoredLevelKey = RedisKey.USER_CLICKER.of(scored.getId());
+        usedKeys.add(scoredLevelKey);
+        stringRedisTemplate.opsForValue().set(scoredLevelKey, "2");
+        // missing은 레벨 키가 없다 (Redis 재시작 등으로 사라진 경우)
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_CLICKER.of(),
+                String.valueOf(scored.getId()), String.valueOf(missing.getId()));
+
+        // when
+        scoreFlushService.flush();
+
+        // then
+        assertThat(clickerLevelOf(scored.getId())).isEqualTo(2L);
+        assertThat(clickerLevelOf(missing.getId())).isEqualTo(1L);
+    }
+
     /** DB 레벨 2·3이 FK(users.clicker_id → clicker.id)를 통과하도록 한다. 시드에 있으면 건너뛰고, 트랜잭션 롤백으로 사라진다. */
     private void ensureClickerLevels() {
         jdbcTemplate.update("""
