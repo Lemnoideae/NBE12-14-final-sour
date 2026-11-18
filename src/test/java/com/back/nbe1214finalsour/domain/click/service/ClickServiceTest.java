@@ -25,7 +25,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -88,7 +87,7 @@ class ClickServiceTest {
     }
 
     private ClickRequest request(int clickCount) {
-        return new ClickRequest(SUBMISSION_ID, clickCount, BigDecimal.ZERO, BigDecimal.ZERO);
+        return new ClickRequest(SUBMISSION_ID, clickCount, null, null);
     }
 
     /** 활성 회원 → 중복 아님 → 레벨 캐시 히트(3레벨) → 유저 조회 성공까지의 공통 경로 */
