@@ -58,6 +58,23 @@ public class RedisClickerUpgraderTest {
         assertThat(isMember(DIRTY_CLICKER_KEY)).isTrue();
     }
 
+    @Test
+    @DisplayName("Redis 레벨이 기대 레벨과 다르면 -2를 반환하고 아무것도 바꾸지 않는다")
+    void upgrade_levelMismatch() {
+        // given (다른 요청이 먼저 레벨을 올림)
+        redisTemplate.opsForValue().set(LEVEL_KEY, "2");
+
+        // when
+        long result = clickerUpgrader.upgrade(USER_ID, UNIVERSITY_ID, 1L, 300L);
+
+        // then
+        assertThat(result).isEqualTo(-2L);
+        assertThat(redisTemplate.opsForZSet().score(RANK_KEY, USER_ID.toString())).isEqualTo(1000.0);
+        assertThat(redisTemplate.opsForValue().get(LEVEL_KEY)).isEqualTo("2");
+        assertThat(isMember(DIRTY_USER_KEY)).isFalse();
+        assertThat(isMember(DIRTY_CLICKER_KEY)).isFalse();
+    }
+
     private boolean isMember(String setKey) {
         return Boolean.TRUE.equals(redisTemplate.opsForSet().isMember(setKey, USER_ID.toString()));
     }
