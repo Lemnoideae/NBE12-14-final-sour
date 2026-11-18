@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.willReturn;
 
 @IntegrationTest
 public class UserClickerLevelCacheTest {
@@ -21,6 +22,9 @@ public class UserClickerLevelCacheTest {
     @Autowired
     private StringRedisTemplate redisTemplate;
 
+    @Autowired
+    private UserClickerLevelStore userClickerLevelStore;
+
     @AfterEach
     public void tearDown() {
         redisTemplate.delete(KEY);
@@ -28,6 +32,20 @@ public class UserClickerLevelCacheTest {
 
     private String cachedLevel(){
         return redisTemplate.opsForValue().get(KEY);
+    }
+
+    @Test
+    @DisplayName("레벨 키가 없으면 DB 레벨을 Redis에 저장하고 그 값을 반환한다")
+    void loadIfAbsent_whenEmpty() {
+        // given
+        willReturn(2L).given(userClickerLevelStore).findLevel(USER_ID);
+
+        // when
+        long level = userClickerLevelCache.loadIfAbsent(USER_ID);
+
+        // then
+        assertThat(level).isEqualTo(2L);
+        assertThat(cachedLevel()).isEqualTo("2");
     }
 
     @Test

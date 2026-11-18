@@ -18,6 +18,11 @@ public class UserClickerLevelCache {
 
     private final StringRedisTemplate redisTemplate;
 
+    // 빈 껍데기 (4단계에서 구현)
+    public long loadIfAbsent(Long userId) {
+        return 0;
+    }
+
     // 현재 캐시 값보다 클 때만 갱신 (늦게 도착한 낮은 레벨은 무시)
     public void raiseLevel(Long userId, Long level) {
         redisTemplate.execute(
