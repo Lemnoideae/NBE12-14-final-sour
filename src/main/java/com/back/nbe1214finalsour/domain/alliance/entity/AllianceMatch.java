@@ -25,6 +25,9 @@ public class AllianceMatch extends BaseTimeEntity {
     @Column(name = "winner_alliance_id")
     private Long winnerAllianceId;
 
+    @Column(name = "scheduled_start_at")
+    private OffsetDateTime scheduledStartAt;
+
     @Column(name = "started_at")
     private OffsetDateTime startedAt;
 
@@ -73,6 +76,42 @@ public class AllianceMatch extends BaseTimeEntity {
         match.aScore = 0L;
         match.bScore = 0L;
         return match;
+    }
+
+    public static AllianceMatch request(Long allianceAId, Long allianceBId,
+                                        int durationHours, OffsetDateTime requestExpiredAt,
+                                        OffsetDateTime scheduledStartAt) {
+        AllianceMatch match = request(allianceAId, allianceBId, durationHours, requestExpiredAt);
+        match.scheduledStartAt = scheduledStartAt;
+        return match;
+    }
+
+    public void schedule(OffsetDateTime acceptedAt) {
+        if (scheduledStartAt == null || acceptedAt == null || !acceptedAt.isBefore(scheduledStartAt)) {
+            throw new IllegalStateException("예약 시작 시각이 유효하지 않습니다.");
+        }
+        if (status != AllianceMatchStatus.REQUESTED || deletedAt != null
+                || !acceptedAt.isBefore(requestExpiredAt)) {
+            throw new IllegalStateException("유효한 대결 신청만 예약할 수 있습니다.");
+        }
+        status = AllianceMatchStatus.SCHEDULED;
+    }
+
+    public void startScheduled(OffsetDateTime now) {
+        if (now == null || scheduledStartAt == null || now.isBefore(scheduledStartAt)
+                || status != AllianceMatchStatus.SCHEDULED || deletedAt != null) {
+            throw new IllegalStateException("예약 시작 조건이 충족되지 않았습니다.");
+        }
+        startedAt = now;
+        endedAt = now.plusHours(durationHours);
+        status = AllianceMatchStatus.IN_PROGRESS;
+    }
+
+    public void cancelScheduled() {
+        if (status != AllianceMatchStatus.SCHEDULED || deletedAt != null) {
+            throw new IllegalStateException("예약된 대결만 취소할 수 있습니다.");
+        }
+        status = AllianceMatchStatus.CANCELED;
     }
 
     public void accept(OffsetDateTime acceptedAt) {

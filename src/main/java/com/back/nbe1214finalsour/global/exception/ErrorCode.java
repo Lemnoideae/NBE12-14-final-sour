@@ -96,6 +96,8 @@ public enum ErrorCode {
     MATCH_NOT_PENDING(HttpStatus.CONFLICT, "MATCH_NOT_PENDING", "대기 중인 대결 신청이 아닙니다."),
     MATCH_REQUEST_EXPIRED(HttpStatus.CONFLICT, "MATCH_REQUEST_EXPIRED", "대결 신청 기한이 지났습니다."),
     MATCH_MEMBERS_INCOMPLETE(HttpStatus.CONFLICT, "MATCH_MEMBERS_INCOMPLETE", "양쪽 연합 모두 2개 학교가 가입해야 합니다."),
+    MATCH_INVALID_SCHEDULE(HttpStatus.BAD_REQUEST, "MATCH_INVALID_SCHEDULE", "예약 시각은 미래이며 연합 만료 전 대결이 끝나야 합니다."),
+    MATCH_SCHEDULE_CONFLICT(HttpStatus.CONFLICT, "MATCH_SCHEDULE_CONFLICT", "이미 예약된 대결이 있는 연합입니다."),
     MATCH_INSUFFICIENT_TIME(HttpStatus.CONFLICT, "MATCH_INSUFFICIENT_TIME", "연합 만료 전 대결을 끝낼 시간이 부족합니다."),
     GUEST_ALREADY_LIKED(HttpStatus.CONFLICT, "GUEST_ALREADY_LIKED", "이미 좋아요를 눌렀습니다."),
 

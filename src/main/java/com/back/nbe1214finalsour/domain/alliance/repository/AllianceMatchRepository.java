@@ -24,6 +24,7 @@ public interface AllianceMatchRepository extends JpaRepository<AllianceMatch, Lo
         SELECT CASE WHEN COUNT(m) > 0 THEN true ELSE false END FROM AllianceMatch m
         WHERE m.deletedAt IS NULL AND m.status IN (
           com.back.nbe1214finalsour.domain.alliance.entity.AllianceMatchStatus.REQUESTED,
+          com.back.nbe1214finalsour.domain.alliance.entity.AllianceMatchStatus.SCHEDULED,
           com.back.nbe1214finalsour.domain.alliance.entity.AllianceMatchStatus.IN_PROGRESS)
           AND (m.allianceAId = :allianceId OR m.allianceBId = :allianceId)
         """)
@@ -53,6 +54,21 @@ public interface AllianceMatchRepository extends JpaRepository<AllianceMatch, Lo
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT m FROM AllianceMatch m WHERE m.id = :matchId")
     Optional<AllianceMatch> findByIdForUpdate(@Param("matchId") Long matchId);
+
+    @Query("""
+        SELECT CASE WHEN COUNT(m) > 0 THEN true ELSE false END FROM AllianceMatch m
+        WHERE m.deletedAt IS NULL AND m.status = com.back.nbe1214finalsour.domain.alliance.entity.AllianceMatchStatus.SCHEDULED
+          AND (m.allianceAId = :allianceId OR m.allianceBId = :allianceId)
+        """)
+    boolean existsScheduledForAlliance(@Param("allianceId") Long allianceId);
+
+    @Query(value = """
+        SELECT id FROM alliance_match
+        WHERE status = 'SCHEDULED' AND deleted_at IS NULL
+          AND scheduled_start_at <= :now
+        ORDER BY id ASC LIMIT 100
+        """, nativeQuery = true)
+    List<Long> findDueScheduledIds(@Param("now") OffsetDateTime now);
 
     // 주기적으로 만료되는 신청은 작은 묶음으로 처리해 긴 트랜잭션을 방지함.
     @Query(value = """
