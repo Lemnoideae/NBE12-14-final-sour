@@ -2,6 +2,7 @@ package com.back.nbe1214finalsour.domain.user.service;
 
 import com.back.nbe1214finalsour.domain.auth.service.RefreshTokenService;
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
+import com.back.nbe1214finalsour.domain.clicker.repository.UserClickerLevelCache;
 import com.back.nbe1214finalsour.domain.clicker.service.ClickerService;
 import com.back.nbe1214finalsour.domain.university.entity.Department;
 import com.back.nbe1214finalsour.domain.university.entity.University;
@@ -37,6 +38,7 @@ public class UserService {
     private final UniversityRepository universityRepository;
     private final DepartmentRepository departmentRepository;
     private final ClickerService clickerService;
+    private final UserClickerLevelCache userClickerLevelCache;
     private final UserScoreCache userScoreCache;
     private final PasswordEncoder passwordEncoder;
     private final RefreshTokenService refreshTokenService;
@@ -73,7 +75,7 @@ public class UserService {
                 user.getLogoUrl(),
                 new UniversityInfo(university.getId(), university.getName(), university.getLogoUrl()),
                 new DepartmentInfo(department.getId(), department.getName()),
-                clickerInfo(user.getClickerId()),
+                clickerInfo(userClickerLevelCache.find(userId).orElse(user.getClickerId())),
                 contribScore,
                 attackScore);
     }
