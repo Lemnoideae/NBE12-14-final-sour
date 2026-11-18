@@ -1,5 +1,5 @@
 import type { SchoolId } from '../data/schoolIds.ts';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Trophy } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { formatContribution } from '../utils/formatContribution';
@@ -8,10 +8,12 @@ import { BottomSheetDialog } from './BottomSheetDialog';
 import { CampusSignButton, CampusStage, GuestbookBoardButton } from './CampusStage';
 import { GameScreenLayout } from './GameScreenLayout';
 import { TopHUD, schoolHudProps } from './TopHUD';
-import { LiveClicksEmpty, SPECTATOR_NOTICE, SpectatorBar, VisitNotFoundPhone, VisitSchoolInfoSheet, formatScore, useVisitedSchool } from './VisitingParts.tsx';
+import { LiveClicksEmpty, SPECTATOR_NOTICE, SpectatorBar, VisitNotFoundPhone, VisitSchoolInfoSheet, formatScore } from './VisitingParts.tsx';
+import { LoadNotice } from './LoadNotice';
+import { useVisitSchool } from '../hooks/useVisitSchool.ts';
 
 interface VisitingScreen1PhoneProps {
-  /** Visited school ID from the map (M2). Values are read from the shared school rows. */
+  /** Visited school ID from the map (M2). Mock rows, or the server's school detail in API mode (SCRUM-163). */
   /** null: no school was chosen; the screen shows the not-found notice. */
   schoolId: SchoolId | null;
   onBackToMap?: () => void;
@@ -40,7 +42,12 @@ export const VisitingScreen1Phone: React.FC<VisitingScreen1PhoneProps> = ({
   const [clickNoticeToast, setClickNoticeToast] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [localSound, setLocalSound] = useState(() => soundManager.enabled);
-  const { school, mySchool } = useVisitedSchool(schoolId);
+  const visit = useVisitSchool(schoolId);
+  const { school, isMyUniversity } = visit;
+  // The server says this is my own school (e.g. a stale map entry): my campus is where clicks count.
+  useEffect(() => {
+    if (isMyUniversity) onBackToMySchool();
+  }, [isMyUniversity, onBackToMySchool]);
 
   const handleCampusClick = () => {
     soundManager.playTapSound();
@@ -56,7 +63,19 @@ export const VisitingScreen1Phone: React.FC<VisitingScreen1PhoneProps> = ({
     soundManager.playTabSound();
   };
 
-  if (!school) return <VisitNotFoundPhone schoolId={schoolId} onBackToMap={onBackToMap} />;
+  if (visit.status === 'not-found') return <VisitNotFoundPhone schoolId={schoolId} onBackToMap={onBackToMap} />;
+  if (visit.status !== 'ready' || !school) {
+    return (
+      <LoadNotice
+        status={visit.status === 'failed' ? 'failed' : 'loading'}
+        name="방문 학교"
+        failureDetail={visit.failureDetail}
+        onRetry={visit.retry}
+        onBack={onBackToMap}
+        backLabel="지도로 돌아가기"
+      />
+    );
+  }
 
   return (
     <GameScreenLayout
@@ -76,7 +95,7 @@ export const VisitingScreen1Phone: React.FC<VisitingScreen1PhoneProps> = ({
           onOpenRankings={() => onNavigateTab('rankings')}
         />
       }
-      previewBar={<SpectatorBar mySchoolShortName={mySchool.shortName} onBackToMySchool={onBackToMySchool} />}
+      previewBar={<SpectatorBar mySchoolShortName={visit.mySchoolShortName} onBackToMySchool={onBackToMySchool} />}
       nav={
         <BottomNav
           activeTab="map"
@@ -93,6 +112,7 @@ export const VisitingScreen1Phone: React.FC<VisitingScreen1PhoneProps> = ({
           <BottomSheetDialog label={`${school.name} 학교 정보`} onClose={closeInfo}>
             <VisitSchoolInfoSheet
               school={school}
+              extras={visit.extras}
               onOpenGuestbook={() => {
                 setIsInfoOpen(false);
                 onOpenGuestbook();

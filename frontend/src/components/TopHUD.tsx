@@ -17,8 +17,10 @@ interface TopHUDProps {
   /** Shown in the badge title, e.g. "서울 · 수도권". */
   schoolRegion: string;
   schoolScore: number;
-  rank: number;
-  rankDelta: string;
+  /** Null while the school has no server ranking (API visit, SCRUM-163). */
+  rank: number | null;
+  /** Null hides the change badge: the API has no rank change. */
+  rankDelta: string | null;
   campusLevel: number;
   soundEnabled: boolean;
   onToggleSound: () => void;
@@ -34,7 +36,7 @@ interface TopHUDProps {
 }
 
 /** HUD school props for a school row (comparison screens use the player's school). */
-export const schoolHudProps = (school: SchoolView) => ({
+export const schoolHudProps = (school: Pick<SchoolView, 'name' | 'id' | 'badgeColor' | 'firstSyllable' | 'city' | 'filterRegion'>) => ({
   schoolName: school.name,
   schoolId: school.id,
   schoolBadgeColor: school.badgeColor,
@@ -163,10 +165,12 @@ export const TopHUD: React.FC<TopHUDProps> = ({
           className="pixel-plaque plaque-yellow px-2 py-1 flex items-center gap-1 text-xs font-pixel font-bold cursor-pointer shrink-0"
           title="전국 대학 순위 보기"
         >
-          <span>전국 <span data-testid={visiting ? 'visit-rank' : undefined}>{rank}위</span></span>
-          <span className="text-[10px] font-mono text-[#ffffff] bg-[#22c55e] border border-[#261608] px-1 py-0.2 font-black shadow-[1px_1px_0px_#261608]">
-            {rankDelta}
-          </span>
+          <span>전국 <span data-testid={visiting ? 'visit-rank' : undefined}>{rank === null ? '순위 없음' : `${rank}위`}</span></span>
+          {rankDelta !== null && (
+            <span className="text-[10px] font-mono text-[#ffffff] bg-[#22c55e] border border-[#261608] px-1 py-0.2 font-black shadow-[1px_1px_0px_#261608]">
+              {rankDelta}
+            </span>
+          )}
         </button>
       </div>
     </header>
