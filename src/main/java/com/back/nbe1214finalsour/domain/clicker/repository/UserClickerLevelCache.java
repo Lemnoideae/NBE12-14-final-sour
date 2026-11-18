@@ -2,20 +2,15 @@ package com.back.nbe1214finalsour.domain.clicker.repository;
 
 import com.back.nbe1214finalsour.global.redis.RedisKey;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
 import java.util.Optional;
 
-// 클릭 엔진이 클릭 세기를 계산할 때 읽는 회원 레벨 캐시 (원본은 DB users.clicker_id)
+// 클릭 엔진이 클릭 세기를 계산할 때 읽는 회원 레벨 (원본은 Redis, DB users.clicker_id는 배치 반영)
 @Repository
 @RequiredArgsConstructor
 public class UserClickerLevelCache {
-    private static final RedisScript<Long> RAISE_SCRIPT =
-            RedisScript.of(new ClassPathResource("redis/clicker-level-redis.lua"), Long.class);
 
     private final StringRedisTemplate redisTemplate;
     private final UserClickerLevelStore userClickerLevelStore;
@@ -38,14 +33,5 @@ public class UserClickerLevelCache {
     public Optional<Long> find(Long userId) {
         return Optional.ofNullable(redisTemplate.opsForValue().get(RedisKey.USER_CLICKER.of(userId)))
                 .map(Long::valueOf);
-    }
-
-    // 현재 캐시 값보다 클 때만 갱신 (늦게 도착한 낮은 레벨은 무시)
-    public void raiseLevel(Long userId, Long level) {
-        redisTemplate.execute(
-                RAISE_SCRIPT,
-                List.of(RedisKey.USER_CLICKER.of(userId)),
-                String.valueOf(level)
-        );
     }
 }
