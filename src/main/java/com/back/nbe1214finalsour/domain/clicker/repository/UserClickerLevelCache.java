@@ -21,8 +21,13 @@ public class UserClickerLevelCache {
 
     // 키가 없으면 DB 레벨로 채운다 (SET NX)
     public long loadIfAbsent(Long userId) {
+        String key = RedisKey.USER_CLICKER.of(userId);
+        String cached = redisTemplate.opsForValue().get(key);
+        if (cached != null) {
+            return Long.parseLong(cached);
+        }
         long dbLevel = userClickerLevelStore.findLevel(userId);
-        redisTemplate.opsForValue().setIfAbsent(RedisKey.USER_CLICKER.of(userId), String.valueOf(dbLevel));
+        redisTemplate.opsForValue().setIfAbsent(key, String.valueOf(dbLevel));
         return dbLevel;
     }
 
