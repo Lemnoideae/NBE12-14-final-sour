@@ -3,8 +3,12 @@ package com.back.nbe1214finalsour.domain.alliance;
 import com.back.nbe1214finalsour.IntegrationTest;
 import com.back.nbe1214finalsour.domain.alliance.entity.Alliance;
 import com.back.nbe1214finalsour.domain.alliance.entity.AllianceMatch;
+import com.back.nbe1214finalsour.domain.alliance.entity.AllianceMatchSettlement;
+import com.back.nbe1214finalsour.domain.alliance.repository.AllianceMatchSettlementRepository;
+import com.back.nbe1214finalsour.domain.alliance.service.AllianceMatchSettlementCompletionService;
 import com.back.nbe1214finalsour.domain.alliance.entity.AllianceUniversity;
 import com.back.nbe1214finalsour.domain.alliance.repository.AllianceMatchRepository;
+import com.back.nbe1214finalsour.domain.alliance.repository.AllianceRepository;
 import com.back.nbe1214finalsour.domain.alliance.service.AllianceMatchService;
 import com.back.nbe1214finalsour.domain.alliance.service.AllianceService;
 import com.back.nbe1214finalsour.domain.user.entity.User;
@@ -16,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -34,13 +39,28 @@ import static org.assertj.core.api.Assertions.assertThat;
 @IntegrationTest
 class AllianceMatchConcurrencyIntegrationTest {
 
-    @Autowired AllianceService allianceService;
-    @Autowired AllianceMatchService matchService;
-    @Autowired AllianceMatchRepository matchRepository;
-    @Autowired UserRepository userRepository;
-    @Autowired JdbcTemplate jdbc;
-    @Autowired EmailHasher emailHasher;
-    @Autowired PasswordEncoder passwordEncoder;
+    @Autowired
+    AllianceService allianceService;
+    @Autowired
+    AllianceMatchService matchService;
+    @Autowired
+    AllianceMatchRepository matchRepository;
+    @Autowired
+    AllianceMatchSettlementRepository settlementRepository;
+    @Autowired
+    AllianceMatchSettlementCompletionService completionService;
+    @Autowired
+    UserRepository userRepository;
+    @Autowired
+    JdbcTemplate jdbc;
+    @Autowired
+    EmailHasher emailHasher;
+    @Autowired
+    PasswordEncoder passwordEncoder;
+    @Autowired
+    AllianceRepository allianceRepository;
+    @Autowired
+    TransactionTemplate transactionTemplate;
 
     private final List<Long> allianceIds = new ArrayList<>();
     private final List<Long> userIds = new ArrayList<>();
@@ -204,6 +224,7 @@ class AllianceMatchConcurrencyIntegrationTest {
     void cleanUp() {
         // FK 제약 때문에 대결 -> 가입 -> 연합 -> 회원 -> 학과 -> 대학 순서로 정리한다.
         for (Long id : allianceIds) {
+            jdbc.update("DELETE FROM alliance_match_settlement WHERE match_id IN (SELECT id FROM alliance_match WHERE alliance_a_id = ? OR alliance_b_id = ?)", id, id);
             jdbc.update("DELETE FROM alliance_match WHERE alliance_a_id = ? OR alliance_b_id = ?", id, id);
         }
         for (Long id : allianceIds) jdbc.update("DELETE FROM alliance_university WHERE alliance_id = ?", id);
@@ -211,5 +232,108 @@ class AllianceMatchConcurrencyIntegrationTest {
         for (Long id : userIds) jdbc.update("DELETE FROM users WHERE id = ?", id);
         for (Long id : departmentIds) jdbc.update("DELETE FROM department WHERE id = ?", id);
         for (Long id : universityIds) jdbc.update("DELETE FROM university WHERE id = ?", id);
+    }
+
+    @Test
+    void sameMatchFinishedTwice_onlyOneSucceeds() throws Exception {
+        // given: 두 연합과 종료 시각이 지난 대결
+        Group a = createFullAlliance();
+        Group b = createFullAlliance();
+
+        OffsetDateTime startedAt = OffsetDateTime.now().minusHours(7);
+
+        Long matchId = transactionTemplate.execute(status -> {
+            Alliance allianceA = allianceRepository.findByIdForUpdate(
+                    a.allianceId()
+            ).orElseThrow();
+
+            Alliance allianceB = allianceRepository.findByIdForUpdate(
+                    b.allianceId()
+            ).orElseThrow();
+
+            AllianceMatch match = AllianceMatch.request(
+                    a.allianceId(),
+                    b.allianceId(),
+                    6,
+                    startedAt.plusHours(1)
+            );
+
+            match.accept(startedAt);
+            allianceA.startMatch(startedAt);
+            allianceB.startMatch(startedAt);
+
+            Long id = matchRepository.saveAndFlush(match).getId();
+            AllianceMatchSettlement settlement = AllianceMatchSettlement.prepare(
+                    id, 300L, 200L,
+                    a.first.universityId(), a.second.universityId(),
+                    b.first.universityId(), b.second.universityId(),
+                    120L, 180L, 80L, 120L);
+            settlement.markApplied();
+            settlementRepository.saveAndFlush(settlement);
+            return id;
+        });
+
+        // when: 두 스레드가 동시에 같은 대결 종료 시도
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try {
+            Future<Boolean> first = executor.submit(() ->
+                    tryFinishMatch(matchId, ready, start)
+            );
+
+            Future<Boolean> second = executor.submit(() ->
+                    tryFinishMatch(matchId, ready, start)
+            );
+
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            int successCount = (first.get(30, TimeUnit.SECONDS) ? 1 : 0)
+                    + (second.get(30, TimeUnit.SECONDS) ? 1 : 0);
+
+            // then: 먼저 도착한 호출이 종료하고 다음 호출은 멱등적으로 성공
+            assertThat(successCount).isEqualTo(2);
+            assertThat(matchStatus(matchId)).isEqualTo("FINISHED");
+
+            assertThat(allianceStatus(a.allianceId()))
+                    .isEqualTo("ACTIVE");
+            assertThat(allianceStatus(b.allianceId()))
+                    .isEqualTo("ACTIVE");
+
+            // then: 동결된 정산 스냅샷의 결과만 저장
+            Long aScore = jdbc.queryForObject(
+                    "SELECT a_score FROM alliance_match WHERE id = ?",
+                    Long.class,
+                    matchId
+            );
+
+            Long bScore = jdbc.queryForObject(
+                    "SELECT b_score FROM alliance_match WHERE id = ?",
+                    Long.class,
+                    matchId
+            );
+
+            assertThat(List.of(aScore, bScore)).isEqualTo(List.of(300L, 200L));
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(30, TimeUnit.SECONDS))
+                    .isTrue();
+        }
+    }
+
+    private boolean tryFinishMatch(
+            Long matchId,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) throws Exception {
+        ready.countDown();
+        if (!start.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("동시성 테스트 시작 실패");
+        }
+        completionService.completeApplied(matchId);
+        return true;
     }
 }

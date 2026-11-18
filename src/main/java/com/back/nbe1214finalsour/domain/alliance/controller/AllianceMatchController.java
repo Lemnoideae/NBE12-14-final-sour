@@ -25,7 +25,8 @@ public class AllianceMatchController {
             @PathVariable Long allianceId,
             @Valid @RequestBody AllianceMatchCreateRequest request) {
         return ApiResponse.ok(new AllianceMatchResponse(matchService.requestMatch(
-                authUser.userId(), allianceId, request.opponentAllianceId(), request.durationHours())));
+                authUser.userId(), allianceId, request.opponentAllianceId(),
+                request.durationHours(), request.scheduledStartAt())));
     }
 
     // 상대 연합 B 회원이 수락

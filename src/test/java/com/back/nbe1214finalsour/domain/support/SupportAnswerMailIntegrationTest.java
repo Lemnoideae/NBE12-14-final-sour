@@ -14,6 +14,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.listeners.StubbingLookupListener;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.ApplicationContext;
@@ -29,9 +30,15 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -89,9 +96,9 @@ class SupportAnswerMailIntegrationTest {
     @DisplayName("답변이 커밋되면 문의 메일 전용 스레드에서 수신 이메일로 한 번 보낸다")
     void sendsAfterCommitOnMailThread() throws Exception {
         long id = insert("me@example.com", "아이템 효과가 적용되지 않아요");
-        AtomicReference<String> thread = new AtomicReference<>();
+        CompletableFuture<String> thread = new CompletableFuture<>();
         doAnswer(invocation -> {
-            thread.set(Thread.currentThread().getName());
+            thread.complete(Thread.currentThread().getName());
             return null;
         }).when(mailSender).sendAnswer(anyString(), anyString(), anyString(), anyString());
 
@@ -99,7 +106,56 @@ class SupportAnswerMailIntegrationTest {
 
         verify(mailSender, timeout(WAIT_MS).times(1)).sendAnswer(
                 "me@example.com", TITLE_PREFIX + "아이템 효과가 적용되지 않아요", "문의 답변드립니다", "확인 결과 ...");
-        assertThat(thread.get()).startsWith("support-mail-");
+        // 호출 기록만으로는 Answer 실행 완료를 보장하지 않으므로, 스레드 이름이 저장될 때까지 기다린다.
+        assertThat(thread.get(WAIT_MS, TimeUnit.MILLISECONDS)).startsWith("support-mail-");
+    }
+
+    @Test
+    @DisplayName("메일 호출이 기록되어도 콜백이 스레드 이름을 저장할 때까지 기다린다")
+    void waitsForThreadCaptureAfterInvocationIsRecorded() throws Exception {
+        CountDownLatch invocationRecorded = new CountDownLatch(1);
+        CountDownLatch resumeCallback = new CountDownLatch(1);
+        // Mockito가 호출을 기록한 뒤 Answer를 실행하기 전의 순서를 고정한다 (Issue #102).
+        StubbingLookupListener pauseBeforeAnswer = event -> {
+            if (Thread.currentThread().getName().startsWith("support-mail-")
+                    && event.getInvocation().getMethod().getName().equals("sendAnswer")
+                    && (TITLE_PREFIX + "아이템 효과가 적용되지 않아요").equals(event.getInvocation().getArgument(1))) {
+                invocationRecorded.countDown();
+                try {
+                    assertThat(resumeCallback.await(WAIT_MS, TimeUnit.MILLISECONDS)).isTrue();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new AssertionError(e);
+                }
+            }
+        };
+        var listeners = mockingDetails(mailSender).getMockCreationSettings().getStubbingLookupListeners();
+        listeners.add(pauseBeforeAnswer);
+        try (ExecutorService verifier = Executors.newSingleThreadExecutor()) {
+            var verification = verifier.submit(() -> {
+                sendsAfterCommitOnMailThread();
+                return null;
+            });
+            try {
+                assertThat(invocationRecorded.await(WAIT_MS, TimeUnit.MILLISECONDS)).isTrue();
+                // 호출 기록만 보고 검증이 끝나서는 안 된다. 콜백이 멈춘 동안에는 아직 기다려야 한다.
+                assertThatThrownBy(() -> verification.get(100, TimeUnit.MILLISECONDS))
+                        .isInstanceOf(TimeoutException.class);
+                resumeCallback.countDown();
+                verification.get(WAIT_MS, TimeUnit.MILLISECONDS);
+            } finally {
+                resumeCallback.countDown();
+            }
+        } finally {
+            // 실패해도 비동기 작업과 listener를 다음 테스트에 남기지 않는다.
+            resumeCallback.countDown();
+            try {
+                context.getBean(AsyncConfig.SUPPORT_MAIL_EXECUTOR, ThreadPoolTaskExecutor.class)
+                        .submit(() -> {}).get(WAIT_MS, TimeUnit.MILLISECONDS);
+            } finally {
+                listeners.remove(pauseBeforeAnswer);
+            }
+        }
     }
 
     @Test
