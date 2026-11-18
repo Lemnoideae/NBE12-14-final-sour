@@ -37,6 +37,7 @@ import { SupportGuestScreenPhone } from './components/SupportGuestScreenPhone';
 import { CampusStatsSheet } from './components/CampusStatsSheet';
 import { getSchoolRankings } from './data/mockRankings';
 import { useMockGame } from './hooks/useMockGame';
+import { useCampusClicks } from './hooks/useCampusClicks';
 import { useMockRequest } from './hooks/useMockRequest';
 import { MOCK_REQUEST_MODES, type MockRequestMode } from './utils/mockRequest';
 import { MockLoadGate } from './components/MockLoadGate';
@@ -83,6 +84,7 @@ function AppContent() {
   const shellVariant = isPhone && SERVICE_VIEW_MODES.has(viewMode) ? 'full' : 'framed';
   const viewWrap = shellVariant === 'full' ? 'w-full flex flex-col' : 'w-full flex flex-col items-center py-2 animate-fadeIn';
   const game = useMockGame();
+  const campusClicks = useCampusClicks();
   const request = useMockRequest();
   const playerInfo = game.player;
   const schoolScore = game.state.schoolScore;
@@ -165,7 +167,7 @@ function AppContent() {
 
   const handleCampusTap = useCallback(
     (_x: number, _y: number, isCrit: boolean, _gainedPoints: number) => {
-      const gainedPoints = game.tap(isCrit);
+      const gainedPoints = campusClicks.tap(isCrit);
       // A refused click (M5-A) adds nothing, not even to the fever gauge.
       if (gainedPoints === null) return null;
 
@@ -182,7 +184,7 @@ function AppContent() {
       }
       return gainedPoints;
     },
-    [game.tap, isFever]
+    [campusClicks.tap, isFever]
   );
 
   const alliance = useAlliance();
@@ -490,7 +492,12 @@ function AppContent() {
     <AllianceNavProvider value={allianceNav}>
       <div className={`w-full bg-[#f1f5f9] flex flex-col items-center justify-start select-none text-[#261608] ${isPhone ? 'device-full min-h-dvh' : 'min-h-screen p-2 sm:p-5'}`}>
         {API_MODE === 'api' && <ApiSessionWatcher onEnded={() => setViewMode('login')} />}
-        {API_MODE === 'api' && <ApiPlayerSync />}
+        {API_MODE === 'api' && <ApiPlayerSync getPendingScore={campusClicks.getPendingScore} />}
+        {campusClicks.notice && (
+          <p role="alert" className="w-full max-w-3xl border-2 border-[#8b5327] bg-[#fffbeb] p-3 text-sm font-pixel">
+            {campusClicks.notice}
+          </p>
+        )}
         {/* [목업] Phone: the presentation header, view menus and demo tools move into a sheet behind this bar (Q5). Not part of the real service. */}
         {isPhone && (
           <div className="mock-menu-bar w-full shrink-0 flex items-center justify-end gap-2 bg-[#fffbeb] border-b-2 border-dashed border-[#8b5327]">

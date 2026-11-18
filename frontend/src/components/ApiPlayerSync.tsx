@@ -7,13 +7,15 @@ import { useMockGame } from '../hooks/useMockGame';
  * level come from GET /users/me instead of the mock defaults. Applied when the profile changes, so a refetch with the
  * same values leaves the game alone.
  */
-export const ApiPlayerSync: React.FC = () => {
+export const ApiPlayerSync: React.FC<{ getPendingScore?: () => number }> = ({ getPendingScore }) => {
   const { data } = useMyInfo();
   const { applyAccount } = useMockGame();
   const applyRef = useRef(applyAccount);
+  const pendingRef = useRef(getPendingScore);
   applyRef.current = applyAccount;
+  pendingRef.current = getPendingScore;
   useEffect(() => {
-    if (data) applyRef.current(accountFromMyInfo(data));
+    if (data) applyRef.current({ ...accountFromMyInfo(data), contribution: data.totalContribScore + (pendingRef.current?.() ?? 0) });
   }, [data]);
   return null;
 };
