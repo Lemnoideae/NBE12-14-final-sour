@@ -27,8 +27,10 @@ public class UserClickerLevelCache {
             return Long.parseLong(cached);
         }
         long dbLevel = userClickerLevelStore.findLevel(userId);
-        redisTemplate.opsForValue().setIfAbsent(key, String.valueOf(dbLevel));
-        return dbLevel;
+        if (Boolean.TRUE.equals(redisTemplate.opsForValue().setIfAbsent(key, String.valueOf(dbLevel)))) {
+            return dbLevel;
+        }
+        return Long.parseLong(redisTemplate.opsForValue().get(key));
     }
 
     // 현재 캐시 값보다 클 때만 갱신 (늦게 도착한 낮은 레벨은 무시)
