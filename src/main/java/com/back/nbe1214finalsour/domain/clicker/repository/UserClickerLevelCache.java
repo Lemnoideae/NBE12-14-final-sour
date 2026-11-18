@@ -34,9 +34,10 @@ public class UserClickerLevelCache {
         return Long.parseLong(redisTemplate.opsForValue().get(key));
     }
 
-    // 빈 껍데기 (25단계에서 구현)
+    // 읽기 전용 조회. 키가 없어도 채우지 않는다
     public Optional<Long> find(Long userId) {
-        return Optional.empty();
+        return Optional.ofNullable(redisTemplate.opsForValue().get(RedisKey.USER_CLICKER.of(userId)))
+                .map(Long::valueOf);
     }
 
     // 현재 캐시 값보다 클 때만 갱신 (늦게 도착한 낮은 레벨은 무시)
