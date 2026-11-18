@@ -108,4 +108,28 @@ class UserServiceTest {
         assertThat(response.clicker().clickPower()).isEqualTo(20);
         assertThat(response.clicker().nextLevelRequiredScore()).isEqualTo(1000L);
     }
+
+    @Test
+    @DisplayName("내 정보를 조회할 때 Redis에 레벨이 없으면 DB 레벨로 clicker를 만든다")
+    void getMyInfo_fallsBackToDbLevel() {
+        // given: Redis 레벨 키 없음 (처음 가입, Redis 재시작), DB clickerId는 1
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+        given(user.getUniversityId()).willReturn(UNIVERSITY_ID);
+        given(user.getDepartmentId()).willReturn(DEPARTMENT_ID);
+        given(user.getClickerId()).willReturn(1L);
+        given(universityRepository.findById(UNIVERSITY_ID)).willReturn(Optional.of(university));
+        given(departmentRepository.findById(DEPARTMENT_ID)).willReturn(Optional.of(department));
+        given(userScoreCache.findContribScore(UNIVERSITY_ID, USER_ID)).willReturn(OptionalLong.empty());
+        given(userScoreCache.findAttackScore(USER_ID)).willReturn(OptionalLong.empty());
+        given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
+        given(userClickerLevelCache.find(USER_ID)).willReturn(Optional.empty());
+
+        // when
+        MyInfoResponse response = userService.getMyInfo(USER_ID);
+
+        // then
+        assertThat(response.clicker().level()).isEqualTo(1L);
+        assertThat(response.clicker().clickPower()).isEqualTo(10);
+        assertThat(response.clicker().nextLevelRequiredScore()).isEqualTo(300L);
+    }
 }
