@@ -58,9 +58,10 @@ class ScoreFlushIntegrationTest {
 
     private final List<String> usedKeys = new ArrayList<>(List.of(
             RedisKey.DIRTY_USER.of(), RedisKey.DIRTY_UNIV.of(), RedisKey.DIRTY_DEPT.of(),
+            RedisKey.DIRTY_CLICKER.of(),
             // 테스트가 중간에 실패하면 배치가 떼어 낸 키가 남는다
             RedisKey.DIRTY_USER.of() + ":flushing", RedisKey.DIRTY_UNIV.of() + ":flushing",
-            RedisKey.DIRTY_DEPT.of() + ":flushing"));
+            RedisKey.DIRTY_DEPT.of() + ":flushing", RedisKey.DIRTY_CLICKER.of() + ":flushing"));
     /** {@code rank:univ}는 키가 하나뿐이라 통째로 지우지 않고 테스트가 넣은 학교만 뺀다. */
     private final List<String> addedUnivRankMembers = new ArrayList<>();
 
@@ -253,6 +254,42 @@ class ScoreFlushIntegrationTest {
         // then
         assertThat(departmentScoreOf(scored.getId())).isEqualTo(300L);
         assertThat(departmentScoreOf(missing.getId())).isZero();
+    }
+
+    @Test
+    @DisplayName("dirty:clicker에 있는 회원의 Redis 레벨로 DB 클리커 레벨을 올린다")
+    void flushesDirtyClickerLevel() {
+        // given
+        ensureClickerLevels();
+        University university = universityRepository.saveAndFlush(new University("배치테스트대학교"));
+        Department department = departmentRepository.saveAndFlush(new Department(university, "배치학과"));
+        User user = saveUser(university, department, "레벨회원", "flush-level@test.ac.kr");
+        String userId = String.valueOf(user.getId());
+
+        String levelKey = RedisKey.USER_CLICKER.of(user.getId());
+        usedKeys.add(levelKey);
+        stringRedisTemplate.opsForValue().set(levelKey, "2");
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_CLICKER.of(), userId);
+
+        // when
+        scoreFlushService.flush();
+
+        // then
+        assertThat(clickerLevelOf(user.getId())).isEqualTo(2L);
+    }
+
+    /** DB 레벨 2·3이 FK(users.clicker_id → clicker.id)를 통과하도록 한다. 시드에 있으면 건너뛰고, 트랜잭션 롤백으로 사라진다. */
+    private void ensureClickerLevels() {
+        jdbcTemplate.update("""
+                INSERT INTO clicker (id, click_power, required_score)
+                VALUES (2, 20, 300), (3, 40, 1000)
+                ON CONFLICT (id) DO NOTHING
+                """);
+    }
+
+    private Long clickerLevelOf(Long userId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT clicker_id FROM users WHERE id = ?", Long.class, userId);
     }
 
     private Long departmentScoreOf(Long departmentId) {
