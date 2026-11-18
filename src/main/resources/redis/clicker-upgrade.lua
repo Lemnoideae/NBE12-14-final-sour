@@ -6,11 +6,16 @@
 -- ARGV[1]: userId
 -- ARGV[2]: 비용
 -- ARGV[3]: 기대 레벨 (서버가 비용을 계산할 때 쓴 레벨)
--- 반환: 차감 후 잔액, 레벨이 기대값과 다르면 -2
+-- 반환: 차감 후 잔액, 잔액이 부족하면 -1, 레벨이 기대값과 다르면 -2
 
 local level = tonumber(redis.call('GET', KEYS[3]))
 if level ~= tonumber(ARGV[3]) then
     return -2
+end
+
+local score = redis.call('ZSCORE', KEYS[1], ARGV[1])
+if tonumber(score) < tonumber(ARGV[2]) then
+    return -1
 end
 
 local remaining = redis.call('ZINCRBY', KEYS[1], -tonumber(ARGV[2]), ARGV[1])
