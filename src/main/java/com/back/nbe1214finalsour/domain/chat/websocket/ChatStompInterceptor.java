@@ -36,10 +36,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class ChatStompInterceptor implements ChannelInterceptor {
 
-    static final String UNIVERSITY_TOPIC_PREFIX = "/topic/chat/universities/";
-    static final String ERROR_QUEUE = "/user/queue/errors";
-    static final String APP_PREFIX = "/app/";
-
     private static final Pattern UNIVERSITY_TOPIC = Pattern.compile("^/topic/chat/universities/(\\d{1,18})$");
 
     private final AccessTokenAuthenticator accessTokenAuthenticator;
@@ -83,7 +79,7 @@ public class ChatStompInterceptor implements ChannelInterceptor {
     }
 
     private static void authorizeSubscribe(AuthUser user, @Nullable String destination) {
-        if (ERROR_QUEUE.equals(destination)) {
+        if (ChatDestinations.ERROR_QUEUE.equals(destination)) {
             return;
         }
         Matcher university = destination == null ? null : UNIVERSITY_TOPIC.matcher(destination);
@@ -99,7 +95,7 @@ public class ChatStompInterceptor implements ChannelInterceptor {
     }
 
     private static void authorizeSend(AuthUser user, @Nullable String destination) {
-        if (destination == null || !destination.startsWith(APP_PREFIX)) {
+        if (destination == null || !destination.startsWith(ChatDestinations.APP_PREFIX)) {
             throw new BusinessException(ErrorCode.COMMON_FORBIDDEN,
                     "허용하지 않는 전송 목적지 userId=" + user.userId() + ", destination=" + destination);
         }
