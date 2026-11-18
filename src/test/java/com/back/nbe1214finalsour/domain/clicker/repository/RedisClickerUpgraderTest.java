@@ -92,6 +92,22 @@ public class RedisClickerUpgraderTest {
         assertThat(isMember(DIRTY_CLICKER_KEY)).isFalse();
     }
 
+    @Test
+    @DisplayName("잔액이 비용보다 적으면 -1을 반환하고 아무것도 바꾸지 않는다")
+    void upgrade_notEnough() {
+        // given (setUp: 기여도 1000, 레벨 1)
+
+        // when
+        long result = clickerUpgrader.upgrade(USER_ID, UNIVERSITY_ID, 1L, 1500L);
+
+        // then
+        assertThat(result).isEqualTo(-1L);
+        assertThat(redisTemplate.opsForZSet().score(RANK_KEY, USER_ID.toString())).isEqualTo(1000.0);
+        assertThat(redisTemplate.opsForValue().get(LEVEL_KEY)).isEqualTo("1");
+        assertThat(isMember(DIRTY_USER_KEY)).isFalse();
+        assertThat(isMember(DIRTY_CLICKER_KEY)).isFalse();
+    }
+
     private boolean isMember(String setKey) {
         return Boolean.TRUE.equals(redisTemplate.opsForSet().isMember(setKey, USER_ID.toString()));
     }
