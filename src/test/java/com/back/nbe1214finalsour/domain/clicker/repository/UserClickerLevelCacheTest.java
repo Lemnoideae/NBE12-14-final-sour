@@ -10,6 +10,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.BDDMockito.willReturn;
 import static org.mockito.Mockito.never;
 
@@ -65,6 +66,23 @@ public class UserClickerLevelCacheTest {
         assertThat(level).isEqualTo(3L);
         assertThat(cachedLevel()).isEqualTo("3");
         then(userClickerLevelStore).should(never()).findLevel(anyLong());
+    }
+
+    @Test
+    @DisplayName("DB를 읽는 사이 다른 요청이 키를 먼저 채우면 DB 값이 아니라 그 값을 반환한다")
+    void loadIfAbsent_whenFilledConcurrently() {
+        // given
+        willAnswer(invocation -> {
+            redisTemplate.opsForValue().set(KEY, "3");
+            return 2L;
+        }).given(userClickerLevelStore).findLevel(USER_ID);
+
+        // when
+        long level = userClickerLevelCache.loadIfAbsent(USER_ID);
+
+        // then
+        assertThat(level).isEqualTo(3L);
+        assertThat(cachedLevel()).isEqualTo("3");
     }
 
     @Test
