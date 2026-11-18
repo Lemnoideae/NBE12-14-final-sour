@@ -40,6 +40,8 @@ import { CampusStatsSheet } from './components/CampusStatsSheet';
 import { getSchoolRankings } from './data/mockRankings';
 import { useMockGame } from './hooks/useMockGame';
 import { useCampusClicks } from './hooks/useCampusClicks';
+import { useCampusAttacks } from './hooks/useCampusAttacks';
+import { AttackNotice } from './components/VisitAttackBar';
 import { ClickerProvider, useClickerController } from './hooks/useClicker';
 import { ItemShopProvider, useItemShopController } from './hooks/useItemShop';
 import { OtherClicksFeedContext } from './hooks/otherClicksFeedContext';
@@ -90,6 +92,7 @@ function AppContent() {
   const viewWrap = shellVariant === 'full' ? 'w-full flex flex-col' : 'w-full flex flex-col items-center py-2 animate-fadeIn';
   const game = useMockGame();
   const campusClicks = useCampusClicks();
+  const campusAttacks = useCampusAttacks(campusClicks.beginUpgrade);
   const clicker = useClickerController(campusClicks);
   const itemShop = useItemShopController(campusClicks);
   const request = useMockRequest();
@@ -505,7 +508,8 @@ function AppContent() {
       <div className={`w-full bg-[#f1f5f9] flex flex-col items-center justify-start select-none text-[#261608] ${isPhone ? 'device-full min-h-dvh' : 'min-h-screen p-2 sm:p-5'}`}>
         {API_MODE === 'api' && <ApiSessionWatcher onEnded={() => setViewMode('login')} />}
         {API_MODE === 'api' && <ApiPlayerSync getPendingScore={campusClicks.getPendingScore} />}
-        {campusClicks.notice && (
+        {/* The attack bar already shows pending work. Do not shift the campus under repeated taps with a lock banner. */}
+        {campusClicks.notice && !(viewMode === 'visiting' && campusAttacks?.pendingClicks) && (
           <div role="alert" className="w-full max-w-3xl border-2 border-[#8b5327] bg-[#fffbeb] p-3 text-sm font-pixel">
             <p>{campusClicks.notice}</p>
             {campusClicks.retryLimited && (
@@ -516,6 +520,7 @@ function AppContent() {
             )}
           </div>
         )}
+        <AttackNotice attacks={campusAttacks} />
         {/* [목업] Phone: the presentation header, view menus and demo tools move into a sheet behind this bar (Q5). Not part of the real service. */}
         {isPhone && (
           <div className="mock-menu-bar w-full shrink-0 flex items-center justify-end gap-2 bg-[#fffbeb] border-b-2 border-dashed border-[#8b5327]">
@@ -637,6 +642,7 @@ function AppContent() {
             <MockLoadGate key={`visit:${visitSchoolId ?? ''}`} name="방문 학교" onBack={goToMap} backLabel="지도로 돌아가기">
               <VisitingScreen1Phone
                 schoolId={visitSchoolId}
+                attacks={campusAttacks}
                 onBackToMap={goToMap}
                 onBackToMySchool={goToMySchool}
                 onNavigateTab={navigateTab}
@@ -939,6 +945,7 @@ function AppContent() {
         {/* SCRUM-121: one bot check for every screen that sends my campus clicks. */}
         {API_MODE === 'mock' && game.botCheckOpen && <BotCheckDialog onVerified={game.completeBotCheck} onClose={game.closeBotCheck} />}
         {campusClicks.botCheck?.open && <ApiBotCheckDialog onVerified={campusClicks.botCheck.onVerified} onClose={campusClicks.botCheck.onClose} />}
+        {campusAttacks?.botCheck?.open && <ApiBotCheckDialog onVerified={campusAttacks.botCheck.onVerified} onClose={campusAttacks.botCheck.onClose} />}
       </div>
     </AllianceNavProvider>
     </OtherClicksFeedContext.Provider>
