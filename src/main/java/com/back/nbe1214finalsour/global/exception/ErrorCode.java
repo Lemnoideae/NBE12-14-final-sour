@@ -109,9 +109,19 @@ public enum ErrorCode {
     ITEM_NOT_ENOUGH_CREDIT(HttpStatus.BAD_REQUEST, "ITEM_NOT_ENOUGH_CREDIT", "아이템 구매에 필요한 크레딧이 부족합니다."),
     ITEM_LOGO_IMAGE_REQUIRED(HttpStatus.BAD_REQUEST, "ITEM_LOGO_IMAGE_REQUIRED", "로고 아이템은 로고 이미지가 필요합니다."),
     ITEM_LOGO_IMAGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "ITEM_LOGO_IMAGE_TOO_LARGE", "로고 이미지는 5MB 이하만 올릴 수 있습니다."),
-    ITEM_LOGO_IMAGE_INVALID_TYPE(HttpStatus.BAD_REQUEST, "ITEM_LOGO_IMAGE_INVALID_TYPE", "로고 이미지는 PNG, JPG, WEBP만 올릴 수 있습니다.")
-    ;
+    ITEM_LOGO_IMAGE_INVALID_TYPE(HttpStatus.BAD_REQUEST, "ITEM_LOGO_IMAGE_INVALID_TYPE", "로고 이미지는 PNG, JPG, WEBP만 올릴 수 있습니다."),
 
+    // ===== ATTACK =====
+    ATTACK_OWN_UNIVERSITY(HttpStatus.BAD_REQUEST, "ATTACK_OWN_UNIVERSITY", "모교를 공격할 수 없습니다."),
+
+    // ===== CHAT (1번, 추가 명세 §3-7) =====
+    /** 소속 학교가 아닌 채팅방 구독·조회 (SCRUM-128) */
+    CHAT_NOT_MEMBER(HttpStatus.FORBIDDEN, "CHAT_NOT_MEMBER", "소속 학교의 채팅방만 이용할 수 있습니다."),
+    /** 회원당 1초에 1개 (계획 D11, SCRUM-130) */
+    CHAT_TOO_FREQUENT(HttpStatus.TOO_MANY_REQUESTS, "CHAT_TOO_FREQUENT", "메시지를 너무 빨리 보내고 있습니다."),
+    /** 본문이 비었거나 200자를 넘음 (계획 D13, SCRUM-130) */
+    CHAT_INVALID_CONTENT(HttpStatus.BAD_REQUEST, "CHAT_INVALID_CONTENT", "메시지는 1~200자로 입력해주세요."),
+    ;
 
     private final HttpStatus status;
     private final String code;

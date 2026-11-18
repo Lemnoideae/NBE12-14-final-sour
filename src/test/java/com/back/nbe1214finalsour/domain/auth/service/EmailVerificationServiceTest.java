@@ -1,16 +1,5 @@
 package com.back.nbe1214finalsour.domain.auth.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.BDDMockito.willDoNothing;
-import static org.mockito.BDDMockito.willThrow;
-import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-
 import com.back.nbe1214finalsour.IntegrationTest;
 import com.back.nbe1214finalsour.domain.auth.dto.EmailCodeResponse;
 import com.back.nbe1214finalsour.domain.auth.dto.EmailVerifyResponse;
@@ -20,11 +9,6 @@ import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.global.crypto.EmailHasher;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.OffsetDateTime;
-import java.util.Set;
-import java.util.UUID;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +21,17 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.MailSendException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.util.Set;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.*;
 
 /**
  * 학교 이메일 인증을 PostgreSQL·Redis(Testcontainers)로 확인한다. 메일은 가짜 빈으로 받아 코드를 꺼낸다.
@@ -64,7 +59,7 @@ class EmailVerificationServiceTest {
     @Autowired
     private EmailHasher emailHasher;
 
-    @MockitoBean
+    @Autowired
     private VerificationMailSender mailSender;
     @MockitoBean
     private Clock clock;

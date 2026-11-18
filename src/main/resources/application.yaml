@@ -117,3 +117,37 @@ cors:
 scheduling:
   enabled: true
   score-flush-delay: 60s
+
+# 라이벌
+rivals:
+  groups:
+    - [연세대학교, 고려대학교]
+    - [KAIST, POSTECH]
+    - [아주대학교, 인하대학교]
+    - [서강대학교, 성균관대학교, 한양대학교]
+    - [중앙대학교, 경희대학교]
+#    - [한국외국어대학교, 서울시립대학교]
+#    - [건국대학교, 동국대학교, 홍익대학교]
+#    - [국민대학교, 숭실대학교]
+#    - [세종대학교, 단국대학교]
+#    - [광운대학교, 명지대학교]
+#    - [이화여자대학교, 숙명여자대학교]
+    - [가천대학교, 경기대학교]
+    - [GIST, DGIST, UNIST]
+    - [부산대학교, 경북대학교]
+    - [전남대학교, 전북대학교]
+    - [충남대학교, 충북대학교]
+    - [강원대학교, 경상국립대학교]
+#    - [서울교육대학교, 경인교육대학교]
+
+chat:
+  # 채팅 WebSocket 전송 한도 (SCRUM-128, ChatWebSocketProperties). 넘으면 그 연결을 끊는다.
+  # 운영에서 바꾸려면 환경 변수 CHAT_WEBSOCKET_MESSAGESIZELIMIT 등을 쓴다
+  websocket:
+    # 클라이언트가 보내는 메시지 하나(바이트). 크게 키우면 Tomcat WebSocket 텍스트 버퍼(기본 8192)가 먼저 막을 수 있으니 함께 확인한다
+    message-size-limit: 8KB
+    # 연결 뒤 CONNECT를 기다리는 시간
+    time-to-first-message: 10s
+    # 아래 둘은 Spring 기본값. 느린 클라이언트에게 보내지 못하고 이만큼 밀리면 연결을 끊는다
+    send-time-limit: 10s
+    send-buffer-size-limit: 512KB

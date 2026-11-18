@@ -12,6 +12,7 @@ import com.back.nbe1214finalsour.domain.user.repository.UserStatusCache;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import com.back.nbe1214finalsour.global.redis.RedisHandler;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -75,8 +76,15 @@ class ClickServiceTest {
     @Mock
     private User user;
 
-    @InjectMocks
     private ClickService clickService;
+
+    @BeforeEach
+    void setUp() {
+        ClickActionGuard clickActionGuard = new ClickActionGuard(
+                stringRedisTemplate, userStatusCache, userRepository,
+                actionRateLimiter, clickCountLimiter, clickerService, abuseVerificationService);
+        clickService = new ClickService(stringRedisTemplate, userRepository, redisHandler, clickActionGuard);
+    }
 
     private ClickRequest request(int clickCount) {
         return new ClickRequest(SUBMISSION_ID, clickCount);

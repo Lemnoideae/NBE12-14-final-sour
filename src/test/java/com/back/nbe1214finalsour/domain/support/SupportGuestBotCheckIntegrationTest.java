@@ -1,14 +1,5 @@
 package com.back.nbe1214finalsour.domain.support;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
 import com.back.nbe1214finalsour.IntegrationTest;
 import com.back.nbe1214finalsour.domain.support.service.SupportBotCheck;
 import com.back.nbe1214finalsour.global.crypto.EmailHasher;
@@ -17,9 +8,6 @@ import com.back.nbe1214finalsour.global.security.Role;
 import com.back.nbe1214finalsour.global.security.jwt.JwtProvider;
 import com.back.nbe1214finalsour.global.turnstile.TurnstileResult;
 import com.back.nbe1214finalsour.global.turnstile.TurnstileVerifier;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -30,10 +18,22 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import tools.jackson.databind.json.JsonMapper;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * 비회원 문의 의심 구간의 봇 확인을 PostgreSQL·Redis(Testcontainers)와 실제 HTTP 처리로 확인한다 (SCRUM-119, 계획 §5 문의).
@@ -62,7 +62,7 @@ class SupportGuestBotCheckIntegrationTest {
     @Autowired
     private JwtProvider jwtProvider;
 
-    @MockitoBean
+    @Autowired
     private TurnstileVerifier turnstileVerifier;
 
     private String ipKey;

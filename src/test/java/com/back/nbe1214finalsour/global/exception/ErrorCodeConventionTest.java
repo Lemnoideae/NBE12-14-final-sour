@@ -17,7 +17,8 @@ class ErrorCodeConventionTest {
     /** API 명세서(추가 기능 명세 포함)에 나온 도메인 접두어. 새 도메인을 추가하면 여기에도 추가한다. */
     private static final Set<String> ALLOWED_PREFIXES = Set.of(
             "COMMON", "AUTH", "USER", "CLICK", "CLICKER", "ITEM", "UNIV", "ALLY", "MATCH", "GUEST", "PAY", "FILE", "SUPPORT",
-            "ABUSE"); // 어뷰징 의심 시 봇 확인 (SCRUM-115)
+            "ABUSE", "ATTACK", // 어뷰징 의심 시 봇 확인 (SCRUM-115)
+            "CHAT"); // 채팅 (추가 명세 §3-7, SCRUM-128)
 
     private static final Pattern UPPER_SNAKE = Pattern.compile("^[A-Z]+(_[A-Z0-9]+)+$");
 

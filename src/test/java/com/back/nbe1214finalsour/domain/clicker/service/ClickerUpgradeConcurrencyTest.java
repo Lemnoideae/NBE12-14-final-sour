@@ -128,6 +128,6 @@ class ClickerUpgradeConcurrencyTest {
         assertThat(finalLevel).isGreaterThanOrEqualTo(2L);                  // 최소 한 번은 성공
         assertThat(successCount.get()).isEqualTo((int) (finalLevel - 1));    // 성공 횟수 == 오른 레벨 수
         assertThat(finalScore).isEqualTo(INITIAL_SCORE - paidScore);         // 낸 비용 == 오른 레벨들의 비용
-        assertThat(redisTemplate.opsForValue().get("user:" + userId + ":clicker")).isEqualTo(String.valueOf(finalLevel));   // 커밋 후 리스너가 클릭 엔진용 레벨 캐시를 DB와 같은 레벨로 맞춤
+        assertThat(redisTemplate.opsForValue().get("user:" + userId + ":clicker")).isEqualTo(String.valueOf(finalLevel));   // 업그레이드 서비스가 커밋 후 클릭 엔진용 레벨 캐시를 DB와 같은 레벨로 맞춤
     }
 }
