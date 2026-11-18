@@ -35,6 +35,7 @@ import { BottomSheetDialog } from './components/BottomSheetDialog';
 import { BotCheckDialog } from './components/BotCheckDialog';
 import { ApiBotCheckDialog } from './components/ApiBotCheckDialog';
 import { SupportGuestScreenPhone } from './components/SupportGuestScreenPhone';
+import { MyInfoScreenPhone } from './components/MyInfoScreenPhone';
 import { CampusStatsSheet } from './components/CampusStatsSheet';
 import { getSchoolRankings } from './data/mockRankings';
 import { useMockGame } from './hooks/useMockGame';
@@ -58,7 +59,7 @@ import { Smartphone, Gamepad2, Layers, Trophy, ShoppingBag, MapPin, Image as Ima
 
 // [시연] 헤더 학교명 길이별 표시 확인용. 실제 학교 데이터가 아니라 목업 표시 테스트 값이다.
 /** Service flow screens (M5-D). Demo tools and design comparisons are left out of the 44px touch areas. */
-const SERVICE_VIEW_MODES = new Set<string>(['gameplay', 'signup', 'login', 'single_map', 'visiting', 'ranking', 'shop', 'alliance_apply', 'current_alliance', 'battle_apply', 'battle_status', 'support_guest']);
+const SERVICE_VIEW_MODES = new Set<string>(['gameplay', 'signup', 'login', 'single_map', 'visiting', 'ranking', 'shop', 'alliance_apply', 'current_alliance', 'battle_apply', 'battle_status', 'support_guest', 'my_info']);
 /** Sign-up: the backend in API mode (SCRUM-151), the mock onboarding otherwise. */
 const SignupScreen = selectByMode<React.FC<{ onGoToCampus: () => void; onGoToLogin?: () => void }>>({ api: ApiSignupPhone, mock: OnboardingPhone });
 
@@ -71,7 +72,7 @@ const DEMO_SCHOOL_NAMES = [
 
 function AppContent() {
   // Mode: 'ranking_screens' (2-phone ranking comparison with infinite scroll) | 'our_guestbook_screens' | 'visiting_screens' | etc.
-  const [viewMode, setViewMode] = useState<'ranking_screens' | 'our_guestbook_screens' | 'visiting_screens' | 'chat_screens' | 'single_map' | 'visiting' | 'map_screens' | 'map_illustration' | 'shop' | 'ranking' | 'spritesheet' | 'onboarding' | 'signup' | 'login' | 'gameplay' | 'alliance_apply' | 'current_alliance' | 'battle_apply' | 'battle_status' | 'support_guest'>('gameplay');
+  const [viewMode, setViewMode] = useState<'ranking_screens' | 'our_guestbook_screens' | 'visiting_screens' | 'chat_screens' | 'single_map' | 'visiting' | 'map_screens' | 'map_illustration' | 'shop' | 'ranking' | 'spritesheet' | 'onboarding' | 'signup' | 'login' | 'gameplay' | 'alliance_apply' | 'current_alliance' | 'battle_apply' | 'battle_status' | 'support_guest' | 'my_info'>('gameplay');
   const [isChatSheetOpen, setIsChatSheetOpen] = useState<boolean>(false);
   const [isOurGuestbookSheetOpen, setIsOurGuestbookSheetOpen] = useState<boolean>(false);
   const [isStatsSheetOpen, setIsStatsSheetOpen] = useState<boolean>(false);
@@ -759,6 +760,10 @@ function AppContent() {
           <div className={viewWrap}>
             <SupportGuestScreenPhone onBack={goToMySchool} />
           </div>
+        ) : viewMode === 'my_info' ? (
+          <div className={viewWrap}>
+            <MyInfoScreenPhone onBack={() => setViewMode('login')} onGoToLogin={() => setViewMode('login')} />
+          </div>
         ) : viewMode === 'spritesheet' ? (
           <SpriteSheetViewer
             currentLevel={campusLevel}
@@ -772,7 +777,7 @@ function AppContent() {
         ) : viewMode === 'signup' ? (
           <SignupScreen onGoToCampus={goToMySchool} onGoToLogin={() => setViewMode('login')} />
         ) : viewMode === 'login' ? (
-          <ApiLoginPhone onGoToSignup={() => setViewMode('signup')} onGoToCampus={goToMySchool} />
+          <ApiLoginPhone onGoToSignup={() => setViewMode('signup')} onGoToCampus={goToMySchool} onOpenMyInfo={() => setViewMode('my_info')} />
         ) : (
           /* Single Phone Gameplay View */
           <div className={viewWrap}>

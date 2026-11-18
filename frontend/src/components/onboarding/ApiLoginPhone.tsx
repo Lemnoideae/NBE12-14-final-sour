@@ -13,10 +13,12 @@ import { LoginStep, PhoneFrame, SignedInStep } from './OnboardingSteps.tsx';
 interface ApiLoginPhoneProps {
   onGoToSignup: () => void;
   onGoToCampus: () => void;
+  /** Signed in: opens my account screen (SCRUM-166). */
+  onOpenMyInfo?: () => void;
 }
 
 /** The login form when signed out, the account with a logout button when signed in. */
-export const ApiLoginPhone: React.FC<ApiLoginPhoneProps> = ({ onGoToSignup, onGoToCampus }) => {
+export const ApiLoginPhone: React.FC<ApiLoginPhoneProps> = ({ onGoToSignup, onGoToCampus, onOpenMyInfo }) => {
   const client = useApiClient();
   const session = useAuthSession();
   const restore = useSessionRestore();
@@ -35,6 +37,7 @@ export const ApiLoginPhone: React.FC<ApiLoginPhoneProps> = ({ onGoToSignup, onGo
       <SignedInStep
         nickname={me.data?.nickname ?? nickname}
         onGoToCampus={onGoToCampus}
+        onOpenMyInfo={onOpenMyInfo}
         error={error ?? (me.isError ? `내 정보를 불러오지 못했습니다. ${errorMessage(me.error)}` : null)}
         pending={signOut.isPending}
         onLogout={() => {
