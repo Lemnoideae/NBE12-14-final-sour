@@ -1,6 +1,7 @@
 package com.back.nbe1214finalsour.domain.clicker.service;
 
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
+import com.back.nbe1214finalsour.domain.clicker.repository.RedisClickerUpgrader;
 import com.back.nbe1214finalsour.domain.clicker.repository.UserClickerLevelCache;
 import com.back.nbe1214finalsour.domain.clicker.repository.UserClickerLevelStore;
 import com.back.nbe1214finalsour.domain.contribution.ContributionWallet;
@@ -54,6 +55,9 @@ public class ClickerUpgradeServiceTest {
 
     @Mock
     private UserClickerLevelCache userClickerLevelCache;
+
+    @Mock
+    private RedisClickerUpgrader clickerUpgrader;
 
     @InjectMocks
     private ClickerUpgradeService clickerUpgradeService;
@@ -119,12 +123,12 @@ public class ClickerUpgradeServiceTest {
     class WhenSuccess {
 
         @Test
-        @DisplayName("업그레이드하면 다음 레벨 비용만큼 차감하고 레벨을 1 올린 결과를 반환한다")
+        @DisplayName("업그레이드하면 현재 레벨을 기대 레벨로 다음 레벨 비용을 Redis에서 차감하고, 올린 결과를 반환한다")
         void upgrade_success() {
             // given
             given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
-            given(userClickerLevelStore.findLevel(USER_ID)).willReturn(1L);
-            given(contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 300L)).willReturn(OptionalLong.of(700L));
+            given(userClickerLevelCache.loadIfAbsent(USER_ID)).willReturn(1L);
+            given(clickerUpgrader.upgrade(USER_ID, UNIVERSITY_ID, 1L, 300L)).willReturn(700L);
 
             // when
             ClickerUpgradeResult result = clickerUpgradeService.upgrade(USER_ID, UNIVERSITY_ID);
@@ -135,9 +139,7 @@ public class ClickerUpgradeServiceTest {
             assertThat(result.nextLevelRequiredScore()).isEqualTo(1000L);
             assertThat(result.remainingScore()).isEqualTo(700L);
 
-            then(userClickerLevelCache).should().raiseLevel(USER_ID, 2L);
-            then(clickerLevelUpdater).should().changeLevel(USER_ID, 1L, 2L);
-            then(contributionWallet).should(never()).restore(anyLong(), anyLong(), anyLong());
+            then(clickerUpgrader).should().upgrade(USER_ID, UNIVERSITY_ID, 1L, 300L);
         }
     }
 
