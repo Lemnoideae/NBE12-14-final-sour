@@ -29,6 +29,7 @@ public class ScoreFlushService {
         String newUserDirtyKey = RedisKey.DIRTY_USER.of() + ":flushing";
         String newUnivDirtyKey = RedisKey.DIRTY_UNIV.of() + ":flushing";
         String newDeptDirtyKey = RedisKey.DIRTY_DEPT.of() + ":flushing";
+        String newClickerDirtyKey = RedisKey.DIRTY_CLICKER.of() + ":flushing";
 
         // 개인 점수 저장
         if (detach(RedisKey.DIRTY_USER.of(), newUserDirtyKey)) {
@@ -43,6 +44,11 @@ public class ScoreFlushService {
         // 학과 점수 저장
         if (detach(RedisKey.DIRTY_DEPT.of(), newDeptDirtyKey)) {
             flushDepts(newDeptDirtyKey);
+        }
+
+        // 클리커 레벨 저장 (실패해도 위의 점수 반영은 이미 끝나 있다)
+        if (detach(RedisKey.DIRTY_CLICKER.of(), newClickerDirtyKey)) {
+            flushClickerLevels(newClickerDirtyKey);
         }
 
         // 기존 dirty 제거
@@ -121,6 +127,29 @@ public class ScoreFlushService {
                 where u.id = x.id
                     and u.total_score is distinct from x.score
                 """, ids.toArray(Long[]::new), scores.toArray(Long[]::new));
+    }
+
+    private void flushClickerLevels(String dirtyKey) {
+        List<Long> userIds = stringRedisTemplate.opsForSet().members(dirtyKey).stream().map(Long::parseLong).toList();
+
+        List<String> values = stringRedisTemplate.opsForValue()
+                .multiGet(userIds.stream().map(RedisKey.USER_CLICKER::of).toList());
+
+        List<Long> ids = new ArrayList<>();
+        List<Long> levels = new ArrayList<>();
+        for (int i = 0; i < userIds.size(); i++) {
+            ids.add(userIds.get(i));
+            levels.add(Long.parseLong(values.get(i)));
+        }
+
+        if (ids.isEmpty()) return;
+
+        jdbcTemplate.update("""
+                update users as u
+                set clicker_id = x.level
+                from unnest(?::bigint[], ?::bigint[]) as x(id, level)
+                where u.id = x.id
+                """, ids.toArray(Long[]::new), levels.toArray(Long[]::new));
     }
 
     private void flushUsers(String dirtyKey) {
