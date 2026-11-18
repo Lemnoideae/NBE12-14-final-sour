@@ -122,6 +122,20 @@ public class AllianceMatchService {
         }
     }
 
+    // 연합 자체 만료 시 요청 대기 건을 닫는다. 일반적인 요청 만료 시간과는 별개.
+    @Transactional
+    public void cancelRequestedForAllianceExpiry(Long matchId, Long expiringAllianceId) {
+        AllianceMatchPair ids = allianceMatchRepository.findPairById(matchId).orElse(null);
+        if (ids == null || (!ids.allianceAId().equals(expiringAllianceId)
+                && !ids.allianceBId().equals(expiringAllianceId))) return;
+        Alliance[] pair = lockAlliances(ids.allianceAId(), ids.allianceBId());
+        Alliance expiring = ids.allianceAId().equals(expiringAllianceId) ? pair[0] : pair[1];
+        if (expiring.getExpiredAt() == null || expiring.getExpiredAt().isAfter(OffsetDateTime.now())) return;
+        AllianceMatch match = allianceMatchRepository.findByIdForUpdate(matchId).orElse(null);
+        if (match != null && match.getDeletedAt() == null
+                && match.getStatus() == AllianceMatchStatus.REQUESTED) match.cancelRequested();
+    }
+
     @Transactional(readOnly = true)
     public AllianceMatch getMatch(Long matchId) {
         requireMatchId(matchId);

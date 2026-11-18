@@ -12,6 +12,8 @@ import java.util.List;
 public interface AllianceUniversityRepository
         extends JpaRepository<AllianceUniversity, Long> {
 
+    List<AllianceUniversity> findByAllianceIdAndDeletedAtIsNullOrderByIdAsc(Long allianceId);
+
     boolean existsByUniversityIdAndStatusAndDeletedAtIsNull(
             Long universityId,
             AllianceUniversityStatus status

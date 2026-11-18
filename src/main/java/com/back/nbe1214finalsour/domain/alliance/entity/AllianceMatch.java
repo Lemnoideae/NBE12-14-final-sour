@@ -97,4 +97,32 @@ public class AllianceMatch extends BaseTimeEntity {
         }
         this.status = AllianceMatchStatus.CANCELED;
     }
+
+    public void finish(OffsetDateTime finishedAt, long aScore, long bScore) {
+        if (finishedAt == null) {
+            throw new IllegalArgumentException("대결 종료 시각은 필수입니다.");
+        }
+        if (status != AllianceMatchStatus.IN_PROGRESS || deletedAt != null) {
+            throw new IllegalStateException("진행 중인 대결만 종료할 수 있습니다.");
+        }
+        if (endedAt == null || finishedAt.isBefore(endedAt)) {
+            throw new IllegalStateException("대결 종료 시각이 지나지 않았습니다.");
+        }
+        if (aScore < 0 || bScore < 0) {
+            throw new IllegalArgumentException("대결 점수는 음수일 수 없습니다.");
+        }
+
+        this.aScore = aScore;
+        this.bScore = bScore;
+
+        if (aScore > bScore) {
+            this.winnerAllianceId = allianceAId;
+        } else if (bScore > aScore) {
+            this.winnerAllianceId = allianceBId;
+        } else {
+            this.winnerAllianceId = null;
+        }
+
+        this.status = AllianceMatchStatus.FINISHED;
+    }
 }
