@@ -40,6 +40,7 @@ import { getSchoolRankings } from './data/mockRankings';
 import { useMockGame } from './hooks/useMockGame';
 import { useCampusClicks } from './hooks/useCampusClicks';
 import { ClickerProvider, useClickerController } from './hooks/useClicker';
+import { ItemShopProvider, useItemShopController } from './hooks/useItemShop';
 import { useMockRequest } from './hooks/useMockRequest';
 import { MOCK_REQUEST_MODES, type MockRequestMode } from './utils/mockRequest';
 import { MockLoadGate } from './components/MockLoadGate';
@@ -88,6 +89,7 @@ function AppContent() {
   const game = useMockGame();
   const campusClicks = useCampusClicks();
   const clicker = useClickerController(campusClicks);
+  const itemShop = useItemShopController(campusClicks);
   const request = useMockRequest();
   const playerInfo = game.player;
   const schoolScore = game.state.schoolScore;
@@ -201,7 +203,9 @@ function AppContent() {
     [hasAllianceAlert],
   );
 
-  const hasAffordableShopItem = shopItems.some((item) => !item.previewOnly && myContribution >= item.cost)
+  const hasAffordableShopItem = (itemShop
+    ? itemShop.items.some((item) => item.payType === 'CONTRIBUTION' && item.type === 'MULTIPLIER' && myContribution >= item.price)
+    : shopItems.some((item) => !item.previewOnly && myContribution >= item.cost))
     || (clicker.upgradeCost !== null && myContribution >= clicker.upgradeCost);
 
   // View menus and demo tools: in the desktop header, or in the mock menu sheet on a phone (T2, plan §5, Q5).
@@ -493,6 +497,7 @@ function AppContent() {
 
   return (
     <ClickerProvider value={clicker}>
+    <ItemShopProvider value={itemShop}>
     <AllianceNavProvider value={allianceNav}>
       <div className={`w-full bg-[#f1f5f9] flex flex-col items-center justify-start select-none text-[#261608] ${isPhone ? 'device-full min-h-dvh' : 'min-h-screen p-2 sm:p-5'}`}>
         {API_MODE === 'api' && <ApiSessionWatcher onEnded={() => setViewMode('login')} />}
@@ -929,6 +934,7 @@ function AppContent() {
         {campusClicks.botCheck?.open && <ApiBotCheckDialog onVerified={campusClicks.botCheck.onVerified} onClose={campusClicks.botCheck.onClose} />}
       </div>
     </AllianceNavProvider>
+    </ItemShopProvider>
     </ClickerProvider>
   );
 }

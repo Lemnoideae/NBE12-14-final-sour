@@ -2,6 +2,8 @@ import React from 'react';
 import { Award } from 'lucide-react';
 import { useMockGame } from '../hooks/useMockGame';
 import { useClicker } from '../hooks/useClicker';
+import { useItemShop } from '../hooks/useItemShop';
+import { ActiveItemEffect } from './ActiveItemEffect';
 
 interface DialogPanelProps {
   myContribution: number;
@@ -12,6 +14,7 @@ interface DialogPanelProps {
 export const DialogPanel: React.FC<DialogPanelProps> = ({ myContribution, clickerLevel }) => {
   const { activeBuff, remainingSeconds } = useMockGame();
   const clicker = useClicker();
+  const itemShop = useItemShop();
   const { nextClicker, normalPower } = clicker;
   const cost = clicker.upgradeCost;
   const progress = clicker.api?.loadNotice ? 0 : cost === null || cost === 0 ? 100 : Math.min(100, Math.floor(myContribution / cost * 100));
@@ -45,6 +48,7 @@ export const DialogPanel: React.FC<DialogPanelProps> = ({ myContribution, clicke
           {clicker.api ? '클릭 세기는 서버 응답 기준입니다.' : buffStatus}
         </p>
       </div>
+      {itemShop && <ActiveItemEffect shop={itemShop} />}
     </div>
   );
 };

@@ -129,16 +129,23 @@ export function useApiCampusClicks(): CampusClicks {
   }, []);
   const canRetryLimited = signedIn && snapshot.recoverable && isClickLimitError(snapshot.error);
   const needsVerification = signedIn && requiresClickVerification(snapshot.error);
-  const notice = snapshot.error
-    ? `${recoveryNotice ? `${recoveryNotice} ` : ''}${errorMessage(snapshot.error)} 미확정 ${snapshot.pendingClicks}회 전송을 보류했습니다. ${canRetryLimited ? '잠시 기다린 뒤 아래 버튼을 누르면 거절된 배치의 점수를 되돌리고 남은 대기 클릭을 재개합니다.' : needsVerification && snapshot.recoverable ? '자동 입력 방지 확인을 마치면 같은 배치로 다시 전송합니다.' : '중복 적립 방지를 위해 추가 클릭과 재전송을 중단했습니다.'} 새로고침하면 미확정 클릭은 사라지며 서버에 반영된 점수만 남습니다.`
-    : cancelledClicks > 0
-      ? `세션 종료로 미확정 ${cancelledClicks}회 전송을 중단했습니다. 이미 전송한 요청은 반영되었을 수 있으므로 다시 로그인해 점수를 확인해 주세요.`
-      : !signedIn
-        ? '클릭 점수를 적립하려면 로그인해 주세요.'
-        : !ready ? '내 정보를 불러온 뒤 클릭할 수 있습니다.'
-          : snapshot.locked ? '클리커 강화 결과를 확인하는 동안 클릭을 잠시 멈춥니다.' : recoveryNotice;
+  const getNotice = (): string | null => {
+    if (snapshot.error) {
+      let guidance = '중복 적립 방지를 위해 추가 클릭과 재전송을 중단했습니다.';
+      if (canRetryLimited) guidance = '잠시 기다린 뒤 아래 버튼을 누르면 거절된 배치의 점수를 되돌리고 남은 대기 클릭을 재개합니다.';
+      else if (needsVerification && snapshot.recoverable) guidance = '자동 입력 방지 확인을 마치면 같은 배치로 다시 전송합니다.';
+      const prefix = recoveryNotice ? `${recoveryNotice} ` : '';
+      return `${prefix}${errorMessage(snapshot.error)} 미확정 ${snapshot.pendingClicks}회 전송을 보류했습니다. ${guidance} 새로고침하면 미확정 클릭은 사라지며 서버에 반영된 점수만 남습니다.`;
+    }
+    if (cancelledClicks > 0) return `세션 종료로 미확정 ${cancelledClicks}회 전송을 중단했습니다. 이미 전송한 요청은 반영되었을 수 있으므로 다시 로그인해 점수를 확인해 주세요.`;
+    if (signedIn) {
+      if (ready) return snapshot.locked ? '구매·강화 결과를 확인하는 동안 클릭을 잠시 멈춥니다.' : recoveryNotice;
+      return '내 정보를 불러온 뒤 클릭할 수 있습니다.';
+    }
+    return '클릭 점수를 적립하려면 로그인해 주세요.';
+  };
   return {
-    tap, notice, getPendingScore,
+    tap, notice: getNotice(), getPendingScore,
     upgradeBlocked: snapshot.pendingClicks > 0 || snapshot.locked,
     beginUpgrade,
     retryLimited: canRetryLimited ? retryLimited : null,

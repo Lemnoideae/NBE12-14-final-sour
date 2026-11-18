@@ -5,6 +5,8 @@ import { BottomNav, NavTab } from './BottomNav';
 import { type MockStoreItem } from '../data/gameRules';
 import { useMockGame } from '../hooks/useMockGame';
 import { useClicker } from '../hooks/useClicker';
+import { useItemShop } from '../hooks/useItemShop';
+import { ApiItemShop } from './ApiItemShop';
 import { useMockRequest } from '../hooks/useMockRequest.tsx';
 import { ImageChangeShop } from './ImageChangeShop.tsx';
 import { PhoneShell } from './PhoneShell';
@@ -31,6 +33,7 @@ export const ShopScreenPhone: React.FC<ShopScreenPhoneProps> = ({
   const game = useMockGame();
   const clicker = useClicker();
   const api = clicker.api;
+  const itemShop = useItemShop();
   const upgradeHelpId = useId();
   const clickerLevel = clicker.level ?? '—';
   const contribution = game.state.contribution;
@@ -42,7 +45,7 @@ export const ShopScreenPhone: React.FC<ShopScreenPhoneProps> = ({
   const [selectedItemId, setSelectedItemId] = useState<string>('coffee');
   const [showConfirmDialog, setShowConfirmDialog] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  // Purchases stay mock until SCRUM-158; only mock-mode upgrades use this request runner.
+  // Only mock purchases/upgrades use this request runner; API items have a root controller.
   const request = useMockRequest();
   const buying = request.isPending('shop-buy');
   const upgrading = api ? api.pending : request.isPending('shop-upgrade');
@@ -429,7 +432,7 @@ export const ShopScreenPhone: React.FC<ShopScreenPhoneProps> = ({
             </p>
           )}
           <div className="rpg-box p-2 font-pixel text-[10px] text-[#8b5327]" role="status">
-            <p>{api ? '클리커는 서버 값 · 아이템 구매는 아직 목업입니다.' : '수치는 목업용 임시 값 · 개인 기여도만 소비 · 구매로 레벨 하락 없음'}</p>
+            <p>{api ? '클리커와 아이템은 서버 값 · 개인 기여도만 소비합니다.' : '수치는 목업용 임시 값 · 개인 기여도만 소비 · 구매로 레벨 하락 없음'}</p>
             <p>{api ? '서버 기본 세기 기준' : game.activeBuff ? `${game.activeBuff.name} · ${game.remainingSeconds}초 남음` : '활성 버프 없음'} · 현재 클릭당 {clicker.normalPower}점</p>
             {!api && <p>버프는 1개만 활성화 · 새로 사용하면 기존 효과 교체</p>}
             {upgradeCost !== null && contribution < upgradeCost && <p>강화까지 {(upgradeCost - contribution).toLocaleString('ko-KR')}점 부족</p>}
@@ -437,6 +440,7 @@ export const ShopScreenPhone: React.FC<ShopScreenPhoneProps> = ({
 
           {/* ========================================================= */}
           {/* WOODEN SHELVES SECTION HEADER                             */}
+          {api ? itemShop && <ApiItemShop shop={itemShop} /> : <>
           {/* ========================================================= */}
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-1.5">
@@ -549,7 +553,7 @@ export const ShopScreenPhone: React.FC<ShopScreenPhoneProps> = ({
               <div className="grid grid-cols-2 gap-2 pt-0.5">
                 <button
                   onClick={handleConfirmPurchase}
-                  disabled={selectedItem.previewOnly || contribution < selectedItem.cost || buying || Boolean(api?.pending || api?.reconcile)}
+                  disabled={selectedItem.previewOnly || contribution < selectedItem.cost || buying}
                   className="disabled:opacity-50 disabled:cursor-not-allowed pixel-plaque plaque-green py-1.5 px-2 text-center font-pixel text-xs font-black flex items-center justify-center gap-1 cursor-pointer"
                 >
                   <Check className="w-3.5 h-3.5 text-white" />
@@ -566,6 +570,7 @@ export const ShopScreenPhone: React.FC<ShopScreenPhoneProps> = ({
               </div>
             </div>
           )}
+          </>}
         </div>
       </div>
 
