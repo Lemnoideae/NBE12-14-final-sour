@@ -1,9 +1,9 @@
 package com.back.nbe1214finalsour.domain.click.service;
 
-import com.back.nbe1214finalsour.domain.abuse.service.AbuseVerificationService;
 import com.back.nbe1214finalsour.domain.click.dto.ClickApplyResponse;
 import com.back.nbe1214finalsour.domain.click.dto.ClickRequest;
 import com.back.nbe1214finalsour.domain.click.dto.ClickResponse;
+import com.back.nbe1214finalsour.domain.university.service.library.LibraryBonusChecker;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
@@ -15,6 +15,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
 
@@ -26,8 +28,10 @@ public class ClickService {
     private final UserRepository userRepository;
     private final RedisHandler redisHandler;
     private final ClickActionGuard clickActionGuard;
+    private final LibraryBonusChecker libraryBonusChecker;
 
     private static final RedisScript<List> APPLY_CLICK = RedisScript.of(new ClassPathResource("redis/apply-click.lua"), List.class);
+    private static final BigDecimal LIBRARY_MULTIPLIER = new BigDecimal("1.2");
 
     /**
      * @param universityId 토큰의 학교 ID
@@ -36,6 +40,8 @@ public class ClickService {
     public ClickResponse click(Long userId, Long universityId, Long departmentId, ClickRequest request) {
         int clickCount = request.clickCount();
         String submissionId = request.submissionId();
+        Double lat = request.latitude();
+        Double lng = request.longitude();
 
         long score = clickActionGuard.verifyAndGetBaseScore(userId, submissionId, clickCount);
 
@@ -46,9 +52,16 @@ public class ClickService {
         }
 
         // 아이템 적용 가져오기
-        Double multiplier = redisHandler.getHash(RedisKey.USER_EFFECT.of(userId), "multiplier", Double.class)
-                .orElse(1.0);
-        score = (long) Math.floor(score * multiplier);
+        BigDecimal itemMultiplier = BigDecimal.valueOf(redisHandler.getHash(RedisKey.USER_EFFECT.of(userId), "multiplier", Double.class)
+                .orElse(1.0));
+
+        // 도서관 이스터에그
+        boolean isInLibrary = libraryBonusChecker.isInLibrary(universityId, lat, lng);
+        BigDecimal multiplierBigDecimal = itemMultiplier.multiply(isInLibrary ? LIBRARY_MULTIPLIER : BigDecimal.ONE);
+
+        // 점수 계산
+        score = multiplierBigDecimal.multiply(BigDecimal.valueOf(score))
+                .setScale(0, RoundingMode.FLOOR).longValueExact();
 
         // 4. Redis에 반영
         long nowSec = Instant.now().getEpochSecond();
@@ -79,6 +92,6 @@ public class ClickService {
                 Long.valueOf(r.get(3)),
                 Long.valueOf(r.get(4)));
 
-        return ClickResponse.from(clickApplyResponse, clickCount, score, multiplier, universityId, departmentId);
+        return ClickResponse.from(clickApplyResponse, clickCount, score, multiplierBigDecimal.doubleValue(), universityId, departmentId, isInLibrary);
     }
 }

@@ -115,6 +115,15 @@ public class AllianceUniversity extends BaseTimeEntity {
         this.approverUserId = approverUserId;
     }
 
+    // 연합 만료 시 기존 가입 및 대기 신청을 각각 종료한다.
+    public void expireMembership() {
+        if (status == AllianceUniversityStatus.ACCEPTED) {
+            status = AllianceUniversityStatus.LEFT;
+        } else if (status == AllianceUniversityStatus.PENDING) {
+            status = AllianceUniversityStatus.REJECTED;
+        }
+    }
+
     public void reject() {
         // 1. 승인 대기 상태인지 확인
         if (this.status != AllianceUniversityStatus.PENDING) {
