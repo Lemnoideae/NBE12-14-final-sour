@@ -4,6 +4,7 @@ import { Crown, ArrowUp, ArrowDown, Minus, RefreshCw } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { BottomNav, NavTab } from './BottomNav';
 import { getSchoolRankings, type RankingRow } from '../data/mockRankings';
+import type { SchoolId } from '../data/schoolIds';
 import { useMockGame } from '../hooks/useMockGame';
 import { SharedImage } from './SharedImage.tsx';
 
@@ -40,7 +41,7 @@ export const RankingScreen1Phone: React.FC<RankingScreen1PhoneProps> = ({
   const rows4to7 = rankings.slice(3, 7);
   const row8CutOff = rankings[7];
 
-  const renderBadge = (item: RankingRow, size: 'sm' | 'md' | 'lg' = 'sm') => {
+  const renderBadge = (item: RankingRow<SchoolId>, size: 'sm' | 'md' | 'lg' = 'sm') => {
     const sizeClasses =
       size === 'lg'
         ? 'w-10 h-10 text-sm font-black'

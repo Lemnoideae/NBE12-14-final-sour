@@ -1,3 +1,4 @@
+import type { SchoolId } from '../data/schoolIds.ts';
 import React, { useState } from 'react';
 import { PhoneShell } from './PhoneShell';
 import { BottomNavFooter, type NavTab } from './BottomNav';
@@ -41,7 +42,7 @@ export const AllianceApplyScreenPhone: React.FC<AllianceApplyScreenPhoneProps> =
 
   const mySchool = getSchoolInfo(mySchoolId);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedSchoolId, setSelectedSchoolId] = useState<string | null>(null);
+  const [selectedSchoolId, setSelectedSchoolId] = useState<SchoolId | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const durationConfig = MOCK_SHOP_CONFIG.alliance.durationHours;
   const [durationHours, setDurationHours] = useState(durationConfig.default);
@@ -57,16 +58,16 @@ export const AllianceApplyScreenPhone: React.FC<AllianceApplyScreenPhoneProps> =
     return u.name.toLowerCase().includes(query) || u.region.toLowerCase().includes(query) || u.shortName.toLowerCase().includes(query);
   });
 
-  const selectedSchool = selectedSchoolId ? getSchoolInfo(selectedSchoolId) : null;
+  const selectedSchool = selectedSchoolId !== null ? getSchoolInfo(selectedSchoolId) : null;
 
-  const handleSelectSchool = (schoolId: string) => {
+  const handleSelectSchool = (schoolId: SchoolId) => {
     soundManager.playTabSound();
     setSelectedSchoolId(schoolId);
     setFeedbackMessage(null);
   };
 
   const handleSendApplication = () => {
-    if (!selectedSchoolId) return;
+    if (selectedSchoolId === null) return;
     soundManager.playBuySound();
     const result = applyRequest(selectedSchoolId, durationHours);
     if (result.success) {

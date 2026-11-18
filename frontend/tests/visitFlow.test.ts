@@ -1,3 +1,4 @@
+import { SCHOOL_ID, type SchoolId } from '../src/data/schoolIds';
 import assert from 'node:assert/strict';
 import { assertAbsent, assertSameNode } from './helpers/domAssert';
 import { after, afterEach, test } from 'node:test';
@@ -53,7 +54,7 @@ const chip = (name: string) => within(screen.getByRole('group', { name: '권역 
 const searchBox = () => screen.getByRole('textbox', { name: '학교 검색' }) as HTMLInputElement;
 const visitHeading = (name: string) => screen.getByRole('heading', { level: 1, name });
 const views = getSchoolViews();
-const view = (id: string) => getSchoolById(views, id)!;
+const view = (id: SchoolId) => getSchoolById(views, id)!;
 
 afterEach(() => cleanup());
 after(() => { assetHooks.deregister(); dom.window.close(); });
@@ -67,7 +68,7 @@ test('실제 경로: 캠퍼스 지도 탭 → 단일 지도 → 방문 → 지�
 
   fireEvent.click(chip('영남'));
   fireEvent.change(searchBox(), { target: { value: '부산' } });
-  const pusan = view('pusan');
+  const pusan = view(SCHOOL_ID.pusan);
   click(`${pusan.name} 방문`);
 
   visitHeading(pusan.name);
@@ -116,7 +117,7 @@ test('지도에서 내 학교를 고르면 방문 화면이 아니라 내 캠퍼
 test('방문 화면의 방명록은 같은 학교 이름으로 열리고 닫으면 같은 학교로 돌아온다 (D3)', () => {
   mountApp();
   click('🗺️ 단일 폰 지도');
-  const kaist = view('kaist');
+  const kaist = view(SCHOOL_ID.kaist);
   click(`${kaist.name} 방문`);
   const trigger = screen.getByRole('button', { name: `${kaist.name} 방명록 보기` });
   fireEvent.click(trigger);
@@ -131,7 +132,7 @@ test('방문 화면의 방명록은 같은 학교 이름으로 열리고 닫으�
 test('학교 정보 시트의 방명록 전체보기는 정보 시트를 닫고 같은 학교 방명록을 연다 (V2, Q2)', () => {
   mountApp();
   click('🗺️ 단일 폰 지도');
-  const kaist = view('kaist');
+  const kaist = view(SCHOOL_ID.kaist);
   click(`${kaist.name} 방문`);
   fireEvent.click(screen.getByTestId('visit-info-button'));
   const info = screen.getByRole('dialog', { name: `${kaist.name} 학교 정보` });
@@ -144,9 +145,9 @@ test('학교 정보 시트의 방명록 전체보기는 정보 시트를 닫고 
 test('방문 방명록 새 글은 좋아요 0·미선택으로 시작하고 명시적 좋아요만 반영한다', () => {
   mountApp();
   click('🗺️ 단일 폰 지도');
-  click(`${view('kaist').name} 방문`);
-  click(`${view('kaist').name} 방명록 보기`);
-  const dialog = screen.getByRole('dialog', { name: `${view('kaist').name} 방명록` });
+  click(`${view(SCHOOL_ID.kaist).name} 방문`);
+  click(`${view(SCHOOL_ID.kaist).name} 방명록 보기`);
+  const dialog = screen.getByRole('dialog', { name: `${view(SCHOOL_ID.kaist).name} 방명록` });
   fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: '새 방명록 좋아요 회귀 검사' } });
   fireEvent.click(within(dialog).getByRole('button', { name: '남기기' }));
   const message = within(dialog).getByText('새 방명록 좋아요 회귀 검사');
@@ -166,7 +167,7 @@ test('방문 방명록 새 글은 좋아요 0·미선택으로 시작하고 명�
 test('공통 목록에 없는 학교 ID는 다른 학교로 바꾸지 않고 안내와 지도 복귀만 보인다', () => {
   let backToMap = 0;
   render(React.createElement(MockGameProvider, null,
-    React.createElement(VisitingScreen1Phone, { schoolId: 'no-such-school', onBackToMap: () => { backToMap++; } })));
+    React.createElement(VisitingScreen1Phone, { schoolId: 999_999, onBackToMap: () => { backToMap++; } })));
   assert.match(screen.getByRole('alert').textContent ?? '', /학교를 찾을 수 없습니다/);
   assertAbsent(screen.queryByRole('heading', { level: 1 }));
   click('지도로 돌아가기');
@@ -174,9 +175,9 @@ test('공통 목록에 없는 학교 ID는 다른 학교로 바꾸지 않고 안
 });
 
 test('방문 화면의 순위·점수는 내 점수가 바뀌어 순위가 밀리면 함께 바뀐다', () => {
-  const chonnam = view('chonnam');
+  const chonnam = view(SCHOOL_ID.chonnam);
   render(React.createElement(MockGameProvider, { initialState: { ...INITIAL_GAME_STATE, schoolScore: 3_000_000 },
-    children: React.createElement(VisitingScreen1Phone, { schoolId: 'chonnam' }) }));
+    children: React.createElement(VisitingScreen1Phone, { schoolId: SCHOOL_ID.chonnam }) }));
   assert.equal(chonnam.rank, 3);
   assert.equal(screen.getByTestId('visit-rank').textContent?.trim(), '4위');
 });
@@ -187,7 +188,7 @@ test('관전 클릭은 시간을 고정하면 게임 상태를 바꾸지 않고 
   const initial = { ...INITIAL_GAME_STATE, activeBuff: { itemId: 'single-use-fixture', expiresAt: 300000 } };
   mountApp(initial, SINGLE_USE);
   click('🗺️ 단일 폰 지도');
-  const pusan = view('pusan');
+  const pusan = view(SCHOOL_ID.pusan);
   click(`${pusan.name} 방문`);
   const before = latest.state;
   const campus = screen.getByRole('button', { name: `${pusan.name} 캠퍼스 (관전 모드)` });
@@ -210,11 +211,11 @@ test('방문 중에도 시간 버프는 정상 만료되고 이동이 만료 시
   const expiresAt = latest.state.activeBuff?.expiresAt;
   assert.equal(expiresAt, 31000);
   click('🗺️ 단일 폰 지도');
-  click(`${view('kaist').name} 방문`);
+  click(`${view(SCHOOL_ID.kaist).name} 방문`);
   act(() => { t.mock.timers.tick(10000); });
   assert.equal(latest.state.activeBuff?.expiresAt, expiresAt);
   click('지도로 돌아가기');
-  click(`${view('kaist').name} 방문`);
+  click(`${view(SCHOOL_ID.kaist).name} 방문`);
   assert.equal(latest.state.activeBuff?.expiresAt, expiresAt);
   act(() => { t.mock.timers.tick(21000); });
   assert.equal(latest.state.activeBuff, null);

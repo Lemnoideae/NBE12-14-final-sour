@@ -1,3 +1,4 @@
+import { SCHOOL_ID, type SchoolId } from '../src/data/schoolIds';
 import assert from 'node:assert/strict';
 import { assertAbsent, assertSameNode } from './helpers/domAssert';
 import { after, afterEach, test } from 'node:test';
@@ -125,7 +126,7 @@ test('앱을 열면 메뉴를 누르지 않아도 메인 게임 화면이 첫 �
 
 test('두 열람 화면이 같은 저장소를 구독하고 권한 없는 변경은 반영되지 않는다', () => {
   const store = createSharedImageStore(MOCK_IMAGE_DIRECTORY);
-  const target = { type: 'school' as const, id: 'hanyang' };
+  const target = { type: 'school' as const, id: SCHOOL_ID.hanyang };
   render(React.createElement(SharedImageProvider, { store },
     React.createElement('section', { 'aria-label': '내 화면' }, React.createElement(SharedImage, { target, name: '한양대학교' })),
     React.createElement('section', { 'aria-label': '외부 학교 화면' }, React.createElement(SharedImage, { target, name: '한양대학교' }))));
@@ -134,7 +135,7 @@ test('두 열람 화면이 같은 저장소를 구독하고 권한 없는 변경
   assert.equal(screen.getAllByRole('img', { name: '한양대학교 이미지' }).length, 2);
   act(() => { assert.equal(store.apply('external-viewer', target, 'https://example.org/other.png', 'denied'), false); });
   assert.equal(screen.getAllByRole('img', { name: '한양대학교 이미지' }).length, 2);
-  assert.equal(store.get({ type: 'school', id: 'kaist' }), undefined);
+  assert.equal(store.get({ type: 'school', id: SCHOOL_ID.kaist }), undefined);
   fireEvent.error(screen.getAllByRole('img', { name: '한양대학교 이미지' })[0]);
   assert.equal(screen.getAllByRole('img', { name: '한양대학교 기본 배지' }).length, 1);
 });
@@ -181,23 +182,23 @@ test('모의 이미지 결제 성공·실패·취소는 공유 화면과 게임 
   function StoreProbe() { store = useImageStore(); return null; }
   render(React.createElement(MockGameProvider, null, React.createElement(React.Fragment, null,
     React.createElement(Probe), React.createElement(StoreProbe), React.createElement(ImageChangeShop),
-    React.createElement(SharedImage, { target: { type: 'school', id: 'hanyang' }, name: '한양대학교' }))));
+    React.createElement(SharedImage, { target: { type: 'school', id: SCHOOL_ID.hanyang }, name: '한양대학교' }))));
   act(() => { latest.buy('coffee'); });
   const before = latest.state;
   clickButton(/학교 이미지 변경 ·/);
   fireEvent.change(screen.getByLabelText('이미지 URL'), { target: { value: 'https://example.org/crest.png' } });
   await act(async () => { clickButton('결제 실패 시연'); });
-  assert.equal(store!.get({ type: 'school', id: 'hanyang' }), undefined);
+  assert.equal(store!.get({ type: 'school', id: SCHOOL_ID.hanyang }), undefined);
   assert.deepEqual(latest.state, before);
   clickButton('취소');
-  assert.equal(store!.get({ type: 'school', id: 'hanyang' }), undefined);
+  assert.equal(store!.get({ type: 'school', id: SCHOOL_ID.hanyang }), undefined);
   clickButton(/학교 이미지 변경 ·/);
   fireEvent.change(screen.getByLabelText('이미지 URL'), { target: { value: 'https://example.org/crest.png' } });
   await act(async () => {
     clickButton('모의 결제 성공 및 즉시 적용');
     clickButton('모의 결제 성공 및 즉시 적용');
   });
-  assert.equal(store!.get({ type: 'school', id: 'hanyang' })?.revision, 1);
+  assert.equal(store!.get({ type: 'school', id: SCHOOL_ID.hanyang })?.revision, 1);
   assert.equal(screen.getByRole('img', { name: '한양대학교 이미지' }).getAttribute('src'), 'https://example.org/crest.png');
   assert.deepEqual(latest.state, before);
   assert.equal(latest.state.activeBuff?.expiresAt, 31000);
@@ -569,7 +570,7 @@ test('상점 변경 대상은 고정 리터럴이 아닌 현재 사용자 신원
 
 test('커스텀 이미지 로드 실패 시 등록된 기본 로고로 복구하고 기본 로고 실패 시 접근성 텍스트로 복구한다', () => {
   const store = createSharedImageStore(MOCK_IMAGE_DIRECTORY);
-  const target = { type: 'school' as const, id: 'hanyang' };
+  const target = { type: 'school' as const, id: SCHOOL_ID.hanyang };
   render(React.createElement(SharedImageProvider, { store },
     React.createElement(SharedImage, { target, name: '한양대학교', defaultUrl: 'https://example.org/default-crest.png' })));
 
@@ -595,13 +596,13 @@ test('커스텀 이미지 로드 실패 시 등록된 기본 로고로 복구하
 test('학교 기본 로고는 지도와 같은 SCHOOL_LOGO_ASSETS 한 곳에서 온다 (M1-D5)', (t) => {
   // The map shows a school's logo status from SCHOOL_LOGO_ASSETS; SharedImage must read the same map
   // instead of a second list, so registering one asset updates both.
-  const logos = SCHOOL_LOGO_ASSETS as Record<string, string>;
-  logos.kaist = 'https://example.org/kaist-crest.png';
-  t.after(() => { delete logos.kaist; });
+  const logos = SCHOOL_LOGO_ASSETS as Record<SchoolId, string>;
+  logos[SCHOOL_ID.kaist] = 'https://example.org/kaist-crest.png';
+  t.after(() => { delete logos[SCHOOL_ID.kaist]; });
   const store = createSharedImageStore(MOCK_IMAGE_DIRECTORY);
   render(React.createElement(SharedImageProvider, { store },
-    React.createElement(SharedImage, { target: { type: 'school', id: 'kaist' }, name: 'KAIST' })));
-  assert.equal(schoolLogoStatus('kaist'), 'asset');
+    React.createElement(SharedImage, { target: { type: 'school', id: SCHOOL_ID.kaist }, name: 'KAIST' })));
+  assert.equal(schoolLogoStatus(SCHOOL_ID.kaist), 'asset');
   assert.equal(screen.getByRole('img', { name: 'KAIST 기본 로고' }).getAttribute('src'), 'https://example.org/kaist-crest.png');
 });
 
@@ -633,13 +634,13 @@ test('세션 요청 ID로 중복 완료를 차단하고 취소 시 URL 초안을
   store!.subscribe(() => { notifications++; });
 
   await act(async () => { clickButton('모의 결제 성공 및 즉시 적용'); });
-  assert.equal(store!.get({ type: 'school', id: 'hanyang' })?.revision, 1);
+  assert.equal(store!.get({ type: 'school', id: SCHOOL_ID.hanyang })?.revision, 1);
   assert.equal(notifications, 1);
 
   // 동일 세션 완료 중복 시도 -> 거부되고 리비전과 알림이 증가하지 않음
-  const duplicateApplied = store!.apply('me', { type: 'school', id: 'hanyang' }, 'https://example.org/school.png', completedRequestId!);
+  const duplicateApplied = store!.apply('me', { type: 'school', id: SCHOOL_ID.hanyang }, 'https://example.org/school.png', completedRequestId!);
   assert.equal(duplicateApplied, false);
-  assert.equal(store!.get({ type: 'school', id: 'hanyang' })?.revision, 1);
+  assert.equal(store!.get({ type: 'school', id: SCHOOL_ID.hanyang })?.revision, 1);
   assert.equal(notifications, 1);
 });
 
@@ -649,15 +650,15 @@ test('2개 이상의 서로 다른 사용자·열람 화면 컨텍스트에서 �
   function MultiUserViews({ myDeptName = '컴퓨터소프트웨어학부', myNick = '열정학번사자' }: { myDeptName?: string; myNick?: string }) {
     return React.createElement(SharedImageProvider, { store },
       React.createElement('div', { 'data-testid': 'viewer-me' },
-        React.createElement(SharedImage, { target: { type: 'school', id: 'hanyang' }, name: '한양대학교' }),
+        React.createElement(SharedImage, { target: { type: 'school', id: SCHOOL_ID.hanyang }, name: '한양대학교' }),
         React.createElement(SharedImage, { target: { type: 'department', id: 'my-department' }, name: myDeptName }),
         React.createElement(SharedImage, { target: { type: 'profile', id: 'me' }, name: myNick }),
       ),
       React.createElement('div', { 'data-testid': 'viewer-external' },
-        React.createElement(SharedImage, { target: { type: 'school', id: 'hanyang' }, name: '한양대학교' }),
+        React.createElement(SharedImage, { target: { type: 'school', id: SCHOOL_ID.hanyang }, name: '한양대학교' }),
         React.createElement(SharedImage, { target: { type: 'department', id: 'my-department' }, name: myDeptName }),
         React.createElement(SharedImage, { target: { type: 'profile', id: 'me' }, name: myNick }),
-        React.createElement(SharedImage, { target: { type: 'school', id: 'kaist' }, name: 'KAIST' }),
+        React.createElement(SharedImage, { target: { type: 'school', id: SCHOOL_ID.kaist }, name: 'KAIST' }),
         React.createElement(SharedImage, { target: { type: 'department', id: 'kaist-computing' }, name: '전산학부' }),
         React.createElement(SharedImage, { target: { type: 'profile', id: 'external-viewer' }, name: '외부인' }),
       ),
@@ -667,9 +668,9 @@ test('2개 이상의 서로 다른 사용자·열람 화면 컨텍스트에서 �
   const { rerender } = render(React.createElement(MultiUserViews));
 
   // 1. 학교 이미지 변경: user 'me' -> hanyang
-  act(() => { assert.equal(store.apply('me', { type: 'school', id: 'hanyang' }, 'https://example.org/hanyang.png', 'm-req-1'), true); });
+  act(() => { assert.equal(store.apply('me', { type: 'school', id: SCHOOL_ID.hanyang }, 'https://example.org/hanyang.png', 'm-req-1'), true); });
   assert.equal(screen.getAllByRole('img', { name: '한양대학교 이미지' }).length, 2);
-  assert.equal(store.get({ type: 'school', id: 'kaist' }), undefined);
+  assert.equal(store.get({ type: 'school', id: SCHOOL_ID.kaist }), undefined);
 
   // 2. 학과 이미지 변경: user 'me' -> my-department
   act(() => { assert.equal(store.apply('me', { type: 'department', id: 'my-department' }, 'https://example.org/my-dept.png', 'm-req-2'), true); });
@@ -683,16 +684,16 @@ test('2개 이상의 서로 다른 사용자·열람 화면 컨텍스트에서 �
 
   // 4. 실패 / 취소는 아무것도 전파하지 않음
   act(() => {
-    assert.equal(store.apply('me', { type: 'school', id: 'hanyang' }, 'invalid-url', 'fail-1'), false);
-    assert.equal(store.apply('me', { type: 'school', id: 'hanyang' }, 'javascript:alert(1)', 'fail-2'), false);
+    assert.equal(store.apply('me', { type: 'school', id: SCHOOL_ID.hanyang }, 'invalid-url', 'fail-1'), false);
+    assert.equal(store.apply('me', { type: 'school', id: SCHOOL_ID.hanyang }, 'javascript:alert(1)', 'fail-2'), false);
   });
-  assert.equal(store.get({ type: 'school', id: 'hanyang' })?.url, 'https://example.org/hanyang.png');
+  assert.equal(store.get({ type: 'school', id: SCHOOL_ID.hanyang })?.url, 'https://example.org/hanyang.png');
 
   // 5. 권한 거절:
   assert.equal(store.apply('me', { type: 'department', id: 'business' }, 'https://example.org/biz.png', 'biz-req'), false);
-  assert.equal(store.apply('me', { type: 'school', id: 'kaist' }, 'https://example.org/k.png', 'k-req'), false);
+  assert.equal(store.apply('me', { type: 'school', id: SCHOOL_ID.kaist }, 'https://example.org/k.png', 'k-req'), false);
   assert.equal(store.apply('me', { type: 'profile', id: 'external-viewer' }, 'https://example.org/ext.png', 'ext-req'), false);
-  assert.equal(store.apply('external-viewer', { type: 'school', id: 'hanyang' }, 'https://example.org/hack.png', 'hack-req'), false);
+  assert.equal(store.apply('external-viewer', { type: 'school', id: SCHOOL_ID.hanyang }, 'https://example.org/hack.png', 'hack-req'), false);
   assert.equal(store.apply('external-viewer', { type: 'department', id: 'my-department' }, 'https://example.org/hack2.png', 'hack2-req'), false);
 
   // 6. 이름 변경 시에도 ID 기반 이미지 보존
@@ -735,7 +736,7 @@ test('커피 버프 활성 중 이미지 구매 후 시간이 지나면 커피�
   t.mock.timers.enable({ apis: ['Date', 'setInterval', 'setTimeout'], now: 1000 });
   render(React.createElement(MockGameProvider, null, React.createElement(React.Fragment, null,
     React.createElement(Probe), React.createElement(ImageChangeShop),
-    React.createElement(SharedImage, { target: { type: 'school', id: 'hanyang' }, name: '한양대학교' }))));
+    React.createElement(SharedImage, { target: { type: 'school', id: SCHOOL_ID.hanyang }, name: '한양대학교' }))));
 
   act(() => { latest.buy('coffee'); });
   assert.equal(latest.state.activeBuff?.expiresAt, 31000);
@@ -818,7 +819,7 @@ test('R3-1 (b): React.StrictMode 환경에서 setPlayer는 부수효과 없이 �
   const matchingUsers = controller!.imageStore.getDirectory().users.filter((u) => u.userId === 'me');
   assert.equal(matchingUsers.length, 1);
   assert.equal(matchingUsers[0].departmentId, 'business');
-  assert.equal(matchingUsers[0].schoolId, 'hanyang');
+  assert.equal(matchingUsers[0].schoolId, SCHOOL_ID.hanyang);
 });
 
 test('R3-1 (c): 전역 초기화에 의존하지 않고 시드 디렉터리는 깊은 동결 불변성을 유지한다', () => {
@@ -828,7 +829,7 @@ test('R3-1 (c): 전역 초기화에 의존하지 않고 시드 디렉터리는 �
   assert.ok(Object.isFrozen(MOCK_IMAGE_DIRECTORY.users));
   // 시드 원본 수정 시도 시 TypeError 발생
   assert.throws(() => {
-    ((MOCK_IMAGE_DIRECTORY as unknown) as { schoolIds: readonly string[] }).schoolIds = [];
+    ((MOCK_IMAGE_DIRECTORY as unknown) as { schoolIds: readonly SchoolId[] }).schoolIds = [];
   }, TypeError);
 });
 

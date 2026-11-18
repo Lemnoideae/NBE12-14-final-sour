@@ -1,3 +1,4 @@
+import { SCHOOL_ID, type SchoolId } from '../src/data/schoolIds';
 import assert from 'node:assert/strict';
 import { assertAbsent } from './helpers/domAssert';
 import { after, afterEach, test } from 'node:test';
@@ -39,26 +40,26 @@ const { getSchoolDepartments, initialSchoolScore } = await import('../src/data/g
 afterEach(() => cleanup());
 after(() => { assetHooks.deregister(); dom.window.close(); });
 
-const input = (mySchoolId: string, myDepartment = '내학과') => ({
+const input = (mySchoolId: SchoolId, myDepartment = '내학과') => ({
   // Same score the app starts from when a player enrols at this school (useMockGame enroll).
   schools: getSchoolViews(initialSchoolScore(mySchoolId), mySchoolId), mySchoolId, myNickname: '나', myDepartment,
 });
 const byId = (messages: { id: string; text: string }[], id: string) => messages.find((message) => message.id === id)!.text;
 
 test('교내 채팅의 순위 문구는 내 학교의 현재 순위와 바로 위 학교에서 나온다 (T44-D1)', () => {
-  for (const id of ['hanyang', 'pusan', 'chonnam', 'jejunu']) {
+  for (const id of [SCHOOL_ID.hanyang, SCHOOL_ID.pusan, SCHOOL_ID.chonnam, SCHOOL_ID.jejunu]) {
     const sample = input(id);
     const me = sample.schools.find((school) => school.id === id)!;
     const above = sample.schools.find((school) => school.rank === me.rank - 1)!;
     const messages = getSchoolChatSamples(sample);
-    assert.equal(byId(messages, 'msg-2'), `${me.rank}위 실화냐 ${above.rank}위 가자!!`, id);
-    assert.equal(byId(messages, 'msg-5'), `${above.shortName} ${above.rank}위 추월 가능?`, id);
+    assert.equal(byId(messages, 'msg-2'), `${me.rank}위 실화냐 ${above.rank}위 가자!!`, `school ${id}`);
+    assert.equal(byId(messages, 'msg-5'), `${above.shortName} ${above.rank}위 추월 가능?`, `school ${id}`);
   }
 });
 
 test('내 학교가 1위면 위 학교 대신 2위 학교를 경계한다', () => {
-  const sample = input('kaist');
-  const me = sample.schools.find((school) => school.id === 'kaist')!;
+  const sample = input(SCHOOL_ID.kaist);
+  const me = sample.schools.find((school) => school.id === SCHOOL_ID.kaist)!;
   assert.equal(me.rank, 1);
   const messages = getSchoolChatSamples(sample);
   assert.equal(byId(messages, 'msg-2'), '1위 지키자!! 끝까지 간다');
@@ -66,24 +67,24 @@ test('내 학교가 1위면 위 학교 대신 2위 학교를 경계한다', () =
 });
 
 test('교내 채팅 작성자는 모두 내 학교 배지이고 학과는 내 학교 목록(없으면 일반 학과)에서 나온다', () => {
-  const hanyangOnly = getSchoolDepartments('hanyang').map((d) => d.name).filter((name) => !getSchoolDepartments('kaist').some((d) => d.name === name));
-  const sample = input('kaist', '전산학부');
-  const kaist = sample.schools.find((school) => school.id === 'kaist')!;
+  const hanyangOnly = getSchoolDepartments(SCHOOL_ID.hanyang).map((d) => d.name).filter((name) => !getSchoolDepartments(SCHOOL_ID.kaist).some((d) => d.name === name));
+  const sample = input(SCHOOL_ID.kaist, '전산학부');
+  const kaist = sample.schools.find((school) => school.id === SCHOOL_ID.kaist)!;
   const messages = getSchoolChatSamples(sample).filter((message) => !message.isMe && !message.isFiltered);
   assert.ok(messages.every((message) => message.schoolInitial === kaist.firstSyllable && message.schoolBadgeBg === kaist.badgeColor));
   assert.ok(messages.every((message) => !hanyangOnly.includes(message.department)), '한양대 학과가 섞이면 안 된다');
   assert.ok(messages.every((message) => message.department !== '전산학부'), '내 학과는 샘플 작성자에서 뺀다');
-  assert.equal(sampleDepartments('snu', '', 3).length, 3, '학과 목록이 없는 학교도 작성자 학과가 있다');
+  assert.equal(sampleDepartments(SCHOOL_ID.snu, '', 3).length, 3, '학과 목록이 없는 학교도 작성자 학과가 있다');
 });
 
 test('연합 채팅은 소속 연합이 없으면 null, 있으면 다른 연합 학교만 쓴다 (T44-D2)', () => {
-  assert.equal(getAllianceForSchool(INITIAL_MOCK_ALLIANCES, 'hanyang', Date.now()), undefined);
-  assert.equal(getUnionChatSamples(input('hanyang'), null), null);
-  const alliance = getAllianceForSchool(INITIAL_MOCK_ALLIANCES, 'kaist', Date.now())!;
-  assert.equal(getUnionChatSamples(input('hanyang'), alliance.schoolIds), null, '내 학교가 없는 연합은 쓰지 않는다');
-  const sample = input('kaist');
+  assert.equal(getAllianceForSchool(INITIAL_MOCK_ALLIANCES, SCHOOL_ID.hanyang, Date.now()), undefined);
+  assert.equal(getUnionChatSamples(input(SCHOOL_ID.hanyang), null), null);
+  const alliance = getAllianceForSchool(INITIAL_MOCK_ALLIANCES, SCHOOL_ID.kaist, Date.now())!;
+  assert.equal(getUnionChatSamples(input(SCHOOL_ID.hanyang), alliance.schoolIds), null, '내 학교가 없는 연합은 쓰지 않는다');
+  const sample = input(SCHOOL_ID.kaist);
   const messages = getUnionChatSamples(sample, alliance.schoolIds)!;
-  const partners = alliance.schoolIds.filter((id) => id !== 'kaist').map((id) => sample.schools.find((school) => school.id === id)!);
+  const partners = alliance.schoolIds.filter((id) => id !== SCHOOL_ID.kaist).map((id) => sample.schools.find((school) => school.id === id)!);
   const others = messages.filter((message) => !message.isMe);
   assert.deepEqual(others.map((message) => [message.schoolInitial, message.schoolBadgeBg]), partners.map((school) => [school.firstSyllable, school.badgeColor]));
   assert.ok(others[0].text.startsWith(`${partners[0].shortName} ${partners[0].rank}위`));
@@ -108,13 +109,13 @@ test('앱: 한양대(연합 없음)는 연합 채팅 빈 상태와 비활성 입
   assert.ok(!dialog.textContent!.includes('KAIST 1위 수성'), '옛 고정 샘플이 남으면 안 된다');
   fireEvent.click(within(dialog).getByTitle('채팅창 닫기'));
 
-  act(() => { latest.setPlayer({ schoolId: 'kaist', department: '전산학부', nickname: '넙죽러' }); });
+  act(() => { latest.setPlayer({ schoolId: SCHOOL_ID.kaist, department: '전산학부', nickname: '넙죽러' }); });
   dialog = openUnion();
   assertAbsent(within(dialog).queryByTestId('union-chat-empty'));
   // setPlayer keeps the current game score, so expected text comes from the live ranking.
-  const schools = getSchoolViews(latest.state.schoolScore, 'kaist');
-  const alliance = getAllianceForSchool(INITIAL_MOCK_ALLIANCES, 'kaist', Date.now())!;
-  const expected = getUnionChatSamples({ schools, mySchoolId: 'kaist', myNickname: '넙죽러', myDepartment: '전산학부' }, alliance.schoolIds)!;
+  const schools = getSchoolViews(latest.state.schoolScore, SCHOOL_ID.kaist);
+  const alliance = getAllianceForSchool(INITIAL_MOCK_ALLIANCES, SCHOOL_ID.kaist, Date.now())!;
+  const expected = getUnionChatSamples({ schools, mySchoolId: SCHOOL_ID.kaist, myNickname: '넙죽러', myDepartment: '전산학부' }, alliance.schoolIds)!;
   for (const message of expected) assert.ok(dialog.textContent!.includes(message.text), message.text);
-  for (const id of ['postech']) assert.ok(dialog.textContent!.includes(schools.find((entry) => entry.id === id)!.shortName), id);
+  for (const id of [SCHOOL_ID.postech]) assert.ok(dialog.textContent!.includes(schools.find((entry) => entry.id === id)!.shortName), `school ${id}`);
 });

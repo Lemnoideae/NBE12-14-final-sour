@@ -1,5 +1,6 @@
 // Shared chrome for the national and 충청 map phones: status bar, search + region chips, school list sheet
 // and school markers. Plan: docs/261108-1930-m1_school_map_data_plan.md 4-2, 4-3.
+import type { SchoolId } from '../data/schoolIds.ts';
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { Search, Crown, X, ChevronUp, ChevronDown } from 'lucide-react';
 import { soundManager } from '../utils/sound';
@@ -60,10 +61,10 @@ export function MapLayer({ children }: { children: React.ReactNode }) {
 export interface MapControlsProps {
   schools: readonly SchoolView[];
   query: string;
-  selectedSchoolId?: string;
+  selectedSchoolId?: SchoolId;
   onRegionChange: (region: MapRegion) => void;
   onQueryChange: (query: string) => void;
-  onSelectSchool: (schoolId: string) => void;
+  onSelectSchool: (schoolId: SchoolId) => void;
   onNavigateTab?: (tab: NavTab) => void;
 }
 
@@ -171,7 +172,7 @@ export function SchoolMarker({
   selected: boolean;
   large?: boolean;
   labelOffset?: { dx: number; dy: number };
-  onSelect: (schoolId: string) => void;
+  onSelect: (schoolId: SchoolId) => void;
 }) {
   return (
     <button
@@ -237,13 +238,13 @@ export function SchoolListSheet({
   title: string;
   schools: readonly SchoolView[];
   query: string;
-  selectedSchoolId?: string;
+  selectedSchoolId?: SchoolId;
   onQueryChange: (query: string) => void;
-  onSelectSchool: (schoolId: string) => void;
+  onSelectSchool: (schoolId: SchoolId) => void;
   onNavigateTab?: (tab: NavTab) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const select = (schoolId: string) => {
+  const select = (schoolId: SchoolId) => {
     soundManager.playTabSound();
     onSelectSchool(schoolId);
   };

@@ -1,3 +1,4 @@
+import { SCHOOL_ID, type SchoolId } from '../src/data/schoolIds';
 import assert from 'node:assert/strict';
 import { after, afterEach, test } from 'node:test';
 import { registerHooks } from 'node:module';
@@ -34,16 +35,16 @@ afterEach(() => cleanup());
 after(() => { assetHooks.deregister(); dom.window.close(); });
 
 function mount(initialRegion: (typeof MAP_REGIONS)[number] = '전체') {
-  const selected: string[] = [];
+  const selected: SchoolId[] = [];
   render(React.createElement(MockGameProvider, null,
-    React.createElement(MapScreenPhone, { initialRegion, onSelectSchool: (id: string) => selected.push(id) })));
+    React.createElement(MapScreenPhone, { initialRegion, onSelectSchool: (id: SchoolId) => selected.push(id) })));
   return selected;
 }
 const chip = (name: string) => within(screen.getByRole('group', { name: '권역 선택' })).getByRole('button', { name });
 const mapArea = () => screen.getByTestId('map-area');
 const resultCount = () => screen.getByTestId('school-result-count').textContent;
-const listIds = () => Array.from(screen.getByRole('list', { name: '학교 목록' }).querySelectorAll('li[data-school-id]')).map((li) => li.getAttribute('data-school-id'));
-const markerIds = () => Array.from(mapArea().querySelectorAll('button[data-school-id]')).map((b) => b.getAttribute('data-school-id'));
+const listIds = () => Array.from(screen.getByRole('list', { name: '학교 목록' }).querySelectorAll('li[data-school-id]')).map((li) => Number(li.getAttribute('data-school-id')));
+const markerIds = () => Array.from(mapArea().querySelectorAll('button[data-school-id]')).map((b) => Number(b.getAttribute('data-school-id')));
 
 test('7개 권역 칩이 모두 동작하고 지도와 목록이 같은 권역을 보여 준다', () => {
   mount();
@@ -56,7 +57,7 @@ test('7개 권역 칩이 모두 동작하고 지도와 목록이 같은 권역�
     assert.equal(resultCount(), `${expected.length}개교`, region);
     assert.deepEqual(listIds(), expected, region);
     if (region === '전체') {
-      assert.deepEqual(markerIds(), ['kaist', 'pusan', 'chonnam']);
+      assert.deepEqual(markerIds(), [SCHOOL_ID.kaist, SCHOOL_ID.pusan, SCHOOL_ID.chonnam]);
     } else {
       assert.deepEqual([...markerIds()].sort(), [...expected].sort(), `${region} markers`);
     }
@@ -65,8 +66,8 @@ test('7개 권역 칩이 모두 동작하고 지도와 목록이 같은 권역�
 
 test('전국 지도의 권역 버블은 계산된 학교 수를 보이고 누른 권역으로 확대한다', () => {
   mount();
-  const gyeongsang = screen.getByRole('button', { name: '경상 대학 10개, 영남 확대' });
-  assert.match(gyeongsang.textContent ?? '', /경상 10/);
+  const gyeongsang = screen.getByRole('button', { name: '경상 대학 11개, 영남 확대' }); // DGIST added with the V2 seed (SCRUM-149)
+  assert.match(gyeongsang.textContent ?? '', /경상 11/);
   fireEvent.click(gyeongsang);
   assert.equal(mapArea().getAttribute('data-region'), '영남');
   assert.equal(chip('영남').getAttribute('aria-pressed'), 'true');
@@ -79,7 +80,7 @@ test('전국 지도의 권역 버블은 계산된 학교 수를 보이고 누른
 test('내 학교 태그는 공통 순위의 순위를 보인다', () => {
   mount();
   assert.equal(screen.getByTestId('my-school-tag').textContent, '내 학교 한양대 · 18위');
-  assert.ok(screen.getByRole('button', { name: /^서울 대학 10개/ }));
+  assert.ok(screen.getByRole('button', { name: /^서울 대학 11개/ })); // 국민대 added with the V2 seed (SCRUM-149)
 });
 
 test('검색은 결과 수를 갱신하고 결과가 없으면 안내와 지우기 버튼을 보인다', () => {
@@ -87,7 +88,7 @@ test('검색은 결과 수를 갱신하고 결과가 없으면 안내와 지우�
   const input = screen.getByRole('textbox', { name: '학교 검색' });
   fireEvent.change(input, { target: { value: 'kaist' } });
   assert.equal(resultCount(), '1개교');
-  assert.deepEqual(listIds(), ['kaist']);
+  assert.deepEqual(listIds(), [SCHOOL_ID.kaist]);
   fireEvent.change(input, { target: { value: '없는학교' } });
   assert.equal(resultCount(), '0개교');
   const status = screen.getByRole('status');
@@ -105,7 +106,7 @@ test('마커·목록 방문·TOP 3 리본이 같은 학교 ID를 전달한다', 
   fireEvent.click(screen.getByRole('button', { name: '한양대학교 방문' }));
   fireEvent.click(chip('충청'));
   fireEvent.click(within(mapArea()).getByRole('button', { name: /^충남대학교 전국 \d+위$/ }));
-  assert.deepEqual(selected, ['kaist', 'hanyang', 'hanyang', 'cnu']);
+  assert.deepEqual(selected, [SCHOOL_ID.kaist, SCHOOL_ID.hanyang, SCHOOL_ID.hanyang, SCHOOL_ID.cnu]);
   const marker = within(mapArea()).getByRole('button', { name: /^충남대학교 전국/ });
   assert.equal(marker.getAttribute('aria-pressed'), 'true');
 });

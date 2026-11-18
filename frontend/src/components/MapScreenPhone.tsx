@@ -1,3 +1,4 @@
+import type { SchoolId } from '../data/schoolIds.ts';
 import React, { useState } from 'react';
 import { Screen1NationalMap } from './Screen1NationalMap';
 import { Screen2RegionMap } from './Screen2RegionMap';
@@ -9,14 +10,14 @@ import type { MapRegion } from '../data/schoolMapLayout.ts';
 export interface MapContext {
   region: MapRegion;
   query: string;
-  selectedSchoolId?: string;
+  selectedSchoolId?: SchoolId;
 }
 
 export const INITIAL_MAP_CONTEXT: MapContext = { region: '전체', query: '' };
 
 interface MapScreenPhoneProps {
   /** Receives the selected school ID; the app opens that school's visit screen. */
-  onSelectSchool?: (schoolId: string) => void;
+  onSelectSchool?: (schoolId: SchoolId) => void;
   onNavigateTab?: (tab: NavTab) => void;
   /** Controlled context. Without it the phone keeps its own state (comparison demos). */
   context?: MapContext;
@@ -50,7 +51,7 @@ export const MapScreenPhone: React.FC<MapScreenPhoneProps> = ({
     selectedSchoolId: current.selectedSchoolId,
     onRegionChange: (region: MapRegion) => update({ region }),
     onQueryChange: (query: string) => update({ query }),
-    onSelectSchool: (schoolId: string) => {
+    onSelectSchool: (schoolId: SchoolId) => {
       update({ selectedSchoolId: schoolId });
       onSelectSchool?.(schoolId);
     },

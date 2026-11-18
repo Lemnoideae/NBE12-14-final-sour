@@ -1,3 +1,4 @@
+import type { SchoolId } from '../src/data/schoolIds';
 import { after, afterEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertAbsent } from './helpers/domAssert';
@@ -469,7 +470,7 @@ test('visiting screens show the visited school scene at its score-derived level'
   const { getCampusStage } = await import('../src/utils/gameModel');
   // The visited school comes from the shared rows (M2); its level is derived from its score.
   const visited = getSchoolById(getSchoolViews(), DEMO_VISIT_SCHOOL_ID)!;
-  const screens: React.FC<{ schoolId: string }>[] = await Promise.all([
+  const screens: React.FC<{ schoolId: SchoolId }>[] = await Promise.all([
     import('../src/components/VisitingScreen1Phone').then((m) => m.VisitingScreen1Phone),
     import('../src/components/VisitingScreen2Phone').then((m) => m.VisitingScreen2Phone),
   ]);

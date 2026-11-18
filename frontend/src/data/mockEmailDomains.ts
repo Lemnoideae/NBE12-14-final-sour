@@ -3,17 +3,19 @@
 // schools (docs/4차-프로젝트-기획서(261107).html:870). This list is a sample, not the service's support policy,
 // and the real university domains were not verified.
 
+import { SCHOOL_ID, type SchoolId } from './schoolIds';
+
 export interface MockEmailDomain {
   domain: string;
-  schoolIds: readonly string[];
+  schoolIds: readonly SchoolId[];
 }
 
 export const MOCK_EMAIL_DOMAINS: readonly MockEmailDomain[] = [
-  { domain: 'hanyang.ac.kr', schoolIds: ['hanyang'] },
-  { domain: 'kaist.ac.kr', schoolIds: ['kaist'] },
-  { domain: 'pusan.ac.kr', schoolIds: ['pusan'] },
+  { domain: 'hanyang.ac.kr', schoolIds: [SCHOOL_ID.hanyang] },
+  { domain: 'kaist.ac.kr', schoolIds: [SCHOOL_ID.kaist] },
+  { domain: 'pusan.ac.kr', schoolIds: [SCHOOL_ID.pusan] },
   // Fictional domain for showing the "shared domain" rejection.
-  { domain: 'shared-demo.ac.kr', schoolIds: ['hanyang', 'kaist'] },
+  { domain: 'shared-demo.ac.kr', schoolIds: [SCHOOL_ID.hanyang, SCHOOL_ID.kaist] },
 ];
 
 /** Quick-fill samples on the email step: three supported, one shared and one unsupported domain. */
@@ -26,8 +28,8 @@ export const MOCK_SAMPLE_EMAILS = [
 ] as const;
 
 export type DomainResolution =
-  | { kind: 'school'; schoolId: string }
-  | { kind: 'ambiguous'; schoolIds: readonly string[] }
+  | { kind: 'school'; schoolId: SchoolId }
+  | { kind: 'ambiguous'; schoolIds: readonly SchoolId[] }
   | { kind: 'unsupported' };
 
 /** Exact match on the part after '@'. Subdomains are not matched in the mockup. */

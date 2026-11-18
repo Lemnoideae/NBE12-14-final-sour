@@ -1,5 +1,8 @@
+import { SCHOOL_ID, type SchoolId } from './schoolIds.ts';
+
 export interface UniversityItem {
-  id: string;
+  /** Backend university ID (university.id). */
+  id: SchoolId;
   name: string;
   shortName: string;
   firstSyllable: string;
@@ -16,7 +19,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
   // Highest mock starting scores. The live TOP 3 is derived in schoolDirectory.
   // =========================================================
   {
-    id: 'kaist',
+    id: SCHOOL_ID.kaist,
     name: 'KAIST',
     shortName: 'KAIST',
     firstSyllable: '카',
@@ -27,7 +30,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 2903118,
   },
   {
-    id: 'pusan',
+    id: SCHOOL_ID.pusan,
     name: '부산대학교',
     shortName: '부산대',
     firstSyllable: '부',
@@ -38,7 +41,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 2780400,
   },
   {
-    id: 'chonnam',
+    id: SCHOOL_ID.chonnam,
     name: '전남대학교',
     shortName: '전남대',
     firstSyllable: '전',
@@ -50,10 +53,10 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
   },
 
   // =========================================================
-  // SEOUL (10 schools - Clustered into "서울 10", with 한양대 as my school)
+  // SEOUL (11 schools - Clustered into "서울 11", with 한양대 as my school)
   // =========================================================
   {
-    id: 'snu',
+    id: SCHOOL_ID.snu,
     name: '서울대학교',
     shortName: '서울대',
     firstSyllable: '서',
@@ -64,7 +67,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 2540800,
   },
   {
-    id: 'yonsei',
+    id: SCHOOL_ID.yonsei,
     name: '연세대학교',
     shortName: '연세대',
     firstSyllable: '연',
@@ -75,7 +78,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 2410500,
   },
   {
-    id: 'korea',
+    id: SCHOOL_ID.korea,
     name: '고려대학교',
     shortName: '고려대',
     firstSyllable: '고',
@@ -86,7 +89,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 2380200,
   },
   {
-    id: 'hanyang',
+    id: SCHOOL_ID.hanyang,
     name: '한양대학교',
     shortName: '한양대',
     firstSyllable: '한',
@@ -97,7 +100,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 2190400,
   },
   {
-    id: 'skku',
+    id: SCHOOL_ID.skku,
     name: '성균관대학교',
     shortName: '성균관대',
     firstSyllable: '성',
@@ -108,7 +111,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 2050100,
   },
   {
-    id: 'sogang',
+    id: SCHOOL_ID.sogang,
     name: '서강대학교',
     shortName: '서강대',
     firstSyllable: '서',
@@ -119,7 +122,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 1670500,
   },
   {
-    id: 'cau',
+    id: SCHOOL_ID.cau,
     name: '중앙대학교',
     shortName: '중앙대',
     firstSyllable: '중',
@@ -130,7 +133,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 1590300,
   },
   {
-    id: 'khu',
+    id: SCHOOL_ID.khu,
     name: '경희대학교',
     shortName: '경희대',
     firstSyllable: '경',
@@ -141,7 +144,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 1520700,
   },
   {
-    id: 'ewha',
+    id: SCHOOL_ID.ewha,
     name: '이화여자대학교',
     shortName: '이화여대',
     firstSyllable: '이',
@@ -152,7 +155,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 1460000,
   },
   {
-    id: 'hufs',
+    id: SCHOOL_ID.hufs,
     name: '한국외국어대학교',
     shortName: '한국외대',
     firstSyllable: '외',
@@ -162,12 +165,23 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     city: '서울',
     score: 1410200,
   },
+  {
+    id: SCHOOL_ID.kookmin,
+    name: '국민대학교',
+    shortName: '국민대',
+    firstSyllable: '국',
+    badgeColor: '#1e3a8a',
+    region: '서울',
+    filterRegion: '수도권',
+    city: '서울',
+    score: 1180300,
+  },
 
   // =========================================================
-  // INCHEON (5 schools - Clustered into "인천 5")
+  // INCHEON (4 schools - Clustered into "인천 4")
   // =========================================================
   {
-    id: 'inha',
+    id: SCHOOL_ID.inha,
     name: '인하대학교',
     shortName: '인하대',
     firstSyllable: '인',
@@ -178,7 +192,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 1360500,
   },
   {
-    id: 'inu',
+    id: SCHOOL_ID.inu,
     name: '인천대학교',
     shortName: '인천대',
     firstSyllable: '인',
@@ -189,7 +203,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 740100,
   },
   {
-    id: 'ginue',
+    id: SCHOOL_ID.ginue,
     name: '경인교육대학교',
     shortName: '경인교대',
     firstSyllable: '경',
@@ -200,7 +214,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 610300,
   },
   {
-    id: 'icatholic',
+    id: SCHOOL_ID.icatholic,
     name: '인천가톨릭대학교',
     shortName: '인천가톨릭대',
     firstSyllable: '가',
@@ -210,23 +224,12 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     city: '인천',
     score: 410200,
   },
-  {
-    id: 'itc',
-    name: '인하공업전문대학',
-    shortName: '인하공전',
-    firstSyllable: '공',
-    badgeColor: '#d97706',
-    region: '인천',
-    filterRegion: '수도권',
-    city: '인천',
-    score: 340100,
-  },
 
   // =========================================================
   // GYEONGGI (10 schools - Distributed across real cities)
   // =========================================================
   {
-    id: 'ajou',
+    id: SCHOOL_ID.ajou,
     name: '아주대학교',
     shortName: '아주대',
     firstSyllable: '아',
@@ -237,7 +240,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 1310800,
   },
   {
-    id: 'gachon',
+    id: SCHOOL_ID.gachon,
     name: '가천대학교',
     shortName: '가천대',
     firstSyllable: '가',
@@ -248,7 +251,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 880400,
   },
   {
-    id: 'kau',
+    id: SCHOOL_ID.kau,
     name: '한국항공대학교',
     shortName: '항공대',
     firstSyllable: '항',
@@ -259,7 +262,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 710200,
   },
   {
-    id: 'kyonggi',
+    id: SCHOOL_ID.kyonggi,
     name: '경기대학교',
     shortName: '경기대',
     firstSyllable: '경',
@@ -270,7 +273,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 680500,
   },
   {
-    id: 'daejin',
+    id: SCHOOL_ID.daejin,
     name: '대진대학교',
     shortName: '대진대',
     firstSyllable: '대',
@@ -281,7 +284,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 380400,
   },
   {
-    id: 'yongin',
+    id: SCHOOL_ID.yongin,
     name: '용인대학교',
     shortName: '용인대',
     firstSyllable: '용',
@@ -292,7 +295,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 520100,
   },
   {
-    id: 'kangnam',
+    id: SCHOOL_ID.kangnam,
     name: '강남대학교',
     shortName: '강남대',
     firstSyllable: '강',
@@ -303,7 +306,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 450300,
   },
   {
-    id: 'suwon',
+    id: SCHOOL_ID.suwon,
     name: '수원대학교',
     shortName: '수원대',
     firstSyllable: '수',
@@ -314,7 +317,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 440200,
   },
   {
-    id: 'hanshin',
+    id: SCHOOL_ID.hanshin,
     name: '한신대학교',
     shortName: '한신대',
     firstSyllable: '한',
@@ -325,7 +328,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 370100,
   },
   {
-    id: 'hknu',
+    id: SCHOOL_ID.hknu,
     name: '한경국립대학교',
     shortName: '한경대',
     firstSyllable: '한',
@@ -337,10 +340,10 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
   },
 
   // =========================================================
-  // GANGWON (5 schools)
+  // GANGWON (4 schools)
   // =========================================================
   {
-    id: 'kangwon',
+    id: SCHOOL_ID.kangwon,
     name: '강원대학교',
     shortName: '강원대',
     firstSyllable: '강',
@@ -351,7 +354,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 1220100,
   },
   {
-    id: 'hallym',
+    id: SCHOOL_ID.hallym,
     name: '한림대학교',
     shortName: '한림대',
     firstSyllable: '한',
@@ -362,18 +365,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 910200,
   },
   {
-    id: 'gwnu',
-    name: '강릉원주대학교',
-    shortName: '강릉원주대',
-    firstSyllable: '강',
-    badgeColor: '#0284c7',
-    region: '강원',
-    filterRegion: '강원',
-    city: '강릉',
-    score: 760200,
-  },
-  {
-    id: 'sangji',
+    id: SCHOOL_ID.sangji,
     name: '상지대학교',
     shortName: '상지대',
     firstSyllable: '상',
@@ -384,7 +376,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 530400,
   },
   {
-    id: 'cku',
+    id: SCHOOL_ID.cku,
     name: '가톨릭관동대학교',
     shortName: '관동대',
     firstSyllable: '관',
@@ -399,7 +391,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
   // CHUNGBUK (10 schools)
   // =========================================================
   {
-    id: 'cbu',
+    id: SCHOOL_ID.cbu,
     name: '충북대학교',
     shortName: '충북대',
     firstSyllable: '충',
@@ -410,7 +402,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 1180300,
   },
   {
-    id: 'knue',
+    id: SCHOOL_ID.knue,
     name: '한국교원대학교',
     shortName: '교원대',
     firstSyllable: '교',
@@ -421,8 +413,8 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 720800,
   },
   {
-    id: 'ut',
-    name: '한국교통대학교',
+    id: SCHOOL_ID.ut,
+    name: '국립한국교통대학교',
     shortName: '교통대',
     firstSyllable: '교',
     badgeColor: '#0369a1',
@@ -432,7 +424,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 590300,
   },
   {
-    id: 'cheongju',
+    id: SCHOOL_ID.cheongju,
     name: '청주대학교',
     shortName: '청주대',
     firstSyllable: '청',
@@ -443,7 +435,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 560200,
   },
   {
-    id: 'seowon',
+    id: SCHOOL_ID.seowon,
     name: '서원대학교',
     shortName: '서원대',
     firstSyllable: '서',
@@ -454,7 +446,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 480100,
   },
   {
-    id: 'semyung',
+    id: SCHOOL_ID.semyung,
     name: '세명대학교',
     shortName: '세명대',
     firstSyllable: '세',
@@ -465,7 +457,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 470200,
   },
   {
-    id: 'cje',
+    id: SCHOOL_ID.cje,
     name: '청주교육대학교',
     shortName: '청주교대',
     firstSyllable: '청',
@@ -476,7 +468,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 460400,
   },
   {
-    id: 'jungwon',
+    id: SCHOOL_ID.jungwon,
     name: '중원대학교',
     shortName: '중원대',
     firstSyllable: '중',
@@ -487,7 +479,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 330200,
   },
   {
-    id: 'kdu',
+    id: SCHOOL_ID.kdu,
     name: '극동대학교',
     shortName: '극동대',
     firstSyllable: '극',
@@ -498,7 +490,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 290100,
   },
   {
-    id: 'u1',
+    id: SCHOOL_ID.u1,
     name: '유원대학교',
     shortName: '유원대',
     firstSyllable: '유',
@@ -513,7 +505,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
   // CHUNGNAM / DAEJEON (14 schools)
   // =========================================================
   {
-    id: 'cnu',
+    id: SCHOOL_ID.cnu,
     name: '충남대학교',
     shortName: '충남대',
     firstSyllable: '충',
@@ -524,8 +516,8 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 1890600,
   },
   {
-    id: 'hanbat',
-    name: '한밭대학교',
+    id: SCHOOL_ID.hanbat,
+    name: '국립한밭대학교',
     shortName: '한밭대',
     firstSyllable: '한',
     badgeColor: '#0f766e',
@@ -535,7 +527,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 750300,
   },
   {
-    id: 'hannam',
+    id: SCHOOL_ID.hannam,
     name: '한남대학교',
     shortName: '한남대',
     firstSyllable: '한',
@@ -546,7 +538,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 660200,
   },
   {
-    id: 'kut',
+    id: SCHOOL_ID.kut,
     name: '한국기술교육대학교',
     shortName: '한기대',
     firstSyllable: '기',
@@ -557,7 +549,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 690400,
   },
   {
-    id: 'sch',
+    id: SCHOOL_ID.sch,
     name: '순천향대학교',
     shortName: '순천향대',
     firstSyllable: '순',
@@ -568,8 +560,8 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 650100,
   },
   {
-    id: 'gongju',
-    name: '공주대학교',
+    id: SCHOOL_ID.gongju,
+    name: '국립공주대학교',
     shortName: '공주대',
     firstSyllable: '공',
     badgeColor: '#047857',
@@ -579,7 +571,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 640200,
   },
   {
-    id: 'hoseo',
+    id: SCHOOL_ID.hoseo,
     name: '호서대학교',
     shortName: '호서대',
     firstSyllable: '호',
@@ -590,7 +582,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 570300,
   },
   {
-    id: 'sunmoon',
+    id: SCHOOL_ID.sunmoon,
     name: '선문대학교',
     shortName: '선문대',
     firstSyllable: '선',
@@ -601,7 +593,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 540200,
   },
   {
-    id: 'baekseok',
+    id: SCHOOL_ID.baekseok,
     name: '백석대학교',
     shortName: '백석대',
     firstSyllable: '백',
@@ -612,7 +604,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 500100,
   },
   {
-    id: 'nsu',
+    id: SCHOOL_ID.nsu,
     name: '남서울대학교',
     shortName: '남서울대',
     firstSyllable: '남',
@@ -623,7 +615,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 490200,
   },
   {
-    id: 'konyang',
+    id: SCHOOL_ID.konyang,
     name: '건양대학교',
     shortName: '건양대',
     firstSyllable: '건',
@@ -634,7 +626,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 430100,
   },
   {
-    id: 'hanseo',
+    id: SCHOOL_ID.hanseo,
     name: '한서대학교',
     shortName: '한서대',
     firstSyllable: '한',
@@ -645,7 +637,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 390200,
   },
   {
-    id: 'chungwoon',
+    id: SCHOOL_ID.chungwoon,
     name: '청운대학교',
     shortName: '청운대',
     firstSyllable: '청',
@@ -660,7 +652,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
   // JEOLLA (10 schools)
   // =========================================================
   {
-    id: 'jbnu',
+    id: SCHOOL_ID.jbnu,
     name: '전북대학교',
     shortName: '전북대',
     firstSyllable: '전',
@@ -671,7 +663,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 1270400,
   },
   {
-    id: 'chosun',
+    id: SCHOOL_ID.chosun,
     name: '조선대학교',
     shortName: '조선대',
     firstSyllable: '조',
@@ -682,7 +674,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 1100200,
   },
   {
-    id: 'gist',
+    id: SCHOOL_ID.gist,
     name: 'GIST',
     shortName: 'GIST',
     firstSyllable: '지',
@@ -693,7 +685,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 850700,
   },
   {
-    id: 'wku',
+    id: SCHOOL_ID.wku,
     name: '원광대학교',
     shortName: '원광대',
     firstSyllable: '원',
@@ -704,7 +696,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 620500,
   },
   {
-    id: 'jeonju',
+    id: SCHOOL_ID.jeonju,
     name: '전주대학교',
     shortName: '전주대',
     firstSyllable: '전',
@@ -715,7 +707,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 550400,
   },
   {
-    id: 'kunsan',
+    id: SCHOOL_ID.kunsan,
     name: '국립군산대학교',
     shortName: '군산대',
     firstSyllable: '군',
@@ -726,7 +718,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 360300,
   },
   {
-    id: 'scnu',
+    id: SCHOOL_ID.scnu,
     name: '국립순천대학교',
     shortName: '순천대',
     firstSyllable: '순',
@@ -737,7 +729,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 310200,
   },
   {
-    id: 'mokpo',
+    id: SCHOOL_ID.mokpo,
     name: '국립목포대학교',
     shortName: '목포대',
     firstSyllable: '목',
@@ -748,7 +740,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 280100,
   },
   {
-    id: 'woosuk',
+    id: SCHOOL_ID.woosuk,
     name: '우석대학교',
     shortName: '우석대',
     firstSyllable: '우',
@@ -760,10 +752,10 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
   },
 
   // =========================================================
-  // GYEONGSANG (10 schools)
+  // GYEONGSANG (11 schools)
   // =========================================================
   {
-    id: 'knu',
+    id: SCHOOL_ID.knu,
     name: '경북대학교',
     shortName: '경북대',
     firstSyllable: '경',
@@ -774,7 +766,18 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 1980300,
   },
   {
-    id: 'postech',
+    id: SCHOOL_ID.dgist,
+    name: 'DGIST',
+    shortName: 'DGIST',
+    firstSyllable: '디',
+    badgeColor: '#7c3aed',
+    region: '경상',
+    filterRegion: '영남',
+    city: '대구',
+    score: 1290400,
+  },
+  {
+    id: SCHOOL_ID.postech,
     name: 'POSTECH',
     shortName: 'POSTECH',
     firstSyllable: '포',
@@ -785,7 +788,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 1810400,
   },
   {
-    id: 'unist',
+    id: SCHOOL_ID.unist,
     name: 'UNIST',
     shortName: 'UNIST',
     firstSyllable: '유',
@@ -796,7 +799,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 1740200,
   },
   {
-    id: 'kmu',
+    id: SCHOOL_ID.kmu,
     name: '계명대학교',
     shortName: '계명대',
     firstSyllable: '계',
@@ -807,7 +810,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 1060400,
   },
   {
-    id: 'yu',
+    id: SCHOOL_ID.yu,
     name: '영남대학교',
     shortName: '영남대',
     firstSyllable: '영',
@@ -818,7 +821,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 1020800,
   },
   {
-    id: 'pknu',
+    id: SCHOOL_ID.pknu,
     name: '국립부경대학교',
     shortName: '부경대',
     firstSyllable: '부',
@@ -829,7 +832,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 980100,
   },
   {
-    id: 'donga',
+    id: SCHOOL_ID.donga,
     name: '동아대학교',
     shortName: '동아대',
     firstSyllable: '동',
@@ -840,7 +843,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 940500,
   },
   {
-    id: 'cwnu',
+    id: SCHOOL_ID.cwnu,
     name: '국립창원대학교',
     shortName: '창원대',
     firstSyllable: '창',
@@ -851,7 +854,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 820300,
   },
   {
-    id: 'gnu',
+    id: SCHOOL_ID.gnu,
     name: '경상국립대학교',
     shortName: '경상대',
     firstSyllable: '경',
@@ -866,7 +869,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
   // JEJU (2 schools)
   // =========================================================
   {
-    id: 'jejunu',
+    id: SCHOOL_ID.jejunu,
     name: '제주대학교',
     shortName: '제주대',
     firstSyllable: '제',
@@ -877,7 +880,7 @@ export const REAL_UNIVERSITIES: UniversityItem[] = [
     score: 1140500,
   },
   {
-    id: 'jeju_intl',
+    id: SCHOOL_ID.jeju_intl,
     name: '제주국제대학교',
     shortName: '제주국제대',
     firstSyllable: '국',

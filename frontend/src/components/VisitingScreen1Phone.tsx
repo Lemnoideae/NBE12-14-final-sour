@@ -1,3 +1,4 @@
+import type { SchoolId } from '../data/schoolIds.ts';
 import React, { useState } from 'react';
 import { Trophy } from 'lucide-react';
 import { soundManager } from '../utils/sound';
@@ -11,7 +12,8 @@ import { LiveClicksEmpty, SPECTATOR_NOTICE, SpectatorBar, VisitNotFoundPhone, Vi
 
 interface VisitingScreen1PhoneProps {
   /** Visited school ID from the map (M2). Values are read from the shared school rows. */
-  schoolId: string;
+  /** null: no school was chosen; the screen shows the not-found notice. */
+  schoolId: SchoolId | null;
   onBackToMap?: () => void;
   onBackToMySchool?: () => void;
   onNavigateTab?: (tab: NavTab) => void;

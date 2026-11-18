@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import type { SchoolId } from './data/schoolIds';
 import { TopHUD } from './components/TopHUD';
 import { CampusView } from './components/CampusView';
 import { PhoneShellVariantContext } from './components/PhoneShell';
@@ -66,7 +67,7 @@ function AppContent() {
   const [isMockMenuOpen, setIsMockMenuOpen] = useState<boolean>(false);
   // Map → visit → return (M2, docs/261108-2000-m2_map_visit_return_plan.md 4-1). Only the ID is kept;
   // the visit screen reads the school's values from the shared rows.
-  const [visitSchoolId, setVisitSchoolId] = useState<string | null>(null);
+  const [visitSchoolId, setVisitSchoolId] = useState<SchoolId | null>(null);
   const [mapContext, setMapContext] = useState<MapContext>(INITIAL_MAP_CONTEXT);
   const [isVisitGuestbookOpen, setIsVisitGuestbookOpen] = useState<boolean>(false);
 
@@ -98,7 +99,7 @@ function AppContent() {
     setViewMode('single_map');
   };
   // My school opens my own campus; any other ID opens its visit screen (unknown IDs show a notice there).
-  const openSchool = (schoolId: string) => {
+  const openSchool = (schoolId: SchoolId) => {
     if (schoolId === playerInfo.schoolId) {
       goToMySchool();
       return;
@@ -583,11 +584,11 @@ function AppContent() {
         ) : viewMode === 'visiting' ? (
           <div className={viewWrap}>
             {isVisitGuestbookOpen && (
-              <VisitingScreen2Phone modal schoolId={visitSchoolId ?? ''} onCloseGuestbook={() => setIsVisitGuestbookOpen(false)} />
+              <VisitingScreen2Phone modal schoolId={visitSchoolId} onCloseGuestbook={() => setIsVisitGuestbookOpen(false)} />
             )}
             <MockLoadGate key={`visit:${visitSchoolId ?? ''}`} name="방문 학교" onBack={goToMap} backLabel="지도로 돌아가기">
               <VisitingScreen1Phone
-                schoolId={visitSchoolId ?? ''}
+                schoolId={visitSchoolId}
                 onBackToMap={goToMap}
                 onBackToMySchool={goToMySchool}
                 onNavigateTab={navigateTab}
