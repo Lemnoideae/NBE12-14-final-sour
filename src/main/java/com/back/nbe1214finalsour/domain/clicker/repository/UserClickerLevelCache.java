@@ -8,6 +8,7 @@ import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 // 클릭 엔진이 클릭 세기를 계산할 때 읽는 회원 레벨 캐시 (원본은 DB users.clicker_id)
 @Repository
@@ -31,6 +32,11 @@ public class UserClickerLevelCache {
             return dbLevel;
         }
         return Long.parseLong(redisTemplate.opsForValue().get(key));
+    }
+
+    // 빈 껍데기 (25단계에서 구현)
+    public Optional<Long> find(Long userId) {
+        return Optional.empty();
     }
 
     // 현재 캐시 값보다 클 때만 갱신 (늦게 도착한 낮은 레벨은 무시)

@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+import java.util.Optional;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.then;
@@ -83,6 +85,19 @@ public class UserClickerLevelCacheTest {
         // then
         assertThat(level).isEqualTo(3L);
         assertThat(cachedLevel()).isEqualTo("3");
+    }
+
+    @Test
+    @DisplayName("레벨 키가 있으면 그 레벨을 반환한다")
+    void find_whenPresent() {
+        // given
+        redisTemplate.opsForValue().set(KEY, "3");
+
+        // when
+        Optional<Long> level = userClickerLevelCache.find(USER_ID);
+
+        // then
+        assertThat(level).contains(3L);
     }
 
     @Test
