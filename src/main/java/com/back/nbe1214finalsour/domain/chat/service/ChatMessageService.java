@@ -6,7 +6,7 @@ import com.back.nbe1214finalsour.domain.chat.entity.ChatRoomId;
 import com.back.nbe1214finalsour.domain.chat.relay.ChatMessagePublisher;
 import com.back.nbe1214finalsour.domain.chat.repository.ChatMessageRepository;
 import com.back.nbe1214finalsour.domain.forbiddenword.service.ForbiddenWordFilter;
-import com.back.nbe1214finalsour.domain.university.repository.UniversityNameCache;
+import com.back.nbe1214finalsour.domain.university.repository.UniversityCache;
 import com.back.nbe1214finalsour.domain.user.entity.User;
 import com.back.nbe1214finalsour.domain.user.entity.UserStatus;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
@@ -41,7 +41,7 @@ public class ChatMessageService {
     static final Duration SEND_INTERVAL = Duration.ofSeconds(1);
 
     private final UserRepository userRepository;
-    private final UniversityNameCache universityNameCache;
+    private final UniversityCache universityCache;
     private final ForbiddenWordFilter forbiddenWordFilter;
     private final ChatMessageRepository chatMessageRepository;
     private final ChatMessagePublisher chatMessagePublisher;
@@ -61,7 +61,7 @@ public class ChatMessageService {
 
         long universityId = authUser.universityId();
         ChatMessage message = ChatMessage.create(ChatRoomId.university(universityId), user.getId(), user.getNickname(),
-                this.universityNameCache.getName(universityId), this.forbiddenWordFilter.mask(text),
+                this.universityCache.getName(universityId), this.forbiddenWordFilter.mask(text),
                 this.clock.instant(), UNIVERSITY_RETENTION);
 
         try {

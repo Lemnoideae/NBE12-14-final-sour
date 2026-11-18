@@ -2,7 +2,7 @@ package com.back.nbe1214finalsour.domain.click;
 
 import com.back.nbe1214finalsour.IntegrationTest;
 import com.back.nbe1214finalsour.domain.clicker.service.ClickerService;
-import com.back.nbe1214finalsour.domain.university.repository.UniversityNameCache;
+import com.back.nbe1214finalsour.domain.university.repository.UniversityCache;
 import com.back.nbe1214finalsour.domain.university.service.rival.RivalChecker;
 import com.back.nbe1214finalsour.domain.user.entity.User;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
@@ -43,7 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>기본 클리커(레벨 1)의 clickPower는 1이다. 테스트가 만든 학교는 {@code rivals.groups}에 없으므로
  * 요청 피해량 = floor(clickCount * 0.3)이고, 경쟁 학교 공격은 {@link RivalChecker}를 스파이로 바꿔 확인한다.
  *
- * <p>학교는 서버가 뜬 뒤에 넣으므로 {@link UniversityNameCache}를 다시 불러와야 공격 대상으로 찾을 수 있다.
+ * <p>학교는 서버가 뜬 뒤에 넣으므로 {@link UniversityCache}를 다시 불러와야 공격 대상으로 찾을 수 있다.
  */
 @IntegrationTest
 @AutoConfigureMockMvc
@@ -70,7 +70,7 @@ class AttackIntegrationTest {
     @Autowired
     private RivalChecker rivalChecker;
     @Autowired
-    private UniversityNameCache universityNameCache;
+    private UniversityCache universityCache;
 
     private long universityId;
     private long departmentId;
@@ -89,7 +89,7 @@ class AttackIntegrationTest {
         departmentId = jdbcTemplate.queryForObject(
                 "INSERT INTO department (university_id, name) VALUES (?, '컴퓨터공학과') RETURNING id", Long.class,
                 universityId);
-        universityNameCache.load();
+        universityCache.load();
 
         user = userRepository.saveAndFlush(User.create(universityId, departmentId, "공격왕", EMAIL,
                 emailHasher.hash(EMAIL), "{noop}unused", OffsetDateTime.now()));
@@ -123,7 +123,7 @@ class AttackIntegrationTest {
         jdbcTemplate.update("DELETE FROM users WHERE university_id = ?", universityId);
         jdbcTemplate.update("DELETE FROM department WHERE university_id = ?", universityId);
         jdbcTemplate.update("DELETE FROM university WHERE id IN (?, ?)", universityId, targetUniversityId);
-        universityNameCache.load();
+        universityCache.load();
     }
 
     @Test

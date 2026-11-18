@@ -15,7 +15,7 @@ import com.back.nbe1214finalsour.domain.chat.relay.ChatMessagePublisher;
 import com.back.nbe1214finalsour.domain.chat.repository.ChatMessageRepository;
 import com.back.nbe1214finalsour.domain.chat.websocket.ChatDestinations;
 import com.back.nbe1214finalsour.domain.chat.websocket.RawStompClient;
-import com.back.nbe1214finalsour.domain.university.repository.UniversityNameCache;
+import com.back.nbe1214finalsour.domain.university.repository.UniversityCache;
 import com.back.nbe1214finalsour.domain.user.entity.User;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.global.crypto.EmailHasher;
@@ -68,7 +68,7 @@ class ChatSendIntegrationTest {
     @Autowired
     private UserRepository userRepository;
     @Autowired
-    private UniversityNameCache universityNameCache;
+    private UniversityCache universityCache;
     @Autowired
     private StringRedisTemplate redis;
     @Autowired
@@ -94,7 +94,7 @@ class ChatSendIntegrationTest {
                 "INSERT INTO university (name, logo_url) VALUES (?, 'https://cdn.test/u/logo.png') RETURNING id",
                 Long.class, "채팅테스트대" + suffix);
         // 학교 이름은 앱이 뜰 때 읽어 두므로, 테스트가 만든 학교를 넣으려면 다시 읽는다
-        this.universityNameCache.load();
+        this.universityCache.load();
         Long departmentId = this.jdbcTemplate.queryForObject(
                 "INSERT INTO department (university_id, name) VALUES (?, '컴퓨터공학과') RETURNING id", Long.class,
                 this.universityId);
@@ -111,7 +111,7 @@ class ChatSendIntegrationTest {
         this.jdbcTemplate.update("DELETE FROM users WHERE id = ?", this.user.getId());
         this.jdbcTemplate.update("DELETE FROM department WHERE university_id = ?", this.universityId);
         this.jdbcTemplate.update("DELETE FROM university WHERE id = ?", this.universityId);
-        this.universityNameCache.load();
+        this.universityCache.load();
     }
 
     private RawStompClient connectAndSubscribe() throws Exception {

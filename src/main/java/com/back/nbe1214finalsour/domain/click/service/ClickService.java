@@ -1,6 +1,5 @@
 package com.back.nbe1214finalsour.domain.click.service;
 
-import com.back.nbe1214finalsour.domain.abuse.service.AbuseVerificationService;
 import com.back.nbe1214finalsour.domain.click.dto.ClickApplyResponse;
 import com.back.nbe1214finalsour.domain.click.dto.ClickRequest;
 import com.back.nbe1214finalsour.domain.click.dto.ClickResponse;
@@ -15,6 +14,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
@@ -36,6 +36,8 @@ public class ClickService {
     public ClickResponse click(Long userId, Long universityId, Long departmentId, ClickRequest request) {
         int clickCount = request.clickCount();
         String submissionId = request.submissionId();
+        Double lat = request.lat();
+        Double lng = request.lng();
 
         long score = clickActionGuard.verifyAndGetBaseScore(userId, submissionId, clickCount);
 
@@ -44,6 +46,10 @@ public class ClickService {
                     .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND))
                     .getDepartmentId();
         }
+
+        // TODO: 도서관 이스터에그
+
+
 
         // 아이템 적용 가져오기
         Double multiplier = redisHandler.getHash(RedisKey.USER_EFFECT.of(userId), "multiplier", Double.class)

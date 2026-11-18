@@ -6,7 +6,7 @@ import com.back.nbe1214finalsour.domain.click.dto.AttackResponse;
 import com.back.nbe1214finalsour.domain.university.service.rival.RivalChecker;
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
 import com.back.nbe1214finalsour.domain.clicker.service.ClickerService;
-import com.back.nbe1214finalsour.domain.university.repository.UniversityNameCache;
+import com.back.nbe1214finalsour.domain.university.repository.UniversityCache;
 import com.back.nbe1214finalsour.domain.user.entity.UserStatus;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.domain.user.repository.UserStatusCache;
@@ -71,7 +71,7 @@ class AttackServiceTest {
     @Mock
     private RivalChecker rivalChecker;
     @Mock
-    private UniversityNameCache universityNameCache;
+    private UniversityCache universityCache;
     @Mock
     private AbuseVerificationService abuseVerificationService;
 
@@ -82,7 +82,7 @@ class AttackServiceTest {
         ClickActionGuard clickActionGuard = new ClickActionGuard(
                 stringRedisTemplate, userStatusCache, userRepository,
                 actionRateLimiter, clickCountLimiter, clickerService, abuseVerificationService);
-        attackService = new AttackService(clickActionGuard, stringRedisTemplate, rivalChecker, universityNameCache);
+        attackService = new AttackService(clickActionGuard, stringRedisTemplate, rivalChecker, universityCache);
     }
 
     private AttackRequest request(Long targetUniversityId, int clickCount) {
@@ -91,7 +91,7 @@ class AttackServiceTest {
 
     /** 대상 학교 있음 → 활성 회원 → 중복 아님 → 레벨 캐시 히트(3레벨)까지의 공통 경로 */
     private void givenHappyPathBeforeScript(Clicker clicker, boolean isRival) {
-        given(universityNameCache.getName(TARGET_UNIVERSITY_ID)).willReturn(TARGET_NAME);
+        given(universityCache.getName(TARGET_UNIVERSITY_ID)).willReturn(TARGET_NAME);
         given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
         given(userStatusCache.find(USER_ID)).willReturn(Optional.of(UserStatus.ACTIVE));
         given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(true);
@@ -120,7 +120,7 @@ class AttackServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ATTACK_OWN_UNIVERSITY);
 
-        verify(universityNameCache, never()).getName(anyLong());
+        verify(universityCache, never()).getName(anyLong());
         verify(userStatusCache, never()).find(anyLong());
         verify(stringRedisTemplate, never()).execute(any(), anyList(), any(), any(), any());
     }
@@ -129,7 +129,7 @@ class AttackServiceTest {
     @DisplayName("없는 학교를 공격하면 UNIV_NOT_FOUND 예외, 중복 제출 키와 요청 한도는 쓰지 않는다")
     void attack_targetUniversityNotFound() {
         willThrow(new BusinessException(ErrorCode.UNIV_NOT_FOUND))
-                .given(universityNameCache).getName(TARGET_UNIVERSITY_ID);
+                .given(universityCache).getName(TARGET_UNIVERSITY_ID);
 
         assertThatThrownBy(() -> attackService.attack(USER_ID, UNIVERSITY_ID, request(TARGET_UNIVERSITY_ID, 3)))
                 .isInstanceOf(BusinessException.class)
@@ -148,7 +148,7 @@ class AttackServiceTest {
     @Test
     @DisplayName("중복 제출이면 CLICK_DUPLICATE_SUBMISSION 예외, 점수 반영은 하지 않는다")
     void attack_duplicateSubmission() {
-        given(universityNameCache.getName(TARGET_UNIVERSITY_ID)).willReturn(TARGET_NAME);
+        given(universityCache.getName(TARGET_UNIVERSITY_ID)).willReturn(TARGET_NAME);
         given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
         given(userStatusCache.find(USER_ID)).willReturn(Optional.of(UserStatus.ACTIVE));
         given(valueOperations.setIfAbsent("submit:1:sub-1", SUBMISSION_ID, Duration.ofSeconds(10L)))
@@ -165,7 +165,7 @@ class AttackServiceTest {
     @Test
     @DisplayName("요청 한도 초과 예외는 그대로 전파되고 점수 반영은 하지 않는다")
     void attack_rateLimitExceeded() {
-        given(universityNameCache.getName(TARGET_UNIVERSITY_ID)).willReturn(TARGET_NAME);
+        given(universityCache.getName(TARGET_UNIVERSITY_ID)).willReturn(TARGET_NAME);
         given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
         given(userStatusCache.find(USER_ID)).willReturn(Optional.of(UserStatus.ACTIVE));
         given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(true);
