@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type SubmitEvent } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import { PhoneShell } from './PhoneShell';
-import { useMockRequest } from '../hooks/useMockRequest';
+import { useGuestSupportSender, type GuestSupportSender } from '../hooks/useGuestSupportSender';
 import { useTurnstileWidget } from '../hooks/useTurnstileWidget';
 import { TURNSTILE_ACTIONS } from '../utils/turnstile';
 import { soundManager } from '../utils/sound';
 import {
-  judgeGuestSupport,
   normalizeSupportForm,
   SUPPORT_FORM_LIMITS,
   SUPPORT_MESSAGES,
@@ -17,24 +16,27 @@ import {
 // Guest inquiry form (SCRUM-122, plan .agents/01-PLAN/261117-0848-turnstile_bot_verification_plan.md §3-4).
 // POST /api/v1/supports. From the third inquiry in an hour the server answers 403 ABUSE_VERIFICATION_REQUIRED; the
 // form then shows a widget (action support_guest) and sends the same request again with `turnstileToken`.
-// [목업] No server yet: the mock request layer decides network success, utils/mockSupport.ts decides the answer.
+// Sending is by mode (SCRUM-164, hooks/useGuestSupportSender.ts): the mock server (request layer + utils/mockSupport.ts)
+// or the API. A refused token (403 ABUSE_VERIFICATION_FAILED) keeps the check open; "다시 시도" gets a new token.
 // Attachments are left out: the server takes them from members only.
 
-const SEND_REQUEST_KEY = 'support-create';
 const EMPTY_FORM: SupportForm = { recipientEmail: '', title: '', content: '' };
 const INPUT_CLASS = 'w-full bg-[#ffffff] border-2 border-[#261608] px-2.5 py-1.5 text-xs text-[#261608] placeholder:text-stone-400 focus:outline-none focus:bg-[#fef9c3] shadow-[inset_1px_1px_0px_#261608] disabled:bg-stone-100 disabled:text-stone-500';
 
-type Notice = { kind: 'success' | 'error' | 'network'; text: string };
+/** `retry`: the request can be sent again (no answer, or a refused token: the check asks for a new one). */
+type Notice = { kind: 'success' | 'error' | 'retry'; text: string };
 
 export function SupportGuestScreenPhone({ onBack = () => {} }: { onBack?: () => void }) {
-  const { run } = useMockRequest();
+  return <SupportGuestView sender={useGuestSupportSender()} onBack={onBack} />;
+}
+
+/** The form with a given sender, so tests can drive the API sender in mock-mode builds. */
+export function SupportGuestView({ sender, onBack = () => {} }: { sender: GuestSupportSender; onBack?: () => void }) {
+  const { send: sendRequest, demo } = sender;
   const [form, setForm] = useState<SupportForm>(EMPTY_FORM);
   const [sending, setSending] = useState(false);
   const [checkOpen, setCheckOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
-  // [목업] Stands in for the server's count per IP.
-  const sentRef = useRef(0);
-  const [sentCount, setSentCount] = useState(0);
   /** The request the server asked to confirm; the widget's token is attached to this one. */
   const pendingRef = useRef<SupportForm | null>(null);
   const cancelRef = useRef<(() => void) | null>(null);
@@ -44,32 +46,29 @@ export function SupportGuestScreenPhone({ onBack = () => {} }: { onBack?: () => 
   const send = useCallback((request: SupportForm, token?: string) => {
     setSending(true);
     setNotice(null);
-    const cancel = run(SEND_REQUEST_KEY, (ok) => {
+    cancelRef.current = sendRequest(request, token, (result) => {
       cancelRef.current = null;
       setSending(false);
-      if (!ok) {
-        setNotice({ kind: 'network', text: SUPPORT_MESSAGES.network });
+      if (result.kind === 'failed' || result.kind === 'verification-failed') {
+        // The pending request stays; with the check open, "다시 시도" resets the widget for a new token.
+        setNotice({ kind: 'retry', text: result.text });
         return;
       }
-      const verdict = judgeGuestSupport(sentRef.current, token);
-      if (verdict === 'verification-required') {
+      if (result.kind === 'verification-required') {
         pendingRef.current = request;
         setCheckOpen(true);
         return;
       }
       pendingRef.current = null;
       setCheckOpen(false);
-      if (verdict === 'too-many') {
-        setNotice({ kind: 'error', text: SUPPORT_MESSAGES.tooMany });
+      if (result.kind === 'too-many') {
+        setNotice({ kind: 'error', text: result.text });
         return;
       }
-      sentRef.current += 1;
-      setSentCount(sentRef.current);
       setForm((current) => ({ ...current, title: '', content: '' }));
       setNotice({ kind: 'success', text: SUPPORT_MESSAGES.accepted });
     });
-    if (cancel) cancelRef.current = cancel;
-  }, [run]);
+  }, [sendRequest]);
 
   const sendWithToken = useCallback((token: string) => {
     if (pendingRef.current) send(pendingRef.current, token);
@@ -96,8 +95,7 @@ export function SupportGuestScreenPhone({ onBack = () => {} }: { onBack?: () => 
   const resetDemo = () => {
     cancelRef.current?.();
     cancelRef.current = null;
-    sentRef.current = 0;
-    setSentCount(0);
+    demo?.reset();
     setSending(false);
     cancelCheck();
   };
@@ -149,7 +147,7 @@ export function SupportGuestScreenPhone({ onBack = () => {} }: { onBack?: () => 
         {checkOpen && (
           <SupportBotCheck
             onToken={sendWithToken}
-            failed={notice?.kind === 'network'}
+            failed={notice?.kind === 'retry'}
             sending={sending}
             onCancel={cancelCheck}
           />
@@ -162,11 +160,11 @@ export function SupportGuestScreenPhone({ onBack = () => {} }: { onBack?: () => 
           <p data-testid="support-error" role="alert" className="rpg-box p-2.5 bg-[#fee2e2] border-2 border-[#991b1b] text-[11px] font-bold text-[#7f1d1d]">{notice.text}</p>
         )}
 
-        <div className="border-2 border-dashed border-[#8b5327] bg-[#fffbeb] p-2 flex flex-wrap items-center gap-2 text-[10px] text-[#8b5327]">
-          <span data-testid="support-sent-count" className="font-bold">[시연] 보낸 문의 수: {sentCount}</span>
+        {demo && <div className="border-2 border-dashed border-[#8b5327] bg-[#fffbeb] p-2 flex flex-wrap items-center gap-2 text-[10px] text-[#8b5327]">
+          <span data-testid="support-sent-count" className="font-bold">[시연] 보낸 문의 수: {demo.sentCount}</span>
           <button type="button" onClick={resetDemo} className="pixel-plaque plaque-parchment px-2 py-0.5 text-[10px] font-bold cursor-pointer">[시연] 보낸 문의 수 초기화</button>
           <p className="w-full leading-tight">[시연] 서버는 IP마다 1시간 동안 셉니다. 3건째부터 확인, 6건째부터 거절합니다. 목업은 이 화면에서 보낸 수로 대신합니다.</p>
-        </div>
+        </div>}
       </div>
     </PhoneShell>
   );
