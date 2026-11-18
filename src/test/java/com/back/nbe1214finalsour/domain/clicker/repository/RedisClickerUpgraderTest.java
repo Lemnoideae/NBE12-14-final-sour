@@ -125,6 +125,22 @@ public class RedisClickerUpgraderTest {
         assertThat(isMember(DIRTY_CLICKER_KEY)).isFalse();
     }
 
+    @Test
+    @DisplayName("잔액과 비용이 정확히 같으면 차감해 잔액 0을 반환하고, 레벨 +1과 dirty 표시도 한다")
+    void upgrade_exactBalance() {
+        // given (setUp: 기여도 1000, 레벨 1)
+
+        // when
+        long result = clickerUpgrader.upgrade(USER_ID, UNIVERSITY_ID, 1L, 1000L);
+
+        // then
+        assertThat(result).isZero();
+        assertThat(redisTemplate.opsForZSet().score(RANK_KEY, USER_ID.toString())).isEqualTo(0.0);
+        assertThat(redisTemplate.opsForValue().get(LEVEL_KEY)).isEqualTo("2");
+        assertThat(isMember(DIRTY_USER_KEY)).isTrue();
+        assertThat(isMember(DIRTY_CLICKER_KEY)).isTrue();
+    }
+
     private boolean isMember(String setKey) {
         return Boolean.TRUE.equals(redisTemplate.opsForSet().isMember(setKey, USER_ID.toString()));
     }
