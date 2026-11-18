@@ -5,12 +5,13 @@ import { nicknameProblem, NICKNAME_RULE, SIGNUP_ERROR_CODES } from '../api/auth'
 import { errorMessage, fieldErrorMap, isApiError } from '../api/errors';
 import { useMyInfo, useUpdateNickname, type MyInfo } from '../api/users';
 import { soundManager } from '../utils/sound';
+import { PasswordChangeForm, WithdrawalForm } from './AccountSecurityForms';
 import { LoadNotice } from './LoadNotice';
 import { PhoneShell } from './PhoneShell';
 import { ImageFallback } from './SharedImage';
 
 // My account in API mode (SCRUM-166, plan .agents/01-PLAN/261118-2239-scrum166_my_info_profile.md): the profile from
-// GET /users/me and the nickname change. The mock has no accounts, so this screen exists only with the backend.
+// GET /users/me, the nickname change, and the password change and withdrawal (SCRUM-167). The mock has no accounts, so this screen exists only with the backend.
 
 const INPUT_CLASS = 'w-full bg-[#ffffff] border-2 border-[#261608] px-2.5 py-1.5 text-xs text-[#261608] focus:outline-none focus:bg-[#fef9c3] shadow-[inset_1px_1px_0px_#261608] disabled:bg-stone-100 disabled:text-stone-500';
 
@@ -58,6 +59,8 @@ export function MyInfoScreenPhone({ onBack, onGoToLogin }: MyInfoScreenPhoneProp
             <ProfileCard info={me.data} />
             {/* A new member (another login) starts a new form. */}
             <NicknameForm key={me.data.id} current={me.data.nickname} />
+            <PasswordChangeForm key={`password-${me.data.id}`} />
+            <WithdrawalForm key={`withdrawal-${me.data.id}`} />
           </>
         ) : (
           <div role="status" className="rpg-box p-4 bg-[#fdf5df] border-2 border-[#261608] flex flex-col items-center gap-2 text-center">

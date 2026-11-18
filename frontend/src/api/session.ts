@@ -16,16 +16,24 @@ export const SESSION_ENDING_CODES = {
   AUTH_INVALID_REFRESH_TOKEN: 'expired',
 } as const;
 
-export type SessionEndReason = (typeof SESSION_ENDING_CODES)[keyof typeof SESSION_ENDING_CODES];
+/** Ends this browser's session itself after the account changed (SCRUM-167): the server revoked every refresh token. */
+export const ACCOUNT_CLOSE_MESSAGES = {
+  'password-changed': '비밀번호를 바꿨어요. 새 비밀번호로 다시 로그인해 주세요.',
+  withdrawn: '탈퇴했어요. 이 계정으로는 더 이상 로그인할 수 없어요.',
+} as const;
+export type AccountCloseReason = keyof typeof ACCOUNT_CLOSE_MESSAGES;
 
-export function sessionEndReason(code: string): SessionEndReason | null {
+export type SessionEndReason = (typeof SESSION_ENDING_CODES)[keyof typeof SESSION_ENDING_CODES] | AccountCloseReason;
+
+export function sessionEndReason(code: string): (typeof SESSION_ENDING_CODES)[keyof typeof SESSION_ENDING_CODES] | null {
   return Object.hasOwn(SESSION_ENDING_CODES, code) ? SESSION_ENDING_CODES[code as keyof typeof SESSION_ENDING_CODES] : null;
 }
 
 /** Why a signed-in session ended, for the login screen's notice. */
 export interface SessionEnd {
   reason: SessionEndReason;
-  code: string;
+  /** The server's error code; null when this browser closed the session itself (`close`). */
+  code: string | null;
   /** The server's message, e.g. "다른 기기에서 로그인해 로그아웃되었습니다. 다시 로그인해주세요." */
   message: string;
 }
@@ -47,6 +55,8 @@ export interface AuthSession {
    * out, so a failed session restore on first visit shows no "logged out" notice.
    */
   end(error: ApiError): void;
+  /** After a password change or withdrawal answered 204. Does nothing when already signed out. */
+  close(reason: AccountCloseReason): void;
   subscribe(listener: () => void): () => void;
 }
 
@@ -74,6 +84,10 @@ export function createAuthSession(): AuthSession {
       const reason = sessionEndReason(error.code);
       if (!reason) throw new Error(`세션을 끝내는 코드가 아닙니다: ${error.code}`);
       set({ status: 'signed-out', ended: { reason, code: error.code, message: error.message } });
+    },
+    close(reason) {
+      if (state.status !== 'signed-in') return;
+      set({ status: 'signed-out', ended: { reason, code: null, message: ACCOUNT_CLOSE_MESSAGES[reason] } });
     },
     subscribe(listener) {
       listeners.add(listener);

@@ -67,6 +67,25 @@ export function useUpdateNickname() {
   });
 }
 
+/**
+ * PATCH /users/me/password (SCRUM-167). 204 means the server revoked every refresh token, expired the cookie and
+ * dropped the login session, so this browser closes its session at once: a request still on its way with the old
+ * token would otherwise try to reissue and end it as "expired". 400 USER_INVALID_PASSWORD: wrong current password.
+ */
+export async function changePassword(client: ApiClient, request: { currentPassword: string; newPassword: string }): Promise<void> {
+  await client.request<void>('/users/me/password', { method: 'PATCH', body: request });
+  client.session.close('password-changed');
+}
+
+/**
+ * POST /users/me/withdrawal (SCRUM-167). 204 is the same session end as a password change. 400
+ * USER_INVALID_PASSWORD: wrong password; 403 USER_SUSPENDED ends the session with the suspension notice (client.ts).
+ */
+export async function withdraw(client: ApiClient, password: string): Promise<void> {
+  await client.request<void>('/users/me/withdrawal', { method: 'POST', body: { password } });
+  client.session.close('withdrawn');
+}
+
 /** Whether to show the admin menu (SCRUM-171). The server checks the role again on every admin call. */
 export function useIsAdmin(): boolean {
   const me = useMyInfo();
