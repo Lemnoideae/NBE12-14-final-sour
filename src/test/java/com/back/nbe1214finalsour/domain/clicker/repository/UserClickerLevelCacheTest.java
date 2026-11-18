@@ -101,6 +101,19 @@ public class UserClickerLevelCacheTest {
     }
 
     @Test
+    @DisplayName("레벨 키가 없으면 빈 값을 반환하고 키를 만들지 않는다")
+    void find_whenEmpty() {
+        // given (키 없음)
+
+        // when
+        Optional<Long> level = userClickerLevelCache.find(USER_ID);
+
+        // then
+        assertThat(level).isEmpty();
+        assertThat(redisTemplate.hasKey(KEY)).isFalse();
+    }
+
+    @Test
     @DisplayName("캐시가 없으면 새 레벨을 평문 숫자로 저장")
     void raiseLevel_whenEmpty() {
         userClickerLevelCache.raiseLevel(USER_ID, 2L);
