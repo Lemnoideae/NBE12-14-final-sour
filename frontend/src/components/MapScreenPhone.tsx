@@ -3,7 +3,8 @@ import React, { useState } from 'react';
 import { Screen1NationalMap } from './Screen1NationalMap';
 import { Screen2RegionMap } from './Screen2RegionMap';
 import type { NavTab } from './BottomNav';
-import { useSchoolViews } from '../hooks/useSchoolViews.ts';
+import { useMapSchools } from '../hooks/useMapSchools.ts';
+import { LoadNotice } from './LoadNotice';
 import type { MapRegion } from '../data/schoolMapLayout.ts';
 
 /** What the map shows. Kept outside the map in the app so a visit can return to it (M2 A2). */
@@ -36,7 +37,9 @@ export const MapScreenPhone: React.FC<MapScreenPhoneProps> = ({
   onContextChange,
   initialRegion = '전체',
 }) => {
-  const schools = useSchoolViews();
+  // Mock rows or the server's ranks on the school directory, by mode (SCRUM-162).
+  const map = useMapSchools();
+  const schools = map.schools;
   const [localContext, setLocalContext] = useState<MapContext>({ ...INITIAL_MAP_CONTEXT, region: initialRegion });
   const current = context ?? localContext;
   const update = (patch: Partial<MapContext>) => {
@@ -57,6 +60,18 @@ export const MapScreenPhone: React.FC<MapScreenPhoneProps> = ({
     },
     onNavigateTab,
   };
+
+  if (map.status !== 'ready') {
+    return (
+      <LoadNotice
+        status={map.status}
+        name="학교 지도"
+        failureDetail={map.failureDetail}
+        onRetry={map.retry}
+        onBack={() => onNavigateTab('campus')}
+      />
+    );
+  }
 
   return current.region === '충청' ? <Screen2RegionMap {...controls} /> : <Screen1NationalMap {...controls} region={current.region} />;
 };

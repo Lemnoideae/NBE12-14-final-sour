@@ -5,7 +5,8 @@ import React, { useLayoutEffect, useRef, useState } from 'react';
 import { Search, Crown, X, ChevronUp, ChevronDown } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { BottomNav, type NavTab } from './BottomNav';
-import { SharedImage } from './SharedImage.tsx';
+import { ImageFallback, SharedImage } from './SharedImage.tsx';
+import { SCHOOL_LOGO_ASSETS } from '../data/schoolLogos.ts';
 import { MAP_DESIGN_FRAME_PX, MAP_REGIONS, mapLayerFit, type MapRegion } from '../data/schoolMapLayout.ts';
 import type { SchoolView } from '../data/schoolDirectory.ts';
 
@@ -139,7 +140,11 @@ export function MapSearchHeader({
 export function SchoolBadge({ school, className }: { school: SchoolView; className: string }) {
   return (
     <div className={className} style={{ backgroundColor: school.badgeColor }} data-logo-status={school.logoStatus}>
-      <SharedImage target={{ type: 'school', id: school.id }} name={school.name} fallback={school.firstSyllable} className="w-full h-full" />
+      {school.logoUrl ? (
+        <ImageFallback url={school.logoUrl} defaultUrl={SCHOOL_LOGO_ASSETS[school.id]} name={school.name} fallback={school.firstSyllable} className="w-full h-full" />
+      ) : (
+        <SharedImage target={{ type: 'school', id: school.id }} name={school.name} fallback={school.firstSyllable} className="w-full h-full" />
+      )}
     </div>
   );
 }
