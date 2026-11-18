@@ -8,7 +8,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willReturn;
+import static org.mockito.Mockito.never;
 
 @IntegrationTest
 public class UserClickerLevelCacheTest {
@@ -46,6 +49,22 @@ public class UserClickerLevelCacheTest {
         // then
         assertThat(level).isEqualTo(2L);
         assertThat(cachedLevel()).isEqualTo("2");
+    }
+
+    @Test
+    @DisplayName("레벨 키가 있으면 DB를 읽지 않고 Redis 값을 반환하며 덮어쓰지 않는다")
+    void loadIfAbsent_whenPresent() {
+        // given
+        redisTemplate.opsForValue().set(KEY, "3");
+        willReturn(2L).given(userClickerLevelStore).findLevel(USER_ID);
+
+        // when
+        long level = userClickerLevelCache.loadIfAbsent(USER_ID);
+
+        // then
+        assertThat(level).isEqualTo(3L);
+        assertThat(cachedLevel()).isEqualTo("3");
+        then(userClickerLevelStore).should(never()).findLevel(anyLong());
     }
 
     @Test
