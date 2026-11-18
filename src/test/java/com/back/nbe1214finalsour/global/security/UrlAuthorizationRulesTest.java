@@ -187,6 +187,17 @@ class UrlAuthorizationRulesTest {
     }
 
     @Test
+    @DisplayName("추가 기능 방명록 조회는 인증 선택, 쓰기 메서드는 인증 필요")
+    void guestBookListIsOptionalButWriteIsRequired() throws Exception {
+        Row list = new Row(HttpMethod.GET, "/api/v1/universities/12/guestbooks", Auth.OPTIONAL);
+        perform(list, null).andExpect(status().isOk());
+        perform(list, jwtProvider.createAccessToken(USER, null))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data").value(42));
+        Row create = new Row(HttpMethod.POST, "/api/v1/universities/12/guestbooks", Auth.REQUIRED);
+        perform(create, null).andExpect(status().isUnauthorized());
+    }
+
+    @Test
     @DisplayName("문의 등록(추가 명세 §3-8, 선택)은 익명도 보안 규칙을 통과하고, 유효한 토큰이면 로그인 회원이 채워진다")
     void supportCreateIsOptional() throws Exception {
         Row create = new Row(HttpMethod.POST, "/api/v1/supports", Auth.OPTIONAL);
