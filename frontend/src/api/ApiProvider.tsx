@@ -3,6 +3,7 @@ import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { createApiClient, type ApiClient } from './client';
 import type { ApiFaultMode } from './faults';
 import { createQueryClient } from './queryClient';
+import type { SessionState } from './session';
 
 const ApiClientContext = createContext<ApiClient | null>(null);
 
@@ -28,6 +29,15 @@ export function useApiClient(): ApiClient {
   const client = useContext(ApiClientContext);
   if (!client) throw new Error('ApiProvider 안에서 useApiClient를 사용하세요.');
   return client;
+}
+
+/**
+ * The API session state. When it turns to signed-out with `ended` set (another device logged in, suspension, refresh
+ * expired), the app shows the login screen with `ended.message` (wired with the login screen, SCRUM-152).
+ */
+export function useAuthSession(): SessionState {
+  const { session } = useApiClient();
+  return useSyncExternalStore(session.subscribe, session.getState, session.getState);
 }
 
 /** The client's fault-injection mode and its setter, for the test tool. */

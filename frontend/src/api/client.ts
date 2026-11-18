@@ -1,9 +1,11 @@
-// The one HTTP client every API call goes through (SCRUM-147). Plan: .agents/01-PLAN/261118-1021-frontend_prototype_migration_plan.md
-// §5 단계 0-3. It calls the same origin (the Vite proxy forwards /api/, SCRUM-146), unwraps ApiResponse and turns
-// every failure into ApiError. Access tokens and reissue come next (SCRUM-148).
+// The one HTTP client every API call goes through (SCRUM-147, SCRUM-148). Plan:
+// .agents/01-PLAN/261118-1021-frontend_prototype_migration_plan.md §5 단계 0-3·0-4. It calls the same origin (the
+// Vite proxy forwards /api/, SCRUM-146), unwraps ApiResponse, turns every failure into ApiError, sends the access
+// token and reissues it once when it expires.
 
-import { ApiError, CLIENT_ERROR_CODES, parseFieldErrors } from './errors';
+import { ApiError, CLIENT_ERROR_CODES, isApiError, parseFieldErrors } from './errors';
 import { createApiFaults, type ApiFaults } from './faults';
+import { createAuthSession, sessionEndReason, type AuthSession } from './session';
 
 /** Every endpoint is under /api/v1 (decision 2026-11-12); paths passed to the client start after it. */
 export const API_BASE_PATH = '/api/v1';
@@ -11,6 +13,10 @@ export const API_BASE_PATH = '/api/v1';
 export const SUCCESS_CODE = 'SUCCESS';
 /** Bad Gateway, Service Unavailable, Gateway Timeout: answered by a proxy in front of the backend. */
 const GATEWAY_STATUSES: ReadonlySet<number> = new Set([502, 503, 504]);
+/** The access token expired, or its session was lost (AccessTokenAuthenticator): reissue and try once more. */
+export const EXPIRED_TOKEN_CODE = 'COMMON_EXPIRED_TOKEN';
+/** AuthController.reissue: reads the refreshToken cookie, answers ReissueResponse and a new cookie. */
+export const REISSUE_PATH = '/auth/reissue';
 
 export type QueryValue = string | number | boolean | null | undefined;
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -22,6 +28,17 @@ export interface ApiRequestOptions {
   /** FormData goes as multipart (the logo item, ItemController); anything else as JSON. */
   body?: unknown;
   signal?: AbortSignal;
+  /**
+   * Leave the session out: no Authorization header, no reissue, and a session-ending code does not end the session.
+   * For the auth endpoints themselves (login, signup, email code), whose errors belong to their form.
+   */
+  anonymous?: boolean;
+}
+
+/** ReissueResponse */
+export interface ReissueResponse {
+  accessToken: string;
+  expiresInSeconds: number;
 }
 
 export interface ApiClient {
@@ -31,14 +48,21 @@ export interface ApiClient {
    */
   request<T>(path: string, options?: ApiRequestOptions): Promise<T>;
   get<T>(path: string, options?: Omit<ApiRequestOptions, 'method' | 'body'>): Promise<T>;
+  /**
+   * Gets a new access token with the refresh cookie and signs the session in. Calls made while one is running
+   * share it, so the used-once refresh token is sent only once. Resolves to the new token.
+   */
+  reissue(): Promise<string>;
   /** The test tool's delay and failure injection for this client. */
   readonly faults: ApiFaults;
+  readonly session: AuthSession;
 }
 
 export interface ApiClientOptions {
   fetch?: typeof fetch;
   baseUrl?: string;
   faults?: ApiFaults;
+  session?: AuthSession;
 }
 
 interface ApiResponseBody {
@@ -80,18 +104,31 @@ async function readBody(response: Response): Promise<unknown> {
   }
 }
 
+/** Waits for a promise shared with other callers; aborting stops this caller's wait, not the shared work. */
+function awaitShared<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
+}
+
 export function createApiClient(options: ApiClientOptions = {}): ApiClient {
   const doFetch = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
   const baseUrl = options.baseUrl ?? API_BASE_PATH;
   const faults = options.faults ?? createApiFaults();
+  const session = options.session ?? createAuthSession();
+  let reissuing: Promise<string> | null = null;
 
-  async function request<T>(path: string, { method = 'GET', query, body, signal }: ApiRequestOptions = {}): Promise<T> {
-    const url = buildUrl(baseUrl, path, query);
-    await faults.beforeRequest(signal);
-
+  /** One HTTP exchange: sends `accessToken` when given, returns data or throws ApiError. */
+  async function send<T>(url: string, method: HttpMethod, body: unknown, signal: AbortSignal | undefined,
+    accessToken: string | null): Promise<T> {
     const encoded = encodeBody(body);
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (encoded.contentType) headers['Content-Type'] = encoded.contentType;
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
 
     let response: Response;
     try {
@@ -123,9 +160,53 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     });
   }
 
+  /** Ends a signed-in session when the error says it is over, then rethrows the error. */
+  function endSessionIfOver(error: unknown): never {
+    if (isApiError(error) && error.kind === 'http' && sessionEndReason(error.code)) session.end(error);
+    throw error;
+  }
+
+  function reissue(): Promise<string> {
+    if (!reissuing) {
+      const url = buildUrl(baseUrl, REISSUE_PATH);
+      reissuing = send<ReissueResponse>(url, 'POST', undefined, undefined, null)
+        .then(({ accessToken }) => {
+          session.signIn(accessToken);
+          return accessToken;
+        }, endSessionIfOver)
+        .finally(() => { reissuing = null; });
+    }
+    return reissuing;
+  }
+
+  async function request<T>(path: string, { method = 'GET', query, body, signal, anonymous = false }: ApiRequestOptions = {}): Promise<T> {
+    const url = buildUrl(baseUrl, path, query);
+    await faults.beforeRequest(signal);
+    if (anonymous) return send<T>(url, method, body, signal, null);
+
+    const sentToken = session.getAccessToken();
+    try {
+      return await send<T>(url, method, body, signal, sentToken);
+    } catch (error) {
+      if (!(isApiError(error) && error.code === EXPIRED_TOKEN_CODE && sentToken)) endSessionIfOver(error);
+    }
+
+    // The token expired. If another request already replaced it, use the new one; otherwise reissue (shared).
+    const current = session.getAccessToken();
+    const nextToken = current && current !== sentToken ? current : await awaitShared(reissue(), signal);
+    try {
+      return await send<T>(url, method, body, signal, nextToken);
+    } catch (error) {
+      // Only one retry: a second COMMON_EXPIRED_TOKEN goes to the caller instead of reissuing in a loop.
+      return endSessionIfOver(error);
+    }
+  }
+
   return {
     request,
     get: (path, getOptions) => request(path, { ...getOptions, method: 'GET' }),
+    reissue,
     faults,
+    session,
   };
 }
