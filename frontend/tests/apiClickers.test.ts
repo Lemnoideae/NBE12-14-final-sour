@@ -290,6 +290,18 @@ test('Java 계약 센서: DTO 필드·레벨 도달 비용·최대 레벨·인�
   const controller = readFileSync(new URL('controller/ClickerController.java', root), 'utf8');
   assert.match(controller, /@PostMapping\("\/upgrade"\)/, fix);
   assert.match(controller, /upgrade\(@AuthenticationPrincipal AuthUser authUser\)/, fix);
+  // #109: one Redis Lua call compares the expected level, then deducts and raises it. A conflict (-2) or a short
+  // balance (-1) changes nothing, so a 409 needs only a fresh profile, not an observed level rise (useClicker).
   const service = readFileSync(new URL('service/ClickerUpgradeService.java', root), 'utf8');
-  assert.match(service, /tryDeduct\(userId, universityId, nextClicker.getRequiredScore\(\)\)/, fix);
+  assert.match(service, /redisClickerUpgrader\.upgrade\(\s*userId, universityId, currentLevel, nextClicker\.getRequiredScore\(\)\)/, fix);
+  assert.match(service, /upgradeResult == -1\)\s*\{\s*throw new BusinessException\(ErrorCode\.CLICKER_NOT_ENOUGH_SCORE\)/, fix);
+  assert.match(service, /upgradeResult == -2\)\s*\{\s*throw new BusinessException\(ErrorCode\.CLICKER_UPGRADE_CONFLICT\)/, fix);
+  const lua = readFileSync(new URL('../../../../../../resources/redis/clicker-upgrade.lua', root), 'utf8');
+  const at = (text: string) => lua.indexOf(text);
+  assert.ok(at('return -2') >= 0 && at('return -1') > at('return -2') && at('ZINCRBY') > at('return -1'), fix);
+  const errors = readFileSync(new URL('../../global/exception/ErrorCode.java', root), 'utf8');
+  assert.match(errors, /CLICKER_UPGRADE_CONFLICT\(HttpStatus\.CONFLICT,/, fix);
+  // The reconcile GET must see the upgraded level before the 1-minute batch writes it to the DB.
+  const users = readFileSync(new URL('../user/service/UserService.java', root), 'utf8');
+  assert.match(users, /clickerInfo\(userClickerLevelCache\.find\(userId\)\.orElse\(user\.getClickerId\(\)\)\)/, fix);
 });
