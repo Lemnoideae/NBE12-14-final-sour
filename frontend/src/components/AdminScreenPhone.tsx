@@ -1,26 +1,31 @@
 import { ChevronLeft, RefreshCw } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuthSession } from '../api/ApiProvider';
 import { useAdminPendingSupportCount } from '../api/admin';
 import { errorMessage } from '../api/errors';
 import { useIsAdmin, useMyInfo } from '../api/users';
 import { soundManager } from '../utils/sound';
+import { ADMIN_BOX as BOX, ADMIN_BUTTON as BUTTON, AdminForbiddenNotice } from './adminUi';
+import { AdminSupportDetailView, AdminSupportList, type AdminSupportListState } from './AdminSupportsPanel';
 import { LoadNotice } from './LoadNotice';
 import { PhoneShell } from './PhoneShell';
 
 // Admin home in API mode (SCRUM-172, plan .agents/01-PLAN/261119-1023-scrum172_admin_entry.md). Shown only to a
 // profile whose role is ADMIN; the server checks the role again on every admin call. The menu items are switched on
-// by SCRUM-173 (inquiries), SCRUM-174 (member status, abuse ranking) and SCRUM-175 (test tools).
+// by SCRUM-173 (inquiries, AdminSupportsPanel), SCRUM-174 (member status, abuse ranking) and SCRUM-175 (test tools).
 
-const BUTTON = 'pixel-plaque plaque-wood min-h-11 min-w-11 px-3 py-2 text-xs font-bold cursor-pointer disabled:opacity-50 disabled:cursor-default';
-const BOX = 'rpg-box p-3 bg-[#fdf5df] border-2 border-[#261608] shadow-[2px_2px_0px_#261608] flex flex-col gap-2';
+type AdminView = { kind: 'home' } | { kind: 'supports' } | { kind: 'support'; id: number };
 
-/** Admin menu entries, in the order of their subtasks. */
-const ADMIN_MENU: ReadonlyArray<{ label: string; detail: string }> = [
-  { label: '문의 처리', detail: '문의 목록과 답변' },
+/** Admin menu entries, in the order of their subtasks. An entry without `opens` is not built yet. */
+const ADMIN_MENU: ReadonlyArray<{ label: string; detail: string; opens?: AdminView['kind'] }> = [
+  { label: '문의 처리', detail: '문의 목록과 답변', opens: 'supports' },
   { label: '회원 정지·해제', detail: '회원 상태 변경' },
   { label: '어뷰징 순위', detail: '최근 3일 부정행위 순위' },
   { label: '테스트 도구', detail: '이 브라우저의 요청 지연·실패 주입' },
 ];
+
+const TITLE: Record<AdminView['kind'], string> = { home: '관리자', supports: '문의 처리', support: '문의 상세' };
+const BACK_LABEL: Record<AdminView['kind'], string> = { home: '내 정보로 돌아가기', supports: '관리자 홈으로 돌아가기', support: '문의 목록으로 돌아가기' };
 
 interface AdminScreenPhoneProps {
   onBack: () => void;
@@ -31,28 +36,43 @@ export function AdminScreenPhone({ onBack, onGoToLogin }: AdminScreenPhoneProps)
   const signedIn = useAuthSession().status === 'signed-in';
   const me = useMyInfo();
   const isAdmin = useIsAdmin();
+  const [stored, setView] = useState<AdminView>({ kind: 'home' });
+  const [supportList, setSupportList] = useState<AdminSupportListState>({ filter: 'RECEIVED', page: 0 });
+  const heading = useRef<HTMLHeadingElement>(null);
+  // Only an admin gets past the home; signing out or losing the role falls back to its notices.
+  const view: AdminView = signedIn && isAdmin && me.data ? stored : { kind: 'home' };
+  useEffect(() => { if (view.kind !== 'home' || stored.kind !== 'home') heading.current?.focus(); }, [view.kind, stored.kind]);
 
   if (signedIn && !me.data) {
     return <LoadNotice status={me.isError ? 'failed' : 'loading'} name="내 정보" failureDetail={errorMessage(me.error)}
       onRetry={() => void me.refetch()} onBack={onBack} backLabel="내 정보로" />;
   }
 
+  const back = view.kind === 'support' ? () => setView({ kind: 'supports' })
+    : view.kind === 'supports' ? () => setView({ kind: 'home' }) : onBack;
+
   return (
     <PhoneShell>
       <header className="bg-[#faecc7] border-b-2 border-[#261608] p-2 flex items-center gap-3 shrink-0 font-pixel text-[#261608]">
-        <button type="button" onClick={() => { soundManager.playTabSound(); onBack(); }} className={BUTTON} aria-label="내 정보로 돌아가기">
+        <button type="button" onClick={() => { soundManager.playTabSound(); back(); }} className={BUTTON} aria-label={BACK_LABEL[view.kind]}>
           <ChevronLeft className="w-4 h-4 inline" aria-hidden="true" /> 뒤로
         </button>
-        <h1 className="text-sm font-black">관리자</h1>
+        <h1 ref={heading} tabIndex={-1} className="text-sm font-black">{TITLE[view.kind]}</h1>
       </header>
       <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 font-pixel text-[#261608]">
-        {!signedIn ? (
+        {view.kind === 'supports' && me.data ? (
+          <AdminSupportList adminId={me.data.id} state={supportList} onChange={setSupportList}
+            onOpen={(id) => setView({ kind: 'support', id })} onGoToLogin={onGoToLogin} />
+        ) : view.kind === 'support' && me.data ? (
+          <AdminSupportDetailView key={view.id} adminId={me.data.id} supportId={view.id}
+            onBackToList={() => setView({ kind: 'supports' })} onGoToLogin={onGoToLogin} />
+        ) : !signedIn ? (
           <div role="status" className={`${BOX} items-center text-center`}>
             <p className="text-sm font-bold">관리자 계정으로 로그인해 주세요</p>
             <button type="button" onClick={onGoToLogin} className={BUTTON}>로그인</button>
           </div>
         ) : isAdmin ? (
-          <AdminHome onGoToLogin={onGoToLogin} />
+          <AdminHome onGoToLogin={onGoToLogin} onOpen={(kind) => setView(kind === 'supports' ? { kind } : { kind: 'home' })} />
         ) : (
           <p role="status" data-testid="admin-denied" className={`${BOX} text-sm font-bold text-center`}>관리자만 이용할 수 있어요.</p>
         )}
@@ -61,18 +81,10 @@ export function AdminScreenPhone({ onBack, onGoToLogin }: AdminScreenPhoneProps)
   );
 }
 
-function AdminHome({ onGoToLogin }: { onGoToLogin: () => void }) {
+function AdminHome({ onGoToLogin, onOpen }: { onGoToLogin: () => void; onOpen: (kind: AdminView['kind']) => void }) {
   const { query: pending, forbidden } = useAdminPendingSupportCount();
 
-  if (forbidden) {
-    return (
-      <div role="alert" data-testid="admin-forbidden" className={`${BOX} items-center text-center`}>
-        <p className="text-sm font-black text-[#991b1b]">이 로그인에는 아직 관리자 권한이 없어요</p>
-        <p className="text-[11px]">권한이 막 바뀌었다면 로그아웃한 뒤 다시 로그인해 주세요.</p>
-        <button type="button" onClick={onGoToLogin} className={BUTTON}>로그인 화면으로</button>
-      </div>
-    );
-  }
+  if (forbidden) return <AdminForbiddenNotice onGoToLogin={onGoToLogin} />;
 
   return (
     <>
@@ -92,11 +104,12 @@ function AdminHome({ onGoToLogin }: { onGoToLogin: () => void }) {
         )}
       </section>
       <nav aria-label="관리자 메뉴" className="flex flex-col gap-2">
-        {ADMIN_MENU.map(({ label, detail }) => (
-          <button key={label} type="button" disabled aria-describedby={`admin-menu-${label}`}
-            className="pixel-plaque plaque-parchment min-h-12 px-3 py-2 text-left text-xs font-bold disabled:opacity-60 disabled:cursor-default">
+        {ADMIN_MENU.map(({ label, detail, opens }) => (
+          <button key={label} type="button" disabled={!opens} aria-describedby={`admin-menu-${label}`}
+            onClick={opens ? () => { soundManager.playTabSound(); onOpen(opens); } : undefined}
+            className="pixel-plaque plaque-parchment min-h-12 px-3 py-2 text-left text-xs font-bold cursor-pointer disabled:opacity-60 disabled:cursor-default">
             {label}
-            <span id={`admin-menu-${label}`} className="block text-[10px] font-normal">{detail} · 준비 중</span>
+            <span id={`admin-menu-${label}`} className="block text-[10px] font-normal">{opens ? detail : `${detail} · 준비 중`}</span>
           </button>
         ))}
       </nav>
