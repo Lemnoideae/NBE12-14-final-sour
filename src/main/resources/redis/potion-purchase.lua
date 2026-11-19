@@ -6,6 +6,13 @@
 redis.call('SET', KEYS[4], '1', 'PX', ARGV[7])
 local remaining = redis.call('ZINCRBY', KEYS[1], -tonumber(ARGV[2]), ARGV[1])
 redis.call('SADD', KEYS[2], ARGV[1])
+local raw = redis.call('HGETALL', KEYS[3])
+local previous = ''
+if #raw > 0 then
+    local fields = {}
+    for i = 1, #raw, 2 do fields[raw[i]] = raw[i + 1] end
+    previous = cjson.encode(fields)
+end
 redis.call('HSET', KEYS[3], 'itemId', ARGV[3], 'multiplier', ARGV[4], 'expiredAt', ARGV[5], 'purchaseId', ARGV[6])
 redis.call('PEXPIREAT', KEYS[3], ARGV[5])
-return {tonumber(remaining), ''}
+return {tonumber(remaining), previous}
