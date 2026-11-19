@@ -72,3 +72,19 @@ test('계약 센서: 서비스의 500 code-point 길이와 1분 제한, 생성 �
   assert.match(service, /codePointCount/); assert.match(service, /GUEST_OWN_UNIVERSITY/);
   assert.match(controller, /ApiResponse<GuestBookListResponse.Item> createGuestBook/);
 });
+
+test('좋아요 계약 센서: JPA 서버의 POST·DELETE 경로·응답·없는 좋아요 오류와 일치해야 한다', () => {
+  const base = new URL('../../src/main/java/com/back/nbe1214finalsour/domain/guestbook/', import.meta.url);
+  const controller = readFileSync(new URL('controller/GuestBookLikeController.java', base), 'utf8');
+  const response = readFileSync(new URL('dto/GuestBookLikeResponse.java', base), 'utf8');
+  const errors = readFileSync(new URL('../../global/exception/ErrorCode.java', base), 'utf8');
+  assert.match(controller, /@RequestMapping\("\/api\/v1\/guestbooks"\)/, '좋아요 기본 경로가 바뀌면 API 클라이언트도 함께 갱신하세요.');
+  for (const method of ['Post', 'Delete']) {
+    assert.ok(controller.includes(`@${method}Mapping("/{guestbookId}/likes")`), `${method} 좋아요 매핑 누락: 서버와 프론트를 같은 기능 단위로 적용하세요.`);
+  }
+  assert.match(response, /Long guestbookId/);
+  assert.match(response, /boolean liked/);
+  assert.match(response, /int likeCount/);
+  assert.match(errors, /GUEST_ALREADY_LIKED\(HttpStatus.CONFLICT/);
+  assert.match(errors, /GUEST_LIKE_NOT_FOUND\(HttpStatus.NOT_FOUND/);
+});
