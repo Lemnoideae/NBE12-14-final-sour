@@ -20,6 +20,8 @@ interface CampusViewProps {
   activeStudents: number;
   onOpenGuestbook?: () => void;
   showGuestbookBoard?: boolean;
+  /** null hides the mock unread count when the service has no unread API. */
+  guestbookBadge?: string | null;
   /** Opens the campus stats sheet (T5). Without it the sign still shows, as on the comparison mockups. */
   onOpenStats?: () => void;
   showStatsButton?: boolean;
@@ -41,6 +43,7 @@ export const CampusView: React.FC<CampusViewProps> = ({
   activeStudents,
   onOpenGuestbook,
   showGuestbookBoard = true,
+  guestbookBadge = 'N 5',
   onOpenStats,
   showStatsButton = true,
   fill = false,
@@ -275,7 +278,7 @@ export const CampusView: React.FC<CampusViewProps> = ({
         )}
 
         {/* Wooden Pixel Notice Board Object in Lower-Left Area near Main Path */}
-        {showGuestbookBoard && <GuestbookBoardButton ariaLabel="우리 학교 방명록 보기" badge="N 5" onOpen={onOpenGuestbook} />}
+        {showGuestbookBoard && <GuestbookBoardButton ariaLabel="우리 학교 방명록 보기" badge={guestbookBadge ?? undefined} onOpen={onOpenGuestbook} />}
 
         {/* Student Live Whisper Bubble */}
         {studentWhisper && (

@@ -29,6 +29,7 @@ import { TwoPhoneVisitingComparison } from './components/TwoPhoneVisitingCompari
 import { TwoPhoneOurSchoolGuestbookComparison } from './components/TwoPhoneOurSchoolGuestbookComparison';
 import { TwoPhoneRankingComparison } from './components/TwoPhoneRankingComparison';
 import { OurSchoolGuestbookBottomSheet } from './components/OurSchoolGuestbookBottomSheet';
+import { ApiGuestbookBottomSheet } from './components/ApiGuestbookBottomSheet';
 import { ChatPreviewBar } from './components/ChatPreviewBar';
 import { ChatBottomSheet } from './components/ChatBottomSheet';
 import { BottomSheetDialog } from './components/BottomSheetDialog';
@@ -641,7 +642,8 @@ function AppContent() {
         ) : viewMode === 'visiting' ? (
           <div className={viewWrap}>
             {isVisitGuestbookOpen && (
-              <VisitingScreen2Phone modal schoolId={visitSchoolId} onCloseGuestbook={() => setIsVisitGuestbookOpen(false)} />
+              <VisitingScreen2Phone modal schoolId={visitSchoolId} onCloseGuestbook={() => setIsVisitGuestbookOpen(false)}
+                onGoToLogin={() => { setIsVisitGuestbookOpen(false); setViewMode('login'); }} />
             )}
             <MockLoadGate key={`visit:${visitSchoolId ?? ''}`} name="방문 학교" onBack={goToMap} backLabel="지도로 돌아가기">
               <VisitingScreen1Phone
@@ -901,18 +903,19 @@ function AppContent() {
                       setIsOurGuestbookSheetOpen(false);
                       soundManager.playTabSound();
                     }}>
-                      <OurSchoolGuestbookBottomSheet
-                        onClose={() => {
-                          setIsOurGuestbookSheetOpen(false);
-                          soundManager.playTabSound();
-                        }}
-                        onGoToMap={() => {
-                          setIsOurGuestbookSheetOpen(false);
-                          setActiveTab('map');
-                        }}
-                        mySchoolId={mySchool.id}
-                        schoolName={mySchool.name}
-                      />
+                      {API_MODE === 'api' ? <ApiGuestbookBottomSheet onClose={() => {
+                        setIsOurGuestbookSheetOpen(false);
+                        soundManager.playTabSound();
+                      }} onGoToMap={() => {
+                        setIsOurGuestbookSheetOpen(false);
+                        setActiveTab('map');
+                      }} onGoToLogin={() => { setIsOurGuestbookSheetOpen(false); setViewMode('login'); }} /> : <OurSchoolGuestbookBottomSheet onClose={() => {
+                        setIsOurGuestbookSheetOpen(false);
+                        soundManager.playTabSound();
+                      }} onGoToMap={() => {
+                        setIsOurGuestbookSheetOpen(false);
+                        setActiveTab('map');
+                      }} mySchoolId={mySchool.id} schoolName={mySchool.name} />}
                     </BottomSheetDialog>
                   )}
                 </>
@@ -921,6 +924,7 @@ function AppContent() {
               {activeTab === 'campus' && (
                 <>
                   <CampusView
+                    guestbookBadge={API_MODE === 'api' ? null : 'N 5'}
                     onTap={handleCampusTap}
                     clickPower={clickPower}
                     basePower={basePower}
