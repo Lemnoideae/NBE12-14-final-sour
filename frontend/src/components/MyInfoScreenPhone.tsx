@@ -3,7 +3,7 @@ import { ChevronLeft } from 'lucide-react';
 import { useAuthSession } from '../api/ApiProvider';
 import { nicknameProblem, NICKNAME_RULE, SIGNUP_ERROR_CODES } from '../api/auth';
 import { errorMessage, fieldErrorMap, isApiError } from '../api/errors';
-import { useMyInfo, useUpdateNickname, type MyInfo } from '../api/users';
+import { useIsAdmin, useMyInfo, useUpdateNickname, type MyInfo } from '../api/users';
 import { soundManager } from '../utils/sound';
 import { PasswordChangeForm, WithdrawalForm } from './AccountSecurityForms';
 import { LoadNotice } from './LoadNotice';
@@ -21,11 +21,14 @@ interface MyInfoScreenPhoneProps {
   onGoToLogin: () => void;
   onOpenPurchaseHistory?: () => void;
   onOpenSupports?: () => void;
+  /** Shown only when the profile's role is ADMIN (SCRUM-172). */
+  onOpenAdmin?: () => void;
 }
 
-export function MyInfoScreenPhone({ onBack, onGoToLogin, onOpenPurchaseHistory, onOpenSupports }: MyInfoScreenPhoneProps) {
+export function MyInfoScreenPhone({ onBack, onGoToLogin, onOpenPurchaseHistory, onOpenSupports, onOpenAdmin }: MyInfoScreenPhoneProps) {
   const signedIn = useAuthSession().status === 'signed-in';
   const me = useMyInfo();
+  const isAdmin = useIsAdmin();
 
   if (signedIn && !me.data) {
     return (
@@ -63,6 +66,8 @@ export function MyInfoScreenPhone({ onBack, onGoToLogin, onOpenPurchaseHistory, 
               className="pixel-plaque plaque-yellow min-h-11 px-3 py-2 text-xs font-bold cursor-pointer">아이템 구매 내역</button>}
             {onOpenSupports && <button type="button" onClick={onOpenSupports}
               className="pixel-plaque plaque-yellow min-h-12 px-3 py-2 text-xs font-bold cursor-pointer">회원 문의 · 내 문의</button>}
+            {isAdmin && onOpenAdmin && <button type="button" onClick={() => { soundManager.playTabSound(); onOpenAdmin(); }}
+              className="pixel-plaque plaque-green min-h-12 px-3 py-2 text-xs font-bold cursor-pointer">관리자 메뉴</button>}
             {/* A new member (another login) starts a new form. */}
             <NicknameForm key={me.data.id} current={me.data.nickname} />
             <PasswordChangeForm key={`password-${me.data.id}`} />

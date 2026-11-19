@@ -37,6 +37,7 @@ import { ApiBotCheckDialog } from './components/ApiBotCheckDialog';
 import { SupportGuestScreenPhone } from './components/SupportGuestScreenPhone';
 import { SupportMemberScreenPhone } from './components/SupportMemberScreenPhone';
 import { MyInfoScreenPhone } from './components/MyInfoScreenPhone';
+import { AdminScreenPhone } from './components/AdminScreenPhone';
 import { PurchaseHistoryScreenPhone } from './components/PurchaseHistoryScreenPhone';
 import { CampusStatsSheet } from './components/CampusStatsSheet';
 import { getSchoolRankings } from './data/mockRankings';
@@ -63,7 +64,7 @@ import { Smartphone, Gamepad2, Layers, Trophy, ShoppingBag, MapPin, Image as Ima
 
 // [시연] 헤더 학교명 길이별 표시 확인용. 실제 학교 데이터가 아니라 목업 표시 테스트 값이다.
 /** Service flow screens (M5-D). Demo tools and design comparisons are left out of the 44px touch areas. */
-const SERVICE_VIEW_MODES = new Set<string>(['gameplay', 'signup', 'login', 'single_map', 'visiting', 'ranking', 'shop', 'alliance_apply', 'current_alliance', 'battle_apply', 'battle_status', 'support_guest', 'my_info', 'purchase_history', 'member_support']);
+const SERVICE_VIEW_MODES = new Set<string>(['gameplay', 'signup', 'login', 'single_map', 'visiting', 'ranking', 'shop', 'alliance_apply', 'current_alliance', 'battle_apply', 'battle_status', 'support_guest', 'my_info', 'purchase_history', 'member_support', 'admin']);
 /** Sign-up: the backend in API mode (SCRUM-151), the mock onboarding otherwise. */
 const SignupScreen = selectByMode<React.FC<{ onGoToCampus: () => void; onGoToLogin?: () => void }>>({ api: ApiSignupPhone, mock: OnboardingPhone });
 
@@ -76,7 +77,7 @@ const DEMO_SCHOOL_NAMES = [
 
 function AppContent() {
   // Mode: 'ranking_screens' (2-phone ranking comparison with infinite scroll) | 'our_guestbook_screens' | 'visiting_screens' | etc.
-  const [viewMode, setViewMode] = useState<'ranking_screens' | 'our_guestbook_screens' | 'visiting_screens' | 'chat_screens' | 'single_map' | 'visiting' | 'map_screens' | 'map_illustration' | 'shop' | 'ranking' | 'spritesheet' | 'onboarding' | 'signup' | 'login' | 'gameplay' | 'alliance_apply' | 'current_alliance' | 'battle_apply' | 'battle_status' | 'support_guest' | 'my_info' | 'purchase_history' | 'member_support'>('gameplay');
+  const [viewMode, setViewMode] = useState<'ranking_screens' | 'our_guestbook_screens' | 'visiting_screens' | 'chat_screens' | 'single_map' | 'visiting' | 'map_screens' | 'map_illustration' | 'shop' | 'ranking' | 'spritesheet' | 'onboarding' | 'signup' | 'login' | 'gameplay' | 'alliance_apply' | 'current_alliance' | 'battle_apply' | 'battle_status' | 'support_guest' | 'my_info' | 'purchase_history' | 'member_support' | 'admin'>('gameplay');
   const [isChatSheetOpen, setIsChatSheetOpen] = useState<boolean>(false);
   const [isOurGuestbookSheetOpen, setIsOurGuestbookSheetOpen] = useState<boolean>(false);
   const [isStatsSheetOpen, setIsStatsSheetOpen] = useState<boolean>(false);
@@ -771,7 +772,8 @@ function AppContent() {
         ) : viewMode === 'my_info' ? (
           <div className={viewWrap}>
             <MyInfoScreenPhone onBack={() => setViewMode('login')} onGoToLogin={() => setViewMode('login')}
-              onOpenPurchaseHistory={() => setViewMode('purchase_history')} onOpenSupports={() => setViewMode('member_support')} />
+              onOpenPurchaseHistory={() => setViewMode('purchase_history')} onOpenSupports={() => setViewMode('member_support')}
+              onOpenAdmin={() => setViewMode('admin')} />
           </div>
         ) : viewMode === 'purchase_history' ? (
           <div className={viewWrap}>
@@ -780,6 +782,10 @@ function AppContent() {
         ) : viewMode === 'member_support' ? (
           <div className={viewWrap}>
             <SupportMemberScreenPhone onBack={() => setViewMode('my_info')} onGoToLogin={() => setViewMode('login')} />
+          </div>
+        ) : viewMode === 'admin' ? (
+          <div className={viewWrap}>
+            <AdminScreenPhone onBack={() => setViewMode('my_info')} onGoToLogin={() => setViewMode('login')} />
           </div>
         ) : viewMode === 'spritesheet' ? (
           <SpriteSheetViewer
