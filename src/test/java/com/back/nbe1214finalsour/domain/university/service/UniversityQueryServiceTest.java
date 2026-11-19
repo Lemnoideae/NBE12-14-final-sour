@@ -1,6 +1,7 @@
 
 package com.back.nbe1214finalsour.domain.university.service;
 
+import com.back.nbe1214finalsour.domain.alliance.service.AllianceAllyChecker;
 import com.back.nbe1214finalsour.domain.university.repository.UniversityContributorReader;
 import com.back.nbe1214finalsour.domain.university.dto.DepartmentResponse;
 import com.back.nbe1214finalsour.domain.university.dto.UniversityDetailResponse;
@@ -51,6 +52,9 @@ class UniversityQueryServiceTest {
 
     @Mock
     private UniversityMemberService universityMemberService;
+
+    @Mock
+    private AllianceAllyChecker allianceAllyChecker;
 
     @Test
     @DisplayName("학교 이름으로 검색하면 DTO 목록을 반환한다")

@@ -161,6 +161,7 @@ class UniversityControllerTest {
                         498L,
                         List.of(),
                         List.of(),
+                        false,
                         false
                 ));
 
@@ -220,6 +221,7 @@ class UniversityControllerTest {
                                         1L, 101L, "클릭장인", 9000L
                                 )
                         ),
+                        false,
                         false
                 ));
 
@@ -262,7 +264,8 @@ class UniversityControllerTest {
                         498L,
                         List.of(),
                         List.of(),
-                        true
+                        true,
+                        false
                 ));
 
         mockMvc.perform(
@@ -302,6 +305,7 @@ class UniversityControllerTest {
                         498L,
                         List.of(),
                         List.of(),
+                        false,
                         false
                 ));
 
