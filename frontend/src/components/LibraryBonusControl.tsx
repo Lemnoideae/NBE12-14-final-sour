@@ -25,7 +25,7 @@ export function LibraryBonusControl({ control }: { control: LibraryClickControl 
     <div className="px-2 pb-2 space-y-2">
       <p id={`${id}-purpose`} className="text-[11px]">
         내 학교 도서관 100m 이내인지 서버가 확인할 수 있도록 실제 위경도를 클릭 요청에 보내요.
-        위치는 이 화면의 메모리에만 최대 30초 보관하며, 계속 추적하거나 저장하지 않아요.
+        새 제출용 위치는 메모리에만 최대 30초 보관해요. 지속 추적·브라우저 저장은 하지 않아요.
       </p>
       <div className="flex flex-wrap gap-2">
         <button type="button" className={BUTTON} disabled={status === 'locating'} aria-describedby={`${id}-purpose ${id}-status`} onClick={control.request}>

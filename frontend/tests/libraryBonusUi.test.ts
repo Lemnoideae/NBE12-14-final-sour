@@ -43,7 +43,7 @@ test('목적을 펼쳐도 권한을 묻지 않고 명시적 버튼 뒤에만 조
   assert.equal(document.querySelector('details')?.open, false);
   f.open();
   screen.getByText(/실제 위경도를 클릭 요청에 보내요/);
-  screen.getByText(/메모리에만 최대 30초/);
+  screen.getByText(/새 제출용 위치는 메모리에만 최대 30초/);
   assert.equal(f.requests.length, 0);
   f.request();
   assert.equal(f.requests.length, 1);
