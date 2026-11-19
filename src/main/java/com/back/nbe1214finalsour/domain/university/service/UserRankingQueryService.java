@@ -6,6 +6,7 @@ import com.back.nbe1214finalsour.domain.university.repository.UniversityReposito
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import com.back.nbe1214finalsour.global.redis.RedisHandler;
+import com.back.nbe1214finalsour.global.redis.RedisKey;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,7 @@ public class UserRankingQueryService {
     private final UniversityRankingService rankingService;
     private final UniversityRepository universityRepository;
     private final UniversityContributorReader contributorReader;
+    private final RankSnapshotService rankSnapshotService;
 
     private record Excluded(long position, double score) {}
 
@@ -43,7 +45,8 @@ public class UserRankingQueryService {
         // Redis 기여도 ZSET은 구매/업그레이드 잔액으로도 사용되므로 ZREM하면 안 된다.
         // PostgreSQL에서 비공개 회원을 찾아 랭킹 계산에서만 제외한다.
         List<Excluded> excluded = new ArrayList<>();
-        for (Long userId : contributorReader.findExcludedUserIds(universityId)) {
+        List<Long> excludedUserIds = contributorReader.findExcludedUserIds(universityId);
+        for (Long userId : excludedUserIds) {
             var position = rankingService.getContributorPosition(universityId, userId);
             if (position.isEmpty()) {
                 continue; // DB에는 있지만 아직 Redis 랭킹에 없는 회원
@@ -93,6 +96,10 @@ public class UserRankingQueryService {
         Map<Long, UniversityContributorReader.RankingProfile> profiles =
                 contributorReader.findRankingProfiles(universityId, userIds);
 
+        // 어제 공개 순위 (비공개 회원은 어제 점수로도 빼고 센다, Redis 왕복 3회)
+        Map<Long, Long> previousRanks = rankSnapshotService.previousRanks(
+                RedisKey.RANK_USER_SNAPSHOT.of(universityId), userIds, excludedUserIds);
+
         List<UserRankingResponse.Item> items = new ArrayList<>();
         List<Double> excludedScores = excluded.stream()
                 .map(Excluded::score)
@@ -118,7 +125,8 @@ public class UserRankingQueryService {
                     profile.nickname(),
                     profile.profileImageUrl(),
                     new UserRankingResponse.DepartmentInfo(profile.departmentId(), profile.departmentName()),
-                    (long) entry.score()
+                    (long) entry.score(),
+                    RankSnapshotService.change(previousRanks, profile.userId(), publicRank)
             ));
         }
 
@@ -127,9 +135,11 @@ public class UserRankingQueryService {
             var myRank = rankingService.getContributorRank(universityId, myUserId);
             var myScore = rankingService.getContributorScore(universityId, myUserId);
             if (myRank.isPresent() && myScore.isPresent()) {
+                long myPublicRank = myRank.getAsLong() - countExcludedHigher(excludedScores, myScore.getAsDouble());
                 me = new UserRankingResponse.Me(
-                        myRank.getAsLong() - countExcludedHigher(excludedScores, myScore.getAsDouble()),
-                        (long) myScore.getAsDouble()
+                        myPublicRank,
+                        (long) myScore.getAsDouble(),
+                        RankSnapshotService.change(previousRanks, myUserId, myPublicRank)
                 );
             }
         }

@@ -18,4 +18,8 @@ public interface UniversityRepository extends JpaRepository<University, Long> {
 
     @Query("select u.id, u.name, u.libraryLat, u.libraryLng from University u")
     List<UnivCacheRow> findAllForCache();
+
+    // 순위 복사본(학과·개인)을 만들 학교 목록
+    @Query("select u.id from University u")
+    List<Long> findAllIds();
 }

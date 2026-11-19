@@ -7,6 +7,7 @@ import com.back.nbe1214finalsour.domain.university.repository.UniversityReposito
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import com.back.nbe1214finalsour.global.redis.RedisHandler;
+import com.back.nbe1214finalsour.global.redis.RedisKey;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +25,7 @@ public class DepartmentRankingQueryService {
     private final UniversityRankingService rankingService;
     private final UniversityRepository universityRepository;
     private final DepartmentRepository departmentRepository;
+    private final RankSnapshotService rankSnapshotService;
 
     @Transactional(readOnly = true)
     public DepartmentRankingResponse getDepartments(
@@ -63,6 +65,17 @@ public class DepartmentRankingQueryService {
                         Function.identity()
                 ));
 
+        boolean isMyUniversity = myUniversityId != null
+                && myUniversityId.equals(universityId);
+
+        // 어제 순위 (페이지 학과 + 내 학과, Redis 왕복 3회)
+        List<Long> compared = new ArrayList<>(ids);
+        if (isMyUniversity && myDepartmentId != null) {
+            compared.add(myDepartmentId);
+        }
+        Map<Long, Long> previousRanks = rankSnapshotService.previousRanks(
+                RedisKey.RANK_DEPT_SNAPSHOT.of(universityId), compared, List.of());
+
         // 4. 학과별 점수와 공동 순위 구성
         List<DepartmentRankingResponse.Item> items =
                 new ArrayList<>();
@@ -96,15 +109,13 @@ public class DepartmentRankingQueryService {
                     department.getId(),
                     department.getName(),
                     department.getLogoUrl(),
-                    (long) entry.score()
+                    (long) entry.score(),
+                    RankSnapshotService.change(previousRanks, department.getId(), rank)
             ));
         }
 
         // 5. 로그인한 사용자의 소속 학과 순위
         DepartmentRankingResponse.MyDepartment myDepartment = null;
-
-        boolean isMyUniversity = myUniversityId != null
-                && myUniversityId.equals(universityId);
 
         if (isMyUniversity && myDepartmentId != null) {
             var myRank = rankingService.getDepartmentRank(
@@ -118,7 +129,8 @@ public class DepartmentRankingQueryService {
                 myDepartment = new DepartmentRankingResponse.MyDepartment(
                         myRank.getAsLong(),
                         myDepartmentId,
-                        (long) myScore.getAsDouble()
+                        (long) myScore.getAsDouble(),
+                        RankSnapshotService.change(previousRanks, myDepartmentId, myRank.getAsLong())
                 );
             }
         }

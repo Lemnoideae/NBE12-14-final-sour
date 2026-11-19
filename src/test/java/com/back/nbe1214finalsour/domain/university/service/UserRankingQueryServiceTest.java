@@ -33,6 +33,9 @@ class UserRankingQueryServiceTest {
     @Mock
     private UniversityContributorReader contributorReader;
 
+    @Mock
+    private RankSnapshotService rankSnapshotService;
+
     @InjectMocks
     private UserRankingQueryService queryService;
 
