@@ -1,5 +1,6 @@
-// SCRUM-177: create an alliance and show its detail in API mode. The server has no "my alliance" query yet, so the
-// screen remembers the created alliance per member in this browser and finds others by ID.
+// SCRUM-177: create an alliance and show its detail in API mode. SCRUM-178: join applications handled by number. The
+// server has no "my alliance" or application list yet, so the screen remembers the member's alliance and sent application
+// in this browser, finds others by ID, and approves or rejects by application number.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { after, afterEach, test } from 'node:test';
@@ -23,15 +24,21 @@ const { render, screen, fireEvent, cleanup, waitFor, within } = await import('@t
 const { ApiProvider } = await import('../src/api/ApiProvider');
 const { createApiClient } = await import('../src/api/client');
 const { createQueryClient } = await import('../src/api/queryClient');
-const { createAllianceMemory, parseAllianceId, validateAllianceName } = await import('../src/api/alliances');
+const { createAllianceMemory, createSentApplicationMemory, parseAllianceId, parseApplicationId, validateAllianceName } = await import('../src/api/alliances');
 const { ApiAllianceScreenPhone, remainingTime } = await import('../src/components/ApiAllianceScreenPhone');
 const { SCHOOL_ID } = await import('../src/data/schoolIds');
 const { assertAbsent, assertSameNode } = await import('./helpers/domAssert');
 type MyInfo = import('../src/api/users').MyInfo;
 type Alliance = import('../src/api/alliances').Alliance;
+type AllianceApplication = import('../src/api/alliances').AllianceApplication;
 
 const queryClients: Array<ReturnType<typeof createQueryClient>> = [];
-afterEach(() => {
+afterEach(async () => {
+  // A fetch still in flight schedules its query's 5-minute gc timer when it settles, even after clear(); let every fetch
+  // settle (including its finally step, one macrotask later) before clearing.
+  for (const client of queryClients) {
+    do await new Promise((resolve) => setTimeout(resolve, 0)); while (client.isFetching() > 0);
+  }
   cleanup();
   for (const client of queryClients.splice(0)) {
     // MutationCache.clear() keeps each mutation's 5-minute gc timer alive, so node would not exit; destroy() cancels it.
@@ -56,6 +63,10 @@ const alliance = (id: number, overrides: Partial<Alliance> = {}): Alliance => ({
   id, name: `연합 ${id}`, totalScore: 1234, status: 'ACTIVE', durationHours: 24, expiredAt: '2026-11-20T12:00:00+09:00', ...overrides,
 });
 
+const YONSEI = 2;
+const application = (id: number, allianceId: number, status: AllianceApplication['status'], universityId = YONSEI): AllianceApplication =>
+  ({ id, allianceId, universityId, status });
+
 function fakeStorage(initial: Record<string, string> = {}) {
   const data = new Map(Object.entries(initial));
   return {
@@ -65,8 +76,9 @@ function fakeStorage(initial: Record<string, string> = {}) {
 }
 
 interface Call { route: string; body: unknown }
-function mount({ create, detail, signedIn = true, store = fakeStorage(), memory }: {
+function mount({ create, detail, apply, decide, signedIn = true, store = fakeStorage(), memory }: {
   create?: (body: unknown) => Response; detail?: (id: number) => Response; signedIn?: boolean;
+  apply?: (allianceId: number) => Response; decide?: (applicationId: number, decision: string) => Response;
   store?: ReturnType<typeof fakeStorage>; memory?: ReturnType<typeof createAllianceMemory>;
 } = {}) {
   const calls: Call[] = [];
@@ -83,6 +95,13 @@ function mount({ create, detail, signedIn = true, store = fakeStorage(), memory 
       created.set(made.id, made);
       return ok(made, 201);
     }
+    const applied = /^POST \/api\/v1\/alliances\/(\d+)\/applications$/.exec(call.route);
+    if (applied) return apply ? apply(Number(applied[1])) : ok(application(31, Number(applied[1]), 'PENDING'), 201);
+    const decided = /^PATCH \/api\/v1\/alliances\/applications\/(\d+)\/(approve|reject)$/.exec(call.route);
+    if (decided) return decide ? decide(Number(decided[1]), decided[2])
+      : ok(application(Number(decided[1]), 7, decided[2] === 'approve' ? 'ACCEPTED' : 'REJECTED'));
+    const school = /^GET \/api\/v1\/universities\/(\d+)$/.exec(call.route);
+    if (school) return Number(school[1]) === YONSEI ? ok({ id: YONSEI, name: '연세대학교' }) : fail(404, 'UNIVERSITY_NOT_FOUND', '학교 없음');
     const found = /^GET \/api\/v1\/alliances\/(\d+)$/.exec(call.route);
     if (found) return detail ? detail(Number(found[1])) : ok(created.get(Number(found[1])) ?? alliance(Number(found[1])));
     throw new Error(`Unexpected ${call.route}`);
@@ -93,11 +112,12 @@ function mount({ create, detail, signedIn = true, store = fakeStorage(), memory 
   const navigation: string[] = [];
   render(React.createElement(ApiProvider, { client, queryClient, children: React.createElement(ApiAllianceScreenPhone, {
     onBack: () => navigation.push('back'), onGoToLogin: () => navigation.push('login'),
-    memory: memory ?? createAllianceMemory(() => store.storage), now: () => NOW,
+    memory: memory ?? createAllianceMemory(() => store.storage), applications: createSentApplicationMemory(() => store.storage), now: () => NOW,
   }) }));
   const posts = () => calls.filter(({ route }) => route === 'POST /api/v1/alliances').map(({ body }) => body);
   const details = () => calls.filter(({ route }) => route.startsWith('GET /api/v1/alliances/')).map(({ route }) => route.slice('GET /api/v1/alliances/'.length));
-  return { calls, posts, details, store, navigation };
+  const routes = (prefix: string) => calls.filter(({ route }) => route.startsWith(prefix)).map(({ route }) => route);
+  return { calls, posts, details, routes, store, navigation };
 }
 
 const createForm = () => screen.getByRole('form', { name: '연합 만들기' });
@@ -129,7 +149,7 @@ test('연합을 만들면 다듬은 이름과 기간을 보내고, 만든 연합
   screen.getByText('연합을 만들었어요.');
   assert.equal(f.store.data.get('sour.alliance.created.v1:5'), '7');
   assertAbsent(screen.queryByRole('form', { name: '연합 만들기' }), '소속된 뒤에는 만들기 폼을 숨긴다');
-  screen.getByText(/연합 목록, 소속 학교, 가입 신청과 승인, 대결은 서버 조회 기능이 생기면 열려요/);
+  screen.getByText(/연합 목록, 소속 학교, 받은 가입 신청 목록, 대결은 서버 조회 기능이 생기면 열려요/);
 });
 
 test('기억한 연합이 있으면 다시 들어왔을 때 서버에서 그 연합을 조회해 보인다', async () => {
@@ -250,9 +270,126 @@ test('로그인하지 않았으면 로그인 안내만 보이고 서버를 부�
   assert.deepEqual(f.navigation, ['login', 'back']);
 });
 
+const lookup = async (id: number) => {
+  const form = await screen.findByRole('form', { name: '연합 ID로 찾기' });
+  fireEvent.change(within(form).getByLabelText('연합 ID'), { target: { value: String(id) } });
+  fireEvent.click(within(form).getByRole('button', { name: '찾기' }));
+  const detail = await screen.findByRole('article', { name: `연합 #${id}` });
+  await within(detail).findByRole('heading', { level: 3 });
+  return detail;
+};
+
+test('찾은 연합에 가입 신청하면 신청 번호를 알리고 보낸 신청으로 기억한다. 승인되면 우리 연합으로 기억할 수 있다', async () => {
+  const f = mount();
+  const found = await lookup(9);
+  fireEvent.click(within(found).getByRole('button', { name: '이 연합에 가입 신청' }));
+  await within(found).findByText('가입 신청 #31을(를) 보냈어요. 연합 회원에게 신청 번호 #31를 알려 주세요.');
+  assert.deepEqual(f.routes('POST /api/v1/alliances/'), ['POST /api/v1/alliances/9/applications']);
+  assert.deepEqual(JSON.parse(f.store.data.get('sour.alliance.application.v1:5') ?? 'null'), { applicationId: 31, allianceId: 9 });
+  const card = screen.getByTestId('sent-application');
+  within(card).getByRole('heading', { name: '보낸 가입 신청 #31' });
+  await within(card).findByRole('heading', { name: '연합 9' });
+
+  fireEvent.click(within(card).getByRole('button', { name: '우리 연합으로 기억' }));
+  screen.getByText('연합 #9을(를) 우리 연합으로 기억했어요.');
+  assert.equal(f.store.data.get('sour.alliance.created.v1:5'), '9');
+  assert.equal(f.store.data.has('sour.alliance.application.v1:5'), false, '보낸 신청 기억은 지운다');
+  assertAbsent(screen.queryByTestId('sent-application'));
+  screen.getByRole('form', { name: '가입 신청 처리' });
+  within(found).getByText('우리 연합이에요.');
+  assertAbsent(within(found).queryByRole('button', { name: '이 연합에 가입 신청' }), '우리 연합에는 신청 버튼이 없다');
+});
+
+test('가입 신청 오류는 코드마다 알리고 기억하지 않는다', async () => {
+  const cases: Array<[number, string, RegExp]> = [
+    [409, 'ALLY_UNIVERSITY_ALREADY_JOINED', /^우리 학교는 이미 연합에 소속돼 있어요/],
+    [409, 'ALLY_APPLICATION_PENDING', /이미 처리를 기다리고 있어요/],
+    [409, 'ALLY_FULL', /학교 2곳이 모두 찼어요/],
+    [409, 'ALLY_NOT_ACTIVE', /지금 가입 신청을 받을 수 없어요/],
+    [403, 'ALLY_USER_NOT_ACTIVE', /활동 중인 회원만 가입 신청/],
+  ];
+  let index = 0;
+  const f = mount({ apply: () => fail(cases[index][0], cases[index][1]) });
+  const found = await lookup(9);
+  for (; index < cases.length; index++) {
+    fireEvent.click(within(found).getByRole('button', { name: '이 연합에 가입 신청' }));
+    await waitFor(() => assert.match(within(found).getByTestId('alliance-apply-error').textContent ?? '', cases[index][2]));
+  }
+  assert.equal(f.routes('POST /api/v1/alliances/').length, cases.length, '누를 때마다 한 번, 자동 재시도 없음');
+  assert.equal(f.store.data.size, 0);
+});
+
+test('우리 연합에서 신청 번호를 승인하면 확인을 거쳐 보내고, 들어온 학교와 2/2를 보인다', async () => {
+  const f = mount({ store: fakeStorage({ 'sour.alliance.created.v1:5': '7' }) });
+  const form = await screen.findByRole('form', { name: '가입 신청 처리' });
+  const input = within(form).getByLabelText('신청 번호');
+  fireEvent.click(within(form).getByRole('button', { name: '승인' }));
+  assert.equal(within(form).getByRole('alert').textContent, '신청 번호를 입력해 주세요.');
+  fireEvent.change(input, { target: { value: '31' } });
+  fireEvent.click(within(form).getByRole('button', { name: '승인' }));
+  const confirm = within(form).getByRole('group', { name: '처리 확인' });
+  within(confirm).getByText('신청 #31을(를) 승인할까요? 되돌릴 수 없어요.');
+  assert.deepEqual(f.routes('PATCH'), [], '확인 전에는 보내지 않는다');
+  fireEvent.click(within(confirm).getByRole('button', { name: '취소' }));
+  assert.deepEqual(f.routes('PATCH'), []);
+  fireEvent.click(within(form).getByRole('button', { name: '승인' }));
+  fireEvent.click(within(form).getByRole('button', { name: '승인하기' }));
+  const result = await within(form).findByTestId('application-decision-result');
+  await waitFor(() => assert.equal(result.textContent, '연세대학교이(가) 연합에 들어왔어요.연합 #7 학교 2/2 · 정원이 찼어요. 남은 대기 신청은 서버가 자동으로 거절해요.'));
+  assert.deepEqual(f.routes('PATCH'), ['PATCH /api/v1/alliances/applications/31/approve']);
+  assert.equal((input as HTMLInputElement).value, '', '처리한 번호는 지운다');
+  await waitFor(() => assert.deepEqual(f.details(), ['7', '7'], '승인 뒤 연합 상세를 다시 읽는다'));
+});
+
+test('거절은 확인 뒤 보내고, 학교 이름을 못 읽으면 번호로 보인다. 다른 연합의 신청이면 알린다', async () => {
+  const f = mount({ store: fakeStorage({ 'sour.alliance.created.v1:5': '7' }), decide: (id) => ok(application(id, 8, 'REJECTED', 99)) });
+  const form = await screen.findByRole('form', { name: '가입 신청 처리' });
+  fireEvent.change(within(form).getByLabelText('신청 번호'), { target: { value: ' 40 ' } });
+  fireEvent.click(within(form).getByRole('button', { name: '거절' }));
+  fireEvent.click(within(form).getByRole('button', { name: '거절하기' }));
+  const result = await within(form).findByTestId('application-decision-result');
+  await waitFor(() => assert.match(result.textContent ?? '', /^신청 #40\(학교 #99\)을\(를\) 거절했어요\./));
+  assert.match(result.textContent ?? '', /우리 연합 #7이 아니라 연합 #8에 온 신청이었어요/);
+  assert.deepEqual(f.routes('PATCH'), ['PATCH /api/v1/alliances/applications/40/reject']);
+});
+
+test('신청 처리 오류는 코드마다 알린다', async () => {
+  const cases: Array<[number, string, RegExp]> = [
+    [404, 'ALLY_APPLICATION_NOT_FOUND', /^신청 #31을\(를\) 찾을 수 없어요/],
+    [409, 'ALLY_APPLICATION_NOT_PENDING', /^신청 #31은\(는\) 이미 처리됐어요/],
+    [403, 'ALLY_NOT_MEMBER', /소속이 아니에요/],
+    [409, 'ALLY_FULL', /학교 2곳이 이미 찼어요/],
+    [409, 'ALLY_UNIVERSITY_ALREADY_JOINED', /다른 연합에 들어갔어요/],
+    [409, 'ALLY_NOT_ACTIVE', /처리할 수 없어요/],
+  ];
+  let index = 0;
+  mount({ store: fakeStorage({ 'sour.alliance.created.v1:5': '7' }), decide: () => fail(cases[index][0], cases[index][1]) });
+  const form = await screen.findByRole('form', { name: '가입 신청 처리' });
+  for (; index < cases.length; index++) {
+    fireEvent.change(within(form).getByLabelText('신청 번호'), { target: { value: '31' } });
+    fireEvent.click(within(form).getByRole('button', { name: '승인' }));
+    fireEvent.click(within(form).getByRole('button', { name: '승인하기' }));
+    await waitFor(() => assert.match(within(form).getByTestId('application-decision-error').textContent ?? '', cases[index][2]));
+    assert.equal((within(form).getByLabelText('신청 번호') as HTMLInputElement).value, '31', '실패하면 번호를 남긴다');
+  }
+});
+
+test('보낸 신청의 연합이 없어지면(404) 신청 기억을 지운다. 기억이 깨져 있으면 무시한다', async () => {
+  const gone = mount({ store: fakeStorage({ 'sour.alliance.application.v1:5': JSON.stringify({ applicationId: 3, allianceId: 4 }) }),
+    detail: () => fail(404, 'ALLY_NOT_FOUND', '연합을 찾을 수 없습니다.') });
+  await screen.findByText('가입 신청한 연합 #4을(를) 찾을 수 없어 신청 기억을 지웠어요.');
+  assert.equal(gone.store.data.size, 0);
+  cleanup();
+  const broken = fakeStorage({ 'sour.alliance.application.v1:5': '{"applicationId":"3"}' });
+  assert.equal(createSentApplicationMemory(() => broken.storage).get(5), null);
+  assert.equal(createSentApplicationMemory(() => fakeStorage({ 'sour.alliance.application.v1:5': 'not json' }).storage).get(5), null);
+});
+
 test('입력 검사와 남은 시간 계산', () => {
   assert.deepEqual(validateAllianceName(' a '), { name: 'a' });
   assert.deepEqual(parseAllianceId(' 12 '), { allianceId: 12 });
+  assert.deepEqual(parseApplicationId(' 31 '), { applicationId: 31 });
+  assert.ok('problem' in parseApplicationId('0'));
   for (const value of ['', '-1', '1.5', '1e3', '9007199254740993']) assert.ok('problem' in parseAllianceId(value), value);
   assert.equal(remainingTime('2026-11-19T12:30:00+09:00', NOW), '만료까지 0시간 30분');
   assert.equal(remainingTime('2026-11-19T11:00:00+09:00', NOW), '만료 시각이 지났어요');
@@ -272,12 +409,23 @@ test('계약 센서: 연합 생성·상세 계약이 바뀌면 화면을 다시 
     /Long id,\s*String name,\s*Long totalScore,\s*AllianceStatus status,\s*Integer durationHours,\s*OffsetDateTime expiredAt/, fix);
   assert.match(read('domain/alliance/entity/AllianceStatus.java'), /ACTIVE,[\s\S]*IN_MATCH,[\s\S]*EXPIRED\s*\n\s*\}/, fix);
   assert.match(read('domain/alliance/entity/Alliance.java'), /name\.trim\(\)\.length\(\) > 50/, fix);
+  assert.match(controller, /@PostMapping\("\/\{allianceId\}\/applications"\)\s*\n\s*@ResponseStatus\(HttpStatus\.CREATED\)/, fix);
+  assert.match(controller, /@PatchMapping\("\/applications\/\{applicationId\}\/approve"\)/, fix);
+  assert.match(controller, /@PatchMapping\("\/applications\/\{applicationId\}\/reject"\)/, fix);
+  assert.match(read('domain/alliance/dto/AllianceApplicationResponse.java'),
+    /Long id,\s*Long allianceId,\s*Long universityId,\s*AllianceUniversityStatus status/, fix);
+  assert.match(read('domain/alliance/service/AllianceService.java'), /MAX_ALLIANCE_SIZE = 2;/,
+    '정원이 2가 아니면 승인 결과의 "학교 2/2"와 ALLIANCE_MAX_SCHOOLS를 고치세요.');
   const errors = read('global/exception/ErrorCode.java');
   assert.match(errors, /ALLY_UNIVERSITY_ALREADY_JOINED\(HttpStatus\.CONFLICT, "ALLY_UNIVERSITY_ALREADY_JOINED"/, fix);
   assert.match(errors, /ALLY_USER_NOT_ACTIVE\(HttpStatus\.FORBIDDEN, "ALLY_USER_NOT_ACTIVE"/, fix);
   assert.match(errors, /ALLY_NOT_FOUND\(HttpStatus\.NOT_FOUND, "ALLY_NOT_FOUND"/, fix);
-  assert.doesNotMatch(controller, /@GetMapping\("\/me"\)|@GetMapping\s*\n\s*public ApiResponse<.*List/,
-    '연합 조회 API(내 연합·목록)가 생겼습니다. "준비 중" 안내와 브라우저 기억(AllianceMemory)을 서버 조회로 바꾸세요.');
+  for (const [code, status] of [['ALLY_NOT_ACTIVE', 'CONFLICT'], ['ALLY_FULL', 'CONFLICT'], ['ALLY_APPLICATION_PENDING', 'CONFLICT'],
+    ['ALLY_NOT_MEMBER', 'FORBIDDEN'], ['ALLY_APPLICATION_NOT_FOUND', 'NOT_FOUND'], ['ALLY_APPLICATION_NOT_PENDING', 'CONFLICT']]) {
+    assert.match(errors, new RegExp(`${code}\\(HttpStatus\\.${status}, "${code}"`), fix);
+  }
+  assert.doesNotMatch(controller, /@GetMapping\("\/me"\)|@GetMapping\s*\n\s*public ApiResponse<.*List|@GetMapping\("[^"]*applications/,
+    '연합 조회 API(내 연합·목록·신청 목록)가 생겼습니다. "준비 중" 안내, 브라우저 기억, 신청 번호 입력을 서버 조회로 바꾸세요.');
 
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
   const apiRoute = app.indexOf("API_MODE === 'api' && (viewMode === 'alliance_apply' || viewMode === 'current_alliance') ?");

@@ -1,10 +1,12 @@
-// Alliance create and detail (SCRUM-177, plan .agents/01-PLAN/261119-1123-scrum177_alliance_create_detail.md).
-// AllianceController: POST /api/v1/alliances (201) and GET /api/v1/alliances/{id}. The server has no "my alliance",
-// alliance list or member list yet, so this browser remembers the alliance its member created.
+// Alliance create and detail (SCRUM-177), join applications (SCRUM-178). Plans in .agents/01-PLAN/261119-1123-* and -1134-*.
+// AllianceController: POST /api/v1/alliances (201), GET /api/v1/alliances/{id}, POST /{id}/applications (201) and
+// PATCH /applications/{id}/approve|reject. The server has no "my alliance", alliance list, member list or application
+// list yet, so this browser remembers its member's alliance and sent application, and applications are handled by number.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApiClient } from './ApiProvider';
 import type { ApiClient } from './client';
+import { getUniversityDetail, universityKeys } from './universities';
 
 export type AllianceStatus = 'ACTIVE' | 'IN_MATCH' | 'EXPIRED';
 
@@ -25,6 +27,18 @@ export interface AllianceCreateRequest {
   durationHours: number;
 }
 
+export type AllianceApplicationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'LEFT';
+
+/** AllianceApplicationResponse: one school's membership row in an alliance. */
+export interface AllianceApplication {
+  id: number;
+  allianceId: number;
+  universityId: number;
+  status: AllianceApplicationStatus;
+}
+
+/** AllianceService.MAX_ALLIANCE_SIZE: the founder plus one approved school. */
+export const ALLIANCE_MAX_SCHOOLS = 2;
 export const ALLIANCE_LIMITS = { nameMax: 50, minHours: 6, maxHours: 72, defaultHours: 24 } as const;
 export const ALLIANCE_DURATION_PRESETS = [6, 12, 24, 48, 72] as const;
 
@@ -32,6 +46,12 @@ export const ALLIANCE_ERROR_CODES = {
   alreadyJoined: 'ALLY_UNIVERSITY_ALREADY_JOINED',
   notActiveUser: 'ALLY_USER_NOT_ACTIVE',
   notFound: 'ALLY_NOT_FOUND',
+  notJoinable: 'ALLY_NOT_ACTIVE',
+  full: 'ALLY_FULL',
+  applicationPending: 'ALLY_APPLICATION_PENDING',
+  notMember: 'ALLY_NOT_MEMBER',
+  applicationNotFound: 'ALLY_APPLICATION_NOT_FOUND',
+  applicationNotPending: 'ALLY_APPLICATION_NOT_PENDING',
 } as const;
 
 export const ALLIANCE_STATUS_LABEL: Record<AllianceStatus, string> = { ACTIVE: '활동 중', IN_MATCH: '대결 중', EXPIRED: '만료' };
@@ -42,6 +62,16 @@ export function createAlliance(client: ApiClient, request: AllianceCreateRequest
 
 export function getAlliance(client: ApiClient, allianceId: number, signal?: AbortSignal): Promise<Alliance> {
   return client.get<Alliance>(`/alliances/${allianceId}`, { signal });
+}
+
+export function applyToAlliance(client: ApiClient, allianceId: number): Promise<AllianceApplication> {
+  return client.request<AllianceApplication>(`/alliances/${allianceId}/applications`, { method: 'POST' });
+}
+
+export type ApplicationDecision = 'approve' | 'reject';
+
+export function decideApplication(client: ApiClient, applicationId: number, decision: ApplicationDecision): Promise<AllianceApplication> {
+  return client.request<AllianceApplication>(`/alliances/applications/${applicationId}/${decision}`, { method: 'PATCH' });
 }
 
 /** Keyed by the member, so one member's alliance never shows from another member's cache. */
@@ -58,13 +88,23 @@ export function validateAllianceName(input: string): { name: string } | { proble
   return { name };
 }
 
-/** A positive safe integer typed by the member, or the problem to show. */
-export function parseAllianceId(input: string): { allianceId: number } | { problem: string } {
+/** A positive safe integer typed by the member, or null. */
+function parsePositiveId(input: string): number | null {
   const value = input.trim();
-  if (!value) return { problem: '연합 ID를 입력해 주세요.' };
-  const allianceId = /^\d+$/.test(value) ? Number(value) : NaN;
-  if (!Number.isSafeInteger(allianceId) || allianceId < 1) return { problem: '연합 ID는 1 이상의 정수로 입력해 주세요.' };
-  return { allianceId };
+  const id = /^\d+$/.test(value) ? Number(value) : NaN;
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+export function parseAllianceId(input: string): { allianceId: number } | { problem: string } {
+  if (!input.trim()) return { problem: '연합 ID를 입력해 주세요.' };
+  const allianceId = parsePositiveId(input);
+  return allianceId === null ? { problem: '연합 ID는 1 이상의 정수로 입력해 주세요.' } : { allianceId };
+}
+
+export function parseApplicationId(input: string): { applicationId: number } | { problem: string } {
+  if (!input.trim()) return { problem: '신청 번호를 입력해 주세요.' };
+  const applicationId = parsePositiveId(input);
+  return applicationId === null ? { problem: '신청 번호는 1 이상의 정수로 입력해 주세요.' } : { applicationId };
 }
 
 // ---- The alliance this browser's member created (until GET /alliances/me exists). ----
@@ -75,30 +115,73 @@ export interface AllianceMemory {
   forget(userId: number): void;
 }
 
+/** The application this browser's member sent (until the server can list it). */
+export interface SentApplication {
+  applicationId: number;
+  allianceId: number;
+}
+
+export interface SentApplicationMemory {
+  get(userId: number): SentApplication | null;
+  set(userId: number, application: SentApplication): void;
+  forget(userId: number): void;
+}
+
+type MemoryStorage = () => Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | undefined;
 const memoryKey = (userId: number) => `sour.alliance.created.v1:${userId}`;
+const applicationKey = (userId: number) => `sour.alliance.application.v1:${userId}`;
 
 /**
- * localStorage, per member. Storage can be missing or throw (private window, blocked site data), so every access is
- * guarded and the screen works without it: the member just has to look the alliance up by ID again.
+ * Storage can be missing or throw (private window, blocked site data), so every access is guarded and the screen works
+ * without it: the member just has to look the alliance up by ID again.
  */
-export function createAllianceMemory(storage: () => Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | undefined
-  = () => globalThis.localStorage): AllianceMemory {
+function guarded(storage: MemoryStorage) {
+  return {
+    read(key: string): string | null {
+      try { return storage()?.getItem(key) ?? null; } catch { return null; }
+    },
+    write(key: string, value: string) {
+      try { storage()?.setItem(key, value); } catch { /* the screen still shows it */ }
+    },
+    remove(key: string) {
+      try { storage()?.removeItem(key); } catch { /* nothing to undo */ }
+    },
+  };
+}
+
+const positiveId = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+
+/** localStorage, per member: the alliance this member created or chose to remember. */
+export function createAllianceMemory(storage: MemoryStorage = () => globalThis.localStorage): AllianceMemory {
+  const store = guarded(storage);
   return {
     get(userId) {
+      const raw = store.read(memoryKey(userId));
+      const parsed = raw === null ? NaN : Number(raw);
+      return positiveId(parsed) ? parsed : null;
+    },
+    set(userId, allianceId) { store.write(memoryKey(userId), String(allianceId)); },
+    forget(userId) { store.remove(memoryKey(userId)); },
+  };
+}
+
+/** localStorage, per member: the last join application this member sent. */
+export function createSentApplicationMemory(storage: MemoryStorage = () => globalThis.localStorage): SentApplicationMemory {
+  const store = guarded(storage);
+  return {
+    get(userId) {
+      const raw = store.read(applicationKey(userId));
+      if (raw === null) return null;
       try {
-        const raw = storage()?.getItem(memoryKey(userId));
-        const parsed = raw === null || raw === undefined ? NaN : Number(raw);
-        return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+        const value = JSON.parse(raw) as Partial<SentApplication>;
+        return positiveId(value.applicationId) && positiveId(value.allianceId)
+          ? { applicationId: value.applicationId, allianceId: value.allianceId } : null;
       } catch {
         return null;
       }
     },
-    set(userId, allianceId) {
-      try { storage()?.setItem(memoryKey(userId), String(allianceId)); } catch { /* the screen still shows the alliance */ }
-    },
-    forget(userId) {
-      try { storage()?.removeItem(memoryKey(userId)); } catch { /* nothing to undo */ }
-    },
+    set(userId, application) { store.write(applicationKey(userId), JSON.stringify(application)); },
+    forget(userId) { store.remove(applicationKey(userId)); },
   };
 }
 
@@ -121,5 +204,37 @@ export function useCreateAlliance(userId: number) {
     // Creating is not idempotent: a retry after a lost response could make a second alliance attempt. Let the member decide.
     retry: false,
     onSuccess: (alliance) => queryClient.setQueryData(allianceKeys.detail(userId, alliance.id), alliance),
+  });
+}
+
+/** Join applications are not idempotent either: a lost response may have left one pending on the server. */
+export function useApplyToAlliance() {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: (allianceId: number) => applyToAlliance(client, allianceId),
+    retry: false,
+  });
+}
+
+export function useDecideApplication(userId: number) {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ applicationId, decision }: { applicationId: number; decision: ApplicationDecision }) =>
+      decideApplication(client, applicationId, decision),
+    retry: false,
+    onSuccess: (application) => queryClient.invalidateQueries({ queryKey: [...allianceKeys.all, userId, 'detail', application.allianceId] }),
+  });
+}
+
+/** A school's name for an application row. Names do not change while the screen is open, so no polling. */
+export function useUniversityName(universityId: number | null, viewerId: number) {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: universityKeys.detail(universityId ?? -1, viewerId),
+    queryFn: ({ signal }) => getUniversityDetail(client, universityId!, { signal }),
+    enabled: universityId !== null,
+    staleTime: 5 * 60_000,
+    select: (detail) => detail.name,
   });
 }

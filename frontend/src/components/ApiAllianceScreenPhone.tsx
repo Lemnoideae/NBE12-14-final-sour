@@ -1,9 +1,11 @@
-import { useEffect, useId, useRef, useState, type RefObject, type SubmitEvent } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject, type SubmitEvent } from 'react';
 import { ChevronLeft, RefreshCw } from 'lucide-react';
 import { useAuthSession } from '../api/ApiProvider';
 import {
-  ALLIANCE_DURATION_PRESETS, ALLIANCE_ERROR_CODES, ALLIANCE_LIMITS, ALLIANCE_STATUS_LABEL, createAllianceMemory, parseAllianceId,
-  useAllianceDetail, useCreateAlliance, validateAllianceName, type AllianceMemory,
+  ALLIANCE_DURATION_PRESETS, ALLIANCE_ERROR_CODES, ALLIANCE_LIMITS, ALLIANCE_MAX_SCHOOLS, ALLIANCE_STATUS_LABEL, createAllianceMemory,
+  createSentApplicationMemory, parseAllianceId, parseApplicationId, useAllianceDetail, useApplyToAlliance, useCreateAlliance,
+  useDecideApplication, useUniversityName, validateAllianceName, type AllianceApplication, type AllianceMemory, type ApplicationDecision,
+  type SentApplication, type SentApplicationMemory,
 } from '../api/alliances';
 import { errorMessage, fieldErrorMap, isApiError } from '../api/errors';
 import { useMyInfo } from '../api/users';
@@ -13,14 +15,17 @@ import { DurationPicker, formatDurationHours } from './DurationPicker';
 import { LoadNotice } from './LoadNotice';
 import { PhoneShell } from './PhoneShell';
 
-// Alliance screen in API mode (SCRUM-177, plan .agents/01-PLAN/261119-1123-scrum177_alliance_create_detail.md). Replaces
-// the mock school-to-school proposal screens; the mock keeps them with their [시연] buttons and virtual clock.
+// Alliance screen in API mode: create and detail (SCRUM-177), join applications by number (SCRUM-178). Plans in
+// .agents/01-PLAN/261119-1123-* and -1134-*. Replaces the mock school-to-school proposal screens; the mock keeps them
+// with their [시연] buttons and virtual clock.
 
 const BUTTON = 'pixel-plaque plaque-wood min-h-11 min-w-11 px-3 py-2 text-xs font-bold cursor-pointer disabled:opacity-50 disabled:cursor-default';
 const BOX = 'rpg-box p-3 bg-[#fdf5df] border-2 border-[#261608] shadow-[2px_2px_0px_#261608] flex flex-col gap-2';
 const INPUT = 'w-full min-h-12 border-2 border-[#261608] bg-white px-2 py-2 text-base focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#261608] disabled:bg-stone-100';
 const dateFormat = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'medium', timeStyle: 'short' });
 const defaultMemory = createAllianceMemory();
+const defaultApplications = createSentApplicationMemory();
+const ERROR_TEXT = 'text-[#7f1d1d]';
 
 export function remainingTime(expiredAt: string, now: number): string {
   const diff = Date.parse(expiredAt) - now;
@@ -36,10 +41,13 @@ interface ApiAllianceScreenPhoneProps {
   onNavigateTab?: (tab: NavTab) => void;
   /** Tests pass their own storage and clock. */
   memory?: AllianceMemory;
+  applications?: SentApplicationMemory;
   now?: () => number;
 }
 
-export function ApiAllianceScreenPhone({ onBack, onGoToLogin, onNavigateTab, memory = defaultMemory, now = Date.now }: ApiAllianceScreenPhoneProps) {
+export function ApiAllianceScreenPhone({
+  onBack, onGoToLogin, onNavigateTab, memory = defaultMemory, applications = defaultApplications, now = Date.now,
+}: ApiAllianceScreenPhoneProps) {
   const signedIn = useAuthSession().status === 'signed-in';
   const me = useMyInfo();
   if (signedIn && !me.data) return <LoadNotice status={me.isError ? 'failed' : 'loading'} name="내 정보"
@@ -53,7 +61,8 @@ export function ApiAllianceScreenPhone({ onBack, onGoToLogin, onNavigateTab, mem
         <h1 className="text-sm font-black">연합</h1>
       </header>
       <div className="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col gap-3 font-pixel text-[#261608]">
-        {signedIn && me.data ? <AllianceHome key={me.data.id} userId={me.data.id} universityName={me.data.university.name} memory={memory} now={now} /> : (
+        {signedIn && me.data ? <AllianceHome key={me.data.id} userId={me.data.id} universityName={me.data.university.name}
+          memory={memory} applications={applications} now={now} /> : (
           <div role="status" className={`${BOX} items-center text-center`}>
             <p className="text-sm font-bold">연합을 만들거나 보려면 로그인해 주세요</p>
             <button type="button" className={BUTTON} onClick={onGoToLogin}>로그인</button>
@@ -65,8 +74,11 @@ export function ApiAllianceScreenPhone({ onBack, onGoToLogin, onNavigateTab, mem
   );
 }
 
-function AllianceHome({ userId, universityName, memory, now }: { userId: number; universityName: string; memory: AllianceMemory; now: () => number }) {
+function AllianceHome({ userId, universityName, memory, applications, now }: {
+  userId: number; universityName: string; memory: AllianceMemory; applications: SentApplicationMemory; now: () => number;
+}) {
   const [remembered, setRemembered] = useState(() => memory.get(userId));
+  const [sent, setSent] = useState(() => applications.get(userId));
   const [notice, setNotice] = useState<string | null>(null);
   const [lookedUp, setLookedUp] = useState<number | null>(null);
   const lookupInput = useRef<HTMLInputElement>(null);
@@ -75,32 +87,180 @@ function AllianceHome({ userId, universityName, memory, now }: { userId: number;
     setRemembered(null);
     setNotice(message);
   };
+  const remember = (allianceId: number, message: string) => {
+    memory.set(userId, allianceId);
+    setRemembered(allianceId);
+    applications.forget(userId);
+    setSent(null);
+    setNotice(message);
+  };
+  const forgetSent = (message: string | null) => {
+    applications.forget(userId);
+    setSent(null);
+    setNotice(message);
+  };
+  const rememberButton = (allianceId: number) => (
+    <button type="button" className={BUTTON} onClick={() => remember(allianceId, `연합 #${allianceId}을(를) 우리 연합으로 기억했어요.`)}>
+      우리 연합으로 기억
+    </button>
+  );
 
   return <>
     <section aria-labelledby="alliance-mine" className="flex flex-col gap-2">
       <h2 id="alliance-mine" className="text-sm font-black">우리 연합</h2>
       {notice && <p role="status" className={`${BOX} text-xs`}>{notice}</p>}
-      {remembered !== null ? (
+      {remembered !== null ? <>
         <AllianceDetail userId={userId} allianceId={remembered} now={now} mine
           onMissing={() => forget(`기억해 둔 연합 #${remembered}을(를) 찾을 수 없어 목록에서 지웠어요.`)}
           onForget={() => forget(null)} />
-      ) : (
-        <>
-          <p className="text-xs">이 브라우저에서 만든 연합이 없어요. 같은 학교 회원이 만든 연합은 아래 "연합 ID로 찾기"에서 볼 수 있어요.</p>
-          <CreateAllianceForm userId={userId} universityName={universityName}
-            onCreated={(id) => { memory.set(userId, id); setRemembered(id); setNotice('연합을 만들었어요.'); }}
-            onFindById={() => lookupInput.current?.focus()} />
-        </>
-      )}
+        <ApplicationDecisionForm userId={userId} allianceId={remembered} />
+      </> : <>
+        <p className="text-xs">
+          이 브라우저에 기억한 연합이 없어요. 같은 학교 회원이 만들었거나 우리 학교가 가입한 연합은 아래 "연합 ID로 찾기"에서 찾아
+          "우리 연합으로 기억"할 수 있어요.
+        </p>
+        {sent && <SentApplicationCard userId={userId} sent={sent} now={now} rememberButton={rememberButton(sent.allianceId)}
+          onMissing={() => forgetSent(`가입 신청한 연합 #${sent.allianceId}을(를) 찾을 수 없어 신청 기억을 지웠어요.`)}
+          onForget={() => forgetSent(null)} />}
+        <CreateAllianceForm userId={userId} universityName={universityName}
+          onCreated={(id) => remember(id, '연합을 만들었어요.')}
+          onFindById={() => lookupInput.current?.focus()} />
+      </>}
     </section>
 
-    <AllianceLookup userId={userId} now={now} inputRef={lookupInput} allianceId={lookedUp} onLookup={setLookedUp} />
+    <AllianceLookup userId={userId} now={now} inputRef={lookupInput} allianceId={lookedUp} onLookup={setLookedUp}
+      actions={lookedUp === null ? null : lookedUp === remembered ? <p className="text-[11px] font-bold">우리 연합이에요.</p> : <>
+        <ApplyButton key={lookedUp} allianceId={lookedUp}
+          onSent={(application) => {
+            const next = { applicationId: application.id, allianceId: application.allianceId };
+            applications.set(userId, next);
+            setSent(next);
+          }} />
+        {rememberButton(lookedUp)}
+      </>} />
 
     <section aria-labelledby="alliance-soon" className={`${BOX} text-xs`}>
       <h2 id="alliance-soon" className="font-black text-sm">준비 중</h2>
-      <p>연합 목록, 소속 학교, 가입 신청과 승인, 대결은 서버 조회 기능이 생기면 열려요.</p>
+      <p>연합 목록, 소속 학교, 받은 가입 신청 목록, 대결은 서버 조회 기능이 생기면 열려요.</p>
     </section>
   </>;
+}
+
+/** The school's name, or its number while the name loads or when it cannot be read. */
+function SchoolName({ universityId, viewerId }: { universityId: number; viewerId: number }) {
+  const name = useUniversityName(universityId, viewerId);
+  return <>{name.data ?? `학교 #${universityId}`}</>;
+}
+
+function SentApplicationCard({ userId, sent, now, rememberButton, onMissing, onForget }: {
+  userId: number; sent: SentApplication; now: () => number; rememberButton: ReactNode; onMissing: () => void; onForget: () => void;
+}) {
+  return (
+    <section aria-label="보낸 가입 신청" data-testid="sent-application" className={`${BOX} text-xs`}>
+      <h3 className="text-sm font-black">보낸 가입 신청 #{sent.applicationId}</h3>
+      <p>
+        연합 #{sent.allianceId}에 가입을 신청했어요. 그 연합의 회원에게 신청 번호 <strong>#{sent.applicationId}</strong>를 알려 주세요.
+        승인되면 "우리 연합으로 기억"을 눌러 연합을 보세요. 승인 여부는 서버 조회 기능이 생기면 여기에 표시돼요.
+      </p>
+      <AllianceDetail userId={userId} allianceId={sent.allianceId} now={now} onMissing={onMissing}
+        actions={<>{rememberButton}<button type="button" className={BUTTON} onClick={onForget}>신청 기억 지우기</button></>} />
+    </section>
+  );
+}
+
+function ApplyButton({ allianceId, onSent }: { allianceId: number; onSent: (application: AllianceApplication) => void }) {
+  const apply = useApplyToAlliance();
+  const code = isApiError(apply.error) ? apply.error.code : null;
+  const answered = isApiError(apply.error) && apply.error.kind === 'http';
+  const reason = code === ALLIANCE_ERROR_CODES.alreadyJoined ? '우리 학교는 이미 연합에 소속돼 있어요. 한 학교는 연합 하나에만 소속될 수 있어요.'
+    : code === ALLIANCE_ERROR_CODES.applicationPending ? '우리 학교가 이 연합에 보낸 가입 신청이 이미 처리를 기다리고 있어요. 같은 학교 회원이 보냈을 수 있어요.'
+    : code === ALLIANCE_ERROR_CODES.full ? `이 연합은 학교 ${ALLIANCE_MAX_SCHOOLS}곳이 모두 찼어요.`
+    : code === ALLIANCE_ERROR_CODES.notJoinable ? '이 연합은 지금 가입 신청을 받을 수 없어요. 대결 중이거나 만료된 연합이에요.'
+    : code === ALLIANCE_ERROR_CODES.notFound ? '연합을 찾을 수 없어요.'
+    : code === ALLIANCE_ERROR_CODES.notActiveUser ? '활동 중인 회원만 가입 신청할 수 있어요.'
+    : `가입 신청을 보내지 못했어요. ${errorMessage(apply.error)}${answered ? '' : ' 응답을 받지 못했다면 신청이 이미 접수됐을 수 있어요. 다시 누르면 "이미 처리를 기다리는 신청"으로 알려 줘요.'}`;
+  return <>
+    <button type="button" className={`${BUTTON} plaque-yellow`} disabled={apply.isPending}
+      onClick={() => apply.mutate(allianceId, { onSuccess: onSent })}>
+      {apply.isPending ? '신청하는 중…' : '이 연합에 가입 신청'}
+    </button>
+    {apply.data && <p role="status" className="basis-full font-bold">가입 신청 #{apply.data.id}을(를) 보냈어요. 연합 회원에게 신청 번호 #{apply.data.id}를 알려 주세요.</p>}
+    {apply.error && <p role="alert" data-testid="alliance-apply-error" className={`basis-full ${ERROR_TEXT}`}>{reason}</p>}
+  </>;
+}
+
+function ApplicationDecisionForm({ userId, allianceId }: { userId: number; allianceId: number }) {
+  const id = useId();
+  const [input, setInput] = useState('');
+  const [problem, setProblem] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<{ applicationId: number; decision: ApplicationDecision } | null>(null);
+  const decide = useDecideApplication(userId);
+  const done = decide.data;
+  const asked = decide.variables;
+  const code = isApiError(decide.error) ? decide.error.code : null;
+  const answered = isApiError(decide.error) && decide.error.kind === 'http';
+  const number = asked ? `#${asked.applicationId}` : '';
+  const reason = code === ALLIANCE_ERROR_CODES.applicationNotFound ? `신청 ${number}을(를) 찾을 수 없어요. 번호를 확인해 주세요.`
+    : code === ALLIANCE_ERROR_CODES.applicationNotPending ? `신청 ${number}은(는) 이미 처리됐어요. 승인·거절됐거나 정원이 차서 자동으로 거절된 신청이에요.`
+    : code === ALLIANCE_ERROR_CODES.notMember ? '우리 학교는 이 신청을 받은 연합의 소속이 아니에요. 그 연합의 회원만 처리할 수 있어요.'
+    : code === ALLIANCE_ERROR_CODES.full ? `연합 학교 ${ALLIANCE_MAX_SCHOOLS}곳이 이미 찼어요.`
+    : code === ALLIANCE_ERROR_CODES.alreadyJoined ? '신청한 학교가 그사이 다른 연합에 들어갔어요.'
+    : code === ALLIANCE_ERROR_CODES.notJoinable ? '지금은 이 연합이 가입 신청을 처리할 수 없어요. 대결 중이거나 만료된 연합이에요.'
+    : code === ALLIANCE_ERROR_CODES.notActiveUser ? '활동 중인 회원만 가입 신청을 처리할 수 있어요.'
+    : `가입 신청을 처리하지 못했어요. ${errorMessage(decide.error)}${answered ? '' : ' 응답을 받지 못했다면 이미 처리됐을 수 있어요. 다시 누르면 "이미 처리됨"으로 알려 줘요.'}`;
+
+  const ask = (decision: ApplicationDecision) => {
+    const parsed = parseApplicationId(input);
+    if ('problem' in parsed) { setProblem(parsed.problem); return; }
+    setProblem(null);
+    setConfirming({ applicationId: parsed.applicationId, decision });
+  };
+  const confirm = () => {
+    if (!confirming) return;
+    decide.mutate(confirming, { onSuccess: () => setInput('') });
+    setConfirming(null);
+  };
+  const verb = (decision: ApplicationDecision) => decision === 'approve' ? '승인' : '거절';
+
+  return (
+    <form noValidate onSubmit={(event) => { event.preventDefault(); ask('approve'); }} aria-label="가입 신청 처리" className={`${BOX} text-xs`}>
+      <h3 className="text-sm font-black">가입 신청 처리</h3>
+      <p>가입을 신청한 학교에게 받은 신청 번호를 입력하세요. 받은 신청 목록은 서버 조회 기능이 생기면 보여요.</p>
+      <label htmlFor={`${id}-id`} className="font-bold">신청 번호</label>
+      <input id={`${id}-id`} inputMode="numeric" autoComplete="off" value={input} disabled={decide.isPending} aria-invalid={problem !== null}
+        aria-describedby={problem ? `${id}-problem` : undefined}
+        onChange={(event) => { setInput(event.target.value); setProblem(null); setConfirming(null); }} className={INPUT} />
+      {problem && <p id={`${id}-problem`} role="alert" className={ERROR_TEXT}>{problem}</p>}
+      {confirming ? (
+        <div role="group" aria-label="처리 확인" className="flex flex-col gap-1.5 border-2 border-[#261608] bg-white p-2">
+          <p className="font-bold">신청 #{confirming.applicationId}을(를) {verb(confirming.decision)}할까요? 되돌릴 수 없어요.</p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={`${BUTTON} plaque-yellow`} onClick={confirm}>{verb(confirming.decision)}하기</button>
+            <button type="button" className={BUTTON} onClick={() => setConfirming(null)}>취소</button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <button type="submit" className={`${BUTTON} plaque-yellow`} disabled={decide.isPending}>{decide.isPending && asked?.decision === 'approve' ? '승인하는 중…' : '승인'}</button>
+          <button type="button" className={BUTTON} disabled={decide.isPending} onClick={() => ask('reject')}>
+            {decide.isPending && asked?.decision === 'reject' ? '거절하는 중…' : '거절'}
+          </button>
+        </div>
+      )}
+      {done && !decide.isPending && (
+        <div role="status" data-testid="application-decision-result" className="flex flex-col gap-1 font-bold">
+          {done.status === 'ACCEPTED' ? <>
+            <p><SchoolName universityId={done.universityId} viewerId={userId} />이(가) 연합에 들어왔어요.</p>
+            <p>연합 #{done.allianceId} 학교 {ALLIANCE_MAX_SCHOOLS}/{ALLIANCE_MAX_SCHOOLS} · 정원이 찼어요. 남은 대기 신청은 서버가 자동으로 거절해요.</p>
+          </> : (
+            <p>신청 #{done.id}(<SchoolName universityId={done.universityId} viewerId={userId} />)을(를) 거절했어요.</p>
+          )}
+          {done.allianceId !== allianceId && <p className="font-normal">이 신청은 우리 연합 #{allianceId}이 아니라 연합 #{done.allianceId}에 온 신청이었어요.</p>}
+        </div>
+      )}
+      {decide.error && !decide.isPending && <p role="alert" data-testid="application-decision-error" className={ERROR_TEXT}>{reason}</p>}
+    </form>
+  );
 }
 
 function CreateAllianceForm({ userId, universityName, onCreated, onFindById }: {
@@ -165,8 +325,9 @@ function CreateAllianceForm({ userId, universityName, onCreated, onFindById }: {
   );
 }
 
-function AllianceLookup({ userId, now, inputRef, allianceId, onLookup }: {
+function AllianceLookup({ userId, now, inputRef, allianceId, onLookup, actions }: {
   userId: number; now: () => number; inputRef: RefObject<HTMLInputElement | null>; allianceId: number | null; onLookup: (id: number) => void;
+  actions: ReactNode;
 }) {
   const id = useId();
   const [input, setInput] = useState('');
@@ -189,13 +350,15 @@ function AllianceLookup({ userId, now, inputRef, allianceId, onLookup }: {
         {problem && <p id={`${id}-problem`} role="alert" className="text-[#7f1d1d]">{problem}</p>}
         <button type="submit" className={`${BUTTON} self-start`}>찾기</button>
       </form>
-      {allianceId !== null && <AllianceDetail key={allianceId} userId={userId} allianceId={allianceId} now={now} />}
+      {allianceId !== null && <AllianceDetail key={allianceId} userId={userId} allianceId={allianceId} now={now} actions={actions} />}
     </section>
   );
 }
 
-function AllianceDetail({ userId, allianceId, now, mine = false, onMissing, onForget }: {
+function AllianceDetail({ userId, allianceId, now, mine = false, onMissing, onForget, actions }: {
   userId: number; allianceId: number; now: () => number; mine?: boolean; onMissing?: () => void; onForget?: () => void;
+  /** Shown once the alliance has loaded. */
+  actions?: ReactNode;
 }) {
   const query = useAllianceDetail(userId, allianceId);
   const missing = isApiError(query.error) && query.error.code === ALLIANCE_ERROR_CODES.notFound;
@@ -227,7 +390,11 @@ function AllianceDetail({ userId, allianceId, now, mine = false, onMissing, onFo
             <dt>남은 시간</dt><dd>{alliance.status === 'EXPIRED' ? '만료됨' : remainingTime(alliance.expiredAt, now())}</dd>
           </dl>
           {mine && alliance.status === 'EXPIRED' && <p>만료된 연합이에요. 이 연합을 잊으면 새 연합을 만들 수 있어요.</p>}
-          {mine && <p className="text-[11px]">다른 학교에 이 연합 ID(#{alliance.id})를 알려 주면 가입 신청 기능이 열린 뒤 찾아올 수 있어요. "이 연합 잊기"는 이 브라우저의 기억만 지우고 연합은 그대로 둬요.</p>}
+          {mine && <p className="text-[11px]">
+            다른 학교에 이 연합 ID(#{alliance.id})를 알려 주면 "연합 ID로 찾기"에서 가입 신청할 수 있어요. 신청 번호를 받으면 아래에서 승인하거나 거절하세요.
+            "이 연합 잊기"는 이 브라우저의 기억만 지우고 연합은 그대로 둬요.
+          </p>}
+          {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
         </>}
       <div className="flex flex-wrap gap-2">
         {!missing && (
