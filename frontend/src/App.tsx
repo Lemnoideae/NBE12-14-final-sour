@@ -23,6 +23,7 @@ import { OnboardingPhone } from './components/onboarding/OnboardingPhone';
 import { ApiSignupPhone } from './components/onboarding/ApiSignupPhone';
 import { ApiAccountNavLabel, ApiLoginPhone, ApiSessionWatcher } from './components/onboarding/ApiLoginPhone';
 import { ApiPlayerSync } from './components/ApiPlayerSync';
+import { ApiSchoolScoreSync } from './components/ApiSchoolScoreSync';
 import { API_MODE, selectByMode } from './api/mode';
 import { useMySchool } from './hooks/useSchoolViews';
 import { TwoPhoneChatComparison } from './components/TwoPhoneChatComparison';
@@ -101,7 +102,8 @@ function AppContent() {
   const playerInfo = game.player;
   const schoolScore = game.state.schoolScore;
   const mySchool = useMySchool();
-  // API mode: the server's rank and change against 00:00 KST (SCRUM-184); the score above is still the game's own.
+  // API mode: the server's rank and change against 00:00 KST (SCRUM-184). The score above follows the server's total
+  // through ApiSchoolScoreSync and click answers (SCRUM-188).
   const { rank, change: rankDelta } = useMySchoolRank(schoolScore, playerInfo.schoolId);
   const campusLevel = game.campus.level;
   const myContribution = game.state.contribution;
@@ -514,6 +516,7 @@ function AppContent() {
       <div className={`w-full bg-[#f1f5f9] flex flex-col items-center justify-start select-none text-[#261608] ${isPhone ? 'device-full min-h-dvh' : 'min-h-screen p-2 sm:p-5'}`}>
         {API_MODE === 'api' && <ApiSessionWatcher onEnded={() => setViewMode('login')} />}
         {API_MODE === 'api' && <ApiPlayerSync getPendingScore={campusClicks.getPendingScore} />}
+        {API_MODE === 'api' && <ApiSchoolScoreSync getPendingScore={campusClicks.getPendingScore} isSending={campusClicks.isSending} />}
         {API_MODE === 'api' && <ApiTestToolsNotice schoolName={schoolNameTest} />}
         {/* The attack bar already shows pending work. Do not shift the campus under repeated taps with a lock banner. */}
         {campusClicks.notice && !(viewMode === 'visiting' && campusAttacks?.pendingClicks) && (

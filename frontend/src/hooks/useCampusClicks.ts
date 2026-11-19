@@ -5,6 +5,7 @@ import { submitClicks, type ClickResponse } from '../api/clicks';
 import { isClickLimitError, requiresClickVerification } from '../api/abuse';
 import { errorMessage } from '../api/errors';
 import { selectByMode } from '../api/mode';
+import { rankingKeys } from '../api/rankings';
 import { userKeys, useMyInfo, type MyInfo } from '../api/users';
 import { createClickBatcher, type ClickBatchSnapshot } from '../utils/clickBatcher';
 import { createClickLocation, type ClickLocationSnapshot } from '../utils/clickLocation';
@@ -27,17 +28,20 @@ interface CampusClicks extends ClickUpgradeGate {
   tap: (isCrit: boolean) => number | null;
   notice: string | null;
   getPendingScore: () => number;
+  /** True while a batch is on its way: the server may or may not count it yet (SCRUM-188). */
+  isSending: () => boolean;
   retryLimited: (() => void) | null;
   botCheck: { open: boolean; onOpen: () => void; onClose: () => void; onVerified: () => void } | null;
   /** API mode: other students' click estimates from click responses (SCRUM-159). Null keeps the mock polling. */
   otherClicksFeed: OtherClicksFeed | null;
 }
 const noPendingScore = () => 0;
+const notSending = () => false;
 const EMPTY_BATCH: ClickBatchSnapshot = { pendingClicks: 0, pendingScore: 0, sending: false, error: null, recoverable: false, locked: false };
 
 function useMockCampusClicks(): CampusClicks {
   const { tap } = useMockGame();
-  return { tap, notice: null, getPendingScore: noPendingScore, retryLimited: null, botCheck: null, upgradeBlocked: false, beginUpgrade: () => null, otherClicksFeed: null, library: null };
+  return { tap, notice: null, getPendingScore: noPendingScore, isSending: notSending, retryLimited: null, botCheck: null, upgradeBlocked: false, beginUpgrade: () => null, otherClicksFeed: null, library: null };
 }
 
 /** Mounted at the app root, not on the campus screen: changing tabs must not cancel a collected batch. */
@@ -71,6 +75,8 @@ export function useApiCampusClicks(): CampusClicks {
       onChange: setSnapshot,
       onAccepted(response, pendingScore, { request, sentAt }) {
         setRecoveryNotice(null);
+        // A school ranking requested before this answer reads an older total; drop it so it cannot land after (SCRUM-188).
+        void queryClient.cancelQueries({ queryKey: rankingKeys.mySchool(userId) });
         setLibraryResult({ libraryBonus: response.libraryBonus, multiplier: response.multiplier });
         otherClicksFeed.publish(otherClicks.accept(response.schoolClicksLastSecond, request.clickCount, sentAt));
         applyApiScores({
@@ -120,6 +126,7 @@ export function useApiCampusClicks(): CampusClicks {
   }, [hasPendingClicks]);
 
   const getPendingScore = useCallback(() => batcher.current?.getSnapshot().pendingScore ?? 0, []);
+  const isSending = useCallback(() => batcher.current?.getSnapshot().sending ?? false, []);
   const ready = signedIn && me !== undefined && player.userId === String(me.id);
   const tap = useCallback((_isCrit: boolean): number | null => {
     if (!ready || !me || !batcher.current) return null;
@@ -169,7 +176,7 @@ export function useApiCampusClicks(): CampusClicks {
     return '클릭 점수를 적립하려면 로그인해 주세요.';
   };
   return {
-    tap, notice: getNotice(), getPendingScore,
+    tap, notice: getNotice(), getPendingScore, isSending,
     library: userId === undefined ? null : { location: locationSnapshot, request: location.request, clear: location.clear, lastResult: libraryResult },
     upgradeBlocked: snapshot.pendingClicks > 0 || snapshot.locked,
     beginUpgrade,
