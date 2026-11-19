@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Mail, Check, RefreshCw, Clock, ArrowRight, Sparkles, CheckCircle2, Inbox, Hourglass } from 'lucide-react';
+import { Mail, Check, RefreshCw, Clock, ArrowRight, Sparkles, CheckCircle2, Inbox, Hourglass, KeyRound, LogIn, LogOut } from 'lucide-react';
 import { CampusLayoutScene } from '../CampusScene';
 import { PhoneShell } from '../PhoneShell';
 import { TITLE_LAYOUT } from '../../data/campusLayouts';
@@ -98,11 +98,15 @@ interface EmailStepProps {
   error?: string | null;
   /** A mock request is in flight (M5-B): the submit button waits. */
   pending?: boolean;
+  /** Quick-fill buttons; the API sign-up passes none, since the server decides which domains it knows. */
+  sampleEmails?: readonly string[];
+  /** Shows a link to the login screen for members who already signed up (API mode). */
+  onGoToLogin?: () => void;
 }
 
 const PENDING_LABEL = '요청 중…';
 
-export const EmailStep: React.FC<EmailStepProps> = ({ email, onEmailChange, onRequestCode, error, pending = false }) => (
+export const EmailStep: React.FC<EmailStepProps> = ({ email, onEmailChange, onRequestCode, error, pending = false, sampleEmails = MOCK_SAMPLE_EMAILS, onGoToLogin }) => (
   <>
     <TitleArt />
     <SchoolBelt />
@@ -131,8 +135,8 @@ export const EmailStep: React.FC<EmailStepProps> = ({ email, onEmailChange, onRe
           className="w-full bg-[#ffffff] border-2 border-[#261608] px-2.5 py-1.5 text-xs font-mono text-[#261608] placeholder:text-stone-400 focus:outline-none focus:bg-[#fef9c3] shadow-[inset_1px_1px_0px_#261608]"
         />
       </label>
-      <div className="flex items-center gap-x-1 gap-y-5 flex-wrap py-2.5" aria-label="목업 샘플 이메일">
-        {MOCK_SAMPLE_EMAILS.map((sample) => (
+      {sampleEmails.length > 0 && <div className="flex items-center gap-x-1 gap-y-5 flex-wrap py-2.5" aria-label="목업 샘플 이메일">
+        {sampleEmails.map((sample) => (
           <button
             key={sample}
             type="button"
@@ -145,7 +149,7 @@ export const EmailStep: React.FC<EmailStepProps> = ({ email, onEmailChange, onRe
             @{sample.split('@')[1]}
           </button>
         ))}
-      </div>
+      </div>}
       <ErrorText message={error} />
       <button
         type="submit"
@@ -155,6 +159,11 @@ export const EmailStep: React.FC<EmailStepProps> = ({ email, onEmailChange, onRe
         <span>{pending ? PENDING_LABEL : '인증 코드 받기'}</span>
         <ArrowRight className="w-3.5 h-3.5" />
       </button>
+      {onGoToLogin && (
+        <button type="button" onClick={onGoToLogin} className="min-h-6 self-center font-pixel text-[10px] text-[#8b5327] underline cursor-pointer">
+          이미 가입했어요 · 로그인
+        </button>
+      )}
     </form>
   </>
 );
@@ -169,8 +178,11 @@ interface CodeStepProps {
   remainingSeconds: number;
   attemptsLeft: number;
   resendWaitSeconds: number;
-  /** Code shown in the mock mailbox. There is no real mail in the mockup. */
-  mailboxCode: string | null;
+  /**
+   * Code shown in the mock mailbox; there is no real mail in the mockup. Left out (undefined) when a real mail is
+   * sent: the mock mailbox is not shown.
+   */
+  mailboxCode?: string | null;
   initialDigits?: readonly string[];
   error?: string | null;
   notice?: string | null;
@@ -201,20 +213,27 @@ export const CodeStep: React.FC<CodeStepProps> = ({
         <SchoolBadge school={school} size="w-12 h-12 text-2xl" />
         <div className="min-w-0">
           <span className="text-[9px] font-pixel bg-[#261608] text-[#fef08a] px-1 py-0.2">{school.name} 확인 중</span>
-          <h2 className="font-pixel text-xs font-bold text-white mt-0.5">목업 인증 코드가 발급됐어!</h2>
+          <h2 className="font-pixel text-xs font-bold text-white mt-0.5">{mailboxCode === undefined ? '인증 코드를 메일로 보냈어!' : '목업 인증 코드가 발급됐어!'}</h2>
           <p className="font-mono text-[10px] text-white/90 truncate">{email}</p>
         </div>
       </div>
 
-      <section aria-label="목업 메일함" className="border-2 border-dashed border-[#261608]/60 bg-[#ffffff] p-2 flex items-center gap-2">
-        <Inbox className="w-4 h-4 text-[#8b5327] shrink-0" />
-        <div className="font-pixel text-[10px] text-[#5a3012] leading-tight">
-          <div className="font-bold">목업 메일함 (실제 발송 없음)</div>
-          <div>
-            인증 코드 <span data-testid="mock-mailbox-code" className="font-press-start text-[11px] text-[#261608]">{mailboxCode ?? '------'}</span>
+      {mailboxCode === undefined ? (
+        <p className="border-2 border-dashed border-[#261608]/60 bg-[#ffffff] p-2 flex items-center gap-2 font-pixel text-[10px] text-[#5a3012] leading-tight">
+          <Inbox className="w-4 h-4 text-[#8b5327] shrink-0" />
+          학교 메일함에서 6자리 코드를 확인해 줘. 메일이 없으면 스팸함도 살펴봐!
+        </p>
+      ) : (
+        <section aria-label="목업 메일함" className="border-2 border-dashed border-[#261608]/60 bg-[#ffffff] p-2 flex items-center gap-2">
+          <Inbox className="w-4 h-4 text-[#8b5327] shrink-0" />
+          <div className="font-pixel text-[10px] text-[#5a3012] leading-tight">
+            <div className="font-bold">목업 메일함 (실제 발송 없음)</div>
+            <div>
+              인증 코드 <span data-testid="mock-mailbox-code" className="font-press-start text-[11px] text-[#261608]">{mailboxCode ?? '------'}</span>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <form
         className="rpg-box p-3 flex flex-col gap-2.5"
@@ -281,6 +300,69 @@ export const CodeStep: React.FC<CodeStepProps> = ({
 };
 
 // ---------------------------------------------------------------------------------------------------------
+// Step 2-1. Password (API sign-up only, SCRUM-151)
+// ---------------------------------------------------------------------------------------------------------
+
+interface PasswordStepProps {
+  school: OnboardingSchool;
+  email: string;
+  password: string;
+  confirm: string;
+  onPasswordChange: (password: string) => void;
+  onConfirmChange: (confirm: string) => void;
+  /** Shown under the fields, e.g. the server's rule. */
+  ruleText: string;
+  error?: string | null;
+  onNext: () => void;
+}
+
+export const PasswordStep: React.FC<PasswordStepProps> = ({
+  school, email, password, confirm, onPasswordChange, onConfirmChange, ruleText, error, onNext,
+}) => {
+  const inputClass = 'w-full bg-[#ffffff] border-2 border-[#261608] px-2.5 py-1.5 text-xs font-mono text-[#261608] focus:bg-[#fef9c3] focus:outline-none shadow-[inset_1px_1px_0px_#261608]';
+  return (
+    <div data-testid="password-step" className="my-auto flex flex-col gap-3">
+      <div className="rpg-box p-2.5 flex items-center gap-2 bg-[#fef08a]">
+        <SchoolBadge school={school} />
+        <div className="min-w-0">
+          <p className="font-pixel text-xs sm:text-sm font-bold text-[#261608]">{school.name} ✔</p>
+          <p className="font-mono text-[9px] text-[#15803d] font-bold truncate">{email} 인증 완료</p>
+        </div>
+      </div>
+      <form
+        className="rpg-box p-3 flex flex-col gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          soundManager.playTabSound();
+          onNext();
+        }}
+      >
+        <div className="flex items-center gap-1.5 border-b-2 border-[#261608]/20 pb-1.5">
+          <KeyRound className="w-4 h-4 text-[#8b5327]" />
+          <h2 className="font-pixel text-xs sm:text-sm font-bold text-[#261608]">로그인 비밀번호 정하기</h2>
+        </div>
+        {/* The email as a hidden username lets password managers save the pair. */}
+        <input type="email" name="username" autoComplete="username" value={email} readOnly hidden />
+        <label className="font-pixel text-[10px] font-bold text-[#261608] flex flex-col gap-1">
+          비밀번호
+          <input type="password" autoComplete="new-password" value={password} onChange={(e) => onPasswordChange(e.target.value)} maxLength={64} className={inputClass} />
+        </label>
+        <label className="font-pixel text-[10px] font-bold text-[#261608] flex flex-col gap-1">
+          비밀번호 확인
+          <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => onConfirmChange(e.target.value)} maxLength={64} className={inputClass} />
+        </label>
+        <p className="font-pixel text-[10px] text-[#8b5327] leading-tight">{ruleText}</p>
+        <ErrorText message={error} />
+        <button type="submit" className="pixel-plaque plaque-yellow w-full py-2 mt-1 text-xs font-pixel font-bold flex items-center justify-center gap-1.5 cursor-pointer">
+          <span>다음</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
+      </form>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------------------------------------
 // Step 3. Profile
 // ---------------------------------------------------------------------------------------------------------
 
@@ -294,17 +376,28 @@ interface ProfileStepProps {
   departments: readonly { id: string; name: string }[];
   departmentId: string;
   onDepartmentChange: (departmentId: string) => void;
-  /** null: another school than the current player's, so the game always starts over (D2). */
-  progressChoice: ProgressChoice | null;
+  /**
+   * null: another school than the current player's, so the game always starts over (D2). Left out (undefined) for a
+   * server account, which has no local progress to keep: the choice and the starting-contribution note are hidden.
+   */
+  progressChoice?: ProgressChoice | null;
   onProgressChoiceChange?: (choice: ProgressChoice) => void;
   error?: string | null;
   onEnroll: () => void;
   pending?: boolean;
+  nicknameMaxLength?: number;
+  /** Shows a 중복 확인 button next to the nickname. */
+  onCheckNickname?: () => void;
+  /** Result of the nickname check; `ok` picks the colour. */
+  nicknameStatus?: { ok: boolean; message: string } | null;
+  /** Shown in place of the department list while it loads or after it failed. */
+  departmentsStatus?: React.ReactNode;
 }
 
 export const ProfileStep: React.FC<ProfileStepProps> = ({
   school, email, nickname, onNicknameChange, departments, departmentId, onDepartmentChange,
   progressChoice, onProgressChoiceChange, error, onEnroll, pending = false,
+  nicknameMaxLength = 10, onCheckNickname, nicknameStatus, departmentsStatus,
 }) => {
   const selected = departments.find((department) => department.id === departmentId);
   return (
@@ -332,20 +425,39 @@ export const ProfileStep: React.FC<ProfileStepProps> = ({
           <h2 className="font-pixel text-xs sm:text-sm font-bold text-[#261608]">학생증 프로필 생성</h2>
           <p className="font-pixel text-[10px] text-[#8b5327]">순위와 채팅에 보일 닉네임과 학과를 정해줘!</p>
         </div>
-        <label className="font-pixel text-[10px] font-bold text-[#261608] flex flex-col gap-1">
-          플레이어 닉네임
-          <input
-            type="text"
-            value={nickname}
-            onChange={(e) => onNicknameChange(e.target.value)}
-            placeholder="열정학번사자"
-            maxLength={10}
-            className="w-full bg-[#ffffff] border-2 border-[#261608] px-2.5 py-1.5 text-xs font-pixel text-[#261608] focus:bg-[#fef9c3] focus:outline-none shadow-[inset_1px_1px_0px_#261608]"
-          />
-        </label>
+        <div className="flex flex-col gap-1">
+          <label className="font-pixel text-[10px] font-bold text-[#261608] flex flex-col gap-1">
+            플레이어 닉네임
+            <input
+              type="text"
+              value={nickname}
+              onChange={(e) => onNicknameChange(e.target.value)}
+              placeholder="열정학번사자"
+              maxLength={nicknameMaxLength}
+              className="w-full bg-[#ffffff] border-2 border-[#261608] px-2.5 py-1.5 text-xs font-pixel text-[#261608] focus:bg-[#fef9c3] focus:outline-none shadow-[inset_1px_1px_0px_#261608]"
+            />
+          </label>
+          {onCheckNickname && (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={onCheckNickname}
+                disabled={pending}
+                className="min-h-6 shrink-0 font-pixel text-[10px] font-bold bg-[#faecc7] hover:bg-[#fef08a] text-[#261608] border border-[#261608] px-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+              >
+                중복 확인
+              </button>
+              {nicknameStatus && (
+                <p role="status" data-nickname-ok={nicknameStatus.ok} className={`font-pixel text-[10px] font-bold leading-tight ${nicknameStatus.ok ? 'text-[#15803d]' : 'text-[#b91c1c]'}`}>
+                  {nicknameStatus.message}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
         <div role="group" aria-label="소속 학과" className="flex flex-col gap-0.5">
           <span className="font-pixel text-[10px] font-bold text-[#261608]">소속 학과 · {school.name}</span>
-          <div className="border-2 border-[#261608] bg-[#ffffff] shadow-[3px_3px_0px_#261608] p-1 flex flex-col gap-0.5 max-h-[150px] overflow-y-auto">
+          {departmentsStatus ?? <div className="border-2 border-[#261608] bg-[#ffffff] shadow-[3px_3px_0px_#261608] p-1 flex flex-col gap-0.5 max-h-[150px] overflow-y-auto">
             {departments.map((department) => {
               const isSelected = department.id === departmentId;
               return (
@@ -366,10 +478,10 @@ export const ProfileStep: React.FC<ProfileStepProps> = ({
                 </button>
               );
             })}
-          </div>
+          </div>}
         </div>
 
-        {progressChoice === null ? (
+        {progressChoice === undefined ? null : progressChoice === null ? (
           <p className="font-pixel text-[10px] text-[#9a3412] bg-[#ffedd5] border border-[#9a3412] px-1.5 py-1 leading-tight">
             지금 플레이 중인 학교와 달라요. {school.name}에서 처음부터 시작합니다(기존 진행은 초기화).
           </p>
@@ -406,11 +518,13 @@ export const ProfileStep: React.FC<ProfileStepProps> = ({
         </button>
       </form>
 
-      <div className="rpg-box p-2 bg-[#dcfce7] text-center">
-        <p className="font-pixel text-[10px] text-[#15803d] font-bold">
-          처음부터 시작하면 기본 기여도 {INITIAL_CONTRIBUTION.toLocaleString('ko-KR')}점으로 출발해요!
-        </p>
-      </div>
+      {progressChoice !== undefined && (
+        <div className="rpg-box p-2 bg-[#dcfce7] text-center">
+          <p className="font-pixel text-[10px] text-[#15803d] font-bold">
+            처음부터 시작하면 기본 기여도 {INITIAL_CONTRIBUTION.toLocaleString('ko-KR')}점으로 출발해요!
+          </p>
+        </div>
+      )}
     </>
   );
 };
@@ -426,9 +540,11 @@ interface DoneStepProps {
   startedOver: boolean | null;
   onGoToCampus: () => void;
   onRestart: () => void;
+  /** A line under the welcome, e.g. that the automatic login after sign-up failed. */
+  notice?: string | null;
 }
 
-export const DoneStep: React.FC<DoneStepProps> = ({ school, nickname, department, startedOver, onGoToCampus, onRestart }) => (
+export const DoneStep: React.FC<DoneStepProps> = ({ school, nickname, department, startedOver, onGoToCampus, onRestart, notice }) => (
   <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center">
     <div className="rpg-box p-5 bg-[#fef08a] w-full flex flex-col items-center gap-2">
       <span className="text-4xl" aria-hidden="true">🎉 🎓</span>
@@ -438,12 +554,109 @@ export const DoneStep: React.FC<DoneStepProps> = ({ school, nickname, department
       {startedOver !== null && (
         <p className="font-pixel text-[10px] text-[#261608]">{startedOver ? '새 기록으로 처음부터 시작합니다.' : '기존 진행을 그대로 이어 갑니다.'}</p>
       )}
+      {notice && <p role="status" className="font-pixel text-[10px] font-bold text-[#9a3412]">{notice}</p>}
     </div>
     <button type="button" onClick={onGoToCampus} className="pixel-plaque plaque-green w-full py-2.5 text-sm font-pixel font-black cursor-pointer">
       캠퍼스로 이동
     </button>
     <button type="button" onClick={onRestart} className="font-pixel text-[10px] text-[#8b5327] underline cursor-pointer">
       온보딩 다시 시작
+    </button>
+  </div>
+);
+
+// ---------------------------------------------------------------------------------------------------------
+// Login and the signed-in account (API mode, SCRUM-152)
+// ---------------------------------------------------------------------------------------------------------
+
+interface LoginStepProps {
+  email: string;
+  password: string;
+  onEmailChange: (email: string) => void;
+  onPasswordChange: (password: string) => void;
+  onLogin: () => void;
+  onGoToSignup: () => void;
+  /** Why the last session ended (another device, suspension, expiry), shown above the form. */
+  notice?: string | null;
+  error?: string | null;
+  pending?: boolean;
+}
+
+export const LoginStep: React.FC<LoginStepProps> = ({
+  email, password, onEmailChange, onPasswordChange, onLogin, onGoToSignup, notice, error, pending = false,
+}) => {
+  const inputClass = 'w-full bg-[#ffffff] border-2 border-[#261608] px-2.5 py-1.5 text-xs font-mono text-[#261608] placeholder:text-stone-400 focus:outline-none focus:bg-[#fef9c3] shadow-[inset_1px_1px_0px_#261608]';
+  return (
+    <>
+      <TitleArt />
+      <form
+        className="rpg-box p-3 mt-3 flex flex-col gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          soundManager.playBuySound();
+          onLogin();
+        }}
+      >
+        <div className="flex items-center gap-1.5 border-b-2 border-[#261608]/20 pb-1.5">
+          <LogIn className="w-4 h-4 text-[#8b5327]" />
+          <h2 className="font-pixel text-xs sm:text-sm font-bold text-[#261608]">로그인</h2>
+        </div>
+        {notice && (
+          <p role="status" className="font-pixel text-[10px] font-bold text-[#9a3412] bg-[#ffedd5] border border-[#9a3412] px-1.5 py-1 leading-tight">{notice}</p>
+        )}
+        <label className="font-pixel text-[10px] font-bold text-[#261608] flex flex-col gap-1">
+          학교 이메일 주소
+          <input type="email" autoComplete="username" value={email} onChange={(e) => onEmailChange(e.target.value)} placeholder="student@hanyang.ac.kr" className={inputClass} />
+        </label>
+        <label className="font-pixel text-[10px] font-bold text-[#261608] flex flex-col gap-1">
+          비밀번호
+          <input type="password" autoComplete="current-password" value={password} onChange={(e) => onPasswordChange(e.target.value)} maxLength={64} className={inputClass} />
+        </label>
+        <ErrorText message={error} />
+        <button
+          type="submit"
+          disabled={pending}
+          className="pixel-plaque plaque-yellow w-full py-2 mt-1 text-xs font-pixel font-bold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+        >
+          <span>{pending ? PENDING_LABEL : '로그인하기'}</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
+        <button type="button" onClick={onGoToSignup} className="min-h-6 self-center font-pixel text-[10px] text-[#8b5327] underline cursor-pointer">
+          처음이에요 · 학교 이메일로 가입하기
+        </button>
+      </form>
+    </>
+  );
+};
+
+interface SignedInStepProps {
+  /** From GET /users/me (SCRUM-153), or the login response until the profile arrives. Null shows a plain heading. */
+  nickname: string | null;
+  onGoToCampus: () => void;
+  onLogout: () => void;
+  error?: string | null;
+  pending?: boolean;
+}
+
+export const SignedInStep: React.FC<SignedInStepProps> = ({ nickname, onGoToCampus, onLogout, error, pending = false }) => (
+  <div data-testid="signed-in" className="flex-1 flex flex-col items-center justify-center gap-3 text-center">
+    <div className="rpg-box p-5 bg-[#dcfce7] w-full flex flex-col items-center gap-2">
+      <CheckCircle2 className="w-10 h-10 text-[#15803d]" aria-hidden="true" />
+      <h2 className="font-pixel text-lg font-bold text-[#261608]">{nickname ? `${nickname}님, 로그인되어 있어요` : '로그인되어 있어요'}</h2>
+      <p className="font-pixel text-[10px] text-[#15803d]">새로 고쳐도 로그인이 유지됩니다.</p>
+    </div>
+    <ErrorText message={error} />
+    <button type="button" onClick={onGoToCampus} className="pixel-plaque plaque-green w-full py-2.5 text-sm font-pixel font-black cursor-pointer">
+      캠퍼스로 이동
+    </button>
+    <button
+      type="button"
+      onClick={onLogout}
+      disabled={pending}
+      className="pixel-plaque plaque-parchment w-full py-2 text-xs font-pixel font-bold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+    >
+      <LogOut className="w-3.5 h-3.5" />
+      <span>{pending ? PENDING_LABEL : '로그아웃'}</span>
     </button>
   </div>
 );
