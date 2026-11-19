@@ -1,3 +1,4 @@
+import type { SchoolId } from '../data/schoolIds.ts';
 import React from 'react';
 import { ArrowLeft, Eye, Heart, MapPin, Users } from 'lucide-react';
 import { CAMPUS_STAGES } from '../data/gameRules.ts';
@@ -17,11 +18,11 @@ export interface VisitedSchool {
   mySchool: SchoolView;
 }
 
-export function useVisitedSchool(schoolId: string): VisitedSchool {
+export function useVisitedSchool(schoolId: SchoolId | null): VisitedSchool {
   const views = useSchoolViews();
   const mySchool = views.find((school) => school.isMySchool);
   if (!mySchool) throw new Error('My school is missing from the school list.');
-  return { school: getSchoolById(views, schoolId), mySchool };
+  return { school: schoolId === null ? undefined : getSchoolById(views, schoolId), mySchool };
 }
 
 export function rankMedal(rank: number): string {
@@ -123,7 +124,7 @@ export const VisitSchoolInfoSheet: React.FC<{ school: SchoolView; onOpenGuestboo
 };
 
 interface VisitNotFoundPhoneProps {
-  schoolId: string;
+  schoolId: SchoolId | null;
   onBackToMap: () => void;
 }
 
@@ -132,7 +133,7 @@ export const VisitNotFoundPhone: React.FC<VisitNotFoundPhoneProps> = ({ schoolId
   <PhoneShell chrome={false} className="items-center justify-center gap-3 p-6">
     <div role="alert" className="rpg-box p-3 bg-[#fffbeb] border-3 border-[#261608] shadow-[3px_3px_0px_#261608] flex flex-col items-center gap-1 text-center">
       <p className="font-pixel text-sm font-black text-[#261608]">학교를 찾을 수 없습니다</p>
-      <p className="font-pixel text-[10px] text-[#8b5327]">요청한 학교 ID: {schoolId || '(없음)'}</p>
+      <p className="font-pixel text-[10px] text-[#8b5327]">요청한 학교 ID: {schoolId ?? '(없음)'}</p>
     </div>
     <button
       type="button"
@@ -151,7 +152,7 @@ export const VisitNotFoundPhone: React.FC<VisitNotFoundPhoneProps> = ({ schoolId
 const PREVIEW_PIN_COLORS = ['#e11d48', '#0284c7'];
 
 /** Most liked notes of the visited school's guestbook, from the same samples as the full guestbook sheet. */
-export const GuestbookPreviewNotes: React.FC<{ schoolId: string }> = ({ schoolId }) => (
+export const GuestbookPreviewNotes: React.FC<{ schoolId: SchoolId }> = ({ schoolId }) => (
   <div className="flex flex-col gap-1.5">
     {getVisitGuestbookPreview(schoolId).map((note, index) => (
       <div key={note.id} data-testid="guestbook-preview-note" className="w-full bg-[#fffdf5] border-2 border-[#261608] shadow-[2px_2px_0px_#261608] p-2 flex flex-col gap-0.5 relative">

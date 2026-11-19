@@ -1,6 +1,7 @@
 // Mock chat samples built from the shared school list, rankings and the player's alliance, so no message names a
 // fixed school or rank (T44-D1, T44-D2). Plan: docs/261109-1829-chat_samples_plan.md. Not a server data model:
 // the real service loads chat history over WebSocket (planning doc 6장 "채팅").
+import type { SchoolId } from './schoolIds.ts';
 import { getSchoolDepartments } from './gameRules.ts';
 import type { SchoolView } from './schoolDirectory.ts';
 
@@ -19,7 +20,7 @@ export interface ChatMessage {
 export interface ChatSampleInput {
   /** All schools in national rank order (useSchoolViews). */
   schools: readonly SchoolView[];
-  mySchoolId: string;
+  mySchoolId: SchoolId;
   myNickname: string;
   myDepartment: string;
 }
@@ -30,14 +31,14 @@ const FILTERED_BADGE = '#78716c';
 /** Used when a school has no mock department list (only hanyang, kaist and pusan have one). */
 const GENERIC_DEPARTMENTS = ['기계공학과', '경영학과', '전자공학과', '신소재공학과', '화학공학과'] as const;
 
-function schoolOf(schools: readonly SchoolView[], schoolId: string): SchoolView {
+function schoolOf(schools: readonly SchoolView[], schoolId: SchoolId): SchoolView {
   const school = schools.find((entry) => entry.id === schoolId);
   if (!school) throw new Error(`Unknown chat school: ${schoolId}`);
   return school;
 }
 
 /** Department names for sample writers at a school, leaving out the player's own department. */
-export function sampleDepartments(schoolId: string, exclude: string, count: number): string[] {
+export function sampleDepartments(schoolId: SchoolId, exclude: string, count: number): string[] {
   const names = [...getSchoolDepartments(schoolId).map((department) => department.name), ...GENERIC_DEPARTMENTS];
   const unique = [...new Set(names)].filter((name) => name !== exclude);
   return unique.slice(0, count);
@@ -76,7 +77,7 @@ const UNION_WRITERS = [
  * Alliance chat: one sample from each other member school, then the player's message.
  * Returns null when the player's school has no alliance; the chat sheet then shows an empty state.
  */
-export function getUnionChatSamples(input: ChatSampleInput, allianceSchoolIds: readonly string[] | null): ChatMessage[] | null {
+export function getUnionChatSamples(input: ChatSampleInput, allianceSchoolIds: readonly SchoolId[] | null): ChatMessage[] | null {
   if (!allianceSchoolIds || !allianceSchoolIds.includes(input.mySchoolId)) return null;
   const { schools, mySchoolId, myNickname, myDepartment } = input;
   const me = schoolOf(schools, mySchoolId);

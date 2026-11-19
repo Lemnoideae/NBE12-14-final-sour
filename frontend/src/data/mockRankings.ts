@@ -1,9 +1,11 @@
+import { SCHOOL_ID, type SchoolId } from './schoolIds.ts';
 import { DEFAULT_PLAYER, INITIAL_CONTRIBUTION, INITIAL_DEPARTMENT_SCORE, INITIAL_SCHOOL_SCORE, MY_SCHOOL_ID, getSchoolDepartments, initialSchoolScore } from './gameRules.ts';
 import { REAL_UNIVERSITIES } from './universitiesData.ts';
 import type { MockGameState } from '../utils/gameModel.ts';
 
-export interface RankingRow {
-  id: string;
+/** School rows carry the backend university ID; department and personal rows keep mock string IDs. */
+export interface RankingRow<Id extends string | number = string | number> {
+  id: Id;
   name: string;
   score: number;
   rank: number;
@@ -17,16 +19,20 @@ export interface RankingRow {
   isMySchool?: boolean;
 }
 
-type RankInput = Omit<RankingRow, 'rank' | 'change' | 'mascot' | 'crestColor' | 'crestSymbol'>;
+type RankInput<Id extends string | number> = Omit<RankingRow<Id>, 'rank' | 'change' | 'mascot' | 'crestColor' | 'crestSymbol'>;
+
+function compareIds(a: string | number, b: string | number): number {
+  return typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b));
+}
 
 // 동점은 이름, 동일 이름은 ID로 정렬한다. 순위 번호는 연속 번호의 목업 임시 규칙.
-export function rankEntries<T extends { id: string; name: string; score: number }>(entries: readonly T[]) {
+export function rankEntries<T extends { id: string | number; name: string; score: number }>(entries: readonly T[]) {
   return [...entries]
-    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'ko') || a.id.localeCompare(b.id))
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'ko') || compareIds(a.id, b.id))
     .map((entry, index) => ({ ...entry, rank: index + 1 }));
 }
 
-function present(entries: RankInput[], previous = entries): RankingRow[] {
+function present<Id extends string | number>(entries: RankInput<Id>[], previous = entries): RankingRow<Id>[] {
   const previousRanks = new Map(rankEntries(previous).map((entry) => [entry.id, entry.rank]));
   return rankEntries(entries).map((entry) => {
     const delta = (previousRanks.get(entry.id) ?? entry.rank) - entry.rank;
@@ -45,7 +51,7 @@ function present(entries: RankInput[], previous = entries): RankingRow[] {
  * National ranking. `mySchoolId` is the player's school (M4: set by the mock email verification); its score comes
  * from the game state, every other school keeps its shared mock score.
  */
-export function getSchoolRankings(schoolScore = INITIAL_SCHOOL_SCORE, mySchoolId = MY_SCHOOL_ID): RankingRow[] {
+export function getSchoolRankings(schoolScore = INITIAL_SCHOOL_SCORE, mySchoolId = MY_SCHOOL_ID): RankingRow<SchoolId>[] {
   const entries = REAL_UNIVERSITIES.map((school) => ({
     id: school.id, name: school.name, score: school.id === mySchoolId ? schoolScore : school.score,
     region: `${school.region} · ${school.city}`, firstSyllable: school.firstSyllable,
@@ -54,7 +60,7 @@ export function getSchoolRankings(schoolScore = INITIAL_SCHOOL_SCORE, mySchoolId
   return present(entries, entries.map((entry) => entry.isMySchool ? { ...entry, score: initialSchoolScore(mySchoolId) } : entry));
 }
 
-export function getSchoolName(schoolId: string): string {
+export function getSchoolName(schoolId: SchoolId): string {
   const school = REAL_UNIVERSITIES.find((entry) => entry.id === schoolId);
   if (!school) throw new Error(`Unknown school: ${schoolId}`);
   return school.name;
@@ -73,7 +79,7 @@ const SAMPLE_STUDENTS = [
   { id: 'bird', name: '누리뱁새날개', department: '미디어학부', score: 7950 },
 ] as const;
 /** A student of another school. It must never show up in the in-school ranking. */
-const OTHER_SCHOOL_STUDENT = { id: 'visitor', schoolId: 'snu', name: '외부학교샘플', department: '자유전공학부', score: 999999 };
+const OTHER_SCHOOL_STUDENT = { id: 'visitor', schoolId: SCHOOL_ID.snu, name: '외부학교샘플', department: '자유전공학부', score: 999999 };
 
 export function getMockRankings(state: MockGameState, player = DEFAULT_PLAYER) {
   const mySchoolId = player.schoolId || MY_SCHOOL_ID;

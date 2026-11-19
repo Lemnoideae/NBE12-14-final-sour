@@ -1,5 +1,6 @@
 // V1·V2 (docs/261110-2005-visit_ui_jeju_map_plan.md §4): a visited campus uses the main game's layout.
 // jsdom compares the DOM skeleton and classes; pixel boxes are checked in a browser (tests/e2e/mobile-flows.mjs).
+import { SCHOOL_ID } from '../src/data/schoolIds';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { after, afterEach, test } from 'node:test';
@@ -36,7 +37,7 @@ afterEach(() => cleanup());
 after(() => { assetHooks.deregister(); dom.window.close(); });
 
 const click = (name: string | RegExp) => fireEvent.click(screen.getByRole('button', { name }));
-const pusan = getSchoolById(getSchoolViews(), 'pusan')!;
+const pusan = getSchoolById(getSchoolViews(), SCHOOL_ID.pusan)!;
 
 function mountApp() {
   render(React.createElement(MockGameProvider, null, React.createElement(App)));
@@ -141,7 +142,7 @@ test('방문 화면 소스에 옛 작은 캠퍼스·하단 패널 크기 규칙�
 
 test('2-Phone 비교의 흐린 방문 화면 HUD는 Tab으로도 닿지 않는다 (V3)', async () => {
   const { VisitingScreen2Phone } = await import('../src/components/VisitingScreen2Phone');
-  render(React.createElement(MockGameProvider, null, React.createElement(VisitingScreen2Phone, { schoolId: 'pusan' })));
+  render(React.createElement(MockGameProvider, null, React.createElement(VisitingScreen2Phone, { schoolId: SCHOOL_ID.pusan })));
   const tag = screen.getByTestId('visit-tag');
   const backdrop = tag.closest('[inert]');
   assert.ok(backdrop, '방문 HUD가 inert 영역 안에 있다');

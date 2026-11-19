@@ -1,6 +1,7 @@
 // Mock email verification rules (M4-A, docs/261108-2020-m4_onboarding_auth_plan.md 4-1).
 // Pure functions: time and the new code are arguments, so tests fix them. This reproduces states on screen;
 // it is not the service's server check (TTL, code storage, rate limits and identity checks stay server work).
+import type { SchoolId } from '../data/schoolIds.ts';
 import { getSchoolDepartments } from '../data/gameRules.ts';
 import { resolveEmailDomain } from '../data/mockEmailDomains.ts';
 
@@ -25,13 +26,13 @@ export interface CodeChallenge {
 
 export interface Verification {
   email: string;
-  schoolId: string;
+  schoolId: SchoolId;
   verifiedAt: number;
 }
 
 export interface EnrolledProfile {
   email: string;
-  schoolId: string;
+  schoolId: SchoolId;
   departmentId: string;
   department: string;
   nickname: string;
@@ -41,7 +42,7 @@ export interface MockAuthState {
   step: AuthStep;
   /** Normalized email the current code was sent to. */
   email: string;
-  schoolId: string | null;
+  schoolId: SchoolId | null;
   challenge: CodeChallenge | null;
   verification: Verification | null;
   completed: EnrolledProfile | null;
@@ -98,7 +99,7 @@ export function randomAuthCode(): string {
 /** A code, or a function that makes one. The function is called only when a code is actually issued. */
 export type CodeSource = string | (() => string);
 
-function issue(state: MockAuthState, email: string, schoolId: string, now: number, source: CodeSource): MockAuthState {
+function issue(state: MockAuthState, email: string, schoolId: SchoolId, now: number, source: CodeSource): MockAuthState {
   const code = typeof source === 'function' ? source() : source;
   return {
     ...state,

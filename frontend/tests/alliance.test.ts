@@ -1,3 +1,4 @@
+import { SCHOOL_ID, type SchoolId } from '../src/data/schoolIds';
 import assert from 'node:assert/strict';
 import { assertAbsent } from './helpers/domAssert';
 import { after, afterEach, test } from 'node:test';
@@ -64,37 +65,37 @@ test('연합 신청 유효성 검사: 자기 학교 신청, 유효하지 않은 
   const state = INITIAL_ALLIANCE_STATE;
 
   // 자기 학교 신청 거절
-  const selfRes = applyAllianceRequest(state, 'hanyang', 'hanyang');
+  const selfRes = applyAllianceRequest(state, SCHOOL_ID.hanyang, SCHOOL_ID.hanyang);
   assert.equal(selfRes.result.success, false);
   if (!selfRes.result.success) {
     assert.match(selfRes.result.error, /자기 학교/);
   }
 
   // 존재하지 않는 학교 ID 거절
-  const invalidRes = applyAllianceRequest(state, 'hanyang', 'not-a-school');
+  const invalidRes = applyAllianceRequest(state, SCHOOL_ID.hanyang, 999_999); // no university row has this ID
   assert.equal(invalidRes.result.success, false);
   if (!invalidRes.result.success) {
     assert.match(invalidRes.result.error, /유효하지 않은 학교 ID/);
   }
 
   // 정상 신청
-  const validRes = applyAllianceRequest(state, 'hanyang', 'pusan', 1000);
+  const validRes = applyAllianceRequest(state, SCHOOL_ID.hanyang, SCHOOL_ID.pusan, 1000);
   assert.equal(validRes.result.success, true);
   assert.equal(validRes.nextState.requests.length, 1);
   const pendingReq = validRes.nextState.requests[0];
-  assert.equal(pendingReq.requesterSchoolId, 'hanyang');
-  assert.equal(pendingReq.recipientSchoolId, 'pusan');
+  assert.equal(pendingReq.requesterSchoolId, SCHOOL_ID.hanyang);
+  assert.equal(pendingReq.recipientSchoolId, SCHOOL_ID.pusan);
   assert.equal(pendingReq.status, 'pending');
 
   // 동일 학교 쌍 간 중복 대기 신청 거절
-  const dupRes1 = applyAllianceRequest(validRes.nextState, 'hanyang', 'pusan', 1001);
+  const dupRes1 = applyAllianceRequest(validRes.nextState, SCHOOL_ID.hanyang, SCHOOL_ID.pusan, 1001);
   assert.equal(dupRes1.result.success, false);
   if (!dupRes1.result.success) {
     assert.match(dupRes1.result.error, /이미 대기 중인/);
   }
 
   // 역방향 동일 학교 쌍 간 중복 대기 신청도 거절
-  const dupRes2 = applyAllianceRequest(validRes.nextState, 'pusan', 'hanyang', 1002);
+  const dupRes2 = applyAllianceRequest(validRes.nextState, SCHOOL_ID.pusan, SCHOOL_ID.hanyang, 1002);
   assert.equal(dupRes2.result.success, false);
   if (!dupRes2.result.success) {
     assert.match(dupRes2.result.error, /이미 대기 중인/);
@@ -103,7 +104,7 @@ test('연합 신청 유효성 검사: 자기 학교 신청, 유효하지 않은 
 
 test('상태 전이 및 확정된 요청의 재처리(2회 승인/거절/취소) 차단을 검증한다', () => {
   const state = INITIAL_ALLIANCE_STATE;
-  const { nextState: state1, result: appRes } = applyAllianceRequest(state, 'hanyang', 'pusan', 2000);
+  const { nextState: state1, result: appRes } = applyAllianceRequest(state, SCHOOL_ID.hanyang, SCHOOL_ID.pusan, 2000);
   assert.ok(appRes.success);
   assert.ok(appRes.request);
   const reqId = appRes.request.id;
@@ -113,7 +114,7 @@ test('상태 전이 및 확정된 요청의 재처리(2회 승인/거절/취소)
   assert.equal(acceptRes.success, true);
   if (acceptRes.success) {
     assert.ok(acceptRes.alliance);
-    assert.deepEqual([...acceptRes.alliance.schoolIds], ['hanyang', 'pusan']);
+    assert.deepEqual([...acceptRes.alliance.schoolIds], [SCHOOL_ID.hanyang, SCHOOL_ID.pusan]);
   }
   const acceptedReq = acceptedState.requests.find((r) => r.id === reqId);
   assert.equal(acceptedReq?.status, 'accepted');
@@ -132,7 +133,7 @@ test('상태 전이 및 확정된 요청의 재처리(2회 승인/거절/취소)
   assert.match((reCancel.result as { error: string }).error, /이미 처리된/);
 
   // 2. 거절 전이: 요청 rejected 상태 갱신 및 재처리 차단
-  const { nextState: state2 } = applyAllianceRequest(state, 'hanyang', 'knu', 3000);
+  const { nextState: state2 } = applyAllianceRequest(state, SCHOOL_ID.hanyang, SCHOOL_ID.knu, 3000);
   const req2 = state2.requests[0];
   const { nextState: rejectedState, result: rejectRes } = rejectAllianceRequest(state2, req2.id, 3100);
   assert.equal(rejectRes.success, true);
@@ -143,7 +144,7 @@ test('상태 전이 및 확정된 요청의 재처리(2회 승인/거절/취소)
   assert.match((reReject2.result as { error: string }).error, /이미 처리된/);
 
   // 3. 취소 전이: 요청 cancelled 상태 갱신 및 재처리 차단
-  const { nextState: state3 } = applyAllianceRequest(state, 'hanyang', 'gachon', 4000);
+  const { nextState: state3 } = applyAllianceRequest(state, SCHOOL_ID.hanyang, SCHOOL_ID.gachon, 4000);
   const req3 = state3.requests[0];
   const { nextState: cancelledState, result: cancelRes } = cancelAllianceRequest(state3, req3.id, 4100);
   assert.equal(cancelRes.success, true);
@@ -156,13 +157,13 @@ test('상태 전이 및 확정된 요청의 재처리(2회 승인/거절/취소)
 
 test('네트워크 오류 시뮬레이션 및 복구(재시도) 동작을 검증한다', () => {
   const failureState = { ...INITIAL_ALLIANCE_STATE, simulateRequestFailure: true };
-  const failRes = applyAllianceRequest(failureState, 'hanyang', 'pusan');
+  const failRes = applyAllianceRequest(failureState, SCHOOL_ID.hanyang, SCHOOL_ID.pusan);
   assert.equal(failRes.result.success, false);
   assert.match((failRes.result as { error: string }).error, /네트워크 연결 오류/);
 
   // 오류 플래그 해제 후 재시도 성공
   const recoveredState = { ...failureState, simulateRequestFailure: false };
-  const okRes = applyAllianceRequest(recoveredState, 'hanyang', 'pusan');
+  const okRes = applyAllianceRequest(recoveredState, SCHOOL_ID.hanyang, SCHOOL_ID.pusan);
   assert.equal(okRes.result.success, true);
 });
 
@@ -285,7 +286,7 @@ test('현재 연합 화면: 소속 연합 없음 상태, 시연 수락 후 결�
   // 4. 연합 신청 후 시연 수락 시 결성 상태로 전이
   let targetReqId = '';
   act(() => {
-    const res = allianceValue.applyRequest('pusan');
+    const res = allianceValue.applyRequest(SCHOOL_ID.pusan);
     assert.ok(res.success);
     targetReqId = res.request!.id;
   });
@@ -368,27 +369,27 @@ test('화면 전환 시 연합 상태가 보존되며 기존 게임 상태(점�
 
 test('P2-1 (a): 이미 같은 연합에 소속된 두 학교 간의 재신청 및 수락을 거절한다', () => {
   // 초기 시드 연합 중 'yonsei'와 'korea'는 이미 'alliance-sky'에 소속됨
-  const res1 = applyAllianceRequest(INITIAL_ALLIANCE_STATE, 'yonsei', 'korea');
+  const res1 = applyAllianceRequest(INITIAL_ALLIANCE_STATE, SCHOOL_ID.yonsei, SCHOOL_ID.korea);
   assert.equal(res1.result.success, false);
   if (!res1.result.success) {
     assert.match(res1.result.error, /이미 같은 연합/);
   }
 
   // 역방향 신청도 거절
-  const res2 = applyAllianceRequest(INITIAL_ALLIANCE_STATE, 'korea', 'yonsei');
+  const res2 = applyAllianceRequest(INITIAL_ALLIANCE_STATE, SCHOOL_ID.korea, SCHOOL_ID.yonsei);
   assert.equal(res2.result.success, false);
   if (!res2.result.success) {
     assert.match(res2.result.error, /이미 같은 연합/);
   }
 
   // 신규 결성 후 동일 학교 쌍 재신청 거절
-  const step1 = applyAllianceRequest(INITIAL_ALLIANCE_STATE, 'hanyang', 'pusan');
+  const step1 = applyAllianceRequest(INITIAL_ALLIANCE_STATE, SCHOOL_ID.hanyang, SCHOOL_ID.pusan);
   assert.equal(step1.result.success, true);
   if (!step1.result.success || !step1.result.request) throw new Error('step1 failed');
   const step2 = acceptAllianceRequest(step1.nextState, step1.result.request.id);
   assert.equal(step2.result.success, true);
 
-  const reApply = applyAllianceRequest(step2.nextState, 'hanyang', 'pusan');
+  const reApply = applyAllianceRequest(step2.nextState, SCHOOL_ID.hanyang, SCHOOL_ID.pusan);
   assert.equal(reApply.result.success, false);
   if (!reApply.result.success) {
     assert.match(reApply.result.error, /이미 같은 연합/);
@@ -397,11 +398,11 @@ test('P2-1 (a): 이미 같은 연합에 소속된 두 학교 간의 재신청 �
 
 test('P2-1 (b): 어떠한 연합 신청/수락/취소 시퀀스 후에도 연합 ID의 중복이 발생하지 않는다 (ID 유일성 불변식)', () => {
   let s = INITIAL_ALLIANCE_STATE;
-  const actions: Array<[string, string]> = [
-    ['hanyang', 'pusan'],
-    ['hanyang', 'pusan'], // 재신청 시도
-    ['cau', 'khu'],
-    ['ewha', 'sogang'],
+  const actions: Array<[SchoolId, SchoolId]> = [
+    [SCHOOL_ID.hanyang, SCHOOL_ID.pusan],
+    [SCHOOL_ID.hanyang, SCHOOL_ID.pusan], // 재신청 시도
+    [SCHOOL_ID.cau, SCHOOL_ID.khu],
+    [SCHOOL_ID.ewha, SCHOOL_ID.sogang],
   ];
 
   for (const [a, b] of actions) {
@@ -420,27 +421,27 @@ test('P2-1 (b): 어떠한 연합 신청/수락/취소 시퀀스 후에도 연합
 
 test('P2-2 (a): 목업에서는 1개 학교가 최대 1개 연합에만 소속될 수 있다 (단일 연합 소속 불변식)', () => {
   // korea는 이미 alliance-sky 소속
-  const res1 = applyAllianceRequest(INITIAL_ALLIANCE_STATE, 'hanyang', 'korea');
+  const res1 = applyAllianceRequest(INITIAL_ALLIANCE_STATE, SCHOOL_ID.hanyang, SCHOOL_ID.korea);
   assert.equal(res1.result.success, false);
   if (!res1.result.success) {
     assert.match(res1.result.error, /이미 다른 연합/);
   }
 
   // snu는 이미 alliance-capital 소속
-  const res2 = applyAllianceRequest(INITIAL_ALLIANCE_STATE, 'snu', 'hanyang');
+  const res2 = applyAllianceRequest(INITIAL_ALLIANCE_STATE, SCHOOL_ID.snu, SCHOOL_ID.hanyang);
   assert.equal(res2.result.success, false);
   if (!res2.result.success) {
     assert.match(res2.result.error, /이미 다른 연합/);
   }
 
   // hanyang과 pusan 결성 후, hanyang이 제3 학교(cau)에 신청 시 거절
-  const step1 = applyAllianceRequest(INITIAL_ALLIANCE_STATE, 'hanyang', 'pusan');
+  const step1 = applyAllianceRequest(INITIAL_ALLIANCE_STATE, SCHOOL_ID.hanyang, SCHOOL_ID.pusan);
   assert.equal(step1.result.success, true);
   if (!step1.result.success || !step1.result.request) throw new Error('step1 failed');
   const step2 = acceptAllianceRequest(step1.nextState, step1.result.request.id);
   assert.equal(step2.result.success, true);
 
-  const res3 = applyAllianceRequest(step2.nextState, 'hanyang', 'cau');
+  const res3 = applyAllianceRequest(step2.nextState, SCHOOL_ID.hanyang, SCHOOL_ID.cau);
   assert.equal(res3.result.success, false);
   if (!res3.result.success) {
     assert.match(res3.result.error, /신청 학교는 이미 다른 연합/);
@@ -452,8 +453,8 @@ test('P2-2 (a): 목업에서는 1개 학교가 최대 1개 연합에만 소속�
     requests: [
       {
         id: 'stale-req-1',
-        requesterSchoolId: 'hanyang',
-        recipientSchoolId: 'cau',
+        requesterSchoolId: SCHOOL_ID.hanyang,
+        recipientSchoolId: SCHOOL_ID.cau,
         durationHours: 24,
         status: 'pending' as const,
         createdAt: 1000,
@@ -469,7 +470,7 @@ test('P2-2 (a): 목업에서는 1개 학교가 최대 1개 연합에만 소속�
   }
 
   // 모든 연합 내 학교 소속 카운트 검증: 어떤 학교도 2개 이상의 연합에 소속될 수 없음
-  const schoolCountMap = new Map<string, number>();
+  const schoolCountMap = new Map<SchoolId, number>();
   for (const a of step2.nextState.alliances) {
     for (const sid of a.schoolIds) {
       schoolCountMap.set(sid, (schoolCountMap.get(sid) ?? 0) + 1);
@@ -481,7 +482,7 @@ test('P2-2 (a): 목업에서는 1개 학교가 최대 1개 연합에만 소속�
 });
 
 test('P2-2 (b): 초기 시드 연합(INITIAL_MOCK_ALLIANCES) 내 모든 학교는 유일하며 hanyang은 소속 연합이 없다', () => {
-  const seedSchoolCounts = new Map<string, number>();
+  const seedSchoolCounts = new Map<SchoolId, number>();
   for (const a of INITIAL_MOCK_ALLIANCES) {
     for (const sid of a.schoolIds) {
       seedSchoolCounts.set(sid, (seedSchoolCounts.get(sid) ?? 0) + 1);
@@ -492,7 +493,7 @@ test('P2-2 (b): 초기 시드 연합(INITIAL_MOCK_ALLIANCES) 내 모든 학교�
     assert.equal(count, 1, `시드 연합 내 학교 ${sid}는 유일해야 합니다 (출현 횟수: ${count})`);
   }
 
-  assert.equal(getAllianceForSchool(INITIAL_MOCK_ALLIANCES, 'hanyang', Date.now()), undefined);
+  assert.equal(getAllianceForSchool(INITIAL_MOCK_ALLIANCES, SCHOOL_ID.hanyang, Date.now()), undefined);
 });
 
 test('연합 정원 불변식: 연합은 정확히 2개교다 (시드와 수락으로 만든 연합 모두, 3개교 이상 없음)', () => {
@@ -501,14 +502,14 @@ test('연합 정원 불변식: 연합은 정확히 2개교다 (시드와 수락�
     assert.equal(a.schoolIds.length, ALLIANCE_SIZE, `${a.id}는 ${a.schoolIds.length}개교`);
   }
 
-  const applied = applyAllianceRequest(INITIAL_ALLIANCE_STATE, 'hanyang', 'pusan', 1000);
+  const applied = applyAllianceRequest(INITIAL_ALLIANCE_STATE, SCHOOL_ID.hanyang, SCHOOL_ID.pusan, 1000);
   assert.equal(applied.result.success, true);
   const accepted = acceptAllianceRequest(applied.nextState, applied.result.request!.id, 2000);
   assert.equal(accepted.result.success, true);
-  assert.deepEqual(accepted.result.alliance!.schoolIds, ['hanyang', 'pusan']);
+  assert.deepEqual(accepted.result.alliance!.schoolIds, [SCHOOL_ID.hanyang, SCHOOL_ID.pusan]);
 
   // 성립한 연합에 3번째 학교는 들어갈 수 없다
-  const third = applyAllianceRequest(accepted.nextState, 'gachon', 'hanyang', 3000);
+  const third = applyAllianceRequest(accepted.nextState, SCHOOL_ID.gachon, SCHOOL_ID.hanyang, 3000);
   assert.equal(third.result.success, false);
   for (const a of accepted.nextState.alliances) assert.equal(a.schoolIds.length, ALLIANCE_SIZE);
 });
@@ -532,8 +533,8 @@ test('P2-3 (a): 동일 틱(same tick / 단일 act) 내 동일 학교 쌍 중복 
   let res1: any;
   let res2: any;
   act(() => {
-    res1 = allianceValue.applyRequest('pusan');
-    res2 = allianceValue.applyRequest('pusan');
+    res1 = allianceValue.applyRequest(SCHOOL_ID.pusan);
+    res2 = allianceValue.applyRequest(SCHOOL_ID.pusan);
   });
 
   assert.equal(res1.success, true);
@@ -560,7 +561,7 @@ test('P2-3 (b): 동일 틱 내 동일 요청 2회 연속 수락 시 정확히 1�
 
   let reqId = '';
   act(() => {
-    const res = allianceValue.applyRequest('pusan');
+    const res = allianceValue.applyRequest(SCHOOL_ID.pusan);
     assert.equal(res.success, true);
     reqId = res.request!.id;
   });
@@ -596,7 +597,7 @@ test('P2-3 (c): 동일 틱 내 수락 직후 거절 호출 시 수락만 성공�
 
   let reqId = '';
   act(() => {
-    const res = allianceValue.applyRequest('pusan');
+    const res = allianceValue.applyRequest(SCHOOL_ID.pusan);
     assert.equal(res.success, true);
     reqId = res.request!.id;
   });
@@ -622,27 +623,27 @@ const HOUR = 3600_000;
 
 test('연합 기간: 6~72시간 정수만 허용하고, 기본값은 24시간이다', () => {
   for (const [hours, ok] of [[5, false], [6, true], [72, true], [73, false], [6.5, false]] as const) {
-    const res = applyAllianceRequest(INITIAL_ALLIANCE_STATE, 'hanyang', 'pusan', 1000, hours);
+    const res = applyAllianceRequest(INITIAL_ALLIANCE_STATE, SCHOOL_ID.hanyang, SCHOOL_ID.pusan, 1000, hours);
     assert.equal(res.result.success, ok, `${hours}시간`);
     if (!res.result.success) assert.match(res.result.error, /유효하지 않은 연합 기간/);
     else assert.equal(res.result.request!.durationHours, hours);
   }
-  const byDefault = applyAllianceRequest(INITIAL_ALLIANCE_STATE, 'hanyang', 'pusan', 1000);
+  const byDefault = applyAllianceRequest(INITIAL_ALLIANCE_STATE, SCHOOL_ID.hanyang, SCHOOL_ID.pusan, 1000);
   assert.equal(byDefault.result.success && byDefault.result.request!.durationHours, 24);
 });
 
 test('동시 제안 허용: 하나가 수락되면 두 학교에 걸린 나머지 대기 제안만 자동 거절(capacity)된다', () => {
   let s = INITIAL_ALLIANCE_STATE;
-  const send = (from: string, to: string, at: number) => {
+  const send = (from: SchoolId, to: SchoolId, at: number) => {
     const r = applyAllianceRequest(s, from, to, at, 12);
     assert.equal(r.result.success, true, `${from}→${to}`);
     s = r.nextState;
     return r.result.success ? r.result.request!.id : '';
   };
-  const accepted = send('hanyang', 'pusan', 1000);
-  const sameRequester = send('hanyang', 'knu', 1001); // 한 학교가 여러 곳에 동시에 제안
-  const sameRecipient = send('gachon', 'pusan', 1002);
-  const unrelated = send('hufs', 'gachon', 1003);
+  const accepted = send(SCHOOL_ID.hanyang, SCHOOL_ID.pusan, 1000);
+  const sameRequester = send(SCHOOL_ID.hanyang, SCHOOL_ID.knu, 1001); // 한 학교가 여러 곳에 동시에 제안
+  const sameRecipient = send(SCHOOL_ID.gachon, SCHOOL_ID.pusan, 1002);
+  const unrelated = send(SCHOOL_ID.hufs, SCHOOL_ID.gachon, 1003);
 
   const res = acceptAllianceRequest(s, accepted, 2000);
   assert.equal(res.result.success, true);
@@ -666,30 +667,30 @@ test('동시 제안 허용: 하나가 수락되면 두 학교에 걸린 나머�
 
 test('연합 만료: 만료 시각부터 미소속이 되고, 같은 학교끼리 다시 맺으면 새 연합(다른 ID)이 생긴다', () => {
   const t0 = 10_000;
-  const applied = applyAllianceRequest(INITIAL_ALLIANCE_STATE, 'hanyang', 'pusan', t0, 6);
+  const applied = applyAllianceRequest(INITIAL_ALLIANCE_STATE, SCHOOL_ID.hanyang, SCHOOL_ID.pusan, t0, 6);
   const first = acceptAllianceRequest(applied.nextState, applied.result.success ? applied.result.request!.id : '', t0);
   assert.equal(first.result.success, true);
   const alliance = first.result.success ? first.result.alliance! : undefined!;
   const expiry = t0 + 6 * HOUR;
 
-  assert.equal(getAllianceForSchool(first.nextState.alliances, 'hanyang', expiry - 1)?.id, alliance.id);
+  assert.equal(getAllianceForSchool(first.nextState.alliances, SCHOOL_ID.hanyang, expiry - 1)?.id, alliance.id);
   assert.equal(formatAllianceRemainingTime(alliance, expiry - 90 * 60_000), '만료까지 1시간 30분 남음');
-  const beforeExpiry = applyAllianceRequest(first.nextState, 'hanyang', 'pusan', expiry - 1);
+  const beforeExpiry = applyAllianceRequest(first.nextState, SCHOOL_ID.hanyang, SCHOOL_ID.pusan, expiry - 1);
   assert.equal(beforeExpiry.result.success, false);
   if (!beforeExpiry.result.success) assert.match(beforeExpiry.result.error, /이미 같은 연합/);
 
   assert.equal(isAllianceActive(alliance, expiry), false);
-  assert.equal(getAllianceForSchool(first.nextState.alliances, 'hanyang', expiry), undefined);
-  assert.equal(getLatestExpiredAllianceForSchool(first.nextState.alliances, 'hanyang', expiry)?.id, alliance.id);
+  assert.equal(getAllianceForSchool(first.nextState.alliances, SCHOOL_ID.hanyang, expiry), undefined);
+  assert.equal(getLatestExpiredAllianceForSchool(first.nextState.alliances, SCHOOL_ID.hanyang, expiry)?.id, alliance.id);
   assert.equal(formatAllianceRemainingTime(alliance, expiry), '만료됨');
 
-  const again = applyAllianceRequest(first.nextState, 'pusan', 'hanyang', expiry, 72);
+  const again = applyAllianceRequest(first.nextState, SCHOOL_ID.pusan, SCHOOL_ID.hanyang, expiry, 72);
   assert.equal(again.result.success, true);
   const second = acceptAllianceRequest(again.nextState, again.result.success ? again.result.request!.id : '', expiry + 1);
   assert.equal(second.result.success, true);
   if (second.result.success) {
     assert.notEqual(second.result.alliance!.id, alliance.id);
-    assert.equal(getAllianceForSchool(second.nextState.alliances, 'hanyang', expiry + 1)?.id, second.result.alliance!.id);
+    assert.equal(getAllianceForSchool(second.nextState.alliances, SCHOOL_ID.hanyang, expiry + 1)?.id, second.result.alliance!.id);
   }
 });
 
@@ -752,7 +753,7 @@ test('연합 신청 화면: 기간 선택·제안 대기 표시, 받은 제안�
     fireEvent.click(screen.getByRole('button', { name: /의 연합 제안 수락$/ }));
   });
   assert.ok(allianceValue!.currentAlliance);
-  assert.deepEqual([...allianceValue!.currentAlliance!.schoolIds], [proposal.requesterSchoolId, 'hanyang']);
+  assert.deepEqual([...allianceValue!.currentAlliance!.schoolIds], [proposal.requesterSchoolId, SCHOOL_ID.hanyang]);
   assert.equal(allianceValue!.currentAlliance!.durationHours, proposal.durationHours);
   assert.ok(screen.getByText(/이 결성되었습니다/));
   assert.ok(screen.getByText('자동 거절 (다른 연합 성립)'));
@@ -802,7 +803,7 @@ test('받은 제안만 수락할 수 있다: 내가 보낸 제안은 일반 수�
 
   let result: any;
   act(() => {
-    const sent = allianceValue.applyRequest('pusan');
+    const sent = allianceValue.applyRequest(SCHOOL_ID.pusan);
     result = allianceValue.acceptRequest(sent.success ? sent.request!.id : '');
   });
   assert.equal(result.success, false);
@@ -816,7 +817,7 @@ test('현재 연합 화면: 남은 기간을 보여 주고, 공용 가상 시계
   const initialState = {
     ...INITIAL_ALLIANCE_STATE,
     alliances: [
-      { id: 'alliance-hanyang-pusan', name: '한양대·부산대 연합', schoolIds: ['hanyang', 'pusan'], createdAt: now, durationHours: 6, expiresAt: now + 6 * HOUR },
+      { id: 'alliance-hanyang-pusan', name: '한양대·부산대 연합', schoolIds: [SCHOOL_ID.hanyang, SCHOOL_ID.pusan], createdAt: now, durationHours: 6, expiresAt: now + 6 * HOUR },
       ...INITIAL_ALLIANCE_STATE.alliances,
     ],
   };

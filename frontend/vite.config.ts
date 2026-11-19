@@ -1,9 +1,37 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import {fileURLToPath} from 'url';
+import {defineConfig, loadEnv, type ProxyOptions} from 'vite';
 
-export default defineConfig(() => {
+// Same folder as Vite's injected __dirname, but also defined when tests import this file as plain ESM.
+const configDir = path.dirname(fileURLToPath(import.meta.url));
+
+/** Backend for the dev proxy when API_PROXY_TARGET is unset: Spring Boot's default port. */
+export const DEFAULT_API_PROXY_TARGET = 'http://localhost:8080';
+
+/**
+ * Same-origin calls to the backend (SCRUM-146, plan decision D-6). The refresh cookie is SameSite=Strict with
+ * Path=/api/v1/auth, so the browser must see the API on the page's own origin. `changeOrigin` stays false: the
+ * backend then sees the page's Host, so its same-origin checks (CORS, STOMP handshake) pass from any address.
+ *
+ * Keys start with `^`, which makes Vite treat them as regular expressions. A plain '/api' key is a prefix match and
+ * also forwarded '/apiary' and '/wsx' (checked against the dev server, 2026-11-18). STOMP uses plain WebSocket at
+ * /ws with no SockJS paths (ChatWebSocketConfig).
+ */
+export const API_PROXY_PATHS = { api: '^/api/', ws: '^/ws(?:$|\\?)' } as const;
+
+export function apiProxy(target: string): Record<string, ProxyOptions> {
+  return {
+    [API_PROXY_PATHS.api]: { target },
+    [API_PROXY_PATHS.ws]: { target, ws: true },
+  };
+}
+
+export default defineConfig(({mode}) => {
+  // API_PROXY_TARGET has no VITE_ prefix: it configures the dev server only and never reaches the browser bundle.
+  const env = loadEnv(mode, configDir, '');
+  const proxy = apiProxy(env.API_PROXY_TARGET || DEFAULT_API_PROXY_TARGET);
   return {
     plugins: [react(), tailwindcss()],
     build: {
@@ -13,7 +41,7 @@ export default defineConfig(() => {
     },
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(configDir, '.'),
       },
     },
     server: {
@@ -24,6 +52,11 @@ export default defineConfig(() => {
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      proxy,
+    },
+    // `vite preview` serves the built app the same way, so browser tests of a build reach the backend too.
+    preview: {
+      proxy,
     },
   };
 });

@@ -1,3 +1,4 @@
+import { SCHOOL_ID, type SchoolId } from './schoolIds.ts';
 import { MOCK_SHOP_CONFIG, type MockShopConfig } from './mockShopConfig.ts';
 import { REAL_UNIVERSITIES } from './universitiesData.ts';
 
@@ -53,13 +54,13 @@ export const INITIAL_CONTRIBUTION = 18560;
  * School of the default player. Since M4 the live "my school" is `player.schoolId`, set by the mock email
  * verification (docs/261108-2020-m4_onboarding_auth_plan.md 4-3); this is only the starting value.
  */
-export const MY_SCHOOL_ID = 'hanyang';
+export const MY_SCHOOL_ID: SchoolId = SCHOOL_ID.hanyang;
 
 /**
  * Starting school score when a player starts over at a school (M4 D2). The default school keeps the existing
  * mock value; other schools start from their shared mock score, so the ranking does not jump on enrolment.
  */
-export function initialSchoolScore(schoolId: string): number {
+export function initialSchoolScore(schoolId: SchoolId): number {
   if (schoolId === MY_SCHOOL_ID) return INITIAL_SCHOOL_SCORE;
   const school = REAL_UNIVERSITIES.find((entry) => entry.id === schoolId);
   if (!school) throw new Error(`Unknown school: ${schoolId}`);
@@ -68,7 +69,7 @@ export function initialSchoolScore(schoolId: string): number {
 
 export interface MockPlayerInfo {
   userId: string;
-  schoolId: string;
+  schoolId: SchoolId;
   departmentId: string;
   nickname: string;
   department: string;
@@ -78,7 +79,7 @@ export interface MockPlayerInfo {
 export interface MockDepartment {
   id: string;
   name: string;
-  schoolId: string;
+  schoolId: SchoolId;
   /** Mock department score shown in the in-school ranking when this is not the player's department. */
   seedScore: number;
 }
@@ -86,28 +87,28 @@ export interface MockDepartment {
 // Mock sample departments, one ID per name (M4 4-3). The KAIST and Pusan lists are samples for the three
 // mock email domains, not verified course catalogues.
 export const KNOWN_DEPARTMENTS: readonly MockDepartment[] = [
-  { id: 'my-department', name: '컴퓨터소프트웨어학부', schoolId: 'hanyang', seedScore: 540000 },
-  { id: 'business', name: '경영학과', schoolId: 'hanyang', seedScore: 512900 },
-  { id: 'design', name: '디자인학과', schoolId: 'hanyang', seedScore: 489200 },
-  { id: 'electronics', name: '전자공학과', schoolId: 'hanyang', seedScore: 421000 },
-  { id: 'mechanical', name: '기계공학과', schoolId: 'hanyang', seedScore: 389400 },
-  { id: 'biology', name: '생명과학과', schoolId: 'hanyang', seedScore: 361200 },
-  { id: 'ai', name: '인공지능학과', schoolId: 'hanyang', seedScore: 342100 },
-  { id: 'media', name: '미디어학부', schoolId: 'hanyang', seedScore: 298000 },
-  { id: 'architecture', name: '건축학과', schoolId: 'hanyang', seedScore: 298000 },
-  { id: 'kaist-computing', name: '전산학부', schoolId: 'kaist', seedScore: 498000 },
-  { id: 'kaist-ee', name: '전기및전자공학부', schoolId: 'kaist', seedScore: 452000 },
-  { id: 'kaist-me', name: '기계공학과', schoolId: 'kaist', seedScore: 401000 },
-  { id: 'kaist-id', name: '산업디자인학과', schoolId: 'kaist', seedScore: 356000 },
-  { id: 'kaist-bio', name: '생명과학과', schoolId: 'kaist', seedScore: 300000 },
-  { id: 'pusan-cse', name: '정보컴퓨터공학부', schoolId: 'pusan', seedScore: 476000 },
-  { id: 'pusan-business', name: '경영학과', schoolId: 'pusan', seedScore: 433000 },
-  { id: 'pusan-me', name: '기계공학부', schoolId: 'pusan', seedScore: 398000 },
-  { id: 'pusan-ocean', name: '해양학과', schoolId: 'pusan', seedScore: 342000 },
-  { id: 'pusan-korean', name: '국어국문학과', schoolId: 'pusan', seedScore: 287000 },
+  { id: 'my-department', name: '컴퓨터소프트웨어학부', schoolId: SCHOOL_ID.hanyang, seedScore: 540000 },
+  { id: 'business', name: '경영학과', schoolId: SCHOOL_ID.hanyang, seedScore: 512900 },
+  { id: 'design', name: '디자인학과', schoolId: SCHOOL_ID.hanyang, seedScore: 489200 },
+  { id: 'electronics', name: '전자공학과', schoolId: SCHOOL_ID.hanyang, seedScore: 421000 },
+  { id: 'mechanical', name: '기계공학과', schoolId: SCHOOL_ID.hanyang, seedScore: 389400 },
+  { id: 'biology', name: '생명과학과', schoolId: SCHOOL_ID.hanyang, seedScore: 361200 },
+  { id: 'ai', name: '인공지능학과', schoolId: SCHOOL_ID.hanyang, seedScore: 342100 },
+  { id: 'media', name: '미디어학부', schoolId: SCHOOL_ID.hanyang, seedScore: 298000 },
+  { id: 'architecture', name: '건축학과', schoolId: SCHOOL_ID.hanyang, seedScore: 298000 },
+  { id: 'kaist-computing', name: '전산학부', schoolId: SCHOOL_ID.kaist, seedScore: 498000 },
+  { id: 'kaist-ee', name: '전기및전자공학부', schoolId: SCHOOL_ID.kaist, seedScore: 452000 },
+  { id: 'kaist-me', name: '기계공학과', schoolId: SCHOOL_ID.kaist, seedScore: 401000 },
+  { id: 'kaist-id', name: '산업디자인학과', schoolId: SCHOOL_ID.kaist, seedScore: 356000 },
+  { id: 'kaist-bio', name: '생명과학과', schoolId: SCHOOL_ID.kaist, seedScore: 300000 },
+  { id: 'pusan-cse', name: '정보컴퓨터공학부', schoolId: SCHOOL_ID.pusan, seedScore: 476000 },
+  { id: 'pusan-business', name: '경영학과', schoolId: SCHOOL_ID.pusan, seedScore: 433000 },
+  { id: 'pusan-me', name: '기계공학부', schoolId: SCHOOL_ID.pusan, seedScore: 398000 },
+  { id: 'pusan-ocean', name: '해양학과', schoolId: SCHOOL_ID.pusan, seedScore: 342000 },
+  { id: 'pusan-korean', name: '국어국문학과', schoolId: SCHOOL_ID.pusan, seedScore: 287000 },
 ] as const;
 
-export function getSchoolDepartments(schoolId: string): MockDepartment[] {
+export function getSchoolDepartments(schoolId: SchoolId): MockDepartment[] {
   return KNOWN_DEPARTMENTS.filter((department) => department.schoolId === schoolId);
 }
 

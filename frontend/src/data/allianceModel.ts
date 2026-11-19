@@ -1,3 +1,4 @@
+import { FICTIONAL_SCHOOL_ID, SCHOOL_ID, type SchoolId } from './schoolIds.ts';
 import { MOCK_SHOP_CONFIG, type MockAllianceConfig } from './mockShopConfig.ts';
 import { REAL_UNIVERSITIES } from './universitiesData.ts';
 
@@ -13,8 +14,8 @@ export type AllianceRequestStatus = 'pending' | 'accepted' | 'rejected' | 'cance
 
 export interface AllianceRequest {
   id: string;
-  requesterSchoolId: string;
-  recipientSchoolId: string;
+  requesterSchoolId: SchoolId;
+  recipientSchoolId: SchoolId;
   /** 제안 측이 정한 연합 기간(시간). 수락되면 이 기간으로 연합이 만들어진다. */
   durationHours: number;
   status: AllianceRequestStatus;
@@ -27,7 +28,7 @@ export interface AllianceRequest {
 export interface Alliance {
   id: string;
   name: string;
-  schoolIds: readonly string[];
+  schoolIds: readonly SchoolId[];
   /** 성립(수락) 시각 */
   createdAt: number;
   durationHours: number;
@@ -35,19 +36,18 @@ export interface Alliance {
   expiresAt: number;
 }
 
-export function isValidSchoolId(schoolId: string): boolean {
-  if (!schoolId) return false;
-  if (schoolId === 'blue-sea') return true;
+export function isValidSchoolId(schoolId: SchoolId): boolean {
+  if (schoolId === FICTIONAL_SCHOOL_ID) return true;
   return REAL_UNIVERSITIES.some((u) => u.id === schoolId);
 }
 
-export function getSchoolInfo(schoolId: string) {
-  if (schoolId === 'blue-sea') {
-    return { id: 'blue-sea', name: '푸른바다대학교', shortName: '푸른바다대', firstSyllable: '푸', badgeColor: '#0d9488', region: '경상' };
+export function getSchoolInfo(schoolId: SchoolId) {
+  if (schoolId === FICTIONAL_SCHOOL_ID) {
+    return { id: FICTIONAL_SCHOOL_ID, name: '푸른바다대학교', shortName: '푸른바다대', firstSyllable: '푸', badgeColor: '#0d9488', region: '경상' };
   }
   const found = REAL_UNIVERSITIES.find((u) => u.id === schoolId);
   if (found) return found;
-  return { id: schoolId, name: schoolId, shortName: schoolId, firstSyllable: schoolId[0] ?? '?', badgeColor: '#888888', region: '기타' };
+  return { id: schoolId, name: String(schoolId), shortName: String(schoolId), firstSyllable: '?', badgeColor: '#888888', region: '기타' };
 }
 
 /**
@@ -58,7 +58,7 @@ export const ALLIANCE_SIZE = 2;
 
 const HOUR_MS = 3600_000;
 
-function seedAlliance(id: string, name: string, schoolIds: [string, string], createdAt: number, durationHours: number): Alliance {
+function seedAlliance(id: string, name: string, schoolIds: [SchoolId, SchoolId], createdAt: number, durationHours: number): Alliance {
   return Object.freeze({
     id,
     name,
@@ -75,13 +75,13 @@ function seedAlliance(id: string, name: string, schoolIds: [string, string], cre
  */
 export function createInitialMockAlliances(baseTime: number = Date.now()): readonly Alliance[] {
   return Object.freeze([
-    seedAlliance('alliance-sky', '연고 메이저 연합', ['yonsei', 'korea'], baseTime - 48 * HOUR_MS, 72),
-    seedAlliance('alliance-capital', '수도권 동맹', ['snu', 'skku'], baseTime - 50 * HOUR_MS, 72),
-    seedAlliance('alliance-metro', '경인 메트로 연합', ['inha', 'ajou'], baseTime - 10 * HOUR_MS, 48),
-    seedAlliance('alliance-sinchon', '신촌 연합', ['sogang', 'ewha'], baseTime - 6 * HOUR_MS, 48),
-    seedAlliance('alliance-tech', '과학기술원 연합', ['kaist', 'postech'], baseTime - 30 * HOUR_MS, 72),
-    seedAlliance('alliance-korea-central', '서울 중앙 연합', ['cau', 'khu'], baseTime - 30 * HOUR_MS, 48),
-    seedAlliance('alliance-honam', '호남 플래그십 연합', ['chonnam', 'jbnu'], baseTime - 2 * HOUR_MS, 72),
+    seedAlliance('alliance-sky', '연고 메이저 연합', [SCHOOL_ID.yonsei, SCHOOL_ID.korea], baseTime - 48 * HOUR_MS, 72),
+    seedAlliance('alliance-capital', '수도권 동맹', [SCHOOL_ID.snu, SCHOOL_ID.skku], baseTime - 50 * HOUR_MS, 72),
+    seedAlliance('alliance-metro', '경인 메트로 연합', [SCHOOL_ID.inha, SCHOOL_ID.ajou], baseTime - 10 * HOUR_MS, 48),
+    seedAlliance('alliance-sinchon', '신촌 연합', [SCHOOL_ID.sogang, SCHOOL_ID.ewha], baseTime - 6 * HOUR_MS, 48),
+    seedAlliance('alliance-tech', '과학기술원 연합', [SCHOOL_ID.kaist, SCHOOL_ID.postech], baseTime - 30 * HOUR_MS, 72),
+    seedAlliance('alliance-korea-central', '서울 중앙 연합', [SCHOOL_ID.cau, SCHOOL_ID.khu], baseTime - 30 * HOUR_MS, 48),
+    seedAlliance('alliance-honam', '호남 플래그십 연합', [SCHOOL_ID.chonnam, SCHOOL_ID.jbnu], baseTime - 2 * HOUR_MS, 72),
   ]);
 }
 
@@ -92,12 +92,12 @@ export function isAllianceActive(alliance: Alliance, now: number): boolean {
 }
 
 /** 학교가 지금 소속된 활성 연합. 만료된 연합의 학교는 다시 미소속이다. */
-export function getAllianceForSchool(alliances: readonly Alliance[], schoolId: string, now: number): Alliance | undefined {
+export function getAllianceForSchool(alliances: readonly Alliance[], schoolId: SchoolId, now: number): Alliance | undefined {
   return alliances.find((a) => a.schoolIds.includes(schoolId) && isAllianceActive(a, now));
 }
 
 /** 학교가 소속됐다가 가장 최근에 만료된 연합 (안내 문구용) */
-export function getLatestExpiredAllianceForSchool(alliances: readonly Alliance[], schoolId: string, now: number): Alliance | undefined {
+export function getLatestExpiredAllianceForSchool(alliances: readonly Alliance[], schoolId: SchoolId, now: number): Alliance | undefined {
   return alliances
     .filter((a) => a.schoolIds.includes(schoolId) && !isAllianceActive(a, now))
     .sort((a, b) => b.expiresAt - a.expiresAt)[0];
@@ -152,7 +152,7 @@ function fail(state: AllianceState, error: string): { nextState: AllianceState; 
 }
 
 // 제안과 수락이 공통으로 확인하는 조건 (수락 시점에도 최신 상태로 다시 확인한다)
-function getPairError(state: AllianceState, requesterSchoolId: string, recipientSchoolId: string, now: number, phase: '신청' | '수락'): string | undefined {
+function getPairError(state: AllianceState, requesterSchoolId: SchoolId, recipientSchoolId: SchoolId, now: number, phase: '신청' | '수락'): string | undefined {
   if (!isValidSchoolId(requesterSchoolId) || !isValidSchoolId(recipientSchoolId)) return '유효하지 않은 학교 ID입니다.';
   if (requesterSchoolId === recipientSchoolId) {
     return phase === '신청' ? '자기 학교에는 연합을 신청할 수 없습니다.' : '자기 학교 간 연합은 불가능합니다.';
@@ -172,8 +172,8 @@ function getPairError(state: AllianceState, requesterSchoolId: string, recipient
 
 export function applyAllianceRequest(
   state: AllianceState,
-  requesterSchoolId: string,
-  recipientSchoolId: string,
+  requesterSchoolId: SchoolId,
+  recipientSchoolId: SchoolId,
   now: number = Date.now(),
   durationHours: number = MOCK_SHOP_CONFIG.alliance.durationHours.default,
   config: AllianceConfig = MOCK_SHOP_CONFIG.alliance,
@@ -304,10 +304,10 @@ export function rejectAllianceRequest(
  */
 export function demoReceiveAllianceProposal(
   state: AllianceState,
-  mySchoolId: string,
+  mySchoolId: SchoolId,
   now: number = Date.now(),
 ): { nextState: AllianceState; result: AllianceActionResult } {
-  const hasPendingWithMe = (schoolId: string) =>
+  const hasPendingWithMe = (schoolId: SchoolId) =>
     state.requests.some(
       (r) =>
         r.status === 'pending' &&

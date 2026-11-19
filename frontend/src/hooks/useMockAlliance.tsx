@@ -1,3 +1,4 @@
+import type { SchoolId } from '../data/schoolIds.ts';
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import {
   acceptAllianceRequest,
@@ -18,7 +19,7 @@ import { useMockGame } from './useMockGame.tsx';
 
 interface AllianceContextValue {
   state: AllianceState;
-  mySchoolId: string;
+  mySchoolId: SchoolId;
   /** 가상 시계 기준 현재 시각 (렌더 시점) */
   effectiveNow: number;
   /** 가상 시계 오프셋(ms) */
@@ -32,7 +33,7 @@ interface AllianceContextValue {
   pendingRequests: readonly AllianceRequest[];
   simulateRequestFailure: boolean;
   simulateLoadFailure: boolean;
-  applyRequest: (targetSchoolId: string, durationHours?: number) => AllianceActionResult;
+  applyRequest: (targetSchoolId: SchoolId, durationHours?: number) => AllianceActionResult;
   cancelRequest: (requestId: string) => AllianceActionResult;
   /** 내 학교가 받은 제안 수락. 리더가 없으므로 내 학교 학생 누구든 수락할 수 있다. */
   acceptRequest: (requestId: string) => AllianceActionResult;
@@ -122,7 +123,7 @@ function AllianceStateProvider({ children, initialState }: { children?: React.Re
   const { now } = clock;
 
   const applyRequest = useCallback(
-    (targetSchoolId: string, durationHours?: number): AllianceActionResult => {
+    (targetSchoolId: SchoolId, durationHours?: number): AllianceActionResult => {
       return commit((current) => applyAllianceRequest(current, mySchoolId, targetSchoolId, now(), durationHours));
     },
     [commit, mySchoolId, now],

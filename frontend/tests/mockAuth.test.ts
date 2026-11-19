@@ -1,3 +1,4 @@
+import { SCHOOL_ID } from '../src/data/schoolIds.ts';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
@@ -33,7 +34,7 @@ const verified = () => ok(verifyCode(codeStep(), CODE, T0 + 1000));
 test('도메인으로 학교가 정해지고 형식 오류·미지원·공유 도메인은 거절한다', () => {
   const state = ok(requestCode(INITIAL_AUTH_STATE, '  Student@KAIST.ac.kr ', T0, CODE));
   assert.equal(state.email, 'student@kaist.ac.kr', '공백 제거·소문자 정규화');
-  assert.equal(state.schoolId, 'kaist');
+  assert.equal(state.schoolId, SCHOOL_ID.kaist);
   assert.equal(state.step, 'code');
   assert.equal(err(requestCode(INITIAL_AUTH_STATE, 'not-an-email', T0, CODE)), 'invalid-email');
   assert.equal(err(requestCode(INITIAL_AUTH_STATE, 'student@gmail.com', T0, CODE)), 'unsupported-domain');
@@ -64,7 +65,7 @@ test('기준 1: 맞는 코드로만 프로필 단계로 가고 틀린 코드·�
   assert.equal(err(verifyCode(expireCodeForDemo(state, T0 + 5000), CODE, T0 + 5000)), 'expired', '시연용 만료');
   const passed = ok(verifyCode(state, CODE, T0 + MOCK_AUTH_RULES.codeTtlMs - 1));
   assert.equal(passed.step, 'profile');
-  assert.deepEqual(passed.verification, { email: 'student@kaist.ac.kr', schoolId: 'kaist', verifiedAt: T0 + MOCK_AUTH_RULES.codeTtlMs - 1 });
+  assert.deepEqual(passed.verification, { email: 'student@kaist.ac.kr', schoolId: SCHOOL_ID.kaist, verifiedAt: T0 + MOCK_AUTH_RULES.codeTtlMs - 1 });
 });
 
 test('기준 2: 시도 한도를 넘으면 맞는 코드도 막히고, 이메일을 고쳐 다시 요청해도 대기 시간 안에는 풀리지 않는다', () => {
@@ -124,7 +125,7 @@ test('프로필은 닉네임 1~10자와 인증된 학교의 학과만 받는다'
   assert.equal(err(completeProfile(state, { nickname: '열한글자닉네임입니다요', departmentId: 'kaist-ee' })), 'invalid-nickname');
   assert.equal(err(completeProfile(state, { nickname: '새내기', departmentId: 'business' })), 'invalid-department', '다른 학교 학과는 안 된다');
   const done = ok(completeProfile(state, { nickname: ' 새내기 ', departmentId: 'kaist-ee' }));
-  assert.deepEqual(done.completed, { email: 'student@kaist.ac.kr', schoolId: 'kaist', departmentId: 'kaist-ee', department: '전기및전자공학부', nickname: '새내기' });
+  assert.deepEqual(done.completed, { email: 'student@kaist.ac.kr', schoolId: SCHOOL_ID.kaist, departmentId: 'kaist-ee', department: '전기및전자공학부', nickname: '새내기' });
 });
 
 test('거절된 요청은 코드를 만들지 않는다', () => {

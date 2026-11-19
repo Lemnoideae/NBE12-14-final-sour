@@ -1,3 +1,4 @@
+import { SCHOOL_ID } from '../src/data/schoolIds';
 import assert from 'node:assert/strict';
 import { assertAbsent } from './helpers/domAssert';
 import { after, afterEach, test, type TestContext } from 'node:test';
@@ -223,7 +224,7 @@ test('기준 1: 순위·지도·방문 조회 실패를 고정 조작으로 재�
   tick(MOCK_REQUEST_RULES.failDelayMs);
   assert.match(screen.getByRole('alert').textContent ?? '', /학교 지도 조회에 실패했습니다/);
   click('다시 시도');
-  const pusan = getSchoolById(getSchoolViews(), 'pusan')!;
+  const pusan = getSchoolById(getSchoolViews(), SCHOOL_ID.pusan)!;
   assert.ok(screen.getByRole('button', { name: `${pusan.name} 방문` }), '1회 실패 뒤 다시 시도하면 지도');
 
   setRequestMode('fail');

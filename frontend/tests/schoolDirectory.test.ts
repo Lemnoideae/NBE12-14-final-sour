@@ -1,3 +1,4 @@
+import { SCHOOL_ID, type SchoolId } from '../src/data/schoolIds.ts';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { REAL_UNIVERSITIES } from '../src/data/universitiesData.ts';
@@ -31,7 +32,7 @@ import {
 const ids = REAL_UNIVERSITIES.map((school) => school.id);
 const known = new Set(ids);
 
-function overlaps(points: readonly { id: string; p: Point }[]): string[] {
+function overlaps(points: readonly { id: SchoolId; p: Point }[]): string[] {
   const hits: string[] = [];
   for (let i = 0; i < points.length; i++) {
     for (let j = i + 1; j < points.length; j++) {
@@ -45,7 +46,7 @@ function overlaps(points: readonly { id: string; p: Point }[]): string[] {
 
 test('학교 ID는 유일하고 권역 필터는 지역에서 파생된 값과 같다', () => {
   assert.equal(known.size, ids.length);
-  for (const school of REAL_UNIVERSITIES) assert.equal(school.filterRegion, REGION_TO_FILTER[school.region], school.id);
+  for (const school of REAL_UNIVERSITIES) assert.equal(school.filterRegion, REGION_TO_FILTER[school.region], `school ${school.id}`);
 });
 
 test('모든 학교가 전국 지도 위치를 갖고 충청 학교는 충청 전용 화면 위치를 갖는다', () => {
@@ -53,7 +54,7 @@ test('모든 학교가 전국 지도 위치를 갖고 충청 학교는 충청 �
   const chungcheong = REAL_UNIVERSITIES.filter((school) => school.filterRegion === '충청').map((school) => school.id);
   assert.equal(chungcheong.length, 24);
   assert.deepEqual(chungcheong.filter((id) => !CHUNGCHEONG_PLACEMENTS[id]), []);
-  for (const id of [...Object.keys(NATIONAL_PLACEMENTS), ...Object.keys(CHUNGCHEONG_PLACEMENTS)]) assert.ok(known.has(id), `unknown layout key ${id}`);
+  for (const id of [...Object.keys(NATIONAL_PLACEMENTS), ...Object.keys(CHUNGCHEONG_PLACEMENTS)].map(Number)) assert.ok(known.has(id), `unknown layout key ${id}`);
   const clusterRegions = new Set(MAP_CLUSTERS.map((cluster) => cluster.region));
   for (const school of REAL_UNIVERSITIES) assert.ok(clusterRegions.has(school.region), `no cluster for ${school.region}`);
 });
@@ -62,7 +63,7 @@ test('모든 학교가 전국 지도 위치를 갖고 충청 학교는 충청 �
 // pixels. "Inside" uses the part of the frame each measured map area shows (M1-D3).
 const FRAME = MAP_DESIGN_FRAME_PX;
 const label = (area: Size) => `${area.width}×${area.height}`;
-const outside = (points: readonly { id: string; p: Point }[]) => MAP_AREAS_PX.flatMap((area) => {
+const outside = (points: readonly { id: SchoolId; p: Point }[]) => MAP_AREAS_PX.flatMap((area) => {
   const { cropX, cropY } = mapLayerFit(area);
   return points.filter(({ p }) =>
     p.x < cropX + MARKER_BOX_PX.width / 2 || p.x > FRAME.width - cropX - MARKER_BOX_PX.width / 2 ||
@@ -127,7 +128,7 @@ test('제주 확대 화면은 제주도를 가운데에 두고 섬 전체를 모
 });
 
 test('충청 전용 화면의 학교 마커는 서로 겹치지 않고 모든 지도 크기에서 보이는 영역 안에 있다 (M1-D1)', () => {
-  const points = Object.entries(CHUNGCHEONG_PLACEMENTS).map(([id, p]) => ({ id, p: { x: (p.x / 100) * FRAME.width, y: (p.y / 100) * FRAME.height } }));
+  const points = Object.entries(CHUNGCHEONG_PLACEMENTS).map(([id, p]) => ({ id: Number(id), p: { x: (p.x / 100) * FRAME.width, y: (p.y / 100) * FRAME.height } }));
   assert.deepEqual(outside(points), []);
   assert.deepEqual(overlaps(points), []);
 });
@@ -138,7 +139,7 @@ const BUBBLE_PX: Record<string, number> = { 'w-8 h-8': 32, 'w-9 h-9': 36, 'w-11 
 
 test('전국 지도의 TOP 3 리본은 권역 버블의 학교 수를 가리지 않는다 (M1-D4)', () => {
   const hits: string[] = [];
-  for (const id of ['kaist', 'pusan', 'chonnam']) {
+  for (const id of [SCHOOL_ID.kaist, SCHOOL_ID.pusan, SCHOOL_ID.chonnam]) {
     const p = nationalRibbonPoint(id)!;
     const cx = (p.x / 100) * FRAME.width;
     const cy = (p.y / 100) * FRAME.height + TOP_MARKER_BOX.dy;
@@ -163,15 +164,15 @@ test('지도 표시 값은 공통 순위 규칙과 같고 내 학교는 게임 �
   assert.equal(mine.score, INITIAL_SCHOOL_SCORE);
   assert.equal(mine.rank, 18);
   assert.equal(views.filter((school) => school.isMySchool).length, 1);
-  assert.deepEqual(getTopSchools(views).map((school) => school.id), ['kaist', 'pusan', 'chonnam']);
-  assert.deepEqual(views.filter((school) => school.isTop3).map((school) => school.id), ['kaist', 'pusan', 'chonnam']);
+  assert.deepEqual(getTopSchools(views).map((school) => school.id), [SCHOOL_ID.kaist, SCHOOL_ID.pusan, SCHOOL_ID.chonnam]);
+  assert.deepEqual(views.filter((school) => school.isTop3).map((school) => school.id), [SCHOOL_ID.kaist, SCHOOL_ID.pusan, SCHOOL_ID.chonnam]);
 });
 
 test('내 점수가 바뀌면 TOP 3와 캠퍼스 단계가 함께 바뀐다', () => {
   const top = getSchoolViews(3_000_000);
-  assert.deepEqual(getTopSchools(top).map((school) => school.id), ['hanyang', 'kaist', 'pusan']);
-  assert.equal(getSchoolById(top, 'chonnam')!.isTop3, false);
-  assert.ok(nationalRibbonPoint('hanyang'), 'TOP 3에 들어온 학교도 리본 위치가 있다');
+  assert.deepEqual(getTopSchools(top).map((school) => school.id), [SCHOOL_ID.hanyang, SCHOOL_ID.kaist, SCHOOL_ID.pusan]);
+  assert.equal(getSchoolById(top, SCHOOL_ID.chonnam)!.isTop3, false);
+  assert.ok(nationalRibbonPoint(SCHOOL_ID.hanyang), 'TOP 3에 들어온 학교도 리본 위치가 있다');
   assert.equal(getSchoolById(getSchoolViews(999_999), MY_SCHOOL_ID)!.campusLevel, 3);
   assert.equal(getSchoolById(getSchoolViews(1_000_000), MY_SCHOOL_ID)!.campusLevel, 4);
   assert.equal(getSchoolById(top, MY_SCHOOL_ID)!.campusLevel, 5);
@@ -192,8 +193,8 @@ test('검색은 권역 필터 뒤에 이름·약칭·도시로 찾고 순위 순
   const views = getSchoolViews();
   assert.equal(filterSchools(views, '전체', '').length, 76);
   assert.equal(filterSchools(views, '충청', '').length, 24);
-  assert.deepEqual(filterSchools(views, '전체', '  KAIST ').map((school) => school.id), ['kaist']);
-  assert.ok(filterSchools(views, '수도권', '한양').some((school) => school.id === 'hanyang'));
+  assert.deepEqual(filterSchools(views, '전체', '  KAIST ').map((school) => school.id), [SCHOOL_ID.kaist]);
+  assert.ok(filterSchools(views, '수도권', '한양').some((school) => school.id === SCHOOL_ID.hanyang));
   assert.deepEqual(filterSchools(views, '제주', '한양'), []);
   assert.deepEqual(filterSchools(views, '전체', '존재하지않는학교'), []);
   const ranks = filterSchools(views, '영남', '').map((school) => school.rank);
@@ -205,5 +206,5 @@ test('로고 자산이 없는 학교는 모두 임시 배지 상태로 표시된
   const placeholders = views.filter((school) => school.logoStatus === 'placeholder').length;
   assert.equal(placeholders, views.length - Object.keys(SCHOOL_LOGO_ASSETS).length);
   assert.equal(placeholders, 76);
-  assert.equal(schoolLogoStatus('unknown-id'), 'placeholder');
+  assert.equal(schoolLogoStatus(999_999), 'placeholder');
 });

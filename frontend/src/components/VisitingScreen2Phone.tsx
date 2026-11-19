@@ -1,3 +1,4 @@
+import type { SchoolId } from '../data/schoolIds.ts';
 import React from 'react';
 import { PhoneShell } from './PhoneShell';
 import { GuestbookBottomSheet } from './GuestbookBottomSheet';
@@ -11,7 +12,8 @@ import { CampusAmbience } from './CampusAmbience';
 
 interface VisitingScreen2PhoneProps {
   /** Visited school ID (M2). */
-  schoolId: string;
+  /** null: no school was chosen; the screen shows the not-found notice. */
+  schoolId: SchoolId | null;
   onCloseGuestbook?: () => void;
   /** Actual service flow; the default remains an inline comparison phone. */
   modal?: boolean;

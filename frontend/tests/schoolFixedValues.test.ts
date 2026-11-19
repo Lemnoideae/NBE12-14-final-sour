@@ -1,3 +1,4 @@
+import { SCHOOL_ID } from '../src/data/schoolIds';
 import assert from 'node:assert/strict';
 import { after, afterEach, test } from 'node:test';
 import { registerHooks } from 'node:module';
@@ -44,10 +45,10 @@ const click = (name: string | RegExp) => fireEvent.click(screen.getByRole('butto
 /** Mounts the app with the player enrolled at KAIST (M4 sets the school this way after email verification). */
 function mountAsKaist() {
   render(React.createElement(MockGameProvider, { children: React.createElement(React.Fragment, null, React.createElement(App), React.createElement(Probe)) }));
-  act(() => { latest.setPlayer({ schoolId: 'kaist', department: '전산학부', nickname: '넙죽러' }); });
+  act(() => { latest.setPlayer({ schoolId: SCHOOL_ID.kaist, department: '전산학부', nickname: '넙죽러' }); });
 }
-const kaist = REAL_UNIVERSITIES.find((school) => school.id === 'kaist')!;
-const hanyang = REAL_UNIVERSITIES.find((school) => school.id === 'hanyang')!;
+const kaist = REAL_UNIVERSITIES.find((school) => school.id === SCHOOL_ID.kaist)!;
+const hanyang = REAL_UNIVERSITIES.find((school) => school.id === SCHOOL_ID.hanyang)!;
 
 afterEach(() => cleanup());
 after(() => { assetHooks.deregister(); dom.window.close(); });
@@ -57,13 +58,13 @@ test('방명록 샘플은 학교 ID로 이름·배지를 채우고, 방명록 �
     assert.ok(getVisitGuestbookSamples(school.id).every((entry) => entry.schoolId !== school.id));
     assert.ok(getOurSchoolGuestbookSamples(school.id).every((entry) => entry.schoolId !== school.id));
   }
-  const [entry] = getVisitGuestbookSamples('none');
+  const [entry] = getVisitGuestbookSamples(999_999); // no university row has this ID
   const writer = REAL_UNIVERSITIES.find((school) => school.id === entry.schoolId)!;
   assert.deepEqual([entry.schoolName, entry.schoolInitial, entry.schoolBadgeBg], [writer.name, writer.firstSyllable, writer.badgeColor]);
 });
 
 test('방문 미리보기는 전체 방명록과 같은 샘플 중 좋아요가 많은 2건이다', () => {
-  for (const id of ['kaist', 'pusan', 'hanyang']) {
+  for (const id of [SCHOOL_ID.kaist, SCHOOL_ID.pusan, SCHOOL_ID.hanyang]) {
     const all = getVisitGuestbookSamples(id);
     const preview = getVisitGuestbookPreview(id);
     assert.equal(preview.length, 2);
@@ -81,7 +82,7 @@ test('KAIST 입학: 실제 우리 학교 방명록 시트는 KAIST 이름이고 
   assert.ok(sheet.textContent!.includes(`${kaist.name} 방명록`));
   assert.ok(!sheet.textContent!.includes(hanyang.name));
   assert.ok(!sheet.textContent!.includes(`(${kaist.name})`), '소속 학교 학생의 글이 섞이면 안 된다');
-  const expected = getOurSchoolGuestbookSamples('kaist').length;
+  const expected = getOurSchoolGuestbookSamples(SCHOOL_ID.kaist).length;
   assert.equal(within(sheet).getByTestId('our-guestbook-count').textContent, String(expected));
   assert.equal(within(sheet).getAllByTestId('our-guestbook-entry').length, expected);
 });

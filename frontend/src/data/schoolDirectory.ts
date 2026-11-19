@@ -1,5 +1,6 @@
 // One lookup for school display values: map, rankings and (from M2) visits read the same rows by school ID.
 // Plan: docs/261108-1930-m1_school_map_data_plan.md 4-1. Scores are mock values; my school uses the game state.
+import { SCHOOL_ID, type SchoolId } from './schoolIds.ts';
 import { INITIAL_SCHOOL_SCORE, MY_SCHOOL_ID } from './gameRules.ts';
 import { getSchoolRankings } from './mockRankings.ts';
 import { REAL_UNIVERSITIES, type UniversityItem } from './universitiesData.ts';
@@ -11,7 +12,7 @@ import { getCampusStage } from '../utils/gameModel.ts';
  * School shown by the 2-Phone visiting comparison demo (decision D4, 2026-11-08). It replaced the fictional
  * 'blue-sea' school so the demo reads the same rows as the map. Plan: docs/261108-2000-m2_map_visit_return_plan.md.
  */
-export const DEMO_VISIT_SCHOOL_ID = 'pusan';
+export const DEMO_VISIT_SCHOOL_ID: SchoolId = SCHOOL_ID.pusan;
 
 export interface SchoolView extends Omit<UniversityItem, 'score'> {
   score: number;
@@ -45,7 +46,7 @@ export function getSchoolViews(schoolScore = INITIAL_SCHOOL_SCORE, mySchoolId = 
   });
 }
 
-export function getSchoolById(views: readonly SchoolView[], schoolId: string): SchoolView | undefined {
+export function getSchoolById(views: readonly SchoolView[], schoolId: SchoolId): SchoolView | undefined {
   return views.find((school) => school.id === schoolId);
 }
 

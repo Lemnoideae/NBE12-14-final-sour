@@ -1,8 +1,16 @@
-export type ImageTarget = { type: 'school' | 'department' | 'profile'; id: string };
-export interface ImageMember { userId: string; schoolId: string; departmentId: string }
+import type { SchoolId } from '../data/schoolIds';
+
+/** A school target carries the backend university ID; department and profile IDs are still mock strings. */
+export type ImageTarget = { type: 'school'; id: SchoolId } | { type: 'department' | 'profile'; id: string };
+/** Only the target's own fields, so an extra property on the caller's object is never stored. */
+export function copyImageTarget(target: ImageTarget): ImageTarget {
+  return target.type === 'school' ? { type: target.type, id: target.id } : { type: target.type, id: target.id };
+}
+
+export interface ImageMember { userId: string; schoolId: SchoolId; departmentId: string }
 export interface ImageDirectory {
-  schoolIds: readonly string[];
-  departments: readonly { id: string; schoolId: string }[];
+  schoolIds: readonly SchoolId[];
+  departments: readonly { id: string; schoolId: SchoolId }[];
   users: readonly ImageMember[];
 }
 export interface ImageEvent { readonly target: Readonly<ImageTarget>; readonly url: string; readonly revision: number }
@@ -79,7 +87,7 @@ export function createSharedImageStore(initialDirectory: ImageDirectory, options
     if (!requestId || completed.has(requestId) || !canChangeImage(currentDirectory, userId, target) || !validImageUrl(normalized)) return false;
     const revision = (get(target)?.revision ?? 0) + 1;
     completed.add(requestId);
-    images.set(key(target), Object.freeze({ target: Object.freeze({ type: target.type, id: target.id }), url: normalized, revision }));
+    images.set(key(target), Object.freeze({ target: Object.freeze(copyImageTarget(target)), url: normalized, revision }));
     notify();
     return true;
   };

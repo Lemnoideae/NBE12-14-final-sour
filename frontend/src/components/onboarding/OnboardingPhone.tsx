@@ -1,3 +1,4 @@
+import type { SchoolId } from '../../data/schoolIds.ts';
 import React, { useContext, useState } from 'react';
 import { PhoneShellVariantContext } from '../PhoneShell.tsx';
 import { useMockAuth } from '../../hooks/useMockAuth.tsx';
@@ -11,7 +12,7 @@ import { CodeStep, DoneStep, EmailStep, PhoneFrame, ProfileStep, type Onboarding
 
 const AUTH_REQUEST = 'auth';
 
-function schoolInfo(schoolId: string | null): OnboardingSchool {
+function schoolInfo(schoolId: SchoolId | null): OnboardingSchool {
   const school = REAL_UNIVERSITIES.find((entry) => entry.id === schoolId);
   if (!school) throw new Error(`Unknown school: ${schoolId}`);
   return { name: school.name, firstSyllable: school.firstSyllable, badgeColor: school.badgeColor };

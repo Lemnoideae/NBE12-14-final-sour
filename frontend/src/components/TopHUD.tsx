@@ -1,3 +1,4 @@
+import type { SchoolId } from '../data/schoolIds.ts';
 import React from 'react';
 import { ArrowLeft, Volume2, VolumeX } from 'lucide-react';
 import { soundManager } from '../utils/sound';
@@ -9,7 +10,7 @@ interface TopHUDProps {
   /** 표시할 학교명. 칸보다 길면 MarqueeText로 왕복 표시한다. */
   schoolName: string;
   /** The player's school (M4). */
-  schoolId: string;
+  schoolId: SchoolId;
   schoolBadgeColor: string;
   /** Badge letter when there is no logo. Defaults to the first letter of the name. */
   schoolInitial?: string;

@@ -2,16 +2,14 @@ import { useRef, useState } from 'react';
 import { useMockGame } from '../hooks/useMockGame.tsx';
 import { useMySchool } from '../hooks/useSchoolViews.ts';
 import { useImageStore } from '../hooks/useSharedImages.tsx';
-import { validImageUrl, type ImageTarget } from '../utils/sharedImages.ts';
+import { copyImageTarget, validImageUrl, type ImageTarget } from '../utils/sharedImages.ts';
 import { ImageFallback, SharedImage } from './SharedImage.tsx';
 import sample from '../assets/images/mock_identity_sample.svg?no-inline';
 
-interface ImageChoice {
-  type: 'school' | 'department' | 'profile';
-  id: string;
+type ImageChoice = ImageTarget & {
   name: string;
   targetName: string;
-}
+};
 
 let nextMockSessionCounter = 0;
 
@@ -53,7 +51,7 @@ export function ImageChangeShop() {
     setPending(true);
     await Promise.resolve();
 
-    const target: ImageTarget = { type: selected.type, id: selected.id };
+    const target = copyImageTarget(selected);
     const requestId = sessionRequestIdRef.current || `mock-session-req-${selected.type}-${++nextMockSessionCounter}`;
     const applied = success && store.apply(player.userId, target, url, requestId);
 
@@ -88,7 +86,7 @@ export function ImageChangeShop() {
       <p>{selected.type === 'department' ? player.department : selected.type === 'profile' ? player.nickname : selected.targetName} · {shopConfig.imagePricesKrw[selected.type]}원 · 모의 결제 (실제 청구 없음)</p>
       <p>성공 시 변경 대상의 모든 열람 화면에 즉시 적용됩니다.</p>
       <p>현재 이미지</p>
-      <SharedImage target={{ type: selected.type, id: selected.id }} name={selected.targetName} className="w-20 h-20 bg-blue-700 text-white" />
+      <SharedImage target={copyImageTarget(selected)} name={selected.targetName} className="w-20 h-20 bg-blue-700 text-white" />
       <label>이미지 URL <input className="w-full border border-black" disabled={pending} value={url} onChange={(event) => setUrl(event.target.value)} /></label>
       <button
         type="button"

@@ -1,3 +1,4 @@
+import type { SchoolId } from '../data/schoolIds.ts';
 import React, { useState } from 'react';
 import { ChevronDown, Heart, Sparkles, MapPin, Info } from 'lucide-react';
 import { soundManager } from '../utils/sound';
@@ -8,7 +9,7 @@ interface OurSchoolGuestbookBottomSheetProps {
   onClose?: () => void;
   onGoToMap?: () => void;
   /** The player's school (M4); its own students' notes are left out. */
-  mySchoolId: string;
+  mySchoolId: SchoolId;
   schoolName: string;
 }
 

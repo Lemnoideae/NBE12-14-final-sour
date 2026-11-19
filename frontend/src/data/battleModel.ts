@@ -1,5 +1,6 @@
 // 대결 상태 모델 및 순수 전이 함수 (N4 대결 신청 및 현황)
 // 기획서 4-2, 6장, 10·11장 및 팀장 범위 갱신 계획 5절 기반
+import { SCHOOL_ID, type SchoolId } from './schoolIds.ts';
 import { MOCK_SHOP_CONFIG, type MockBattleConfig } from './mockShopConfig.ts';
 import { ALLIANCE_SIZE, isAllianceActive, type Alliance } from './allianceModel.ts';
 
@@ -17,8 +18,8 @@ export interface Battle {
   readonly id: string;
   readonly requesterAllianceId: string;
   readonly recipientAllianceId: string;
-  readonly requesterSchoolIds: readonly string[]; // 참여 학교 ID 스냅샷
-  readonly recipientSchoolIds: readonly string[]; // 참여 학교 ID 스냅샷
+  readonly requesterSchoolIds: readonly SchoolId[]; // 참여 학교 ID 스냅샷
+  readonly recipientSchoolIds: readonly SchoolId[]; // 참여 학교 ID 스냅샷
   readonly durationHours: number;
   readonly requestedStartTime: number;
   readonly status: BattleStatus;
@@ -269,8 +270,8 @@ export function createInitialMockBattles(baseTime: number = Date.now(), config: 
       id: 'battle-sample-finished-2v2',
       requesterAllianceId: 'alliance-sky',
       recipientAllianceId: 'alliance-capital',
-      requesterSchoolIds: Object.freeze(['yonsei', 'korea']),
-      recipientSchoolIds: Object.freeze(['snu', 'skku']),
+      requesterSchoolIds: Object.freeze([SCHOOL_ID.yonsei, SCHOOL_ID.korea]),
+      recipientSchoolIds: Object.freeze([SCHOOL_ID.snu, SCHOOL_ID.skku]),
       durationHours: 24,
       status: 'finished' as const,
       createdAt: baseTime - 42 * 3600_000,
@@ -286,8 +287,8 @@ export function createInitialMockBattles(baseTime: number = Date.now(), config: 
       id: 'battle-sample-draw-2v2',
       requesterAllianceId: 'alliance-tech',
       recipientAllianceId: 'alliance-korea-central',
-      requesterSchoolIds: Object.freeze(['kaist', 'postech']),
-      recipientSchoolIds: Object.freeze(['cau', 'khu']),
+      requesterSchoolIds: Object.freeze([SCHOOL_ID.kaist, SCHOOL_ID.postech]),
+      recipientSchoolIds: Object.freeze([SCHOOL_ID.cau, SCHOOL_ID.khu]),
       durationHours: 12,
       status: 'finished' as const,
       createdAt: baseTime - 29.5 * 3600_000,
@@ -304,8 +305,8 @@ export function createInitialMockBattles(baseTime: number = Date.now(), config: 
       id: 'battle-sample-active-2v2',
       requesterAllianceId: 'alliance-metro',
       recipientAllianceId: 'alliance-sinchon',
-      requesterSchoolIds: Object.freeze(['inha', 'ajou']),
-      recipientSchoolIds: Object.freeze(['sogang', 'ewha']),
+      requesterSchoolIds: Object.freeze([SCHOOL_ID.inha, SCHOOL_ID.ajou]),
+      recipientSchoolIds: Object.freeze([SCHOOL_ID.sogang, SCHOOL_ID.ewha]),
       durationHours: 24,
       status: 'scheduled' as const,
       createdAt: baseTime - 3 * 3600_000,
@@ -321,8 +322,8 @@ export function createInitialMockBattles(baseTime: number = Date.now(), config: 
       id: 'battle-sample-pending-2v2',
       requesterAllianceId: 'alliance-honam',
       recipientAllianceId: 'alliance-tech',
-      requesterSchoolIds: Object.freeze(['chonnam', 'jbnu']),
-      recipientSchoolIds: Object.freeze(['kaist', 'postech']),
+      requesterSchoolIds: Object.freeze([SCHOOL_ID.chonnam, SCHOOL_ID.jbnu]),
+      recipientSchoolIds: Object.freeze([SCHOOL_ID.kaist, SCHOOL_ID.postech]),
       durationHours: 3,
       status: 'pending' as const,
       createdAt: baseTime - 1800_000,

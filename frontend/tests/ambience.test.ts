@@ -1,3 +1,4 @@
+import { SCHOOL_ID } from '../src/data/schoolIds';
 import assert from 'node:assert/strict';
 import { assertAbsent } from './helpers/domAssert';
 import { after, afterEach, test } from 'node:test';
@@ -62,7 +63,7 @@ test('세 캠퍼스에 포인터 비차단 레이어, 클릭, 밤 창문과 redu
   t.mock.method(Date, 'now', () => kst(21));
   stubMatchMedia(dom.window as unknown as Window, [REDUCED_MOTION_QUERY]);
   let taps = 0;
-  for (const child of [React.createElement(CampusView, { onTap: () => { taps++; }, clickPower: 1, basePower: 1, activeStudents: 1 }), React.createElement(VisitingScreen1Phone, { schoolId: 'pusan' }), React.createElement(VisitingScreen2Phone, { schoolId: 'pusan' })]) {
+  for (const child of [React.createElement(CampusView, { onTap: () => { taps++; }, clickPower: 1, basePower: 1, activeStudents: 1 }), React.createElement(VisitingScreen1Phone, { schoolId: SCHOOL_ID.pusan }), React.createElement(VisitingScreen2Phone, { schoolId: SCHOOL_ID.pusan })]) {
     const result = render(React.createElement(MockGameProvider, null, React.createElement(CampusAmbienceProvider, null, child)));
     const overlay = screen.getByTestId('campus-ambience');
     assert.ok(overlay.classList.contains('pointer-events-none'));

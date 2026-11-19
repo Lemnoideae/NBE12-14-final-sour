@@ -94,7 +94,7 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
   const showStickyTop1Summary = activeRankingTab === 'school' && scrollTop > 175;
 
   const renderBadge = (
-    item: { id: string; name: string; firstSyllable?: string; crestSymbol?: string; badgeColor?: string; crestColor?: string },
+    item: { id: string | number; name: string; firstSyllable?: string; crestSymbol?: string; badgeColor?: string; crestColor?: string },
     size: 'sm' | 'md' | 'lg' = 'sm'
   ) => {
     const sizeClasses =
@@ -112,7 +112,7 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
         className={`${sizeClasses} border-2 border-[#261608] shadow-[1px_1px_0px_#261608] flex items-center justify-center text-white shrink-0 font-pixel`}
         style={{ backgroundColor: bgColor }}
       >
-        <SharedImage target={{ type: activeRankingTab === 'dept' ? 'department' : activeRankingTab === 'personal' ? 'profile' : 'school', id: item.id }} name={item.name} fallback={syllable} className="w-full h-full drop-shadow-[1px_1px_0px_#261608]" />
+        <SharedImage target={typeof item.id === 'number' ? { type: 'school', id: item.id } : { type: activeRankingTab === 'dept' ? 'department' : 'profile', id: item.id }} name={item.name} fallback={syllable} className="w-full h-full drop-shadow-[1px_1px_0px_#261608]" />
       </div>
     );
   };
@@ -200,7 +200,7 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
                 1
               </span>
               <div className="w-4.5 h-4.5 bg-[#1d4ed8] border border-[#261608] flex items-center justify-center font-pixel text-[8px] text-white font-bold shrink-0">
-                <SharedImage target={{ type: 'school', id: top1.id }} name={top1.name} fallback={top1.firstSyllable} className="w-full h-full" />
+                <SharedImage target={{ type: 'school', id: schoolRankings[0].id }} name={top1.name} fallback={top1.firstSyllable} className="w-full h-full" />
               </div>
               <span className="font-pixel text-[11px] font-black text-[#261608] truncate">
                 {top1.name}

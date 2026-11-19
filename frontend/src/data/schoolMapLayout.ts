@@ -1,7 +1,8 @@
-// Map presentation data, keyed by school ID or data region. Plan: docs/261108-1930-m1_school_map_data_plan.md 4-1, 4-2.
+// Map presentation data, keyed by backend school ID (schoolIds.ts) or data region. Plan: docs/261108-1930-m1_school_map_data_plan.md 4-1, 4-2.
 // Every coordinate here is a mockup placement on the pixel map image, not a real location.
 // A real service would place schools from the library latitude/longitude in the University table.
 import { REAL_UNIVERSITIES, type UniversityItem } from './universitiesData.ts';
+import { SCHOOL_ID, type SchoolId } from './schoolIds.ts';
 import mapLayers from '../assets/images/map/layers.json';
 
 export type SchoolRegion = UniversityItem['region'];
@@ -103,21 +104,21 @@ export const MAP_CLUSTERS: readonly MapCluster[] = [
 
 // Hand-placed national points (percent of the map frame), carried over from the old universitiesData x/y.
 // hanyang, ajou, gachon, hknu, kunsan and woosuk moved 1–5 points for M1 so zoomed region markers do not overlap.
-const PLACED_POINTS: Readonly<Record<string, Point>> = {
-  kaist: { x: 41, y: 44 }, pusan: { x: 77, y: 66 }, chonnam: { x: 31, y: 65 }, hanyang: { x: 41, y: 22 },
-  ajou: { x: 36, y: 30 }, gachon: { x: 46, y: 29 }, kau: { x: 31, y: 18 }, daejin: { x: 40, y: 15 },
-  suwon: { x: 32, y: 33 }, hknu: { x: 44, y: 40 }, kangwon: { x: 54, y: 20 }, gwnu: { x: 73, y: 22 },
-  sangji: { x: 58, y: 29 }, cbu: { x: 48, y: 41 }, ut: { x: 56, y: 35 }, semyung: { x: 64, y: 32 },
-  jungwon: { x: 53, y: 38 }, u1: { x: 52, y: 49 }, kut: { x: 39, y: 38 }, sch: { x: 33, y: 39 },
-  gongju: { x: 36, y: 45 }, konyang: { x: 37, y: 49 }, hanseo: { x: 26, y: 38 }, chungwoon: { x: 30, y: 42 },
-  jbnu: { x: 36, y: 57 }, wku: { x: 33, y: 52 }, kunsan: { x: 27, y: 55 }, scnu: { x: 47, y: 70 },
-  mokpo: { x: 23, y: 74 }, woosuk: { x: 38, y: 54 }, knu: { x: 68, y: 53 }, postech: { x: 81, y: 51 },
-  unist: { x: 81, y: 61 }, yu: { x: 73, y: 56 }, cwnu: { x: 67, y: 67 }, gnu: { x: 56, y: 66 },
+const PLACED_POINTS: Readonly<Record<SchoolId, Point>> = {
+  [SCHOOL_ID.kaist]: { x: 41, y: 44 }, [SCHOOL_ID.pusan]: { x: 77, y: 66 }, [SCHOOL_ID.chonnam]: { x: 31, y: 65 }, [SCHOOL_ID.hanyang]: { x: 41, y: 22 },
+  [SCHOOL_ID.ajou]: { x: 36, y: 30 }, [SCHOOL_ID.gachon]: { x: 46, y: 29 }, [SCHOOL_ID.kau]: { x: 31, y: 18 }, [SCHOOL_ID.daejin]: { x: 40, y: 15 },
+  [SCHOOL_ID.suwon]: { x: 32, y: 33 }, [SCHOOL_ID.hknu]: { x: 44, y: 40 }, [SCHOOL_ID.kangwon]: { x: 54, y: 20 },
+  [SCHOOL_ID.sangji]: { x: 58, y: 29 }, [SCHOOL_ID.cbu]: { x: 48, y: 41 }, [SCHOOL_ID.ut]: { x: 56, y: 35 }, [SCHOOL_ID.semyung]: { x: 64, y: 32 },
+  [SCHOOL_ID.jungwon]: { x: 53, y: 38 }, [SCHOOL_ID.u1]: { x: 52, y: 49 }, [SCHOOL_ID.kut]: { x: 39, y: 38 }, [SCHOOL_ID.sch]: { x: 33, y: 39 },
+  [SCHOOL_ID.gongju]: { x: 36, y: 45 }, [SCHOOL_ID.konyang]: { x: 37, y: 49 }, [SCHOOL_ID.hanseo]: { x: 26, y: 38 }, [SCHOOL_ID.chungwoon]: { x: 30, y: 42 },
+  [SCHOOL_ID.jbnu]: { x: 36, y: 57 }, [SCHOOL_ID.wku]: { x: 33, y: 52 }, [SCHOOL_ID.kunsan]: { x: 27, y: 55 }, [SCHOOL_ID.scnu]: { x: 47, y: 70 },
+  [SCHOOL_ID.mokpo]: { x: 23, y: 74 }, [SCHOOL_ID.woosuk]: { x: 38, y: 54 }, [SCHOOL_ID.knu]: { x: 68, y: 53 }, [SCHOOL_ID.postech]: { x: 81, y: 51 },
+  [SCHOOL_ID.unist]: { x: 81, y: 61 }, [SCHOOL_ID.yu]: { x: 73, y: 56 }, [SCHOOL_ID.cwnu]: { x: 67, y: 67 }, [SCHOOL_ID.gnu]: { x: 56, y: 66 },
   // 2026-11-10 (J1, docs/261110-2005-visit_ui_jeju_map_plan.md §3-2): 26,92 and 33,93 lay in the sea north of the
   // island. Both schools are in 제주시, so they sit inland of the north coast; tests check they are on the island.
-  jejunu: { x: 24.2, y: 97.4 }, jeju_intl: { x: 28.3, y: 98.1 },
+  [SCHOOL_ID.jejunu]: { x: 24.2, y: 97.4 }, [SCHOOL_ID.jeju_intl]: { x: 28.3, y: 98.1 },
   // 2026-11-09 (M1-D3): the second 강릉 slot ran off the right edge of the narrowest map area in the 강원 view.
-  cku: { x: 71, y: 25 },
+  [SCHOOL_ID.cku]: { x: 71, y: 25 },
 };
 
 // Base points for cities where no school has a hand-placed point (decision D3, 2026-11-08).
@@ -146,8 +147,8 @@ export interface NationalPlacement {
   slot: number;
 }
 
-function buildNationalPlacements(): Readonly<Record<string, NationalPlacement>> {
-  const placements: Record<string, NationalPlacement> = {};
+function buildNationalPlacements(): Readonly<Record<SchoolId, NationalPlacement>> {
+  const placements: Record<SchoolId, NationalPlacement> = {};
   const cityPoint = new Map<string, Point>();
   const nextSlot = new Map<string, number>();
   for (const school of REAL_UNIVERSITIES) {
@@ -173,13 +174,13 @@ function buildNationalPlacements(): Readonly<Record<string, NationalPlacement>> 
 export const NATIONAL_PLACEMENTS = buildNationalPlacements();
 
 /** TOP 3 ribbons in the national view keep clear of the cluster bubbles; other schools use their own point. */
-const RIBBON_POINTS: Readonly<Record<string, Point>> = {
-  kaist: { x: 49, y: 52 }, // 44,50 → 49,52 (M1-D4): the ribbon covered the 충남·대전 school count
-  pusan: { x: 80, y: 66 },
-  chonnam: { x: 27, y: 73 }, // y 70→73 (M1-D4 check): the ribbon box overlapped the 전라 bubble edge
+const RIBBON_POINTS: Readonly<Record<SchoolId, Point>> = {
+  [SCHOOL_ID.kaist]: { x: 49, y: 52 }, // 44,50 → 49,52 (M1-D4): the ribbon covered the 충남·대전 school count
+  [SCHOOL_ID.pusan]: { x: 80, y: 66 },
+  [SCHOOL_ID.chonnam]: { x: 27, y: 73 }, // y 70→73 (M1-D4 check): the ribbon box overlapped the 전라 bubble edge
 };
 
-export function nationalRibbonPoint(schoolId: string): Point | undefined {
+export function nationalRibbonPoint(schoolId: SchoolId): Point | undefined {
   return RIBBON_POINTS[schoolId] ?? NATIONAL_PLACEMENTS[schoolId]?.point;
 }
 
@@ -251,7 +252,7 @@ export function projectToViewport(point: Point, viewport: RegionViewport): Point
 }
 
 /** Marker centre in design-frame pixels for a school in a zoomed region view. */
-export function regionMarkerPx(schoolId: string, viewport: RegionViewport): Point | undefined {
+export function regionMarkerPx(schoolId: SchoolId, viewport: RegionViewport): Point | undefined {
   const placement = NATIONAL_PLACEMENTS[schoolId];
   if (!placement) return undefined;
   const p = projectToViewport(placement.point, viewport);
@@ -269,29 +270,29 @@ export interface ChungcheongPlacement extends Point {
  * The last 6 were added for M1 (2026-11-08): a least-squares fit from national to 충청 frame points of the
  * 7 schools placed on both maps, then nudged off neighbouring markers.
  */
-export const CHUNGCHEONG_PLACEMENTS: Readonly<Record<string, ChungcheongPlacement>> = {
-  kaist: { x: 39, y: 68, subRegion: '대전' },
-  cnu: { x: 53, y: 63, subRegion: '대전' },
-  hanbat: { x: 29, y: 76, subRegion: '대전' },
-  hannam: { x: 62, y: 74, subRegion: '대전' },
-  cbu: { x: 58, y: 43, subRegion: '청주' },
-  cheongju: { x: 69, y: 35, subRegion: '청주' },
-  seowon: { x: 70, y: 44, subRegion: '청주' },
-  knue: { x: 50, y: 50, subRegion: '청주', leaderLine: { dx: -8, dy: 6 } },
-  cje: { x: 77, y: 52, subRegion: '청주' },
-  ut: { x: 72, y: 22, subRegion: '충주' },
-  semyung: { x: 83, y: 14, subRegion: '제천' },
-  sch: { x: 14, y: 28, subRegion: '아산' }, // x 17→14 (M1-D1): cleared 호서대
-  hoseo: { x: 27, y: 25, subRegion: '아산' },
-  sunmoon: { x: 23, y: 36, subRegion: '아산', leaderLine: { dx: 6, dy: 6 } },
-  kut: { x: 44, y: 35, subRegion: '천안' },
-  baekseok: { x: 46, y: 24, subRegion: '천안' },
-  nsu: { x: 34, y: 17, subRegion: '천안' }, // y 19→17 (M1-D1): cleared 호서대
-  gongju: { x: 25, y: 52, subRegion: '공주' },
-  jungwon: { x: 59, y: 28, subRegion: '괴산' },
-  kdu: { x: 58, y: 16, subRegion: '음성' },
-  u1: { x: 62, y: 86, subRegion: '영동' },
-  konyang: { x: 22, y: 86, subRegion: '논산' },
-  hanseo: { x: 11, y: 18, subRegion: '서산' }, // x 8→11 (M1-D3): inside the narrowest map area
-  chungwoon: { x: 13, y: 44, subRegion: '홍성' },
+export const CHUNGCHEONG_PLACEMENTS: Readonly<Record<SchoolId, ChungcheongPlacement>> = {
+  [SCHOOL_ID.kaist]: { x: 39, y: 68, subRegion: '대전' },
+  [SCHOOL_ID.cnu]: { x: 53, y: 63, subRegion: '대전' },
+  [SCHOOL_ID.hanbat]: { x: 29, y: 76, subRegion: '대전' },
+  [SCHOOL_ID.hannam]: { x: 62, y: 74, subRegion: '대전' },
+  [SCHOOL_ID.cbu]: { x: 58, y: 43, subRegion: '청주' },
+  [SCHOOL_ID.cheongju]: { x: 69, y: 35, subRegion: '청주' },
+  [SCHOOL_ID.seowon]: { x: 70, y: 44, subRegion: '청주' },
+  [SCHOOL_ID.knue]: { x: 50, y: 50, subRegion: '청주', leaderLine: { dx: -8, dy: 6 } },
+  [SCHOOL_ID.cje]: { x: 77, y: 52, subRegion: '청주' },
+  [SCHOOL_ID.ut]: { x: 72, y: 22, subRegion: '충주' },
+  [SCHOOL_ID.semyung]: { x: 83, y: 14, subRegion: '제천' },
+  [SCHOOL_ID.sch]: { x: 14, y: 28, subRegion: '아산' }, // x 17→14 (M1-D1): cleared 호서대
+  [SCHOOL_ID.hoseo]: { x: 27, y: 25, subRegion: '아산' },
+  [SCHOOL_ID.sunmoon]: { x: 23, y: 36, subRegion: '아산', leaderLine: { dx: 6, dy: 6 } },
+  [SCHOOL_ID.kut]: { x: 44, y: 35, subRegion: '천안' },
+  [SCHOOL_ID.baekseok]: { x: 46, y: 24, subRegion: '천안' },
+  [SCHOOL_ID.nsu]: { x: 34, y: 17, subRegion: '천안' }, // y 19→17 (M1-D1): cleared 호서대
+  [SCHOOL_ID.gongju]: { x: 25, y: 52, subRegion: '공주' },
+  [SCHOOL_ID.jungwon]: { x: 59, y: 28, subRegion: '괴산' },
+  [SCHOOL_ID.kdu]: { x: 58, y: 16, subRegion: '음성' },
+  [SCHOOL_ID.u1]: { x: 62, y: 86, subRegion: '영동' },
+  [SCHOOL_ID.konyang]: { x: 22, y: 86, subRegion: '논산' },
+  [SCHOOL_ID.hanseo]: { x: 11, y: 18, subRegion: '서산' }, // x 8→11 (M1-D3): inside the narrowest map area
+  [SCHOOL_ID.chungwoon]: { x: 13, y: 44, subRegion: '홍성' },
 };

@@ -1,3 +1,4 @@
+import type { SchoolId } from '../data/schoolIds.ts';
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Heart, Send, Sparkles, Pin, AlertCircle } from 'lucide-react';
 import { soundManager } from '../utils/sound';
@@ -9,11 +10,11 @@ export type { GuestbookEntry } from '../data/mockGuestbook';
 interface GuestbookBottomSheetProps {
   onClose?: () => void;
   /** Visited school whose guestbook this is. Entries are shared school-neutral samples until M3. */
-  schoolId: string;
+  schoolId: SchoolId;
   schoolName: string;
   schoolInitial: string;
   schoolBadgeColor: string;
-  mySchoolId: string;
+  mySchoolId: SchoolId;
   mySchoolName: string;
   myNickname: string;
   mySchoolInitial: string;

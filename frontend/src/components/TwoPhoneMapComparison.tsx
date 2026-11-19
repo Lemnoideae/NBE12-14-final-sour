@@ -1,3 +1,4 @@
+import type { SchoolId } from '../data/schoolIds.ts';
 import React from 'react';
 import { MapScreenPhone } from './MapScreenPhone';
 import { NavTab } from './BottomNav';
@@ -8,7 +9,7 @@ import { Sparkles, ArrowRight, Compass, ZoomIn } from 'lucide-react';
 interface TwoPhoneMapComparisonProps {
   onNavigateTab: (tab: NavTab) => void;
   onGoToMySchool?: () => void;
-  onSelectSchool?: (schoolId: string) => void;
+  onSelectSchool?: (schoolId: SchoolId) => void;
 }
 
 export const TwoPhoneMapComparison: React.FC<TwoPhoneMapComparisonProps> = ({

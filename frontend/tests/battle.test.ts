@@ -1,3 +1,4 @@
+import { SCHOOL_ID, type SchoolId } from '../src/data/schoolIds.ts';
 import assert from 'node:assert/strict';
 import { after, afterEach, test } from 'node:test';
 import { registerHooks } from 'node:module';
@@ -128,7 +129,7 @@ test('2. 2개교 연합끼리만(2:2) 대결 가능, 전이(pending→accept→a
   const alliances = INITIAL_MOCK_ALLIANCES;
 
   // (a) 2개교가 아닌 연합은 신청·수락 모두 거절 (3개교 연합은 구현하지 않으며, 방어 검증만 남긴다)
-  const oversized = { id: 'alliance-oversized', name: '3개교 연합(비정상)', schoolIds: ['kaist', 'postech', 'unist'], createdAt: 0, durationHours: 72, expiresAt: Date.now() + 72 * 3600_000 };
+  const oversized = { id: 'alliance-oversized', name: '3개교 연합(비정상)', schoolIds: [SCHOOL_ID.kaist, SCHOOL_ID.postech, SCHOOL_ID.unist], createdAt: 0, durationHours: 72, expiresAt: Date.now() + 72 * 3600_000 };
   const withOversized = [...alliances.filter((a) => a.id !== 'alliance-tech'), oversized];
   const mismatchRes = applyBattleRequest(state, withOversized, 'alliance-oversized', 'alliance-capital', 24, getDefaultRequestedStartTime(1000, state.config), 1000);
   assert.equal(mismatchRes.result.success, false);
@@ -261,7 +262,7 @@ test('5. 학교 이미지 변경 시 대결 화면의 로고가 즉시 갱신된
   act(() => {
     const success = imageStore.apply(
       'external-viewer',
-      { type: 'school', id: 'kaist' },
+      { type: 'school', id: SCHOOL_ID.kaist },
       'https://example.com/custom_kaist.svg',
       'req-kaist-battle-1',
     );
@@ -464,7 +465,7 @@ test('8. P3-2: 대결 설정 주입 가능성: 대체 설정 반영, 범위 밖 
 
   // (d) UI: 주입한 범위와 프리셋을 쓰고, 범위 밖 프리셋(6h)은 숨긴다
   cleanup();
-  const allianceState = { ...INITIAL_ALLIANCE_STATE, alliances: [...INITIAL_ALLIANCE_STATE.alliances, { id: 'alliance-hanyang-pusan', name: '한양대·부산대 연합', schoolIds: ['hanyang', 'pusan'], createdAt: 1000, durationHours: 72, expiresAt: Date.now() + 72 * 3600_000 }] };
+  const allianceState = { ...INITIAL_ALLIANCE_STATE, alliances: [...INITIAL_ALLIANCE_STATE.alliances, { id: 'alliance-hanyang-pusan', name: '한양대·부산대 연합', schoolIds: [SCHOOL_ID.hanyang, SCHOOL_ID.pusan], createdAt: 1000, durationHours: 72, expiresAt: Date.now() + 72 * 3600_000 }] };
   render(
     React.createElement(
       MockGameProvider,
@@ -494,7 +495,7 @@ test('2:2 고정 불변식: 대결 시드는 양측 2개교·기간 1~24h이고,
   }
 
   cleanup();
-  const allianceState = { ...INITIAL_ALLIANCE_STATE, alliances: [...INITIAL_ALLIANCE_STATE.alliances, { id: 'alliance-hanyang-pusan', name: '한양대·부산대 연합', schoolIds: ['hanyang', 'pusan'], createdAt: 1000, durationHours: 72, expiresAt: Date.now() + 72 * 3600_000 }] };
+  const allianceState = { ...INITIAL_ALLIANCE_STATE, alliances: [...INITIAL_ALLIANCE_STATE.alliances, { id: 'alliance-hanyang-pusan', name: '한양대·부산대 연합', schoolIds: [SCHOOL_ID.hanyang, SCHOOL_ID.pusan], createdAt: 1000, durationHours: 72, expiresAt: Date.now() + 72 * 3600_000 }] };
   let battleValue: ReturnType<typeof useBattle>;
   function Probe() { battleValue = useBattle(); return null; }
   render(React.createElement(MockGameProvider, null, React.createElement(AllianceProvider, { initialState: allianceState } as any, React.createElement(BattleProvider, null, React.createElement(Probe), React.createElement(BattleApplyScreenPhone)))));
@@ -638,8 +639,8 @@ test('P4-2: BattleStatusScreenPhone 화면에서 시작/종료 시각 및 예정
         id: 'test-scheduled-card',
         requesterAllianceId: 'alliance-seoul-univs',
         recipientAllianceId: 'alliance-gyeongin',
-        requesterSchoolIds: ['hanyang', 'pusan'],
-        recipientSchoolIds: ['yonsei', 'korea'],
+        requesterSchoolIds: [SCHOOL_ID.hanyang, SCHOOL_ID.pusan],
+        recipientSchoolIds: [SCHOOL_ID.yonsei, SCHOOL_ID.korea],
         durationHours: 24,
         status: 'scheduled' as const,
         createdAt: baseTime,
@@ -705,7 +706,7 @@ test('P4-2: BattleStatusScreenPhone 화면에서 시작/종료 시각 및 예정
 test('대결 신청 UI의 시간 경계와 유효하지 않은 입력 및 정상 신청', (t) => {
   const now = Date.UTC(2026, 10, 7, 0);
   t.mock.method(Date, 'now', () => now);
-  const allianceState = { ...INITIAL_ALLIANCE_STATE, alliances: [...INITIAL_ALLIANCE_STATE.alliances, { id: 'alliance-hanyang-pusan', name: '한양대·부산대 연합', schoolIds: ['hanyang', 'pusan'], createdAt: now, durationHours: 72, expiresAt: now + 72 * 3600_000 }] };
+  const allianceState = { ...INITIAL_ALLIANCE_STATE, alliances: [...INITIAL_ALLIANCE_STATE.alliances, { id: 'alliance-hanyang-pusan', name: '한양대·부산대 연합', schoolIds: [SCHOOL_ID.hanyang, SCHOOL_ID.pusan], createdAt: now, durationHours: 72, expiresAt: now + 72 * 3600_000 }] };
   let battleValue: ReturnType<typeof useBattle>;
   function Probe() { battleValue = useBattle(); return null; }
   render(React.createElement(MockGameProvider, null, React.createElement(AllianceProvider, { initialState: allianceState } as any, React.createElement(BattleProvider, null, React.createElement(Probe), React.createElement(BattleApplyScreenPhone)))));
@@ -769,7 +770,7 @@ test('P4-3: BattleApplyScreenPhone 설정 기반 시작 대기 및 진행 기간
       {
         id: 'alliance-hanyang-pusan',
         name: '한양대·부산대 연합',
-        schoolIds: ['hanyang', 'pusan'],
+        schoolIds: [SCHOOL_ID.hanyang, SCHOOL_ID.pusan],
         createdAt: 1000,
         durationHours: 72,
         expiresAt: Date.now() + 72 * 3600_000,
@@ -828,7 +829,7 @@ test('P4-3: BattleApplyScreenPhone 설정 기반 시작 대기 및 진행 기간
 const HOUR_MS = 3600_000;
 const kst = (value: string) => parseKstDateTimeLocal(value);
 const BASE = kst('2026-11-07T08:00');
-const freshAlliance = (id: string, schoolIds: [string, string], createdAt: number, durationHours: number) => ({
+const freshAlliance = (id: string, schoolIds: [SchoolId, SchoolId], createdAt: number, durationHours: number) => ({
   id,
   name: id,
   schoolIds,
@@ -840,8 +841,8 @@ const freshAlliance = (id: string, schoolIds: [string, string], createdAt: numbe
 test('대결 기간: 1~24시간 정수만 허용한다 (0·25·1.5시간 거절)', () => {
   const alliances = [
     ...createInitialMockAlliances(BASE),
-    freshAlliance('alliance-a', ['hanyang', 'pusan'], BASE, 72),
-    freshAlliance('alliance-b', ['gachon', 'hufs'], BASE, 72),
+    freshAlliance('alliance-a', [SCHOOL_ID.hanyang, SCHOOL_ID.pusan], BASE, 72),
+    freshAlliance('alliance-b', [SCHOOL_ID.gachon, SCHOOL_ID.hufs], BASE, 72),
   ];
   const state = createInitialBattleState(BASE);
   const start = kst('2026-11-07T09:00');
@@ -935,10 +936,10 @@ test('대결 신청 화면: 만료 상한으로 기간·시작을 제한하고, 
   const allianceState = {
     ...createInitialAllianceState(BASE),
     alliances: [
-      freshAlliance('alliance-hanyang-pusan', ['hanyang', 'pusan'], BASE, 72),
+      freshAlliance('alliance-hanyang-pusan', [SCHOOL_ID.hanyang, SCHOOL_ID.pusan], BASE, 72),
       ...createInitialMockAlliances(BASE),
-      { ...freshAlliance('alliance-soon', ['gachon', 'hufs'], BASE + 30 * 60_000 - 6 * HOUR_MS, 6), name: '곧 만료 연합' },
-      { ...freshAlliance('alliance-gone', ['knu', 'cnu'], BASE - 7 * HOUR_MS, 6), name: '만료된 테스트 연합' },
+      { ...freshAlliance('alliance-soon', [SCHOOL_ID.gachon, SCHOOL_ID.hufs], BASE + 30 * 60_000 - 6 * HOUR_MS, 6), name: '곧 만료 연합' },
+      { ...freshAlliance('alliance-gone', [SCHOOL_ID.knu, SCHOOL_ID.cnu], BASE - 7 * HOUR_MS, 6), name: '만료된 테스트 연합' },
     ],
   };
   let battleValue: ReturnType<typeof useBattle>;
@@ -1001,7 +1002,7 @@ test('받은 대결 신청만 일반 수락할 수 있다: 내가 보낸 신청�
   const now = Date.now();
   const allianceState = {
     ...INITIAL_ALLIANCE_STATE,
-    alliances: [freshAlliance('alliance-hanyang-pusan', ['hanyang', 'pusan'], now, 72), ...INITIAL_ALLIANCE_STATE.alliances],
+    alliances: [freshAlliance('alliance-hanyang-pusan', [SCHOOL_ID.hanyang, SCHOOL_ID.pusan], now, 72), ...INITIAL_ALLIANCE_STATE.alliances],
   };
   let battleValue: ReturnType<typeof useBattle>;
   function Probe() {

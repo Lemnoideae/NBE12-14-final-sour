@@ -1,3 +1,4 @@
+import { SCHOOL_ID } from '../src/data/schoolIds';
 import assert from 'node:assert/strict';
 import { assertAbsent } from './helpers/domAssert';
 import { after, afterEach, test } from 'node:test';
@@ -87,10 +88,10 @@ test('기준 6: KAIST 메일로 가입하면 HUD·지도·순위·채팅이 같�
   assert.match(phone().getByText(/처음부터 시작합니다/).textContent ?? '', /KAIST/, '다른 학교는 초기화 안내(D2)');
   enrollAs('카이스트새내기', '전기및전자공학부');
   assert.ok(phone().getByText('KAIST 입학을 환영합니다!'));
-  assert.deepEqual(latest.player, { ...latest.player, schoolId: 'kaist', departmentId: 'kaist-ee', department: '전기및전자공학부', nickname: '카이스트새내기', email: 'student@kaist.ac.kr' });
+  assert.deepEqual(latest.player, { ...latest.player, schoolId: SCHOOL_ID.kaist, departmentId: 'kaist-ee', department: '전기및전자공학부', nickname: '카이스트새내기', email: 'student@kaist.ac.kr' });
 
   click('캠퍼스로 이동');
-  const kaist = getSchoolById(getSchoolViews(initialSchoolScore('kaist'), 'kaist'), 'kaist')!;
+  const kaist = getSchoolById(getSchoolViews(initialSchoolScore(SCHOOL_ID.kaist), SCHOOL_ID.kaist), SCHOOL_ID.kaist)!;
   assert.equal(screen.getByRole('heading', { level: 1, name: 'KAIST' }).textContent, 'KAIST', 'HUD 학교명');
   assert.ok(screen.getByText(`입학생: 카이스트새내기 (전기및전자공학부)`));
 
@@ -129,7 +130,7 @@ test('기준 7: 다른 학교로 가입하면 게임 상태가 새 학교 초기
   requestCodeFor('student@pusan.ac.kr');
   enterCode('111111');
   enrollAs('부산갈매기', '해양학과');
-  assert.deepEqual(latest.state, { ...INITIAL_GAME_STATE, schoolScore: initialSchoolScore('pusan') });
+  assert.deepEqual(latest.state, { ...INITIAL_GAME_STATE, schoolScore: initialSchoolScore(SCHOOL_ID.pusan) });
   assert.equal(latest.state.contribution, INITIAL_CONTRIBUTION);
   assert.ok(phone().getByText('새 기록으로 처음부터 시작합니다.'));
 });
@@ -170,7 +171,7 @@ test('기준 1·2: 틀린 코드는 막히고, 한도를 넘긴 뒤에는 화면
   enterCode('999999');
   enterCode('111111');
   assert.match(alertText(), /시도 횟수를 모두 사용/);
-  assert.equal(latest.player.schoolId, 'hanyang');
+  assert.equal(latest.player.schoolId, SCHOOL_ID.hanyang);
 });
 
 test('기준 1·4: 만료 코드는 막히고 재발송은 대기 뒤에만 되며 이전 코드는 무효다', (t) => {

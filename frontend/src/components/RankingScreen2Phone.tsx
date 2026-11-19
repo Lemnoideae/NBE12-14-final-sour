@@ -4,6 +4,7 @@ import { Crown, ArrowUp, ArrowDown, Minus, RefreshCw, ChevronUp, Sparkles } from
 import { soundManager } from '../utils/sound';
 import { BottomNav, NavTab } from './BottomNav';
 import { getSchoolRankings, type RankingRow } from '../data/mockRankings';
+import type { SchoolId } from '../data/schoolIds';
 import { useMockGame } from '../hooks/useMockGame';
 import { SharedImage } from './SharedImage.tsx';
 
@@ -39,7 +40,7 @@ export const RankingScreen2Phone: React.FC<RankingScreen2PhoneProps> = ({
   const rows8to20 = rankings.slice(7, 20);
   const mySchool = rankings.find((school) => school.isMySchool)!;
 
-  const renderBadge = (item: RankingRow, size: 'sm' | 'md' = 'sm') => {
+  const renderBadge = (item: RankingRow<SchoolId>, size: 'sm' | 'md' = 'sm') => {
     const sizeClasses =
       size === 'md' ? 'w-7 h-7 text-xs font-bold' : 'w-5.5 h-5.5 text-[9px] font-bold';
 
