@@ -4,11 +4,9 @@ import type { ApiClient } from './client';
 export const CLICK_BATCH_WINDOW_MS = 1000;
 export const MAX_CLICK_BATCH_SIZE = 20;
 
-/**
- * ClickRequest also has optional `latitude`/`longitude` for the library bonus (#108). They are not sent until
- * SCRUM-185; without them the server never grants the bonus.
- */
-export interface ClickRequest {
+export interface ClickCoordinates { latitude: number; longitude: number }
+/** SCRUM-185: optional real-world coordinates; only the server decides whether the library bonus applies. */
+export interface ClickRequest extends Partial<ClickCoordinates> {
   submissionId: string;
   clickCount: number;
 }
