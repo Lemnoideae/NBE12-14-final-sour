@@ -64,3 +64,10 @@ test('채팅 계약 센서: 경로·스키마·페이지·오류 변경 시 어�
   for (const field of ['messageId', 'roomId', 'userId', 'nickname', 'universityName', 'content', 'createdAt']) assert.match(dto, new RegExp(`\\b${field}\\b`), fix);
   assert.match(read('domain/forbiddenword/dto/ForbiddenWordsResponse.java'), /List<String> words/, fix);
 });
+
+test('실제 채팅은 지연 로드하고 API 미리보기는 샘플 메시지·가짜 읽지 않은 수를 숨긴다', () => {
+  const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  assert.match(app, /React\.lazy\(\(\) => import\('\.\/components\/ApiChatBottomSheet'\)/);
+  assert.match(app, /unreadCount=\{API_MODE === 'api' \? 0 : 12\}/);
+  assert.match(app, /latestMessage=\{API_MODE === 'api' \? '열어서 대화하기'/);
+});

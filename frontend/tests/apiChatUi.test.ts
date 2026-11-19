@@ -5,6 +5,7 @@ import { JSDOM } from 'jsdom';
 import type { ChatCallbacks, ChatConnectionFactory } from '../src/api/chatConnection';
 import type { MyInfo } from '../src/api/users';
 import { flush, message, page, success } from './helpers/chat';
+import { assertAbsent } from './helpers/domAssert';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost', pretendToBeVisual: true });
 for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document, navigator: dom.window.navigator,
@@ -71,7 +72,7 @@ test('빈 학교 대화·서버 메시지만 표시하며 HTML과 금칙어 원�
   act(() => f.callbacks[0].onMessage(message(1, { content: '** <script>문자열</script>' })));
   const bubble = screen.getByTestId('chat-message');
   assert.match(bubble.textContent ?? '', /\*\* <script>문자열<\/script>/);
-  assert.equal(bubble.querySelector('script'), null);
+  assertAbsent(bubble.querySelector('script'));
   assert.equal(screen.queryAllByText('badword').length, 0);
   f.ui.unmount();
   assert.equal(f.counts().stopped, 1);
@@ -107,7 +108,7 @@ test('오류 큐는 메시지를 알리고 연결 중단은 전송을 막으며 
   assert.equal((screen.getByLabelText('채팅 메시지') as HTMLTextAreaElement).disabled, true);
   fireEvent.click(screen.getByRole('button', { name: '연합 채팅' }));
   screen.getByText('연합 채팅은 아직 준비 중이에요. 교내 채팅을 이용해 주세요.');
-  assert.equal(screen.queryByRole('textbox'), null);
+  assertAbsent(screen.queryByRole('textbox'));
   assert.deepEqual(f.sends, []);
 });
 
@@ -148,7 +149,7 @@ test('과거 prepend와 동시 live append가 있어도 보고 있던 메시지�
   await act(async () => { finish(success(page(Array.from({ length: 20 }, (_, i) => 20 - i)))); await flush(); });
   assert.equal(viewport.scrollTop, 2150, '기존 메시지22의 화면 내 위치를 보존한다');
   assert.equal(screen.getAllByTestId('chat-message').length, 41);
-  assert.equal(screen.queryByRole('button', { name: '이전 메시지 20개 불러오기' }), null);
+  assertAbsent(screen.queryByRole('button', { name: '이전 메시지 20개 불러오기' }));
   fireEvent.click(screen.getByRole('button', { name: '최신 메시지로' }));
   assert.equal(viewport.scrollTop, 4100);
 });
