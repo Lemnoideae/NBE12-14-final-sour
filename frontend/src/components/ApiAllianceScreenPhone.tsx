@@ -10,6 +10,7 @@ import {
 } from '../api/alliances';
 import { errorMessage, fieldErrorMap, isApiError } from '../api/errors';
 import { useMyInfo } from '../api/users';
+import { kstDateTimeInput, validateMatchSchedule } from '../api/matchSchedule';
 import { soundManager } from '../utils/sound';
 import { BottomNavFooter, type NavTab } from './BottomNav';
 import { DurationPicker, formatDurationHours } from './DurationPicker';
@@ -156,7 +157,7 @@ function AllianceHome({ userId, universityName, memory, applications, matches, n
 
     <section aria-labelledby="alliance-soon" className={`${BOX} text-xs`}>
       <h2 id="alliance-soon" className="font-black text-sm">준비 중</h2>
-      <p>연합 목록, 소속 학교, 받은 가입 신청 목록, 받은 대결 신청 목록, 진행 중 대결 점수, 대결 시작 시각 예약은 서버 기능이 생기면 열려요.</p>
+      <p>연합 목록, 소속 학교, 받은 가입 신청 목록, 받은 대결 신청 목록, 진행 중 대결 점수는 서버 기능이 생기면 열려요.</p>
     </section>
   </>;
 }
@@ -300,7 +301,7 @@ function AllianceMatches({ userId, allianceId, memory, now }: { userId: number; 
           onMissing={() => forget(`기억해 둔 대결 #${matchId}을(를) 찾을 수 없어 지웠어요.`)} onForget={() => forget(null)} />
       ) : <p className="text-xs">이 브라우저에 기억한 대결이 없어요. 대결을 신청하거나, 상대에게 받은 대결 번호로 찾아보세요.</p>}
       <MatchRequestForm userId={userId} allianceId={allianceId}
-        onRequested={(match) => show(match.id, `대결 신청 #${match.id}을(를) 보냈어요. 상대 연합 회원에게 대결 번호 #${match.id}을(를) 알려 주세요.`)} />
+        onRequested={(match) => show(match.id, `대결 신청 #${match.id}을(를) 보냈어요. 상대 연합 회원에게 대결 번호 #${match.id}을(를) 알려 주세요.`)} now={now} />
       <MatchLookup onLookup={(id) => show(id, null)} />
     </section>
   );
@@ -318,6 +319,7 @@ function matchErrorText(error: unknown, fallback: string, matchId: number | null
     case MATCH_ERROR_CODES.alreadyRequested: return '두 연합 사이에 수락을 기다리는 대결 신청이 이미 있어요.';
     case MATCH_ERROR_CODES.membersIncomplete: return `두 연합 모두 학교 ${ALLIANCE_MAX_SCHOOLS}곳이 가입해야 대결할 수 있어요.`;
     case MATCH_ERROR_CODES.scheduleConflict: return '두 연합 중 하나에 예약된 대결이 있어요.';
+    case MATCH_ERROR_CODES.invalidSchedule: return '예약 시작 시각이 지났거나 대결 종료가 연합 만료를 넘어요. 시작 시각과 대결 시간을 다시 확인해 주세요.';
     case MATCH_ERROR_CODES.insufficientTime: return '두 연합 중 먼저 만료되는 연합이 끝나기 전에 대결을 마칠 시간이 부족해요. 대결 시간을 줄여 보세요.';
     case ALLIANCE_ERROR_CODES.notJoinable: return '두 연합 중 하나가 지금 대결할 수 없어요. 이미 대결 중이거나 만료된 연합이에요.';
     case ALLIANCE_ERROR_CODES.notFound: return '상대 연합을 찾을 수 없어요.';
@@ -325,47 +327,89 @@ function matchErrorText(error: unknown, fallback: string, matchId: number | null
     case ALLIANCE_ERROR_CODES.notActiveUser: return '활동 중인 회원만 대결을 신청하거나 처리할 수 있어요.';
     default: {
       const fields = fieldErrorMap(error);
-      const reason = fields.opponentAllianceId ?? fields.durationHours ?? errorMessage(error);
+      const reason = fields.opponentAllianceId ?? fields.durationHours ?? fields.scheduledStartAt ?? errorMessage(error);
       return `${fallback} ${reason}${answered ? '' : ' 응답을 받지 못했다면 서버에서는 처리됐을 수 있어요. 다시 누르기 전에 새로고침해 확인하세요.'}`;
     }
   }
 }
 
-function MatchRequestForm({ userId, allianceId, onRequested }: { userId: number; allianceId: number; onRequested: (match: AllianceMatch) => void }) {
+function MatchRequestForm({ userId, allianceId, onRequested, now }: {
+  userId: number; allianceId: number; onRequested: (match: AllianceMatch) => void; now: () => number;
+}) {
   const id = useId();
   const [opponent, setOpponent] = useState('');
   const [hours, setHours] = useState<number>(MATCH_LIMITS.defaultHours);
+  const [mode, setMode] = useState<'immediate' | 'scheduled'>('immediate');
+  const [startInput, setStartInput] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
+  const [scheduleProblem, setScheduleProblem] = useState<string | null>(null);
+  const opponentRef = useRef<HTMLInputElement>(null);
+  const scheduleRef = useRef<HTMLInputElement>(null);
+  const own = useAllianceDetail(userId, allianceId);
   const request = useRequestMatch(userId, allianceId);
+  const serverScheduleError = !request.isPending && isApiError(request.error) &&
+    (request.error.code === MATCH_ERROR_CODES.invalidSchedule || Boolean(fieldErrorMap(request.error).scheduledStartAt));
+  // Focus only after React has re-enabled the input following the failed request.
+  useEffect(() => { if (serverScheduleError) scheduleRef.current?.focus(); }, [serverScheduleError]);
   const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (request.isPending) return;
     const parsed = parseAllianceId(opponent);
-    if ('problem' in parsed) { setProblem(parsed.problem.replace('연합 ID', '상대 연합 ID')); return; }
-    if (parsed.allianceId === allianceId) { setProblem('우리 연합과는 대결할 수 없어요.'); return; }
+    if ('problem' in parsed || parsed.allianceId === allianceId) {
+      setProblem('problem' in parsed ? parsed.problem.replace('연합 ID', '상대 연합 ID') : '우리 연합과는 대결할 수 없어요.');
+      opponentRef.current?.focus();
+      return;
+    }
     setProblem(null);
-    request.mutate({ opponentAllianceId: parsed.allianceId, durationHours: hours }, {
-      onSuccess: (match) => { setOpponent(''); onRequested(match); },
+    const schedule: { scheduledStartAt?: string } | { problem: string } = mode === 'scheduled'
+      ? validateMatchSchedule(startInput, now(), hours, own.data?.expiredAt) : {};
+    if ('problem' in schedule) { setScheduleProblem(schedule.problem); scheduleRef.current?.focus(); return; }
+    setScheduleProblem(null);
+    request.mutate({ opponentAllianceId: parsed.allianceId, durationHours: hours, ...schedule }, {
+      onSuccess: (match) => { setOpponent(''); setStartInput(''); onRequested(match); },
     });
   };
   return (
     <form noValidate onSubmit={submit} aria-label="대결 신청" className={`${BOX} text-xs`}>
       <h3 className="text-sm font-black">대결 신청</h3>
       <p>
-        두 연합 모두 학교 {ALLIANCE_MAX_SCHOOLS}곳이 차 있어야 해요. 상대가 수락하면 바로 시작하고, 두 연합 중 먼저 만료되는 연합이 끝나기 전에
-        대결이 끝나야 해요. 시작 시각 예약은 아직 지원하지 않아요.
+        두 연합 모두 학교 {ALLIANCE_MAX_SCHOOLS}곳이 차 있어야 해요. 두 연합 중 먼저 만료되는 연합이 끝나기 전에 대결이 끝나야 해요.
       </p>
       <label htmlFor={`${id}-opponent`} className="font-bold">상대 연합 ID</label>
-      <input id={`${id}-opponent`} inputMode="numeric" autoComplete="off" value={opponent} disabled={request.isPending}
+      <input ref={opponentRef} id={`${id}-opponent`} name="opponentAllianceId" inputMode="numeric" autoComplete="off" value={opponent} disabled={request.isPending}
         aria-invalid={problem !== null} aria-describedby={problem ? `${id}-problem` : undefined}
         onChange={(event) => { setOpponent(event.target.value); setProblem(null); }} className={INPUT} />
       {problem && <p id={`${id}-problem`} role="alert" className={ERROR_TEXT}>{problem}</p>}
       <fieldset disabled={request.isPending} className="contents">
         <DurationPicker label="대결 시간" value={hours} min={MATCH_LIMITS.minHours} max={MATCH_LIMITS.maxHours}
-          presets={MATCH_DURATION_PRESETS} onChange={setHours} />
+          presets={MATCH_DURATION_PRESETS} onChange={(value) => { setHours(value); setScheduleProblem(null); request.reset(); }} />
       </fieldset>
+      <fieldset disabled={request.isPending} className="flex flex-col gap-2">
+        <legend className="font-bold">시작 방식</legend>
+        {(['immediate', 'scheduled'] as const).map((value) => (
+          <div key={value} className="flex items-center gap-2 min-h-12">
+            <input id={`${id}-mode-${value}`} name={`${id}-start-mode`} type="radio" value={value} checked={mode === value}
+              onChange={() => { setMode(value); setScheduleProblem(null); request.reset(); }} />
+            <label htmlFor={`${id}-mode-${value}`} className="flex items-center min-h-12 cursor-pointer">
+              {value === 'immediate' ? '수락하면 즉시 시작' : '시작 시각 예약'}
+            </label>
+          </div>
+        ))}
+      </fieldset>
+      {mode === 'scheduled' && <>
+        <label htmlFor={`${id}-scheduled`} className="font-bold">예약 시작 시각 (한국 시각 KST)</label>
+        <input ref={scheduleRef} id={`${id}-scheduled`} name="scheduledStartAt" type="datetime-local" required step="60"
+          value={startInput} min={kstDateTimeInput(Math.floor(now() / 60_000 + 1) * 60_000)}
+          max={own.data ? kstDateTimeInput(Date.parse(own.data.expiredAt) - hours * 60 * 60_000) : undefined}
+          disabled={request.isPending} aria-invalid={Boolean(scheduleProblem || serverScheduleError)}
+          aria-describedby={`${id}-schedule-help${scheduleProblem ? ` ${id}-schedule-problem` : ''}${serverScheduleError ? ` ${id}-server-error` : ''}`}
+          onChange={(event) => { setStartInput(event.target.value); setScheduleProblem(null); request.reset(); }} className={INPUT} />
+        <p id={`${id}-schedule-help`}>한국 시각(KST) 기준이에요. 예약 시작 전에 상대가 수락해야 하며, 수락한 예약은 취소할 수 없어요.
+          상대 연합의 만료 시각은 신청할 때 서버가 확인해요.</p>
+        {scheduleProblem && <p id={`${id}-schedule-problem`} role="alert" className={ERROR_TEXT}>{scheduleProblem}</p>}
+      </>}
       {request.error && !request.isPending && (
-        <p role="alert" data-testid="match-request-error" className={ERROR_TEXT}>{matchErrorText(request.error, '대결을 신청하지 못했어요.', null)}</p>
+        <p id={`${id}-server-error`} role="alert" data-testid="match-request-error" className={ERROR_TEXT}>{matchErrorText(request.error, '대결을 신청하지 못했어요.', null)}</p>
       )}
       <button type="submit" className={`${BUTTON} plaque-yellow self-start`} disabled={request.isPending}>
         {request.isPending ? '신청하는 중…' : '대결 신청하기'}
