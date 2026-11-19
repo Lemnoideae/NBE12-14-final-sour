@@ -43,4 +43,7 @@ public class RedisPotionPurchaser {
                 String.valueOf(DEDUPE_TTL_MILLIS));
         return new PotionPurchaseOutcome((Long) result.get(0), result.size() > 1 ? (String) result.get(1) : "");
     }
+
+    public void compensate(Long userId, Long universityId, long price, UUID idempotencyKey, String previousEffect) {
+    }
 }

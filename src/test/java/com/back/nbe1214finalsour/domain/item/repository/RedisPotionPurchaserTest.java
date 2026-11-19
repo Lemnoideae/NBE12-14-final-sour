@@ -13,6 +13,7 @@ import org.springframework.data.redis.core.script.RedisScript;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -68,6 +69,17 @@ class RedisPotionPurchaserTest {
      */
     private Long pexpireTime(String key) {
         return redis.execute(PEXPIRETIME_SCRIPT, List.of(key));
+    }
+
+    private Map<String, String> givenEffect(long itemId, String multiplier, OffsetDateTime expiredAt, UUID purchaseId) {
+        Map<String, String> fields = Map.of(
+                "itemId", String.valueOf(itemId),
+                "multiplier", multiplier,
+                "expiredAt", String.valueOf(expiredAt.toInstant().toEpochMilli()),
+                "purchaseId", purchaseId.toString());
+        redis.opsForHash().putAll(EFFECT_KEY, fields);
+        redis.expireAt(EFFECT_KEY, expiredAt.toInstant());
+        return fields;
     }
 
     @Test
@@ -214,5 +226,24 @@ class RedisPotionPurchaserTest {
         assertThat(redis.opsForSet().isMember(DIRTY_KEY, String.valueOf(USER_ID))).isFalse();
         assertThat(redis.opsForValue().get(DEDUPE_KEY)).isEqualTo("1");
         assertThat(redis.getExpire(DEDUPE_KEY, TimeUnit.MILLISECONDS)).isBetween(1L, 60_000L);
+    }
+
+    @Test
+    @DisplayName("보상할 때 효과 주인이고 이전 효과가 없으면 기여도를 되돌리고 효과와 멱등 키를 지운다")
+    void compensate_ownerWithoutPrevious() {
+        // given
+        redis.opsForZSet().add(RANK_KEY, String.valueOf(USER_ID), 700);
+        givenEffect(ITEM_ID, "2.0", OffsetDateTime.now(ZoneOffset.UTC).plusHours(1).truncatedTo(ChronoUnit.MILLIS), KEY);
+        redis.opsForValue().set(DEDUPE_KEY, "1", Duration.ofMinutes(5));
+        redis.opsForSet().remove(DIRTY_KEY, String.valueOf(USER_ID));
+
+        // when
+        purchaser.compensate(USER_ID, UNIVERSITY_ID, 300L, KEY, "");
+
+        // then
+        assertThat(redis.opsForZSet().score(RANK_KEY, String.valueOf(USER_ID))).isEqualTo(1000.0);
+        assertThat(redis.opsForSet().isMember(DIRTY_KEY, String.valueOf(USER_ID))).isTrue();
+        assertThat(redis.hasKey(EFFECT_KEY)).isFalse();
+        assertThat(redis.hasKey(DEDUPE_KEY)).isFalse();
     }
 }
