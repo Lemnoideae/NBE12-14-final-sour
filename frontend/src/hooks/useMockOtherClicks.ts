@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createMockOtherClicksSource, createSeededRandom, MOCK_REALTIME_CONFIG, planOtherClickParticles, type MockRealtimeConfig, type OtherClicksSource, type PlannedOtherClick } from '../data/mockRealtime';
+import type { OtherClicksFeed } from '../utils/otherClicksFeed';
 
 export interface OtherClickScheduler {
   interval: (callback: () => void, ms: number) => () => void;
@@ -9,13 +10,22 @@ const DEFAULT_SCHEDULER: OtherClickScheduler = {
   interval: (callback, ms) => { const id = setInterval(callback, ms); return () => clearInterval(id); },
   timeout: (callback, ms) => { const id = setTimeout(callback, ms); return () => clearTimeout(id); },
 };
+/** API mode: with no new click response for this long, the count is cleared rather than left stale. */
+export const OTHER_CLICKS_STALE_MS = 3000;
 export interface OtherClickParticle extends PlannedOtherClick { id: number }
-export function useMockOtherClicks({ getMyClicksSinceLastTick, config = MOCK_REALTIME_CONFIG, source, scheduler = DEFAULT_SCHEDULER }: {
+interface OtherClicksOptions {
   getMyClicksSinceLastTick: () => number;
   config?: MockRealtimeConfig;
   source?: OtherClicksSource;
   scheduler?: OtherClickScheduler;
-}) {
+  /**
+   * API mode (SCRUM-159): estimates pushed from click responses. When given, the mock source is never polled.
+   * Each estimate covers the previous second, so its particles are spread over `config.pollIntervalMs` (1s).
+   */
+  feed?: OtherClicksFeed | null;
+}
+
+export function useOtherClicks({ getMyClicksSinceLastTick, config = MOCK_REALTIME_CONFIG, source, scheduler = DEFAULT_SCHEDULER, feed = null }: OtherClicksOptions) {
   const [defaultSource] = useState(() => createMockOtherClicksSource());
   const [particles, setParticles] = useState<OtherClickParticle[]>([]);
   const [otherClicks, setOtherClicks] = useState<number | null>(null);
@@ -31,25 +41,43 @@ export function useMockOtherClicks({ getMyClicksSinceLastTick, config = MOCK_REA
       let cancel = () => {};
       cancel = scheduler.timeout(() => { pending.delete(cancel); if (!disposed) callback(); }, ms);
       pending.add(cancel);
+      return () => { pending.delete(cancel); cancel(); };
     };
-    const stop = scheduler.interval(() => {
-      const myClicks = getMyClicksSinceLastTick();
-      try {
-        Promise.resolve((source ?? defaultSource).exchange(myClicks)).then(({ otherClicks: received }) => {
-          if (disposed || !Number.isFinite(received) || received < 0) return;
-          const count = Math.floor(received);
-          setOtherClicks(count);
-          for (const planned of planOtherClickParticles(count, config, random)) {
-            const id = ++sequence;
-            schedule(() => {
-              setParticles((current) => config.maxActiveParticles > 0 ? [...current, { ...planned, id }].slice(-config.maxActiveParticles) : []);
-              schedule(() => setParticles((current) => current.filter((particle) => particle.id !== id)), config.particleLifetimeMs);
-            }, planned.delayMs);
-          }
-        }).catch(() => {});
-      } catch { /* 요청 실패 시 해당 틱의 연출은 생략한다. */ }
-    }, config.pollIntervalMs);
+    const show = (received: number) => {
+      if (disposed || !Number.isFinite(received) || received < 0) return;
+      const count = Math.floor(received);
+      setOtherClicks(count);
+      for (const planned of planOtherClickParticles(count, config, random)) {
+        const id = ++sequence;
+        schedule(() => {
+          setParticles((current) => config.maxActiveParticles > 0 ? [...current, { ...planned, id }].slice(-config.maxActiveParticles) : []);
+          schedule(() => setParticles((current) => current.filter((particle) => particle.id !== id)), config.particleLifetimeMs);
+        }, planned.delayMs);
+      }
+    };
+    let stop: () => void;
+    if (feed) {
+      let cancelStale = () => {};
+      const unsubscribe = feed.subscribe((received) => {
+        show(received);
+        cancelStale();
+        cancelStale = schedule(() => setOtherClicks(null), OTHER_CLICKS_STALE_MS);
+      });
+      stop = unsubscribe;
+    } else {
+      stop = scheduler.interval(() => {
+        const myClicks = getMyClicksSinceLastTick();
+        try {
+          Promise.resolve((source ?? defaultSource).exchange(myClicks)).then(({ otherClicks: received }) => show(received)).catch(() => {});
+        } catch { /* 요청 실패 시 해당 틱의 연출은 생략한다. */ }
+      }, config.pollIntervalMs);
+    }
     return () => { disposed = true; stop(); for (const cancel of pending) cancel(); };
-  }, [getMyClicksSinceLastTick, config, source, scheduler, defaultSource]);
+  }, [getMyClicksSinceLastTick, config, source, scheduler, defaultSource, feed]);
   return { particles, otherClicks };
+}
+
+/** Mock mode only: polls the mock source every `config.pollIntervalMs`. */
+export function useMockOtherClicks(options: Omit<OtherClicksOptions, 'feed'>) {
+  return useOtherClicks(options);
 }

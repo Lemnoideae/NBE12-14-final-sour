@@ -23,6 +23,8 @@ export const INITIAL_GAME_STATE: MockGameState = {
 
 export type GameAction =
   | { type: 'tap'; isCrit: boolean; now: number }
+  | { type: 'api-tap'; points: number }
+  | { type: 'api-scores'; contribution: number; schoolScore: number; departmentScore: number }
   | { type: 'upgrade' }
   | { type: 'buy'; itemId: string; now: number }
   | { type: 'expire'; now: number }
@@ -64,6 +66,15 @@ export function getTapPoints(state: MockGameState, isCrit: boolean, now: number,
 
 export function gameReducer(state: MockGameState, action: GameAction, buffs: readonly MockStoreItem[] = STORE_ITEMS, catalog: readonly MockStoreItem[] = STORE_ITEMS): MockGameState {
   switch (action.type) {
+    case 'api-tap':
+      return {
+        ...state,
+        contribution: state.contribution + action.points,
+        schoolScore: state.schoolScore + action.points,
+        departmentScore: state.departmentScore + action.points,
+      };
+    case 'api-scores':
+      return { ...state, contribution: action.contribution, schoolScore: action.schoolScore, departmentScore: action.departmentScore };
     case 'tap': {
       const points = getTapPoints(state, action.isCrit, action.now, buffs);
       const buff = getActiveBuff(state, action.now, buffs);

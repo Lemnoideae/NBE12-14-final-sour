@@ -33,10 +33,15 @@ import { ChatPreviewBar } from './components/ChatPreviewBar';
 import { ChatBottomSheet } from './components/ChatBottomSheet';
 import { BottomSheetDialog } from './components/BottomSheetDialog';
 import { BotCheckDialog } from './components/BotCheckDialog';
+import { ApiBotCheckDialog } from './components/ApiBotCheckDialog';
 import { SupportGuestScreenPhone } from './components/SupportGuestScreenPhone';
 import { CampusStatsSheet } from './components/CampusStatsSheet';
 import { getSchoolRankings } from './data/mockRankings';
 import { useMockGame } from './hooks/useMockGame';
+import { useCampusClicks } from './hooks/useCampusClicks';
+import { ClickerProvider, useClickerController } from './hooks/useClicker';
+import { ItemShopProvider, useItemShopController } from './hooks/useItemShop';
+import { OtherClicksFeedContext } from './hooks/otherClicksFeedContext';
 import { useMockRequest } from './hooks/useMockRequest';
 import { MOCK_REQUEST_MODES, type MockRequestMode } from './utils/mockRequest';
 import { MockLoadGate } from './components/MockLoadGate';
@@ -83,6 +88,9 @@ function AppContent() {
   const shellVariant = isPhone && SERVICE_VIEW_MODES.has(viewMode) ? 'full' : 'framed';
   const viewWrap = shellVariant === 'full' ? 'w-full flex flex-col' : 'w-full flex flex-col items-center py-2 animate-fadeIn';
   const game = useMockGame();
+  const campusClicks = useCampusClicks();
+  const clicker = useClickerController(campusClicks);
+  const itemShop = useItemShopController(campusClicks);
   const request = useMockRequest();
   const playerInfo = game.player;
   const schoolScore = game.state.schoolScore;
@@ -129,8 +137,8 @@ function AppContent() {
   const [_feverGauge, setFeverGauge] = useState<number>(35);
   const [isFever, setIsFever] = useState<boolean>(false);
   const shopItems = game.storeItems;
-  const basePower = game.normalPower;
-  const clickPower = game.criticalPower;
+  const basePower = clicker.normalPower;
+  const clickPower = clicker.criticalPower;
 
   const handleToggleSound = () => {
     const next = !soundEnabled;
@@ -165,7 +173,7 @@ function AppContent() {
 
   const handleCampusTap = useCallback(
     (_x: number, _y: number, isCrit: boolean, _gainedPoints: number) => {
-      const gainedPoints = game.tap(isCrit);
+      const gainedPoints = campusClicks.tap(isCrit);
       // A refused click (M5-A) adds nothing, not even to the fever gauge.
       if (gainedPoints === null) return null;
 
@@ -182,7 +190,7 @@ function AppContent() {
       }
       return gainedPoints;
     },
-    [game.tap, isFever]
+    [campusClicks.tap, isFever]
   );
 
   const alliance = useAlliance();
@@ -196,8 +204,10 @@ function AppContent() {
     [hasAllianceAlert],
   );
 
-  const hasAffordableShopItem = shopItems.some((item) => !item.previewOnly && myContribution >= item.cost)
-    || (game.clicker.upgradeCost !== null && myContribution >= game.clicker.upgradeCost);
+  const hasAffordableShopItem = (itemShop
+    ? itemShop.items.some((item) => item.payType === 'CONTRIBUTION' && item.type === 'MULTIPLIER' && myContribution >= item.price)
+    : shopItems.some((item) => !item.previewOnly && myContribution >= item.cost))
+    || (clicker.upgradeCost !== null && myContribution >= clicker.upgradeCost);
 
   // View menus and demo tools: in the desktop header, or in the mock menu sheet on a phone (T2, plan §5, Q5).
   // View switcher (M5-D): service flow screens and design comparisons/demo tools are kept apart.
@@ -487,10 +497,24 @@ function AppContent() {
   );
 
   return (
+    <ClickerProvider value={clicker}>
+    <ItemShopProvider value={itemShop}>
+    <OtherClicksFeedContext.Provider value={campusClicks.otherClicksFeed}>
     <AllianceNavProvider value={allianceNav}>
       <div className={`w-full bg-[#f1f5f9] flex flex-col items-center justify-start select-none text-[#261608] ${isPhone ? 'device-full min-h-dvh' : 'min-h-screen p-2 sm:p-5'}`}>
         {API_MODE === 'api' && <ApiSessionWatcher onEnded={() => setViewMode('login')} />}
-        {API_MODE === 'api' && <ApiPlayerSync />}
+        {API_MODE === 'api' && <ApiPlayerSync getPendingScore={campusClicks.getPendingScore} />}
+        {campusClicks.notice && (
+          <div role="alert" className="w-full max-w-3xl border-2 border-[#8b5327] bg-[#fffbeb] p-3 text-sm font-pixel">
+            <p>{campusClicks.notice}</p>
+            {campusClicks.retryLimited && (
+              <button type="button" onClick={campusClicks.retryLimited} className="pixel-plaque plaque-yellow min-h-12 mt-2 px-3 py-2 text-xs font-bold cursor-pointer">거절된 배치를 제외하고 클릭 재개</button>
+            )}
+            {campusClicks.botCheck && (
+              <button type="button" onClick={campusClicks.botCheck.onOpen} className="pixel-plaque plaque-yellow min-h-12 mt-2 px-3 py-2 text-xs font-bold cursor-pointer">자동 입력 방지 확인</button>
+            )}
+          </div>
+        )}
         {/* [목업] Phone: the presentation header, view menus and demo tools move into a sheet behind this bar (Q5). Not part of the real service. */}
         {isPhone && (
           <div className="mock-menu-bar w-full shrink-0 flex items-center justify-end gap-2 bg-[#fffbeb] border-b-2 border-dashed border-[#8b5327]">
@@ -908,9 +932,13 @@ function AppContent() {
         </div>
         </PhoneShellVariantContext.Provider>
         {/* SCRUM-121: one bot check for every screen that sends my campus clicks. */}
-        {game.botCheckOpen && <BotCheckDialog onVerified={game.completeBotCheck} onClose={game.closeBotCheck} />}
+        {API_MODE === 'mock' && game.botCheckOpen && <BotCheckDialog onVerified={game.completeBotCheck} onClose={game.closeBotCheck} />}
+        {campusClicks.botCheck?.open && <ApiBotCheckDialog onVerified={campusClicks.botCheck.onVerified} onClose={campusClicks.botCheck.onClose} />}
       </div>
     </AllianceNavProvider>
+    </OtherClicksFeedContext.Provider>
+    </ItemShopProvider>
+    </ClickerProvider>
   );
 }
 

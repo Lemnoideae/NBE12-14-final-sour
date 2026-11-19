@@ -185,10 +185,14 @@ function useGameController(
       email: account.email,
     });
   }, [commit, setPlayer, player.schoolId]);
+  const applyApiTap = useCallback((points: number) => commit({ type: 'api-tap', points }), [commit]);
+  const applyApiScores = useCallback((scores: Pick<MockGameState, 'contribution' | 'schoolScore' | 'departmentScore'>) => {
+    commit({ type: 'api-scores', ...scores });
+  }, [commit]);
   const activeBuff = getActiveBuff(state, now, engineBuffs);
 
   return {
-    state, player, setPlayer, enroll, applyAccount, tap, buy, upgrade, previewCampus, shopConfig, storeItems,
+    state, player, setPlayer, enroll, applyAccount, applyApiTap, applyApiScores, tap, buy, upgrade, previewCampus, shopConfig, storeItems,
     clickRejectDemo, setClickRejectDemo, clickNotice,
     abuseFlagged, setAbuseFlagged, botCheckOpen, closeBotCheck, completeBotCheck,
     imageStore,

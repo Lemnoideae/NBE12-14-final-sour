@@ -423,6 +423,10 @@
 }
 .bottom-sheet-dialog[open] { display: flex; flex-direction: column; }
 .bottom-sheet-dialog::backdrop { background: rgb(26 15 5 / 75%); }
+/* API purchase modal: native focus containment/Escape; no root scroll locking or manual focus trap. */
+.item-purchase-dialog { width: min(24rem, calc(100% - 2rem)); max-height: 90dvh; margin: auto; overflow: auto; }
+.item-purchase-dialog:modal { overscroll-behavior: contain; }
+.item-purchase-dialog::backdrop { background: rgb(26 15 5 / 75%); overflow: hidden; overscroll-behavior: contain; }
 /* At extremely short heights, allow the whole sheet body to scroll too. */
 .bottom-sheet-dialog > div > div { min-height: 240px; }
 
