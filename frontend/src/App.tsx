@@ -59,6 +59,7 @@ import { CampusAmbienceProvider, useAmbienceControl } from './hooks/useCampusTim
 import type { AmbienceOverride } from './data/campusAmbience';
 import { AllianceApplyScreenPhone } from './components/AllianceApplyScreenPhone';
 import { CurrentAllianceScreenPhone } from './components/CurrentAllianceScreenPhone';
+import { ApiAllianceScreenPhone } from './components/ApiAllianceScreenPhone';
 import { BattleApplyScreenPhone } from './components/BattleApplyScreenPhone';
 import { BattleStatusScreenPhone } from './components/BattleStatusScreenPhone';
 import { soundManager } from './utils/sound';
@@ -729,6 +730,11 @@ function AppContent() {
                 }}
               />
             </MockLoadGate>
+          </div>
+        ) : API_MODE === 'api' && (viewMode === 'alliance_apply' || viewMode === 'current_alliance') ? (
+          // API mode: create and detail against the server (SCRUM-177). The mock proposal screens stay mock-only.
+          <div className={viewWrap}>
+            <ApiAllianceScreenPhone onBack={() => setViewMode('gameplay')} onGoToLogin={() => setViewMode('login')} onNavigateTab={navigateTab} />
           </div>
         ) : viewMode === 'alliance_apply' ? (
           <div className={viewWrap}>
