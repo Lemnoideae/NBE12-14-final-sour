@@ -102,7 +102,7 @@ function mount({ rows: initial, handle }: { rows: AdminSupportDetail[]; handle?:
   const queryClient = createQueryClient();
   queryClients.push(queryClient);
   render(React.createElement(ApiProvider, { client, queryClient, children:
-    React.createElement(AdminScreenPhone, { onBack: () => navigation.push('back'), onGoToLogin: () => navigation.push('login') }) }));
+    React.createElement(AdminScreenPhone, { onBack: () => navigation.push('back'), onGoToLogin: () => navigation.push('login'), schoolName: { value: 'default', onChange: () => undefined } }) }));
   return { calls, navigation, rows };
 }
 /** List page requests; the home's pending count asks for size 1. */
@@ -128,7 +128,7 @@ test('문의 처리 메뉴가 열리고, 목록은 답변 대기부터 20개씩 
   await screen.findByTestId('admin-pending-count');
   const menu = screen.getByRole('navigation', { name: '관리자 메뉴' });
   const enabled = [...menu.querySelectorAll('button')].filter((button) => !button.disabled).map((button) => button.firstChild?.textContent);
-  assert.deepEqual(enabled, ['문의 처리', '회원 정지·해제', '어뷰징 순위'], '테스트 도구(SCRUM-175)만 준비 중');
+  assert.deepEqual(enabled, ['문의 처리', '회원 정지·해제', '어뷰징 순위', '테스트 도구'], '메뉴가 모두 켜졌다');
   await openSupports();
   await waitFor(() => assert.deepEqual(rowTitles(), ['문의 2', '문의 1']));
   assert.deepEqual(lists(f.calls), ['status=RECEIVED&page=0&size=20']);

@@ -13,8 +13,8 @@ interface ApiCheckScreenProps {
 
 /**
  * Dev-only check that the client, the proxy and TanStack Query reach the backend (SCRUM-147): searches schools
- * with GET /api/v1/universities and shows the result. Opened with ?apiCheck in `npm run dev`; the admin test tool
- * (SCRUM-171) takes over the fault-injection control later.
+ * with GET /api/v1/universities and shows the result. Opened with ?apiCheck in `npm run dev` only (production builds
+ * drop it), so its fault-injection control stays for developers; in the app, the admin test tool (SCRUM-175) owns it.
  */
 export const ApiCheckScreen: React.FC<ApiCheckScreenProps> = ({ mode = API_MODE }) => {
   const [draft, setDraft] = useState('');

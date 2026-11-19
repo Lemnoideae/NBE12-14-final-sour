@@ -46,3 +46,10 @@ export function useApiFaultMode(): [ApiFaultMode, (mode: ApiFaultMode) => void] 
   const mode = useSyncExternalStore(faults.subscribe, faults.getMode, faults.getMode);
   return [mode, faults.setMode];
 }
+
+/** Whether click submissions are refused with 429 in this browser, and its setter, for the admin test tool. */
+export function useApiClickRefusal(): [boolean, (on: boolean) => void] {
+  const { faults } = useApiClient();
+  const on = useSyncExternalStore(faults.subscribe, faults.getClickRefusal, faults.getClickRefusal);
+  return [on, faults.setClickRefusal];
+}

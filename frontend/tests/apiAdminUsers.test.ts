@@ -77,7 +77,7 @@ function mount({ ranking = [], handle }: { ranking?: AbuseRankingItem[]; handle?
   const queryClient = createQueryClient();
   queryClients.push(queryClient);
   render(React.createElement(ApiProvider, { client, queryClient, children:
-    React.createElement(AdminScreenPhone, { onBack: () => undefined, onGoToLogin: () => undefined }) }));
+    React.createElement(AdminScreenPhone, { onBack: () => undefined, onGoToLogin: () => undefined, schoolName: { value: 'default', onChange: () => undefined } }) }));
   return { calls };
 }
 const patches = (calls: Call[]) => calls.filter(({ route }) => route.startsWith('PATCH ')).map(({ route, body }) => [route, body]);

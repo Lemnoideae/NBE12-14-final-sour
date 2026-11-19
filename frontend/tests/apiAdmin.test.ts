@@ -82,7 +82,7 @@ function mount({ screen: which, me, pending = () => pendingPage(0), signedIn = t
   queryClients.push(queryClient);
   const ui = which === 'my-info'
     ? React.createElement(MyInfoScreenPhone, { key: 'screen', onBack: () => navigation.push('back'), onGoToLogin: () => navigation.push('login'), onOpenAdmin: () => navigation.push('admin') })
-    : React.createElement(AdminScreenPhone, { key: 'screen', onBack: () => navigation.push('back'), onGoToLogin: () => navigation.push('login') });
+    : React.createElement(AdminScreenPhone, { key: 'screen', onBack: () => navigation.push('back'), onGoToLogin: () => navigation.push('login'), schoolName: { value: 'default', onChange: () => undefined } });
   render(React.createElement(ApiProvider, { client, queryClient, children: [
     React.createElement(ApiSessionWatcher, { key: 'watcher', onEnded: () => navigation.push('ended') }), ui,
   ] }));

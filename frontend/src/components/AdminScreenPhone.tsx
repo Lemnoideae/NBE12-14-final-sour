@@ -7,33 +7,39 @@ import { useIsAdmin, useMyInfo } from '../api/users';
 import { soundManager } from '../utils/sound';
 import { ADMIN_BOX as BOX, ADMIN_BUTTON as BUTTON, AdminForbiddenNotice } from './adminUi';
 import { AdminSupportDetailView, AdminSupportList, type AdminSupportListState } from './AdminSupportsPanel';
+import { AdminTestToolsPanel, type SchoolNameTestControl } from './AdminTestToolsPanel';
 import { AdminAbuseRanking, AdminUserStatusPanel, type AdminUserTarget } from './AdminUsersPanel';
 import { LoadNotice } from './LoadNotice';
 import { PhoneShell } from './PhoneShell';
 
 // Admin home in API mode (SCRUM-172, plan .agents/01-PLAN/261119-1023-scrum172_admin_entry.md). Shown only to a
 // profile whose role is ADMIN; the server checks the role again on every admin call. The menu items are switched on
-// by SCRUM-173 (inquiries, AdminSupportsPanel), SCRUM-174 (member status, abuse ranking, AdminUsersPanel) and SCRUM-175 (test tools).
+// by SCRUM-173 (inquiries, AdminSupportsPanel), SCRUM-174 (member status, abuse ranking, AdminUsersPanel) and SCRUM-175
+// (test tools, AdminTestToolsPanel).
 
 type AdminView = { kind: 'home' } | { kind: 'supports' } | { kind: 'support'; id: number }
-  | { kind: 'users'; target?: AdminUserTarget } | { kind: 'abuse' };
+  | { kind: 'users'; target?: AdminUserTarget } | { kind: 'abuse' } | { kind: 'tools' };
 
-/** Admin menu entries, in the order of their subtasks. An entry without `opens` is not built yet. */
-const ADMIN_MENU: ReadonlyArray<{ label: string; detail: string; opens?: AdminView['kind'] }> = [
+/** Admin menu entries, in the order of their subtasks. */
+const ADMIN_MENU: ReadonlyArray<{ label: string; detail: string; opens: MenuView }> = [
   { label: '문의 처리', detail: '문의 목록과 답변', opens: 'supports' },
   { label: '회원 정지·해제', detail: '회원 상태 변경', opens: 'users' },
   { label: '어뷰징 순위', detail: '최근 3일 부정행위 순위', opens: 'abuse' },
-  { label: '테스트 도구', detail: '이 브라우저의 요청 지연·실패 주입' },
+  { label: '테스트 도구', detail: '이 브라우저의 요청 지연·실패 주입, 클릭 거부, 학교명 표시', opens: 'tools' },
 ];
 
-const TITLE: Record<AdminView['kind'], string> = { home: '관리자', supports: '문의 처리', support: '문의 상세', users: '회원 정지·해제', abuse: '어뷰징 순위' };
+type MenuView = 'supports' | 'users' | 'abuse' | 'tools';
+
+const TITLE: Record<AdminView['kind'], string> = { home: '관리자', supports: '문의 처리', support: '문의 상세', users: '회원 정지·해제', abuse: '어뷰징 순위', tools: '테스트 도구' };
 
 interface AdminScreenPhoneProps {
   onBack: () => void;
   onGoToLogin: () => void;
+  /** The campus header's school name override, owned by the app (SCRUM-175). */
+  schoolName: SchoolNameTestControl;
 }
 
-export function AdminScreenPhone({ onBack, onGoToLogin }: AdminScreenPhoneProps) {
+export function AdminScreenPhone({ onBack, onGoToLogin, schoolName }: AdminScreenPhoneProps) {
   const signedIn = useAuthSession().status === 'signed-in';
   const me = useMyInfo();
   const isAdmin = useIsAdmin();
@@ -72,6 +78,8 @@ export function AdminScreenPhone({ onBack, onGoToLogin }: AdminScreenPhoneProps)
         ) : view.kind === 'abuse' && me.data ? (
           <AdminAbuseRanking adminId={me.data.id} page={abusePage} onPage={setAbusePage}
             onChangeStatus={(target) => setView({ kind: 'users', target })} onGoToLogin={onGoToLogin} />
+        ) : view.kind === 'tools' && me.data ? (
+          <AdminTestToolsPanel schoolName={schoolName} />
         ) : view.kind === 'support' && me.data ? (
           <AdminSupportDetailView key={view.id} adminId={me.data.id} supportId={view.id}
             onBackToList={() => setView({ kind: 'supports' })} onGoToLogin={onGoToLogin} />
@@ -81,7 +89,7 @@ export function AdminScreenPhone({ onBack, onGoToLogin }: AdminScreenPhoneProps)
             <button type="button" onClick={onGoToLogin} className={BUTTON}>로그인</button>
           </div>
         ) : isAdmin ? (
-          <AdminHome onGoToLogin={onGoToLogin} onOpen={(kind) => setView(kind === 'supports' || kind === 'users' || kind === 'abuse' ? { kind } : { kind: 'home' })} />
+          <AdminHome onGoToLogin={onGoToLogin} onOpen={(kind) => setView({ kind })} />
         ) : (
           <p role="status" data-testid="admin-denied" className={`${BOX} text-sm font-bold text-center`}>관리자만 이용할 수 있어요.</p>
         )}
@@ -90,7 +98,7 @@ export function AdminScreenPhone({ onBack, onGoToLogin }: AdminScreenPhoneProps)
   );
 }
 
-function AdminHome({ onGoToLogin, onOpen }: { onGoToLogin: () => void; onOpen: (kind: AdminView['kind']) => void }) {
+function AdminHome({ onGoToLogin, onOpen }: { onGoToLogin: () => void; onOpen: (kind: MenuView) => void }) {
   const { query: pending, forbidden } = useAdminPendingSupportCount();
 
   if (forbidden) return <AdminForbiddenNotice onGoToLogin={onGoToLogin} />;
@@ -114,11 +122,11 @@ function AdminHome({ onGoToLogin, onOpen }: { onGoToLogin: () => void; onOpen: (
       </section>
       <nav aria-label="관리자 메뉴" className="flex flex-col gap-2">
         {ADMIN_MENU.map(({ label, detail, opens }) => (
-          <button key={label} type="button" disabled={!opens} aria-describedby={`admin-menu-${label}`}
-            onClick={opens ? () => { soundManager.playTabSound(); onOpen(opens); } : undefined}
-            className="pixel-plaque plaque-parchment min-h-12 px-3 py-2 text-left text-xs font-bold cursor-pointer disabled:opacity-60 disabled:cursor-default">
+          <button key={label} type="button" aria-describedby={`admin-menu-${label}`}
+            onClick={() => { soundManager.playTabSound(); onOpen(opens); }}
+            className="pixel-plaque plaque-parchment min-h-12 px-3 py-2 text-left text-xs font-bold cursor-pointer">
             {label}
-            <span id={`admin-menu-${label}`} className="block text-[10px] font-normal">{opens ? detail : `${detail} · 준비 중`}</span>
+            <span id={`admin-menu-${label}`} className="block text-[10px] font-normal">{detail}</span>
           </button>
         ))}
       </nav>

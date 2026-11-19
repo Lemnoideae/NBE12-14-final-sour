@@ -181,7 +181,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
 
   async function request<T>(path: string, { method = 'GET', query, body, signal, anonymous = false }: ApiRequestOptions = {}): Promise<T> {
     const url = buildUrl(baseUrl, path, query);
-    await faults.beforeRequest(signal);
+    await faults.beforeRequest(signal, { method, path });
     if (anonymous) return send<T>(url, method, body, signal, null);
 
     const sentToken = session.getAccessToken();
