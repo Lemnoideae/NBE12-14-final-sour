@@ -1,6 +1,7 @@
 package com.back.nbe1214finalsour.domain.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -43,8 +44,8 @@ import org.springframework.test.web.servlet.ResultActions;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 관리자 문의 목록·답변 {@code GET /api/v1/admin/supports}, {@code POST /api/v1/admin/supports/{id}/answer}
- * (추가 명세 §3-9, SCRUM-112)를 PostgreSQL(Testcontainers)과 실제 HTTP 처리로 확인한다.
+ * 관리자 문의 목록·상세·답변 {@code GET /api/v1/admin/supports}, {@code GET /api/v1/admin/supports/{id}},
+ * {@code POST /api/v1/admin/supports/{id}/answer} (추가 명세 §3-9, SCRUM-112·SCRUM-173)를 PostgreSQL(Testcontainers)과 실제 HTTP 처리로 확인한다.
  *
  * <p>관리자 목록은 테이블 전체를 보므로, 넣는 행의 {@code created_at}을 먼 미래로 바꿔 맨 앞에 오게 하고
  * {@code totalCount}는 DB에서 센 값과 비교한다. 넣은 행은 제목 접두어 {@link #TITLE_PREFIX}로 지운다.
@@ -56,6 +57,7 @@ class AdminSupportIntegrationTest {
 
     private static final String TITLE_PREFIX = "SCRUM-112 ";
     private static final String ANSWERS = "/api/v1/admin/supports/{id}/answer";
+    private static final String DETAIL = "/api/v1/admin/supports/{id}";
 
     @Autowired
     private MockMvc mockMvc;
@@ -167,6 +169,49 @@ class AdminSupportIntegrationTest {
     }
 
     @Test
+    @DisplayName("상세: 다른 회원·비회원 문의도 본문·수신 이메일을 보고, 답변 전 answer는 null, 답변 후 상태와 답변이 바뀐다 (SCRUM-173)")
+    void detailShowsContentAndAnswer() throws Exception {
+        long guest = insert(null, "guest@example.com", "비회원 상세", "2099-01-01 05:00:00+00");
+        jdbcTemplate.update("UPDATE customer_support SET attach_file_url = 'https://cdn.example.com/a.png' WHERE id = ?",
+                guest);
+
+        detail(adminToken, guest)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.supportId").value(guest))
+                .andExpect(jsonPath("$.data.title").value(TITLE_PREFIX + "비회원 상세"))
+                .andExpect(jsonPath("$.data.content").value("내용입니다"))
+                .andExpect(jsonPath("$.data.attachFileUrl").value("https://cdn.example.com/a.png"))
+                .andExpect(jsonPath("$.data.recipientEmail").value("guest@example.com"))
+                .andExpect(jsonPath("$.data.isMember").value(false))
+                .andExpect(jsonPath("$.data.status").value("RECEIVED"))
+                .andExpect(jsonPath("$.data.answer").value(nullValue()))
+                .andExpect(jsonPath("$.data.createdAt").value("2099-01-01T14:00:00+09:00"));
+
+        answer(adminToken, guest, "답변 제목", "답변 내용").andExpect(status().isOk());
+
+        detail(adminToken, guest)
+                .andExpect(jsonPath("$.data.status").value("ANSWERED"))
+                .andExpect(jsonPath("$.data.answer.title").value("답변 제목"))
+                .andExpect(jsonPath("$.data.answer.content").value("답변 내용"));
+    }
+
+    @Test
+    @DisplayName("상세: 없는 문의는 404 SUPPORT_NOT_FOUND, 익명은 401, 일반 회원은 본인 문의여도 403")
+    void detailErrors() throws Exception {
+        long id = insert(memberId, "member@example.com", "상세 권한", "2099-01-01 05:00:00+00");
+
+        mockMvc.perform(get(DETAIL, id)).andExpect(status().isUnauthorized());
+        detail(userToken, id)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("COMMON_FORBIDDEN"));
+
+        jdbcTemplate.update("DELETE FROM customer_support WHERE id = ?", id);
+        detail(adminToken, id)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("SUPPORT_NOT_FOUND"));
+    }
+
+    @Test
     @DisplayName("이미 답변한 문의는 409 SUPPORT_ALREADY_ANSWERED이고 첫 답변이 남으며 이벤트도 없다")
     void secondAnswerConflicts() throws Exception {
         long id = insert(memberId, "member@example.com", "두 번 답변", "2099-01-01 05:00:00+00");
@@ -271,6 +316,10 @@ class AdminSupportIntegrationTest {
             builder.param("status", status);
         }
         return mockMvc.perform(builder);
+    }
+
+    private ResultActions detail(String token, long id) throws Exception {
+        return mockMvc.perform(get(DETAIL, id).header(HttpHeaders.AUTHORIZATION, "Bearer " + token));
     }
 
     private ResultActions answer(String token, long id, String title, String content) throws Exception {

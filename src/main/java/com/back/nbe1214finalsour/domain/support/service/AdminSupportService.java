@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.support.service;
 
+import com.back.nbe1214finalsour.domain.support.dto.AdminSupportDetailResponse;
 import com.back.nbe1214finalsour.domain.support.dto.AdminSupportListResponse;
 import com.back.nbe1214finalsour.domain.support.dto.SupportAnswerRequest;
 import com.back.nbe1214finalsour.domain.support.dto.SupportAnswerResponse;
@@ -38,6 +39,18 @@ public class AdminSupportService {
                 ? repository.findAllByOrderByCreatedAtDescIdDesc(pageable)
                 : repository.findByStatusOrderByCreatedAtDescIdDesc(status, pageable);
         return AdminSupportListResponse.from(result);
+    }
+
+    /**
+     * 문의 상세. 관리자는 작성자와 관계없이 모든 문의를 본다 (SCRUM-173).
+     *
+     * @throws BusinessException 404 {@code SUPPORT_NOT_FOUND}
+     */
+    @Transactional(readOnly = true)
+    public AdminSupportDetailResponse getDetail(Long supportId) {
+        return repository.findById(supportId)
+                .map(AdminSupportDetailResponse::from)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SUPPORT_NOT_FOUND, "supportId=" + supportId));
     }
 
     /**

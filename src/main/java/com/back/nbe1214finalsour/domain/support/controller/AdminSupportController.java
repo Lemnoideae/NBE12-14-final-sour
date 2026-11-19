@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.support.controller;
 
+import com.back.nbe1214finalsour.domain.support.dto.AdminSupportDetailResponse;
 import com.back.nbe1214finalsour.domain.support.dto.AdminSupportListResponse;
 import com.back.nbe1214finalsour.domain.support.dto.SupportAnswerRequest;
 import com.back.nbe1214finalsour.domain.support.dto.SupportAnswerResponse;
@@ -22,7 +23,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 관리자 문의 목록·답변 (추가 명세 §3-9).
+ * 관리자 문의 목록·상세·답변 (추가 명세 §3-9, 상세는 SCRUM-173).
  *
  * <p>권한은 {@code SecurityConfig}가 {@code /api/v1/admin/**} 경로로 한 번에 막는다.
  */
@@ -40,6 +41,12 @@ public class AdminSupportController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         return ApiResponse.ok(adminSupportService.getList(status, page, size));
+    }
+
+    /** 문의 상세. 본문·첨부·답변과 수신 이메일을 준다. 없으면 404 {@code SUPPORT_NOT_FOUND} */
+    @GetMapping("/{supportId}")
+    public ApiResponse<AdminSupportDetailResponse> getDetail(@PathVariable Long supportId) {
+        return ApiResponse.ok(adminSupportService.getDetail(supportId));
     }
 
     /** 문의 답변. 답변 메일은 커밋 뒤 비동기로 보낸다 */
