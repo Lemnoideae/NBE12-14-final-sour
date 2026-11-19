@@ -6,6 +6,7 @@
 // still remembers its member's alliance, sent application and latest match in this browser because the server has no
 // alliance list, member list, application list or match list yet, and applications and matches are handled by number.
 
+import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApiClient } from './ApiProvider';
 import type { ApiClient } from './client';
@@ -75,6 +76,7 @@ export const MATCH_ERROR_CODES = {
   requestExpired: 'MATCH_REQUEST_EXPIRED',
   membersIncomplete: 'MATCH_MEMBERS_INCOMPLETE',
   scheduleConflict: 'MATCH_SCHEDULE_CONFLICT',
+  invalidSchedule: 'MATCH_INVALID_SCHEDULE',
   insufficientTime: 'MATCH_INSUFFICIENT_TIME',
 } as const;
 /** While a match can still change by itself (accepted, expired, ended), its card reads it again this often. */
@@ -131,10 +133,11 @@ export function decideApplication(client: ApiClient, applicationId: number, deci
   return client.request<AllianceApplication>(`/alliances/applications/${applicationId}/${decision}`, { method: 'PATCH' });
 }
 
-/** No scheduledStartAt: choosing a start time waits for SCRUM-183. */
+/** Omit scheduledStartAt to start on acceptance; otherwise send an ISO-8601 instant with an explicit offset. */
 export interface MatchRequest {
   opponentAllianceId: number;
   durationHours: number;
+  scheduledStartAt?: string;
 }
 
 export function requestMatch(client: ApiClient, allianceId: number, request: MatchRequest): Promise<AllianceMatch> {
@@ -346,17 +349,27 @@ export function useUniversityName(universityId: number | null, viewerId: number)
   });
 }
 
-const matchMayChange = (status: AllianceMatchStatus | undefined) => status === 'REQUESTED' || status === 'IN_PROGRESS';
+const matchMayChange = (status: AllianceMatchStatus | undefined) => status === 'REQUESTED' || status === 'IN_PROGRESS' || status === 'SCHEDULED';
 
 export function useAllianceMatch(userId: number, matchId: number | null) {
   const client = useApiClient();
-  return useQuery({
+  const queryClient = useQueryClient();
+  const query = useQuery({
     queryKey: allianceKeys.match(userId, matchId ?? 0),
     queryFn: ({ signal }) => getMatch(client, matchId!, signal),
     enabled: matchId !== null,
     staleTime: 0,
     refetchInterval: (query) => matchMayChange(query.state.data?.status) ? MATCH_REFRESH_MS : false,
   });
+  const status = query.data?.status;
+  const a = query.data?.allianceAId;
+  const b = query.data?.allianceBId;
+  // A scheduler or another member may change the match without a local mutation. Refresh both alliances on status change.
+  useEffect(() => {
+    if (!status || a === undefined || b === undefined) return;
+    for (const allianceId of [a, b]) void queryClient.invalidateQueries({ queryKey: allianceKeys.detail(userId, allianceId) });
+  }, [status, a, b, userId, queryClient]);
+  return query;
 }
 
 /** After a match changes, both alliances' status (ACTIVE/IN_MATCH) may have changed too. */
