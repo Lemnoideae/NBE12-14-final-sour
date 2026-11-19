@@ -3,6 +3,11 @@
 -- ARGV[1] userId  ARGV[2] price  ARGV[3] itemId  ARGV[4] multiplier
 -- ARGV[5] expiredAt(epoch ms)  ARGV[6] purchaseId  ARGV[7] 멱등 키 TTL(ms)
 -- 반환: {차감 후 잔액, 이전 효과 JSON 또는 ""}
+--       같은 멱등 키로 이미 구매했으면 {-2}, 기여도 부족(기록 없음 포함)이면 {-1}
+--       중복 검사가 잔액 검사보다 앞이다: 구매 후 잔액이 줄어든 상태의 재전송을 "부족"으로 안내하지 않기 위해
+if redis.call('EXISTS', KEYS[4]) == 1 then
+    return {-2}
+end
 local score = redis.call('ZSCORE', KEYS[1], ARGV[1])
 local amount = tonumber(ARGV[2])
 if not score or tonumber(score) < amount then
