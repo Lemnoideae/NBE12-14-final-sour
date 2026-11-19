@@ -116,7 +116,7 @@ public class UserRankingQueryService {
             }
 
             long originalRank = rankingService.getContributorRank(universityId, entry.member())
-                    .orElseThrow(() -> new IllegalStateException("Redis 랭킹 정보가 조회 중 변경되었습니다."));
+                    .orElseThrow(() -> new BusinessException(ErrorCode.COMMON_INTERNAL_ERROR, "Redis 랭킹 정보가 조회 중 변경되었습니다."));
             long publicRank = originalRank - countExcludedHigher(excludedScores, entry.score());
 
             items.add(new UserRankingResponse.Item(
