@@ -70,6 +70,11 @@ export function useApiItemShopController(gate: ClickUpgradeGate): ItemShopView {
   const active = (work: Attempt) => attempt.current === work && !work.abort.signal.aborted
     && client.session.getState().status === 'signed-in' && queryClient.getQueryData<MyInfo>(userKeys.me)?.id === work.userId;
   const finish = (work: Attempt) => { attempt.current = null; work.release(); changePhase('idle'); };
+  const refreshHistory = (memberId: number) => {
+    const queryKey = itemKeys.history(memberId);
+    // invalidateQueries alone reuses an initial fetch with no cached data. Cancel that stale snapshot too.
+    void queryClient.cancelQueries({ queryKey }).then(() => queryClient.invalidateQueries({ queryKey }));
+  };
   const catalogNotice = catalog.isError ? `아이템 목록을 불러오지 못했습니다. ${errorMessage(catalog.error)}`
     : catalog.isPending ? '아이템 목록을 불러오는 중…' : !catalog.data?.length ? '판매 중인 아이템이 없습니다.' : null;
   const effectNotice = !signedIn ? '적용 효과를 보려면 로그인해 주세요.'
@@ -108,6 +113,7 @@ export function useApiItemShopController(gate: ClickUpgradeGate): ItemShopView {
       finish(work);
       // A failed GET must never turn a confirmed purchase into a retryable POST.
       void queryClient.invalidateQueries({ queryKey: activeKey, exact: true });
+      refreshHistory(work.userId);
     } catch (failure) {
       if (!active(work)) return;
       setError(errorMessage(failure));
@@ -135,6 +141,7 @@ export function useApiItemShopController(gate: ClickUpgradeGate): ItemShopView {
         changePhase('uncertain'); return;
       }
       setError(null); setStatus('서버의 새 적용 효과와 기여도를 확인했습니다. 구매 요청은 다시 보내지 않았습니다.'); finish(work);
+      refreshHistory(work.userId);
     } catch (failure) {
       if (!active(work)) return;
       setError(`구매 결과를 확인하지 못했습니다. ${errorMessage(failure)}`); changePhase('uncertain');

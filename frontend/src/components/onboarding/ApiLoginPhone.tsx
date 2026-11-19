@@ -5,6 +5,8 @@ import { useApiClient, useAuthSession } from '../../api/ApiProvider';
 import { login, logout, useSessionRestore } from '../../api/auth';
 import { errorMessage, fieldErrorMap } from '../../api/errors';
 import { userKeys, useMyInfo } from '../../api/users';
+import { itemKeys } from '../../api/items';
+import { supportKeys } from '../../api/supports';
 import { LoginStep, PhoneFrame, SignedInStep } from './OnboardingSteps.tsx';
 
 // Login, logout and the session restore in API mode (SCRUM-152). The access token stays in memory (SCRUM-148); after
@@ -13,10 +15,12 @@ import { LoginStep, PhoneFrame, SignedInStep } from './OnboardingSteps.tsx';
 interface ApiLoginPhoneProps {
   onGoToSignup: () => void;
   onGoToCampus: () => void;
+  /** Signed in: opens my account screen (SCRUM-166). */
+  onOpenMyInfo?: () => void;
 }
 
 /** The login form when signed out, the account with a logout button when signed in. */
-export const ApiLoginPhone: React.FC<ApiLoginPhoneProps> = ({ onGoToSignup, onGoToCampus }) => {
+export const ApiLoginPhone: React.FC<ApiLoginPhoneProps> = ({ onGoToSignup, onGoToCampus, onOpenMyInfo }) => {
   const client = useApiClient();
   const session = useAuthSession();
   const restore = useSessionRestore();
@@ -35,6 +39,7 @@ export const ApiLoginPhone: React.FC<ApiLoginPhoneProps> = ({ onGoToSignup, onGo
       <SignedInStep
         nickname={me.data?.nickname ?? nickname}
         onGoToCampus={onGoToCampus}
+        onOpenMyInfo={onOpenMyInfo}
         error={error ?? (me.isError ? `내 정보를 불러오지 못했습니다. ${errorMessage(me.error)}` : null)}
         pending={signOut.isPending}
         onLogout={() => {
@@ -106,6 +111,7 @@ export const ApiLoginPhone: React.FC<ApiLoginPhoneProps> = ({ onGoToSignup, onGo
  */
 export const ApiSessionWatcher: React.FC<{ onEnded: () => void }> = ({ onEnded }) => {
   useSessionRestore();
+  const client = useApiClient();
   const session = useAuthSession();
   const queryClient = useQueryClient();
   // The profile belongs to whoever was signed in; the next login must not show it, even for a moment.
@@ -114,6 +120,18 @@ export const ApiSessionWatcher: React.FC<{ onEnded: () => void }> = ({ onEnded }
   useEffect(() => {
     if (session.status === 'signed-out') queryClient.getQueryCache().find({ queryKey: userKeys.me, exact: true })?.reset();
   }, [session.status, queryClient]);
+  // Subscribe synchronously: sign-out + another sign-in in one frame must still abort private history/support GETs.
+  // Query.reset also cancels consumed signals, including the client's pre-HTTP fault delay, without refetching.
+  useEffect(() => {
+    const clearPrivateQueries = () => {
+      if (client.session.getState().status !== 'signed-out') return;
+      for (const queryKey of [itemKeys.histories, supportKeys.all]) {
+        for (const query of queryClient.getQueryCache().findAll({ queryKey })) query.reset();
+      }
+    };
+    clearPrivateQueries();
+    return client.session.subscribe(clearPrivateQueries);
+  }, [client, queryClient]);
   const onEndedRef = useRef(onEnded);
   onEndedRef.current = onEnded;
   // Runs when the state changes, not on every render: the user may leave the login screen while `ended` stays set.

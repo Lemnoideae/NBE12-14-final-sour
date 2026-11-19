@@ -11,10 +11,10 @@ export interface ClickBatchSnapshot {
   locked: boolean;
 }
 
-export interface ClickBatcherOptions {
-  send: (request: ClickRequest) => Promise<ClickResponse>;
+export interface ClickBatcherOptions<TResponse = ClickResponse> {
+  send: (request: ClickRequest) => Promise<TResponse>;
   /** `sentAt` is when the attempt that succeeded was sent (`now()`), so callers can relate it to earlier batches. */
-  onAccepted: (response: ClickResponse, pendingScore: number, accepted: { request: ClickRequest; sentAt: number }) => void;
+  onAccepted: (response: TResponse, pendingScore: number, accepted: { request: ClickRequest; sentAt: number }) => void;
   onChange: (snapshot: ClickBatchSnapshot) => void;
   createId?: () => string;
   now?: () => number;
@@ -22,7 +22,7 @@ export interface ClickBatcherOptions {
 }
 
 /** One serial queue per signed-in member; network retries never make a new submission ID. */
-export function createClickBatcher(options: ClickBatcherOptions) {
+export function createClickBatcher<TResponse = ClickResponse>(options: ClickBatcherOptions<TResponse>) {
   const now = options.now ?? Date.now;
   const createId = options.createId ?? (() => crypto.randomUUID());
   const schedule = options.schedule ?? ((callback, delay) => {

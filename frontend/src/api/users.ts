@@ -1,6 +1,7 @@
 // The signed-in member's own profile (SCRUM-153): GET /api/v1/users/me (UserController.me, MyInfoResponse.java).
+// Nickname change (SCRUM-166): PATCH /api/v1/users/me (UserController.updateProfile, UpdateProfileRequest.java).
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApiClient, useAuthSession } from './ApiProvider';
 import type { ApiClient } from './client';
 import type { UserRole } from './auth';
@@ -40,6 +41,49 @@ export function useMyInfo() {
   const client = useApiClient();
   const signedIn = useAuthSession().status === 'signed-in';
   return useQuery({ queryKey: userKeys.me, queryFn: () => getMyInfo(client), enabled: signedIn });
+}
+
+/**
+ * UpdateProfileRequest has only `nickname`: the department cannot be changed, and the profile image changes only by
+ * buying the personal logo item. Answers MyInfoResponse; 409 USER_NICKNAME_DUPLICATED, 400 COMMON_INVALID_INPUT.
+ */
+export function updateMyProfile(client: ApiClient, request: { nickname: string }): Promise<MyInfo> {
+  return client.request<MyInfo>('/users/me', { method: 'PATCH', body: request });
+}
+
+/**
+ * Changes the nickname and puts it into the cached profile, which the game screens read (ApiPlayerSync). Only the
+ * nickname is taken from the answer: its scores may be older than clicks the cache took in meanwhile.
+ */
+export function useUpdateNickname() {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (nickname: string) => updateMyProfile(client, { nickname }),
+    onSuccess: async (result) => {
+      await queryClient.cancelQueries({ queryKey: userKeys.me, exact: true });
+      queryClient.setQueryData<MyInfo>(userKeys.me, (current) => current?.id === result.id ? { ...current, nickname: result.nickname } : current);
+    },
+  });
+}
+
+/**
+ * PATCH /users/me/password (SCRUM-167). 204 means the server revoked every refresh token, expired the cookie and
+ * dropped the login session, so this browser closes its session at once: a request still on its way with the old
+ * token would otherwise try to reissue and end it as "expired". 400 USER_INVALID_PASSWORD: wrong current password.
+ */
+export async function changePassword(client: ApiClient, request: { currentPassword: string; newPassword: string }): Promise<void> {
+  await client.request<void>('/users/me/password', { method: 'PATCH', body: request });
+  client.session.close('password-changed');
+}
+
+/**
+ * POST /users/me/withdrawal (SCRUM-167). 204 is the same session end as a password change. 400
+ * USER_INVALID_PASSWORD: wrong password; 403 USER_SUSPENDED ends the session with the suspension notice (client.ts).
+ */
+export async function withdraw(client: ApiClient, password: string): Promise<void> {
+  await client.request<void>('/users/me/withdrawal', { method: 'POST', body: { password } });
+  client.session.close('withdrawn');
 }
 
 /** Whether to show the admin menu (SCRUM-171). The server checks the role again on every admin call. */

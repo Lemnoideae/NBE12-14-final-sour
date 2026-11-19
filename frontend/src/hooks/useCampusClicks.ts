@@ -146,7 +146,7 @@ export function useApiCampusClicks(): CampusClicks {
     }
     if (cancelledClicks > 0) return `세션 종료로 미확정 ${cancelledClicks}회 전송을 중단했습니다. 이미 전송한 요청은 반영되었을 수 있으므로 다시 로그인해 점수를 확인해 주세요.`;
     if (signedIn) {
-      if (ready) return snapshot.locked ? '구매·강화 결과를 확인하는 동안 클릭을 잠시 멈춥니다.' : recoveryNotice;
+      if (ready) return snapshot.locked ? '구매·강화·공격 결과를 확인하는 동안 클릭을 잠시 멈춥니다.' : recoveryNotice;
       return '내 정보를 불러온 뒤 클릭할 수 있습니다.';
     }
     return '클릭 점수를 적립하려면 로그인해 주세요.';

@@ -634,11 +634,13 @@ interface SignedInStepProps {
   nickname: string | null;
   onGoToCampus: () => void;
   onLogout: () => void;
+  /** Shows the "내 정보" button (SCRUM-166). */
+  onOpenMyInfo?: () => void;
   error?: string | null;
   pending?: boolean;
 }
 
-export const SignedInStep: React.FC<SignedInStepProps> = ({ nickname, onGoToCampus, onLogout, error, pending = false }) => (
+export const SignedInStep: React.FC<SignedInStepProps> = ({ nickname, onGoToCampus, onLogout, onOpenMyInfo, error, pending = false }) => (
   <div data-testid="signed-in" className="flex-1 flex flex-col items-center justify-center gap-3 text-center">
     <div className="rpg-box p-5 bg-[#dcfce7] w-full flex flex-col items-center gap-2">
       <CheckCircle2 className="w-10 h-10 text-[#15803d]" aria-hidden="true" />
@@ -649,6 +651,11 @@ export const SignedInStep: React.FC<SignedInStepProps> = ({ nickname, onGoToCamp
     <button type="button" onClick={onGoToCampus} className="pixel-plaque plaque-green w-full py-2.5 text-sm font-pixel font-black cursor-pointer">
       캠퍼스로 이동
     </button>
+    {onOpenMyInfo && (
+      <button type="button" onClick={onOpenMyInfo} className="pixel-plaque plaque-yellow w-full py-2 text-xs font-pixel font-bold cursor-pointer">
+        내 정보
+      </button>
+    )}
     <button
       type="button"
       onClick={onLogout}
