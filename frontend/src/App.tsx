@@ -70,6 +70,8 @@ import { Smartphone, Gamepad2, Layers, Trophy, ShoppingBag, MapPin, Image as Ima
 const SERVICE_VIEW_MODES = new Set<string>(['gameplay', 'signup', 'login', 'single_map', 'visiting', 'ranking', 'shop', 'alliance_apply', 'current_alliance', 'battle_apply', 'battle_status', 'support_guest', 'my_info', 'purchase_history', 'member_support', 'admin']);
 /** Sign-up: the backend in API mode (SCRUM-151), the mock onboarding otherwise. */
 const SignupScreen = selectByMode<React.FC<{ onGoToCampus: () => void; onGoToLogin?: () => void }>>({ api: ApiSignupPhone, mock: OnboardingPhone });
+// Load STOMP only when a member opens the API chat sheet; design-comparison screens stay mock-only.
+const ApiChatBottomSheet = React.lazy(() => import('./components/ApiChatBottomSheet').then((module) => ({ default: module.ApiChatBottomSheet })));
 
 function AppContent() {
   // Mode: 'ranking_screens' (2-phone ranking comparison with infinite scroll) | 'our_guestbook_screens' | 'visiting_screens' | etc.
@@ -848,9 +850,9 @@ function AppContent() {
               }
               previewBar={
                 <ChatPreviewBar
-                  latestSender="새벽코딩러"
-                  latestMessage="도서관 앞 클릭 모임 ㄱㄱ"
-                  unreadCount={12}
+                  latestSender={API_MODE === 'api' ? '교내 채팅' : '새벽코딩러'}
+                  latestMessage={API_MODE === 'api' ? '열어서 대화하기' : '도서관 앞 클릭 모임 ㄱㄱ'}
+                  unreadCount={API_MODE === 'api' ? 0 : 12}
                   onClick={() => {
                     setIsChatSheetOpen(true);
                     soundManager.playTabSound();
@@ -873,7 +875,11 @@ function AppContent() {
                       setIsChatSheetOpen(false);
                       soundManager.playTabSound();
                     }}>
-                      <ChatBottomSheet
+                      {API_MODE === 'api' ? <React.Suspense fallback={<p role="status" className="p-3 font-pixel text-sm">채팅 화면을 여는 중이에요.</p>}>
+                        <ApiChatBottomSheet
+                          onClose={() => { setIsChatSheetOpen(false); soundManager.playTabSound(); }}
+                          onGoToLogin={() => { setIsChatSheetOpen(false); setViewMode('login'); }} />
+                      </React.Suspense> : <ChatBottomSheet
                         onClose={() => {
                           setIsChatSheetOpen(false);
                           soundManager.playTabSound();
@@ -881,7 +887,7 @@ function AppContent() {
                         mySchoolInitial={mySchool.firstSyllable}
                         myNickname={playerInfo.nickname}
                         myDepartment={playerInfo.department}
-                      />
+                      />}
                     </BottomSheetDialog>
                   )}
 

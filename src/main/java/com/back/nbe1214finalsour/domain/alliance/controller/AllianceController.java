@@ -21,6 +21,14 @@ public class AllianceController {
     private final AllianceService allianceService;
     private final AllianceQueryService allianceQueryService;
 
+    // 내 학교의 연합. 소속 연합이 없으면 data가 null이다
+    @GetMapping("/me")
+    public ApiResponse<AllianceResponse> getMyAlliance(@AuthenticationPrincipal AuthUser authUser) {
+        return ApiResponse.ok(allianceQueryService.findCurrentAlliance(authUser.universityId())
+                .map(AllianceResponse::new)
+                .orElse(null));
+    }
+
     // 기존 연합 상세 조회
     @GetMapping("/{allianceId}")
     public ApiResponse<AllianceResponse> getAlliance(
