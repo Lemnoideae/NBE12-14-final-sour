@@ -3,7 +3,7 @@ import { Crown, RefreshCw } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { useMySchool } from '../hooks/useSchoolViews';
 import { useRankingBoard, type RankingBoardRow, type RankingTab } from '../hooks/useRankingBoard';
-import { RankingStatusNotice, rankingCaption } from './RankingParts';
+import { RANK_TREND_TONE, RankingStatusNotice, rankTrend, rankingCaption } from './RankingParts';
 
 interface RankingsViewProps {
   currentSchoolScore: number;
@@ -228,7 +228,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               <span className="font-press-start text-[9px] text-[#261608] font-bold">
                 {row.score.toLocaleString('ko-KR')}
               </span>
-              {/* The server has no rank change yet (plan D-3): API rows show no badge. */}
+              {/* Null: nothing to compare against 00:00 KST (new member, or no copy for today), so no badge. */}
               {row.change !== null && (
                 <span
                   className={`text-[8px] font-mono px-0.5 py-0.2 border border-[#261608] font-bold ${
@@ -287,7 +287,8 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               {myRow.score.toLocaleString('ko-KR')}
             </span>
             {myRow.change !== null && (
-              <span className="text-[9px] font-mono px-1 py-0.2 border border-[#261608] text-[#ffffff] bg-[#22c55e] font-black">
+              <span data-testid="my-rank-change" data-trend={rankTrend(myRow.change)}
+                className={`text-[9px] font-mono px-1 py-0.2 border border-[#261608] font-black ${RANK_TREND_TONE[rankTrend(myRow.change)]}`}>
                 {myRow.change}
               </span>
             )}

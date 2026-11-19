@@ -43,7 +43,7 @@ import { ApiTestToolsNotice } from './components/AdminTestToolsPanel';
 import { DEMO_SCHOOL_NAMES, type DemoSchoolNameId } from './data/demoSchoolNames';
 import { PurchaseHistoryScreenPhone } from './components/PurchaseHistoryScreenPhone';
 import { CampusStatsSheet } from './components/CampusStatsSheet';
-import { getSchoolRankings } from './data/mockRankings';
+import { useMySchoolRank } from './hooks/useMySchoolRank';
 import { useMockGame } from './hooks/useMockGame';
 import { useCampusClicks } from './hooks/useCampusClicks';
 import { useCampusAttacks } from './hooks/useCampusAttacks';
@@ -100,9 +100,8 @@ function AppContent() {
   const playerInfo = game.player;
   const schoolScore = game.state.schoolScore;
   const mySchool = useMySchool();
-  const mySchoolRank = getSchoolRankings(schoolScore, playerInfo.schoolId).find((school) => school.isMySchool)!;
-  const rank = mySchoolRank.rank;
-  const rankDelta = mySchoolRank.change;
+  // API mode: the server's rank and change against 00:00 KST (SCRUM-184); the score above is still the game's own.
+  const { rank, change: rankDelta } = useMySchoolRank(schoolScore, playerInfo.schoolId);
   const campusLevel = game.campus.level;
   const myContribution = game.state.contribution;
   const [activeStudents, setActiveStudents] = useState<number>(37);
@@ -594,8 +593,8 @@ function AppContent() {
         ) : viewMode === 'our_guestbook_screens' ? (
           <TwoPhoneOurSchoolGuestbookComparison
             schoolScore={schoolScore}
-            rank={rank}
-            rankDelta={rankDelta}
+            rank={rank ?? undefined}
+            rankDelta={rankDelta ?? undefined}
             campusLevel={campusLevel}
             clickPower={clickPower}
             basePower={basePower}
@@ -622,8 +621,8 @@ function AppContent() {
         ) : viewMode === 'chat_screens' ? (
           <TwoPhoneChatComparison
             schoolScore={schoolScore}
-            rank={rank}
-            rankDelta={rankDelta}
+            rank={rank ?? undefined}
+            rankDelta={rankDelta ?? undefined}
             campusLevel={campusLevel}
             clickPower={clickPower}
             basePower={basePower}
@@ -864,7 +863,7 @@ function AppContent() {
                   activeTab={activeTab}
                   onChangeTab={setActiveTab}
                   hasShopUpgrade={hasAffordableShopItem}
-                  hasRankChange={rankDelta.startsWith('▲')}
+                  hasRankChange={rankDelta?.startsWith('▲') ?? false}
                 />
               }
               overlays={

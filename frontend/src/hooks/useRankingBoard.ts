@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuthSession } from '../api/ApiProvider';
 import { errorMessage } from '../api/errors';
 import { selectByMode } from '../api/mode';
-import { useRankingPages, type RankingKind, type RankingPageByKind } from '../api/rankings';
+import { formatRankChange, useRankingPages, type RankingKind, type RankingPageByKind } from '../api/rankings';
 import { useMyInfo, type MyInfo } from '../api/users';
 import { getMockRankings } from '../data/mockRankings';
 import { REAL_UNIVERSITIES } from '../data/universitiesData';
@@ -28,7 +28,7 @@ export interface RankingBoardRow {
   name: string;
   subtitle: string;
   score: number;
-  /** "▲2", "▼1" or "-" from the mock. null in API mode: the backend has no rank change yet (plan D-3). */
+  /** "▲2", "▼1" or "-". API mode: the server's rankChange against 00:00 KST; null hides the badge. */
   change: string | null;
   firstSyllable: string;
   badgeColor: string;
@@ -102,10 +102,10 @@ const SCHOOL_BY_ID = new Map(REAL_UNIVERSITIES.map((school) => [school.id as num
 const DEPT_COLOR = '#2563eb';
 const PERSON_COLOR = '#0284c7';
 
-function schoolRow(id: number, rank: number, name: string, score: number, logoUrl: string | null, isMine: boolean): RankingBoardRow {
+function schoolRow(id: number, rank: number, name: string, score: number, change: string | null, logoUrl: string | null, isMine: boolean): RankingBoardRow {
   const known = SCHOOL_BY_ID.get(id);
   return {
-    key: `school:${id}`, rank, name, score, change: null, isMine,
+    key: `school:${id}`, rank, name, score, change, isMine,
     subtitle: known ? `${known.region} · ${known.city}` : '',
     firstSyllable: known?.firstSyllable ?? name.slice(0, 1), badgeColor: known?.badgeColor ?? DEPT_COLOR,
     image: { kind: 'url', url: logoUrl, defaultUrl: SCHOOL_LOGO_ASSETS[id as SchoolId] },
@@ -122,18 +122,18 @@ export function toApiRows<K extends RankingKind>(kind: K, pages: readonly Rankin
       let row: RankingBoardRow;
       if (kind === 'school') {
         const school = item as UniversityItem;
-        row = schoolRow(school.universityId, school.rank, school.name, school.totalScore, school.logoUrl, school.universityId === me?.university.id);
+        row = schoolRow(school.universityId, school.rank, school.name, school.totalScore, formatRankChange(school.rankChange), school.logoUrl, school.universityId === me?.university.id);
       } else if (kind === 'dept') {
         const dept = item as DepartmentItem;
         row = {
-          key: `dept:${dept.departmentId}`, rank: dept.rank, name: dept.name, subtitle: schoolName, score: dept.totalScore, change: null,
+          key: `dept:${dept.departmentId}`, rank: dept.rank, name: dept.name, subtitle: schoolName, score: dept.totalScore, change: formatRankChange(dept.rankChange),
           firstSyllable: dept.name.slice(0, 1), badgeColor: DEPT_COLOR, isMine: dept.departmentId === me?.department.id,
           image: { kind: 'url', url: dept.logoUrl },
         };
       } else {
         const user = item as UserItem;
         row = {
-          key: `personal:${user.userId}`, rank: user.rank, name: user.nickname, score: user.contribScore, change: null,
+          key: `personal:${user.userId}`, rank: user.rank, name: user.nickname, score: user.contribScore, change: formatRankChange(user.rankChange),
           subtitle: [schoolName, user.department?.name].filter(Boolean).join(' · '),
           firstSyllable: user.nickname.slice(0, 1), badgeColor: PERSON_COLOR, isMine: user.userId === me?.id,
           image: { kind: 'url', url: user.profileImageUrl },
@@ -160,7 +160,8 @@ export function toApiMine<K extends RankingKind>(kind: K, pages: readonly Rankin
     const mine = (first as UniversityRankingFirst).myUniversity;
     if (!mine) return null;
     const loaded = rows.find((row) => row.key === `school:${mine.universityId}`);
-    return { ...(loaded ?? schoolRow(mine.universityId, mine.rank, me.university.name, mine.totalScore, me.university.logoUrl, true)), rank: mine.rank, score: mine.totalScore, isMine: true };
+    return { ...(loaded ?? schoolRow(mine.universityId, mine.rank, me.university.name, mine.totalScore, null, me.university.logoUrl, true)),
+      rank: mine.rank, score: mine.totalScore, change: formatRankChange(mine.rankChange), isMine: true };
   }
   if (kind === 'dept') {
     const mine = (first as DepartmentRankingFirst).myDepartment;
@@ -169,7 +170,7 @@ export function toApiMine<K extends RankingKind>(kind: K, pages: readonly Rankin
     return {
       ...(loaded ?? { key: `dept:${mine.departmentId}`, name: me.department.name, subtitle: me.university.name, change: null,
         firstSyllable: me.department.name.slice(0, 1), badgeColor: DEPT_COLOR, image: { kind: 'url', url: null } }),
-      rank: mine.rank, score: mine.totalScore, isMine: true,
+      rank: mine.rank, score: mine.totalScore, change: formatRankChange(mine.rankChange), isMine: true,
     };
   }
   const mine = (first as UserRankingFirst).me;
@@ -178,7 +179,7 @@ export function toApiMine<K extends RankingKind>(kind: K, pages: readonly Rankin
   return {
     ...(loaded ?? { key: `personal:${me.id}`, name: me.nickname, subtitle: `${me.university.name} · ${me.department.name}`, change: null,
       firstSyllable: me.nickname.slice(0, 1), badgeColor: PERSON_COLOR, image: { kind: 'url', url: me.profileImageUrl } }),
-    rank: mine.rank, score: mine.contribScore, isMine: true,
+    rank: mine.rank, score: mine.contribScore, change: formatRankChange(mine.rankChange), isMine: true,
   };
 }
 type UniversityRankingFirst = RankingPageByKind['school'];

@@ -5,6 +5,16 @@ import type { RankingBoard, RankingBoardRow, RankingTab } from '../hooks/useRank
 import { ImageFallback, SharedImage } from './SharedImage.tsx';
 import { LoadNotice } from './LoadNotice';
 
+export type RankTrend = 'up' | 'down' | 'same';
+/** ▲ up, ▼ down, anything else ("-") unchanged. The server's rankChange can be a fall (SCRUM-184). */
+export const rankTrend = (delta: string): RankTrend => (delta.startsWith('▲') ? 'up' : delta.startsWith('▼') ? 'down' : 'same');
+/** Badge colors for every rank-change badge: list rows, the pinned own row and the main HUD. */
+export const RANK_TREND_TONE: Record<RankTrend, string> = {
+  up: 'text-[#ffffff] bg-[#22c55e]',
+  down: 'text-[#ffffff] bg-[#fb7185]',
+  same: 'text-[#261608] bg-[#faecc7]',
+};
+
 /** The mock's demo image store, or the server's URL with the bundled school logo and the first syllable as fallbacks. */
 export const RankingRowImage: React.FC<{ row: RankingBoardRow; className?: string }> = ({ row, className }) =>
   row.image.kind === 'shared' ? (

@@ -4,6 +4,7 @@ import com.back.nbe1214finalsour.domain.university.dto.UniversityRankingResponse
 import com.back.nbe1214finalsour.domain.university.entity.University;
 import com.back.nbe1214finalsour.domain.university.repository.UniversityRepository;
 import com.back.nbe1214finalsour.global.redis.RedisHandler;
+import com.back.nbe1214finalsour.global.redis.RedisKey;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -19,6 +20,7 @@ public class UniversityRankingQueryService {
 
     private final UniversityRankingService rankingService;
     private final UniversityRepository universityRepository;
+    private final RankSnapshotService rankSnapshotService;
 
     public UniversityRankingResponse getUniversities(
             int page, int size, Long myUniversityId
@@ -41,6 +43,14 @@ public class UniversityRankingQueryService {
                                 University::getId,
                                 Function.identity()
                         ));
+
+        // 어제 순위 (페이지 학교 + 내 학교, Redis 왕복 3회)
+        List<Long> compared = new ArrayList<>(ids);
+        if (myUniversityId != null) {
+            compared.add(myUniversityId);
+        }
+        Map<Long, Long> previousRanks = rankSnapshotService.previousRanks(
+                RedisKey.RANK_UNIV_SNAPSHOT.of(), compared, List.of());
 
         // 3. Redis 순서를 유지하면서 응답 목록을 만든다.
         List<UniversityRankingResponse.Item> items =
@@ -76,7 +86,8 @@ public class UniversityRankingQueryService {
                     university.getId(),
                     university.getName(),
                     university.getLogoUrl(),
-                    (long) entry.score()
+                    (long) entry.score(),
+                    RankSnapshotService.change(previousRanks, university.getId(), rank)
             ));
         }
 
@@ -95,7 +106,8 @@ public class UniversityRankingQueryService {
                 myUniversity = new UniversityRankingResponse.MyUniversity(
                         myRank.getAsLong(),
                         myUniversityId,
-                        (long) myScore.getAsDouble()
+                        (long) myScore.getAsDouble(),
+                        RankSnapshotService.change(previousRanks, myUniversityId, myRank.getAsLong())
                 );
             }
         }

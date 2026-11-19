@@ -54,6 +54,14 @@ public enum RedisKey {
     SCORE_USER_ATTACK("score:user:attack", Structure.HASH, ValueFormat.PLAIN),
     /** 회원 부정행위 횟수 순위. member: userId, score: 부정행위 횟수 */
     RANK_USER_ABUSE("rank:user:abuse:%s", Structure.ZSET, ValueFormat.PLAIN),
+    /** 매일 00:00 KST의 학교 순위 복사본 (순위 변동 기준). RANK_UNIV와 같은 형식 */
+    RANK_UNIV_SNAPSHOT("rank:snapshot:univ", Structure.ZSET, ValueFormat.PLAIN),
+    /** 매일 00:00 KST의 학과 순위 복사본. RANK_DEPT와 같은 형식 */
+    RANK_DEPT_SNAPSHOT("rank:snapshot:univ:%s:dept", Structure.ZSET, ValueFormat.PLAIN),
+    /** 매일 00:00 KST의 개인 순위 복사본. RANK_USER와 같은 형식 */
+    RANK_USER_SNAPSHOT("rank:snapshot:univ:%s:user", Structure.ZSET, ValueFormat.PLAIN),
+    /** 마지막으로 순위 복사본을 다 만든 날짜(KST, yyyy-MM-dd). 오늘 날짜일 때만 변동을 계산한다 */
+    RANK_SNAPSHOT_DATE("rank:snapshot:date", Structure.STRING, ValueFormat.PLAIN),
 
     // 변경 추적 (Batch)
     DIRTY_UNIV("dirty:univ", Structure.SET, ValueFormat.PLAIN),
@@ -121,6 +129,8 @@ public enum RedisKey {
     // 락
     /** 점수 1분 배치 락 */
     LOCK_SCORE_FLUSH("lock:score-flush", Structure.STRING, ValueFormat.PLAIN),
+    /** 순위 복사본 만들기 락. 여러 서버가 같은 날 한 번만 만든다 */
+    LOCK_RANK_SNAPSHOT("lock:rank-snapshot", Structure.STRING, ValueFormat.PLAIN),
     ;
 
     private final String pattern;

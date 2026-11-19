@@ -1,8 +1,9 @@
 // Rankings (SCRUM-161): GET /api/v1/rankings/universities[/{id}/departments, /{id}/users] (RankingController.java).
 // Public endpoints; with a session the server adds the caller's own row (myUniversity, myDepartment, me).
-// Ties share a rank. There is no rank-change field (plan D-3), so the screens hide the change badge in API mode.
+// Ties share a rank. `rankChange` (SCRUM-184) is yesterday's rank − today's, against the server's 00:00 KST copy of the
+// rankings: positive is up, null when there is nothing to compare (new member, or no copy for today).
 
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useApiClient } from './ApiProvider';
 import type { ApiClient } from './client';
 
@@ -10,6 +11,8 @@ import type { ApiClient } from './client';
 export const RANKING_PAGE_SIZE = 20;
 /** The screens say "5초마다 갱신". Paused while the tab is in the background (TanStack Query default). */
 export const RANKING_REFRESH_MS = 5_000;
+/** The main screen's own-school rank. Ranks move with the 1-minute score batch, so a slower poll is enough. */
+export const MY_SCHOOL_RANK_REFRESH_MS = 30_000;
 
 interface RankingPage<Item> {
   items: Item[];
@@ -21,24 +24,32 @@ interface RankingPage<Item> {
 
 /** UniversityRankingResponse. */
 export interface UniversityRankingPage extends RankingPage<{
-  rank: number; universityId: number; name: string; logoUrl: string | null; totalScore: number;
+  rank: number; universityId: number; name: string; logoUrl: string | null; totalScore: number; rankChange: number | null;
 }> {
-  myUniversity: { rank: number; universityId: number; totalScore: number } | null;
+  myUniversity: { rank: number; universityId: number; totalScore: number; rankChange: number | null } | null;
 }
 
 /** DepartmentRankingResponse. `myDepartment` is only set when the school is the caller's own. */
 export interface DepartmentRankingPage extends RankingPage<{
-  rank: number; departmentId: number; name: string; logoUrl: string | null; totalScore: number;
+  rank: number; departmentId: number; name: string; logoUrl: string | null; totalScore: number; rankChange: number | null;
 }> {
-  myDepartment: { rank: number; departmentId: number; totalScore: number } | null;
+  myDepartment: { rank: number; departmentId: number; totalScore: number; rankChange: number | null } | null;
 }
 
 /** UserRankingResponse. Private members are left out by the server; `me` is only set at the caller's own school. */
 export interface UserRankingPage extends RankingPage<{
   rank: number; userId: number; nickname: string; profileImageUrl: string | null;
-  department: { id: number; name: string } | null; contribScore: number;
+  department: { id: number; name: string } | null; contribScore: number; rankChange: number | null;
 }> {
-  me: { rank: number; contribScore: number } | null;
+  me: { rank: number; contribScore: number; rankChange: number | null } | null;
+}
+
+/** The badge text the screens already draw: ▲n up, ▼n down, - unchanged; null hides the badge. */
+export function formatRankChange(change: number | null | undefined): string | null {
+  if (change === null || change === undefined) return null;
+  if (change > 0) return `▲${change}`;
+  if (change < 0) return `▼${-change}`;
+  return '-';
 }
 
 export type RankingKind = 'school' | 'dept' | 'personal';
@@ -68,6 +79,7 @@ export const rankingKeys = {
   /** The viewer is part of the key: the caller's own row depends on who is signed in. */
   list: (kind: RankingKind, universityId: number | null, viewerId: number | null) =>
     [...rankingKeys.all, kind, universityId, viewerId ?? 'guest'] as const,
+  mySchool: (viewerId: number) => [...rankingKeys.all, 'my-school', viewerId] as const,
 };
 
 /**
@@ -87,5 +99,17 @@ export function useRankingPages<K extends RankingKind>(
     getNextPageParam: (last: RankingPageByKind[K]) => (last.hasNext ? last.page + 1 : undefined),
     enabled: enabled && (kind === 'school' || universityId !== null),
     refetchInterval: RANKING_REFRESH_MS,
+  });
+}
+
+/** The caller's own school row (`myUniversity`) from a one-row school page. Signed-in callers only. */
+export function useMySchoolRanking(viewerId: number | null) {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: rankingKeys.mySchool(viewerId ?? 0),
+    queryFn: ({ signal }) => getRankingPage(client, 'school', { page: 0, size: 1, signal }),
+    select: (page: UniversityRankingPage) => page.myUniversity,
+    enabled: viewerId !== null,
+    refetchInterval: MY_SCHOOL_RANK_REFRESH_MS,
   });
 }
