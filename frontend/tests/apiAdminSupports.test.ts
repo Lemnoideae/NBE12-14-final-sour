@@ -123,12 +123,12 @@ async function openDetail(title: string) {
 const fill = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label, { exact: false }), { target: { value } });
 const submit = () => fireEvent.click(screen.getByRole('button', { name: '답변 등록' }));
 
-test('문의 처리 메뉴만 열리고, 목록은 답변 대기부터 20개씩 최신순으로 보인다', async () => {
+test('문의 처리 메뉴가 열리고, 목록은 답변 대기부터 20개씩 최신순으로 보인다', async () => {
   const f = mount({ rows: [support(1), support(2), support(3, { status: 'ANSWERED', answer: { title: '답', content: '완료' } })] });
   await screen.findByTestId('admin-pending-count');
   const menu = screen.getByRole('navigation', { name: '관리자 메뉴' });
   const enabled = [...menu.querySelectorAll('button')].filter((button) => !button.disabled).map((button) => button.firstChild?.textContent);
-  assert.deepEqual(enabled, ['문의 처리']);
+  assert.deepEqual(enabled, ['문의 처리', '회원 정지·해제', '어뷰징 순위'], '테스트 도구(SCRUM-175)만 준비 중');
   await openSupports();
   await waitFor(() => assert.deepEqual(rowTitles(), ['문의 2', '문의 1']));
   assert.deepEqual(lists(f.calls), ['status=RECEIVED&page=0&size=20']);

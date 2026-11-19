@@ -26,6 +26,7 @@ export const adminKeys = {
   pendingSupports: (adminId: number) => ['admin', adminId, 'supports', 'pending-count'] as const,
   supportList: (adminId: number, filter: AdminSupportFilter, page: number) => ['admin', adminId, 'supports', 'list', filter, page] as const,
   supportDetail: (adminId: number, supportId: number) => ['admin', adminId, 'supports', 'detail', supportId] as const,
+  abuseRankings: (adminId: number, page: number) => ['admin', adminId, 'abuse-rankings', page] as const,
 };
 
 /** AdminSupportListItem. `recipientEmail` is the decrypted address the answer mail goes to. */
@@ -168,5 +169,71 @@ export function useAnswerAdminSupport(adminId: number, supportId: number) {
       });
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: adminKeys.supports(adminId) }),
+  });
+}
+
+// Member status and abuse ranking (SCRUM-174, plan .agents/01-PLAN/261119-1054-scrum174_admin_users_abuse.md).
+
+/** What an admin may set (AdminUserStatusRequest). WITHDRAWN is refused with 400: only the member can leave. */
+export type AdminUserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
+export interface AdminUserStatusResponse {
+  userId: number;
+  status: AdminUserStatus;
+}
+export const USER_NOT_FOUND_CODE = 'USER_NOT_FOUND';
+
+/**
+ * Idempotent: the same status again is a 200 doing the same work. Suspending or banning revokes the member's refresh
+ * tokens and login session, so their access token is a 401 on the next call and logging in is 403 USER_SUSPENDED.
+ */
+export function changeUserStatus(client: ApiClient, userId: number, status: AdminUserStatus, signal?: AbortSignal): Promise<AdminUserStatusResponse> {
+  return client.request(`/admin/users/${userId}/status`, { method: 'PATCH', body: { status }, signal });
+}
+
+/** The member ID typed by an admin, or the reason it cannot be sent. Changing oneself is a 400 on the server too. */
+export function parseUserStatusTarget(input: string, adminId: number): { userId: number } | { problem: string } {
+  const text = input.trim();
+  if (!text) return { problem: '회원 ID를 입력해 주세요.' };
+  if (!/^\d+$/.test(text) || !Number.isSafeInteger(Number(text)) || Number(text) < 1) return { problem: '회원 ID는 1 이상의 정수로 입력해 주세요.' };
+  const userId = Number(text);
+  if (userId === adminId) return { problem: '내 계정의 상태는 바꿀 수 없어요.' };
+  return { userId };
+}
+
+export function useChangeUserStatus() {
+  const client = useApiClient();
+  return useMutation({
+    mutationFn: ({ userId, status }: { userId: number; status: AdminUserStatus }) => changeUserStatus(client, userId, status),
+    retry: false,
+  });
+}
+
+/** AbuseRankingResponse.AbuseRankingItem. `nickname` is null when the member row is gone. */
+export interface AbuseRankingItem {
+  rank: number;
+  userId: number;
+  nickname: string | null;
+  abuseCount: number;
+}
+/** AbuseRankingResponse: the last 3 days (today included, KST), most abuse first. */
+export interface AbuseRankingPage {
+  content: AbuseRankingItem[];
+  page: number;
+  size: number;
+  totalElements: number;
+  hasNext: boolean;
+}
+export const ABUSE_RANKING_PAGE_SIZE = 20;
+
+export function getAbuseRankings(client: ApiClient, page: number, signal?: AbortSignal): Promise<AbuseRankingPage> {
+  return client.get('/admin/abuse-rankings', { query: { page, size: ABUSE_RANKING_PAGE_SIZE }, signal });
+}
+
+export function useAbuseRankings(adminId: number, page: number) {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: adminKeys.abuseRankings(adminId, page),
+    queryFn: ({ signal }) => getAbuseRankings(client, page, signal),
+    staleTime: 0,
   });
 }
