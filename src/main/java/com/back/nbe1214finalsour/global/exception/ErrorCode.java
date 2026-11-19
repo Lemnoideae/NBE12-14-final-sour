@@ -100,6 +100,7 @@ public enum ErrorCode {
     MATCH_SCHEDULE_CONFLICT(HttpStatus.CONFLICT, "MATCH_SCHEDULE_CONFLICT", "이미 예약된 대결이 있는 연합입니다."),
     MATCH_INSUFFICIENT_TIME(HttpStatus.CONFLICT, "MATCH_INSUFFICIENT_TIME", "연합 만료 전 대결을 끝낼 시간이 부족합니다."),
     GUEST_ALREADY_LIKED(HttpStatus.CONFLICT, "GUEST_ALREADY_LIKED", "이미 좋아요를 눌렀습니다."),
+    GUEST_NOT_FOUND(HttpStatus.NOT_FOUND, "GUEST_NOT_FOUND", "방명록을 찾을 수 없습니다."),
     GUEST_OWN_UNIVERSITY(HttpStatus.BAD_REQUEST, "GUEST_OWN_UNIVERSITY", "자기 학교 방명록에는 작성할 수 없습니다."),
     GUEST_TOO_FREQUENT(HttpStatus.TOO_MANY_REQUESTS, "GUEST_TOO_FREQUENT", "방명록은 회원당 1분에 1개만 작성할 수 있습니다."),
 
