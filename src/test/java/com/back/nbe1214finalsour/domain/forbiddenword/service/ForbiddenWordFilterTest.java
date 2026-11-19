@@ -54,6 +54,14 @@ class ForbiddenWordFilterTest {
     }
 
     @Test
+    @DisplayName("기존 채팅 **는 유지하고 방명록은 ***로 가린다")
+    void customReplacementForGuestBook() {
+        ForbiddenWordFilter filter = filter("바보\n");
+        assertThat(filter.mask("바보")).isEqualTo("**");
+        assertThat(filter.mask("바보", "***")).isEqualTo("***");
+    }
+
+    @Test
     @DisplayName("목록이 비면 본문을 그대로 둔다")
     void emptyList() {
         assertThat(filter("# 없음\n").mask("안녕")).isEqualTo("안녕");

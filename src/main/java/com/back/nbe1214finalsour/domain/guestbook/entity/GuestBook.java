@@ -11,7 +11,6 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** V1__init.sql의 guest_book 테이블. 목록 조회용 기본 매핑. */
 @Entity
 @Table(name = "guest_book")
 @Getter
@@ -33,4 +32,14 @@ public class GuestBook extends BaseTimeEntity {
 
     @Column(name = "like_count", nullable = false)
     private int likeCount;
+
+    /** 작성 시 좋아요 수는 0부터 시작한다. */
+    public static GuestBook create(Long userId, Long universityId, String content) {
+        GuestBook guestBook = new GuestBook();
+        guestBook.userId = userId;
+        guestBook.universityId = universityId;
+        guestBook.content = content;
+        guestBook.likeCount = 0;
+        return guestBook;
+    }
 }

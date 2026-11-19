@@ -45,10 +45,17 @@ public class ForbiddenWordFilter {
     }
 
     public String mask(String text) {
+        return mask(text, MASK);
+    }
+
+    /**
+     * 대체 문자를 지정한다. 기존 채팅은 **, 방명록은 명세에 따라 ***를 사용한다.
+     */
+    public String mask(String text, String replacement) {
         if (this.pattern == null) {
             return text;
         }
-        return this.pattern.matcher(text).replaceAll(Matcher.quoteReplacement(MASK));
+        return this.pattern.matcher(text).replaceAll(Matcher.quoteReplacement(replacement));
     }
 
     private static List<String> read(Resource resource) {
