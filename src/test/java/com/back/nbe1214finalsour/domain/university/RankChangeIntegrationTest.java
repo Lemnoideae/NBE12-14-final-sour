@@ -106,6 +106,36 @@ class RankChangeIntegrationTest {
     }
 
     @Test
+    @DisplayName("학교 상세(방문 화면)도 순위 화면과 같은 변동을 내려준다 (SCRUM-189)")
+    void universityDetailRankChange() throws Exception {
+        University a = university("변동상세A대학교", BASE + 100);
+        University b = university("변동상세B대학교", BASE + 200);
+        rankSnapshotService.snapshotIfMissing();
+
+        // 오늘: A 1위(▲1), B 2위(▼1), 복사본 뒤에 생긴 C 3위(null)
+        redis.opsForZSet().add(RedisKey.RANK_UNIV.of(), a.getId().toString(), BASE + 300);
+        University c = university("변동상세C대학교", BASE + 50);
+
+        mockMvc.perform(get("/api/v1/universities/{id}", a.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.rank").value(1))
+                .andExpect(jsonPath("$.data.rankChange").value(1));
+        mockMvc.perform(get("/api/v1/universities/{id}", b.getId()))
+                .andExpect(jsonPath("$.data.rank").value(2))
+                .andExpect(jsonPath("$.data.rankChange").value(-1));
+        mockMvc.perform(get("/api/v1/universities/{id}", c.getId()))
+                .andExpect(jsonPath("$.data.rank").value(3))
+                .andExpect(jsonPath("$.data.rankChange").isEmpty());
+
+        // 자정 실행을 놓친 날은 순위 화면처럼 숨긴다
+        redis.opsForValue().set(RedisKey.RANK_SNAPSHOT_DATE.of(),
+                LocalDate.now(ClockConfig.KST).minusDays(1).toString());
+        mockMvc.perform(get("/api/v1/universities/{id}", a.getId()))
+                .andExpect(jsonPath("$.data.rank").value(1))
+                .andExpect(jsonPath("$.data.rankChange").isEmpty());
+    }
+
+    @Test
     @DisplayName("기록된 날짜가 오늘이 아니면(자정 실행을 놓친 날) 변동을 숨긴다")
     void staleSnapshotHidesChange() throws Exception {
         University a = university("변동테스트E대학교", BASE + 100);

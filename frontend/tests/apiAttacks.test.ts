@@ -46,7 +46,7 @@ const ME: MyInfo = {
   clicker: { level: 1, clickPower: 10, nextLevelRequiredScore: 100 }, totalContribScore: 100, totalAttackScore: 0,
 };
 const DETAIL: UniversityDetail = { id: SCHOOL_ID.pusan, name: '부산대학교', logoUrl: null, totalScore: 1000, rank: 2, memberCount: 42,
-  topDepartments: [], topContributors: [], isMyUniversity: false, isMyAlly: false };
+  topDepartments: [], topContributors: [], isMyUniversity: false, isMyAlly: false, rankChange: null };
 const ANSWER: AttackResponse = { acceptedClicks: 4, damage: 12, multiplier: 1, isRival: false,
   targetUniversity: { id: DETAIL.id, name: DETAIL.name, totalScore: 988, rank: 3 }, myAttackScore: 12 };
 const ASSIST: AssistResponse = { acceptedClicks: 4, assistScore: 12, targetUniversity: { id: DETAIL.id, name: DETAIL.name, totalScore: 1012, rank: 1 },

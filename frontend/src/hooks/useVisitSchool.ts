@@ -5,6 +5,7 @@
 import { useAuthSession } from '../api/ApiProvider';
 import { errorMessage, isApiError } from '../api/errors';
 import { selectByMode } from '../api/mode';
+import { formatRankChange } from '../api/rankings';
 import { useUniversityDetail, type UniversityDetail } from '../api/universities';
 import { useMyInfo } from '../api/users';
 import type { SchoolView } from '../data/schoolDirectory';
@@ -14,7 +15,7 @@ import { REAL_UNIVERSITIES } from '../data/universitiesData';
 import { getCampusStage } from '../utils/gameModel';
 import { useVisitedSchool } from '../components/VisitingParts';
 
-/** A school row as the visit screen shows it: the server may have no rank yet, and it has no rank change. */
+/** A school row as the visit screen shows it: the server may have no rank yet, and then no rank change either. */
 export type VisitSchoolView = Omit<SchoolView, 'rank' | 'rankChange'> & { rank: number | null; rankChange: string | null };
 
 /** Server-only values of the info sheet. Null in the mock, which has no per-school members or contributors. */
@@ -61,7 +62,7 @@ export function toVisitSchoolView(detail: UniversityDetail): VisitSchoolView | u
     name: detail.name,
     score: detail.totalScore,
     rank: detail.rank,
-    rankChange: null,
+    rankChange: formatRankChange(detail.rankChange),
     campusLevel: getCampusStage(detail.totalScore).level,
     isMySchool: detail.isMyUniversity,
     isTop3: detail.rank !== null && detail.rank <= 3,

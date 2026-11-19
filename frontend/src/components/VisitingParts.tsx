@@ -30,7 +30,7 @@ export function rankMedal(rank: number | null): string {
   return (rank !== null && ['🥇', '🥈', '🥉'][rank - 1]) || '🏫';
 }
 
-/** "3위 (▲2)"; a school without a server rank reads "순위 없음", and the API has no rank change. */
+/** "3위 (▲2)"; a school without a server rank reads "순위 없음". Null hides the change (no copy of today yet). */
 export function formatVisitRank(rank: number | null, rankChange: string | null): string {
   const base = rank === null ? '순위 없음' : `${rank}위`;
   return rankChange === null ? base : `${base} (${rankChange})`;
