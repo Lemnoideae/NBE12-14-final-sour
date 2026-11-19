@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { SchoolId } from './data/schoolIds';
 import { TopHUD } from './components/TopHUD';
 import { CampusView } from './components/CampusView';
+import { LibraryBonusControl } from './components/LibraryBonusControl';
 import { PhoneShellVariantContext } from './components/PhoneShell';
 import { GameScreenLayout } from './components/GameScreenLayout';
 import { useDeviceMode } from './hooks/useDeviceMode';
@@ -844,7 +845,8 @@ function AppContent() {
                   onOpenMap={() => setActiveTab('map')}
                 />
               }
-              previewBar={
+              previewBar={<>
+                {activeTab === 'campus' && campusClicks.library && <LibraryBonusControl control={campusClicks.library} />}
                 <ChatPreviewBar
                   latestSender="새벽코딩러"
                   latestMessage="도서관 앞 클릭 모임 ㄱㄱ"
@@ -854,7 +856,7 @@ function AppContent() {
                     soundManager.playTabSound();
                   }}
                 />
-              }
+              </>}
               nav={
                 <BottomNav
                   activeTab={activeTab}
