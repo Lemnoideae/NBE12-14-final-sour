@@ -119,7 +119,7 @@ export function createUniversityChat(api: ApiClient, universityId: number, conne
     send(input: string): boolean {
       const validated = validateChatContent(input);
       if ('problem' in validated) { patch({ error: validated.problem }); return false; }
-      if (!running || state.connection !== 'connected' || state.syncing) { patch({ error: '채팅이 연결되고 이력을 확인한 뒤 보내 주세요.' }); return false; }
+      if (!running || state.connection !== 'connected' || !state.initialized || state.syncing) { patch({ error: '채팅이 연결되고 이력을 확인한 뒤 보내 주세요.' }); return false; }
       patch({ error: null });
       if (!connection?.send(validated.content)) { if (!state.error) patch({ error: '메시지를 보내지 못했어요. 연결을 확인해 주세요.' }); return false; }
       // Do not echo the unmasked draft or replay an uncertain send on reconnect. Only a server message creates a bubble.
