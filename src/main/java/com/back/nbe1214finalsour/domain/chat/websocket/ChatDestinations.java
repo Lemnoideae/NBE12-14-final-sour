@@ -7,6 +7,8 @@ public final class ChatDestinations {
 
     /** 학교 방 구독 경로의 앞부분. 뒤에 학교 ID가 붙는다 */
     public static final String UNIVERSITY_TOPIC_PREFIX = "/topic/chat/universities/";
+    /** 연합 방 구독 경로의 앞부분. 뒤에 연합 ID가 붙는다 */
+    public static final String ALLIANCE_TOPIC_PREFIX = "/topic/chat/alliances/";
     /** 나에게만 오는 에러 */
     public static final String ERROR_QUEUE = "/user/queue/errors";
     /** 클라이언트가 보내는(발행) 경로의 앞부분 */
@@ -17,5 +19,9 @@ public final class ChatDestinations {
 
     public static String university(long universityId) {
         return UNIVERSITY_TOPIC_PREFIX + universityId;
+    }
+
+    public static String alliance(long allianceId) {
+        return ALLIANCE_TOPIC_PREFIX + allianceId;
     }
 }

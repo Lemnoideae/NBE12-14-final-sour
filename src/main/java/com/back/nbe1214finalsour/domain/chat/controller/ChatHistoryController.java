@@ -40,4 +40,15 @@ public class ChatHistoryController {
     ) {
         return ApiResponse.ok(this.chatHistoryService.getUniversityMessages(authUser, universityId, cursor, size));
     }
+
+    /** 연합 채팅방의 메시지. 규칙은 학교 방과 같고, 지금 그 연합에 속한 학교의 회원만 읽는다 (SCRUM-182) */
+    @GetMapping("/alliances/{allianceId}/messages")
+    public ApiResponse<ChatMessagePageResponse> getAllianceMessages(
+            @PathVariable long allianceId,
+            @RequestParam(required = false) @Pattern(regexp = ULID_PATTERN) @Nullable String cursor,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(ChatHistoryService.MAX_PAGE_SIZE) int size,
+            @AuthenticationPrincipal AuthUser authUser
+    ) {
+        return ApiResponse.ok(this.chatHistoryService.getAllianceMessages(authUser, allianceId, cursor, size));
+    }
 }

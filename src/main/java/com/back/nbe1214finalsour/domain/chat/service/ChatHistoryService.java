@@ -19,6 +19,7 @@ public class ChatHistoryService {
     public static final int MAX_PAGE_SIZE = 20;
 
     private final ChatMessageRepository chatMessageRepository;
+    private final AllianceChatMembership allianceChatMembership;
 
     /**
      * 소속 학교 방만 읽을 수 있다. 소속은 구독 권한과 같이 토큰의 학교 ID로 판단한다.
@@ -32,5 +33,17 @@ public class ChatHistoryService {
         }
         return ChatMessagePageResponse.from(
                 this.chatMessageRepository.findLatest(ChatRoomId.university(universityId), cursor, size));
+    }
+
+    /**
+     * 지금 그 연합에 속한 학교의 회원만 읽을 수 있다. 탈퇴·만료 뒤에는 이전 메시지도 읽지 못한다 (D3).
+     *
+     * @throws BusinessException {@code CHAT_NOT_MEMBER}
+     */
+    public ChatMessagePageResponse getAllianceMessages(AuthUser authUser, long allianceId, @Nullable String cursor,
+                                                       int size) {
+        this.allianceChatMembership.requireMember(authUser, allianceId);
+        return ChatMessagePageResponse.from(
+                this.chatMessageRepository.findLatest(ChatRoomId.alliance(allianceId), cursor, size));
     }
 }

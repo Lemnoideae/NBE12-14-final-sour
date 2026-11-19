@@ -17,8 +17,8 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Redis 채널 {@code chat:univ:*}(패턴 구독, D5)로 온 메시지를 이 서버의 STOMP 구독자에게 보낸다
- * ({@code /topic/chat/universities/{학교 ID}}).
+ * Redis 채널 {@code chat:univ:*}·{@code chat:alliance:*}(패턴 구독, D5)로 온 메시지를 이 서버의 STOMP 구독자에게 보낸다
+ * ({@code /topic/chat/universities/{학교 ID}}, {@code /topic/chat/alliances/{연합 ID}}).
  *
  * <p>채널 이름이나 본문이 형식에 맞지 않으면 보내지 않고 경고 로그만 남긴다. 다른 메시지 처리에는 영향이 없다.
  */
@@ -28,9 +28,11 @@ public class ChatRedisSubscriber implements MessageListener {
 
     /** {@link RedisKey#CHAT_UNIV_CHANNEL}({@code chat:univ:%s})의 모든 학교 채널 */
     public static final String UNIVERSITY_CHANNEL_PATTERN = RedisKey.CHAT_UNIV_CHANNEL.pattern().formatted("*");
+    /** {@link RedisKey#CHAT_ALLIANCE_CHANNEL}({@code chat:alliance:%s})의 모든 연합 채널 */
+    public static final String ALLIANCE_CHANNEL_PATTERN = RedisKey.CHAT_ALLIANCE_CHANNEL.pattern().formatted("*");
 
-    private static final Pattern UNIVERSITY_CHANNEL = Pattern.compile(
-            "^" + Pattern.quote(RedisKey.CHAT_UNIV_CHANNEL.pattern().formatted("")) + "(\\d{1,18})$");
+    private static final Pattern UNIVERSITY_CHANNEL = channel(RedisKey.CHAT_UNIV_CHANNEL);
+    private static final Pattern ALLIANCE_CHANNEL = channel(RedisKey.CHAT_ALLIANCE_CHANNEL);
 
     private final SimpMessagingTemplate messagingTemplate;
     private final JsonMapper jsonMapper;
@@ -43,12 +45,22 @@ public class ChatRedisSubscriber implements MessageListener {
     @Override
     public void onMessage(Message message, byte @Nullable [] pattern) {
         String channel = new String(message.getChannel(), StandardCharsets.UTF_8);
-        Matcher matcher = UNIVERSITY_CHANNEL.matcher(channel);
-        if (!matcher.matches()) {
+        String roomId;
+        String destination;
+        Matcher university = UNIVERSITY_CHANNEL.matcher(channel);
+        Matcher alliance = ALLIANCE_CHANNEL.matcher(channel);
+        if (university.matches()) {
+            long universityId = Long.parseLong(university.group(1));
+            roomId = ChatRoomId.university(universityId);
+            destination = ChatDestinations.university(universityId);
+        } else if (alliance.matches()) {
+            long allianceId = Long.parseLong(alliance.group(1));
+            roomId = ChatRoomId.alliance(allianceId);
+            destination = ChatDestinations.alliance(allianceId);
+        } else {
             log.warn("형식에 맞지 않는 채팅 채널이라 버림 channel={}", channel);
             return;
         }
-        long universityId = Long.parseLong(matcher.group(1));
 
         ChatMessageResponse response;
         try {
@@ -58,12 +70,16 @@ public class ChatRedisSubscriber implements MessageListener {
             return;
         }
         // 다른 방의 메시지가 잘못 발행돼도 이 방 구독자에게 보내지 않는다
-        if (!ChatRoomId.university(universityId).equals(response.roomId())) {
+        if (!roomId.equals(response.roomId())) {
             log.warn("채널과 방이 달라 버림 channel={} roomId={} messageId={}", channel, response.roomId(),
                     response.messageId());
             return;
         }
 
-        this.messagingTemplate.convertAndSend(ChatDestinations.university(universityId), response);
+        this.messagingTemplate.convertAndSend(destination, response);
+    }
+
+    private static Pattern channel(RedisKey key) {
+        return Pattern.compile("^" + Pattern.quote(key.pattern().formatted("")) + "(\\d{1,18})$");
     }
 }
