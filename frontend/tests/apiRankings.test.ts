@@ -290,10 +290,9 @@ test('색 센서: 순위 변동 배지는 고정 초록 대신 rankTrend 색을 
       assert.doesNotMatch(block, /bg-\[#22c55e\]/, `${file}: 변동 배지에 RANK_TREND_TONE[rankTrend(...)]을 쓰세요`);
       assert.match(block, /RANK_TREND_TONE\[rankTrend\(/, `${file}: 변동 배지에 RANK_TREND_TONE[rankTrend(...)]을 쓰세요`);
     }
-    // SCRUM-190: the comparison mocks once hard-coded a green own-row badge and a "▼1" pink cut-off row.
-    if (MOCK_SCREENS.includes(file)) {
-      assert.doesNotMatch(source, /bg-\[#(?:22c55e|fb7185)\]/, `${file}: 변동 배지 색을 직접 쓰지 말고 RANK_TREND_TONE[rankTrend(...)]을 쓰세요`);
-    }
+    // SCRUM-190: the comparison mocks once hard-coded a green own-row badge and a "▼1" pink cut-off row, and list rows
+    // repeated the colors in ternaries. The trend colors live only in RANK_TREND_TONE.
+    assert.doesNotMatch(source, /bg-\[#(?:22c55e|fb7185)\]/, `${file}: 변동 배지 색을 직접 쓰지 말고 RANK_TREND_TONE[rankTrend(...)]을 쓰세요`);
   }
 });
 
