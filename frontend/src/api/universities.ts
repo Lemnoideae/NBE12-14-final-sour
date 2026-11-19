@@ -36,7 +36,7 @@ export function getDepartments(client: ApiClient, universityId: number, { signal
 /**
  * UniversityDetailResponse of GET /api/v1/universities/{id} (public; SCRUM-163). `rank` is null while the school has
  * no Redis ranking (the score then comes from the database). At most three departments and contributors; ties share a
- * rank. `isMyUniversity` is false when signed out.
+ * rank. `isMyUniversity` and `isMyAlly` (same current alliance, SCRUM-187) are false when signed out.
  */
 export interface UniversityDetail {
   id: number;
@@ -48,6 +48,7 @@ export interface UniversityDetail {
   topDepartments: Array<{ rank: number; id: number; name: string; totalScore: number }>;
   topContributors: Array<{ rank: number; userId: number; nickname: string; contribScore: number }>;
   isMyUniversity: boolean;
+  isMyAlly: boolean;
 }
 
 /** Same as the rankings: the visited school's score keeps moving while someone watches. */

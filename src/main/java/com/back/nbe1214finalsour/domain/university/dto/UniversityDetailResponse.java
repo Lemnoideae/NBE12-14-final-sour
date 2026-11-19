@@ -11,7 +11,9 @@ public record UniversityDetailResponse(
         Long memberCount,
         List<TopDepartment> topDepartments,
         List<TopContributor> topContributors,
-        boolean isMyUniversity
+        boolean isMyUniversity,
+        // 보는 사람의 학교와 지금 같은 연합인지. 비로그인·내 학교는 false. SCRUM-187 연합 지원
+        boolean isMyAlly
 ) {
     // 해당 학교에서 점수가 높은 학과 정보
     public record TopDepartment(

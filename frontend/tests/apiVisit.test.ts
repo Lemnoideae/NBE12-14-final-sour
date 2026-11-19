@@ -46,6 +46,7 @@ const PUSAN: UniversityDetail = {
   topDepartments: [{ rank: 1, id: 31, name: '기계공학부', totalScore: 9000 }, { rank: 2, id: 32, name: '경영학과', totalScore: 3000 }],
   topContributors: [{ rank: 1, userId: 501, nickname: '부산1등', contribScore: 800 }, { rank: 1, userId: 502, nickname: '부산공동1등', contribScore: 800 }],
   isMyUniversity: false,
+  isMyAlly: false,
 };
 const ok = (data: unknown) => new Response(JSON.stringify({ code: 'SUCCESS', message: '성공', data }), { status: 200 });
 const fail = (status: number, code: string, message: string) => new Response(JSON.stringify({ code, message, data: null }), { status });
@@ -162,7 +163,7 @@ test('계약 센서: 학교 상세 DTO·경로가 백엔드와 같고, 방문 �
   const dto = readFileSync(new URL('dto/UniversityDetailResponse.java', root), 'utf8');
   const components = (body: string) => [...body.matchAll(/^\s+(?:Long|long|String|boolean|List<[\w.]+>)\s+(\w+)/gm)].map((match) => match[1]);
   const [outer, departments, contributors] = dto.split(/public record \w+\(/).slice(1).map((part) => components(part.split(')')[0]));
-  assert.deepEqual(outer, ['id', 'name', 'logoUrl', 'totalScore', 'rank', 'memberCount', 'topDepartments', 'topContributors', 'isMyUniversity']);
+  assert.deepEqual(outer, ['id', 'name', 'logoUrl', 'totalScore', 'rank', 'memberCount', 'topDepartments', 'topContributors', 'isMyUniversity', 'isMyAlly']);
   assert.deepEqual(departments, ['rank', 'id', 'name', 'totalScore']);
   assert.deepEqual(contributors, ['rank', 'userId', 'nickname', 'contribScore']);
   const controller = readFileSync(new URL('controller/UniversityController.java', root), 'utf8');

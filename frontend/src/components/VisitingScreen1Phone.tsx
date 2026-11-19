@@ -11,7 +11,7 @@ import { TopHUD, schoolHudProps } from './TopHUD';
 import { LiveClicksEmpty, SPECTATOR_NOTICE, SpectatorBar, VisitNotFoundPhone, VisitSchoolInfoSheet, formatScore } from './VisitingParts.tsx';
 import { LoadNotice } from './LoadNotice';
 import { useVisitSchool } from '../hooks/useVisitSchool.ts';
-import type { CampusAttacks } from '../hooks/useCampusAttacks';
+import { CAMPUS_ACTION_LABEL, type CampusActionKind, type CampusAttacks } from '../hooks/useCampusAttacks';
 import { VisitAttackBar } from './VisitAttackBar';
 
 interface VisitingScreen1PhoneProps {
@@ -33,7 +33,7 @@ interface VisitingScreen1PhoneProps {
  * Visit screen in the main game's layout (V1·V2, docs/261110-2005-visit_ui_jeju_map_plan.md §4): the same header,
  * campus frame and footer as my campus, with a "방문 중" HUD, a 학교 정보 sign where 상세 스탯 is, and the spectator
  * bar where the chat preview is. Mock/guest spectating never scores; signed-in API members attack without granting
- * contribution or consuming a mock buff (SCRUM-168).
+ * contribution or consuming a mock buff (SCRUM-168), and assist a school of their current alliance instead (SCRUM-187).
  */
 export const VisitingScreen1Phone: React.FC<VisitingScreen1PhoneProps> = ({
   schoolId,
@@ -51,6 +51,8 @@ export const VisitingScreen1Phone: React.FC<VisitingScreen1PhoneProps> = ({
   const visit = useVisitSchool(schoolId);
   const { school, isMyUniversity } = visit;
   const attackMode = !!attacks?.ready && !!school && !isMyUniversity && attacks.myUniversityId !== school.id;
+  // The server decides who is an ally; an ally is assisted, never attacked.
+  const actionKind: CampusActionKind = visit.isMyAlly ? 'assist' : 'attack';
   const attackBlocked = !!attacks && (attacks.blocked || (attacks.pendingTargetId !== null && attacks.pendingTargetId !== schoolId));
   // The server says this is my own school (e.g. a stale map entry): my campus is where clicks count.
   useEffect(() => {
@@ -104,7 +106,7 @@ export const VisitingScreen1Phone: React.FC<VisitingScreen1PhoneProps> = ({
         />
       }
       previewBar={attackMode && attacks
-        ? <VisitAttackBar attacks={attacks} schoolId={school.id} onBackToMySchool={onBackToMySchool} />
+        ? <VisitAttackBar attacks={attacks} schoolId={school.id} onBackToMySchool={onBackToMySchool} kind={actionKind} />
         : <SpectatorBar mySchoolShortName={visit.mySchoolShortName} onBackToMySchool={onBackToMySchool} />}
       nav={
         <BottomNav
@@ -135,15 +137,15 @@ export const VisitingScreen1Phone: React.FC<VisitingScreen1PhoneProps> = ({
       <CampusStage
         level={school.campusLevel}
         fill
-        bubble={attackMode ? <span>공격 모드 · 서버 응답으로 점수 반영</span> : <LiveClicksEmpty />}
+        bubble={attackMode ? <span>{CAMPUS_ACTION_LABEL[actionKind]} 모드 · 서버 응답으로 점수 반영</span> : <LiveClicksEmpty />}
         bubbleDot="#0284c7"
         sceneLabelPrefix={school.name}
         frameProps={attackMode ? undefined : { role: 'button', 'aria-label': `${school.name} 캠퍼스 (관전 모드)`, onClick: handleCampusClick }}
       >
         {attackMode && attacks && (
-          <button type="button" aria-label={`${school.name} 캠퍼스 공격`} disabled={attackBlocked}
-            className="absolute inset-0 z-10 cursor-crosshair touch-manipulation focus-visible:outline-4 focus-visible:outline-offset-[-8px] focus-visible:outline-[#facc15] disabled:cursor-not-allowed"
-            onClick={() => { if (attacks.tap(school.id)) soundManager.playTapSound(); }} />
+          <button type="button" aria-label={`${school.name} 캠퍼스 ${CAMPUS_ACTION_LABEL[actionKind]}`} disabled={attackBlocked}
+            className={`absolute inset-0 z-10 ${actionKind === 'assist' ? 'cursor-pointer' : 'cursor-crosshair'} touch-manipulation focus-visible:outline-4 focus-visible:outline-offset-[-8px] focus-visible:outline-[#facc15] disabled:cursor-not-allowed`}
+            onClick={() => { if (attacks.tap(school.id, actionKind)) soundManager.playTapSound(); }} />
         )}
         {!attackMode && clickNoticeToast && (
           <div className="absolute inset-0 bg-[#261608]/50 flex items-center justify-center p-3 animate-fadeIn z-30 pointer-events-none">
