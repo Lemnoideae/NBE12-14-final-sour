@@ -23,6 +23,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 /** 물약 구매·보상 Lua를 실제 Redis로 검증한다 (@Transactional 없음: Redis만 쓴다). */
 @IntegrationTest
@@ -292,5 +293,26 @@ class RedisPotionPurchaserTest {
         assertThat(effect).doesNotContainKey("purchaseId");
         assertThat(effect).containsExactlyInAnyOrderEntriesOf(previous);
         assertThat(pexpireTime(EFFECT_KEY)).isEqualTo(previousExpiredAt.toInstant().toEpochMilli());
+    }
+
+    @Test
+    @DisplayName("보상할 때 이전 효과에 만료 시각이 없으면 복원하지 않고 효과를 지운다")
+    void compensate_previousWithoutExpiredAt() {
+        // given
+        redis.opsForZSet().add(RANK_KEY, String.valueOf(USER_ID), 700);
+        givenEffect(ITEM_ID, "2.0", OffsetDateTime.now(ZoneOffset.UTC).plusHours(1).truncatedTo(ChronoUnit.MILLIS), KEY);
+        redis.opsForValue().set(DEDUPE_KEY, "1", Duration.ofMinutes(5));
+        String previous = JSON.writeValueAsString(Map.of(
+                "itemId", String.valueOf(OTHER_ITEM_ID),
+                "multiplier", "4.0"));
+
+        // when
+        Throwable thrown = catchThrowable(() -> purchaser.compensate(USER_ID, UNIVERSITY_ID, 300L, KEY, previous));
+
+        // then
+        assertThat(thrown).isNull();
+        assertThat(redis.hasKey(EFFECT_KEY)).isFalse();
+        assertThat(redis.hasKey(DEDUPE_KEY)).isFalse();
+        assertThat(redis.opsForZSet().score(RANK_KEY, String.valueOf(USER_ID))).isEqualTo(1000.0);
     }
 }
