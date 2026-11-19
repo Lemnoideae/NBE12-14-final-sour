@@ -9,7 +9,7 @@ import { createClickBatcher, type ClickBatchSnapshot } from '../src/utils/clickB
 const response: ClickResponse = {
   acceptedClicks: 2, earnedScore: 4, multiplier: 1, myContribScore: 14,
   university: { id: 1, totalScore: 104, rank: 3, logoUrl: 'tempUrl' },
-  department: { id: 7, totalScore: 24 }, schoolClicksLastSecond: 5,
+  department: { id: 7, totalScore: 24 }, schoolClicksLastSecond: 5, libraryBonus: false,
 };
 const network = () => new ApiError({ kind: 'network', code: 'CLIENT_NETWORK_ERROR', status: null });
 
@@ -346,6 +346,8 @@ test('클릭 응답 필드·입력 상한·중복 TTL 센서: Java 계약 변경
   const requestSource = readFileSync(new URL('dto/ClickRequest.java', javaRoot), 'utf8');
   assert.match(requestSource, new RegExp(`@Max\\(value = ${MAX_CLICK_BATCH_SIZE},`), fix);
   assert.match(requestSource, /@Min\(value = 1,/, fix);
+  // The location stays optional: the frontend sends none until SCRUM-185 (library bonus).
+  assert.match(requestSource, /Integer clickCount,\s*Double latitude,\s*Double longitude\s*\)/, fix);
   assert.equal(CLICK_BATCH_WINDOW_MS, 1000);
   assert.match(readFileSync(new URL('service/ClickActionGuard.java', javaRoot), 'utf8'), /Duration.ofSeconds\(10L\)/,
     '중복 방지 TTL이 바뀌면 clickBatcher의 재시도 안전 시간도 재검토하세요');

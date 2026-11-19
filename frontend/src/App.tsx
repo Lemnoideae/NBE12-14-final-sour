@@ -37,6 +37,9 @@ import { ApiBotCheckDialog } from './components/ApiBotCheckDialog';
 import { SupportGuestScreenPhone } from './components/SupportGuestScreenPhone';
 import { SupportMemberScreenPhone } from './components/SupportMemberScreenPhone';
 import { MyInfoScreenPhone } from './components/MyInfoScreenPhone';
+import { AdminScreenPhone } from './components/AdminScreenPhone';
+import { ApiTestToolsNotice } from './components/AdminTestToolsPanel';
+import { DEMO_SCHOOL_NAMES, type DemoSchoolNameId } from './data/demoSchoolNames';
 import { PurchaseHistoryScreenPhone } from './components/PurchaseHistoryScreenPhone';
 import { CampusStatsSheet } from './components/CampusStatsSheet';
 import { getSchoolRankings } from './data/mockRankings';
@@ -56,27 +59,20 @@ import { CampusAmbienceProvider, useAmbienceControl } from './hooks/useCampusTim
 import type { AmbienceOverride } from './data/campusAmbience';
 import { AllianceApplyScreenPhone } from './components/AllianceApplyScreenPhone';
 import { CurrentAllianceScreenPhone } from './components/CurrentAllianceScreenPhone';
+import { ApiAllianceScreenPhone } from './components/ApiAllianceScreenPhone';
 import { BattleApplyScreenPhone } from './components/BattleApplyScreenPhone';
 import { BattleStatusScreenPhone } from './components/BattleStatusScreenPhone';
 import { soundManager } from './utils/sound';
 import { Smartphone, Gamepad2, Layers, Trophy, ShoppingBag, MapPin, Image as ImageIcon, Compass, MessageSquare, BookOpen, Sparkles } from 'lucide-react';
 
-// [시연] 헤더 학교명 길이별 표시 확인용. 실제 학교 데이터가 아니라 목업 표시 테스트 값이다.
 /** Service flow screens (M5-D). Demo tools and design comparisons are left out of the 44px touch areas. */
-const SERVICE_VIEW_MODES = new Set<string>(['gameplay', 'signup', 'login', 'single_map', 'visiting', 'ranking', 'shop', 'alliance_apply', 'current_alliance', 'battle_apply', 'battle_status', 'support_guest', 'my_info', 'purchase_history', 'member_support']);
+const SERVICE_VIEW_MODES = new Set<string>(['gameplay', 'signup', 'login', 'single_map', 'visiting', 'ranking', 'shop', 'alliance_apply', 'current_alliance', 'battle_apply', 'battle_status', 'support_guest', 'my_info', 'purchase_history', 'member_support', 'admin']);
 /** Sign-up: the backend in API mode (SCRUM-151), the mock onboarding otherwise. */
 const SignupScreen = selectByMode<React.FC<{ onGoToCampus: () => void; onGoToLogin?: () => void }>>({ api: ApiSignupPhone, mock: OnboardingPhone });
 
-const DEMO_SCHOOL_NAMES = [
-  // 'default' shows the player's school (M4: set by the mock email verification).
-  { id: 'default', label: '기본', name: null },
-  { id: 'medium', label: '9자', name: '서울과학기술대학교' },
-  { id: 'long', label: '긴 이름', name: '한국방송통신대학교 프라임칼리지 서울캠퍼스' },
-] as const;
-
 function AppContent() {
   // Mode: 'ranking_screens' (2-phone ranking comparison with infinite scroll) | 'our_guestbook_screens' | 'visiting_screens' | etc.
-  const [viewMode, setViewMode] = useState<'ranking_screens' | 'our_guestbook_screens' | 'visiting_screens' | 'chat_screens' | 'single_map' | 'visiting' | 'map_screens' | 'map_illustration' | 'shop' | 'ranking' | 'spritesheet' | 'onboarding' | 'signup' | 'login' | 'gameplay' | 'alliance_apply' | 'current_alliance' | 'battle_apply' | 'battle_status' | 'support_guest' | 'my_info' | 'purchase_history' | 'member_support'>('gameplay');
+  const [viewMode, setViewMode] = useState<'ranking_screens' | 'our_guestbook_screens' | 'visiting_screens' | 'chat_screens' | 'single_map' | 'visiting' | 'map_screens' | 'map_illustration' | 'shop' | 'ranking' | 'spritesheet' | 'onboarding' | 'signup' | 'login' | 'gameplay' | 'alliance_apply' | 'current_alliance' | 'battle_apply' | 'battle_status' | 'support_guest' | 'my_info' | 'purchase_history' | 'member_support' | 'admin'>('gameplay');
   const [isChatSheetOpen, setIsChatSheetOpen] = useState<boolean>(false);
   const [isOurGuestbookSheetOpen, setIsOurGuestbookSheetOpen] = useState<boolean>(false);
   const [isStatsSheetOpen, setIsStatsSheetOpen] = useState<boolean>(false);
@@ -136,7 +132,9 @@ function AppContent() {
     else if (tab === 'shop') setViewMode('shop');
   };
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
-  const [demoSchoolNameId, setDemoSchoolNameId] = useState<(typeof DEMO_SCHOOL_NAMES)[number]['id']>('default');
+  // [시연] header school name length check. In API mode the admin test tool sets it (SCRUM-175).
+  const [demoSchoolNameId, setDemoSchoolNameId] = useState<DemoSchoolNameId>('default');
+  const schoolNameTest = { value: demoSchoolNameId, onChange: setDemoSchoolNameId };
   const demoSchoolName = DEMO_SCHOOL_NAMES.find((d) => d.id === demoSchoolNameId)!.name ?? mySchool.name;
 
   // 기존 피버 연출은 유지하되 별도 EXP는 생성하지 않는다.
@@ -478,22 +476,25 @@ function AppContent() {
           <option value="auto">자동</option><option value="dawn">새벽</option><option value="day">낮</option><option value="dusk">노을</option><option value="night">밤</option>
         </select>
       </label>
-      <label className="font-pixel text-xs font-bold">[시연] 학교명{' '}
-        <select aria-label="[시연] 학교명" value={demoSchoolNameId} onChange={(e) => setDemoSchoolNameId(e.target.value as typeof demoSchoolNameId)} className="border-2 border-[#261608] bg-white px-2 py-1">
-          {DEMO_SCHOOL_NAMES.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-        </select>
-      </label>
-      {/* M5-B: how the next mock requests (auth, shop, ranking/map/visit queries) end. */}
-      <label className="font-pixel text-xs font-bold">[시연] 요청{' '}
-        <select aria-label="[시연] 요청 상태" value={request.mode} onChange={(e) => request.setMode(e.target.value as MockRequestMode)} className="border-2 border-[#261608] bg-white px-2 py-1">
-          {MOCK_REQUEST_MODES.map((option) => <option key={option.mode} value={option.mode}>{option.label}</option>)}
-        </select>
-      </label>
-      {/* M5-A: every click on my campus is refused while this is on. */}
-      <label className="font-pixel text-xs font-bold flex items-center gap-1">
-        <input type="checkbox" checked={game.clickRejectDemo} onChange={(e) => game.setClickRejectDemo(e.target.checked)} />
-        [시연] 서버 클릭 거절 응답
-      </label>
+      {/* API mode: the admin test tool (SCRUM-175) takes over the school name, request mode and click refusal. */}
+      {API_MODE === 'mock' && <>
+        <label className="font-pixel text-xs font-bold">[시연] 학교명{' '}
+          <select aria-label="[시연] 학교명" value={demoSchoolNameId} onChange={(e) => setDemoSchoolNameId(e.target.value as DemoSchoolNameId)} className="border-2 border-[#261608] bg-white px-2 py-1">
+            {DEMO_SCHOOL_NAMES.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+          </select>
+        </label>
+        {/* M5-B: how the next mock requests (auth, shop, ranking/map/visit queries) end. */}
+        <label className="font-pixel text-xs font-bold">[시연] 요청{' '}
+          <select aria-label="[시연] 요청 상태" value={request.mode} onChange={(e) => request.setMode(e.target.value as MockRequestMode)} className="border-2 border-[#261608] bg-white px-2 py-1">
+            {MOCK_REQUEST_MODES.map((option) => <option key={option.mode} value={option.mode}>{option.label}</option>)}
+          </select>
+        </label>
+        {/* M5-A: every click on my campus is refused while this is on. */}
+        <label className="font-pixel text-xs font-bold flex items-center gap-1">
+          <input type="checkbox" checked={game.clickRejectDemo} onChange={(e) => game.setClickRejectDemo(e.target.checked)} />
+          [시연] 서버 클릭 거절 응답
+        </label>
+      </>}
       {/* SCRUM-121: stands in for the server's abuse flag. A click while on opens the bot check. */}
       <label className="font-pixel text-xs font-bold flex items-center gap-1">
         <input type="checkbox" checked={game.abuseFlagged} onChange={(e) => game.setAbuseFlagged(e.target.checked)} />
@@ -510,6 +511,7 @@ function AppContent() {
       <div className={`w-full bg-[#f1f5f9] flex flex-col items-center justify-start select-none text-[#261608] ${isPhone ? 'device-full min-h-dvh' : 'min-h-screen p-2 sm:p-5'}`}>
         {API_MODE === 'api' && <ApiSessionWatcher onEnded={() => setViewMode('login')} />}
         {API_MODE === 'api' && <ApiPlayerSync getPendingScore={campusClicks.getPendingScore} />}
+        {API_MODE === 'api' && <ApiTestToolsNotice schoolName={schoolNameTest} />}
         {/* The attack bar already shows pending work. Do not shift the campus under repeated taps with a lock banner. */}
         {campusClicks.notice && !(viewMode === 'visiting' && campusAttacks?.pendingClicks) && (
           <div role="alert" className="w-full max-w-3xl border-2 border-[#8b5327] bg-[#fffbeb] p-3 text-sm font-pixel">
@@ -729,6 +731,12 @@ function AppContent() {
               />
             </MockLoadGate>
           </div>
+        ) : API_MODE === 'api' && (viewMode === 'alliance_apply' || viewMode === 'current_alliance' || viewMode === 'battle_apply' || viewMode === 'battle_status') ? (
+          // API mode: alliances, applications and matches against the server (SCRUM-177~179). The mock alliance and battle
+          // screens stay mock-only.
+          <div className={viewWrap}>
+            <ApiAllianceScreenPhone onBack={() => setViewMode('gameplay')} onGoToLogin={() => setViewMode('login')} onNavigateTab={navigateTab} />
+          </div>
         ) : viewMode === 'alliance_apply' ? (
           <div className={viewWrap}>
             <AllianceApplyScreenPhone
@@ -771,7 +779,8 @@ function AppContent() {
         ) : viewMode === 'my_info' ? (
           <div className={viewWrap}>
             <MyInfoScreenPhone onBack={() => setViewMode('login')} onGoToLogin={() => setViewMode('login')}
-              onOpenPurchaseHistory={() => setViewMode('purchase_history')} onOpenSupports={() => setViewMode('member_support')} />
+              onOpenPurchaseHistory={() => setViewMode('purchase_history')} onOpenSupports={() => setViewMode('member_support')}
+              onOpenAdmin={() => setViewMode('admin')} />
           </div>
         ) : viewMode === 'purchase_history' ? (
           <div className={viewWrap}>
@@ -780,6 +789,10 @@ function AppContent() {
         ) : viewMode === 'member_support' ? (
           <div className={viewWrap}>
             <SupportMemberScreenPhone onBack={() => setViewMode('my_info')} onGoToLogin={() => setViewMode('login')} />
+          </div>
+        ) : viewMode === 'admin' ? (
+          <div className={viewWrap}>
+            <AdminScreenPhone onBack={() => setViewMode('my_info')} onGoToLogin={() => setViewMode('login')} schoolName={schoolNameTest} />
           </div>
         ) : viewMode === 'spritesheet' ? (
           <SpriteSheetViewer
