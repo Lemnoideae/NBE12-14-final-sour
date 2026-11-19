@@ -151,4 +151,33 @@ class RedisPotionPurchaserTest {
         assertThat(redis.hasKey(EFFECT_KEY)).isFalse();
         assertThat(redis.hasKey(DEDUPE_KEY)).isFalse();
     }
+
+    @Test
+    @DisplayName("같은 멱등 키가 이미 있으면 잔액이 모자라도 -1이 아니라 -2를 돌려준다")
+    void purchase_duplicateKeyEvenWhenNotEnough() {
+        // given: 첫 구매 직후 상태 (기여도 100, 효과 purchaseId=KEY, 멱등 키)
+        redis.opsForZSet().add(RANK_KEY, String.valueOf(USER_ID), 100);
+        OffsetDateTime firstExpiredAt = OffsetDateTime.now(ZoneOffset.UTC).plusHours(1).truncatedTo(ChronoUnit.MILLIS);
+        Map<String, String> firstEffect = Map.of(
+                "itemId", String.valueOf(ITEM_ID),
+                "multiplier", "2.0",
+                "expiredAt", String.valueOf(firstExpiredAt.toInstant().toEpochMilli()),
+                "purchaseId", KEY.toString());
+        redis.opsForHash().putAll(EFFECT_KEY, firstEffect);
+        redis.expireAt(EFFECT_KEY, firstExpiredAt.toInstant());
+        redis.opsForValue().set(DEDUPE_KEY, "1", 60_000L, TimeUnit.MILLISECONDS);
+        OffsetDateTime expiredAt = OffsetDateTime.now(ZoneOffset.UTC).plusHours(1).truncatedTo(ChronoUnit.MILLIS);
+
+        // when
+        PotionPurchaseOutcome outcome = purchaser.purchase(
+                USER_ID, UNIVERSITY_ID, ITEM_ID, 300L, 2.0, expiredAt, KEY);
+
+        // then
+        assertThat(outcome).isEqualTo(new PotionPurchaseOutcome(-2, ""));
+        assertThat(redis.opsForZSet().score(RANK_KEY, String.valueOf(USER_ID))).isEqualTo(100.0);
+        assertThat(redis.<String, String>opsForHash().entries(EFFECT_KEY)).containsExactlyInAnyOrderEntriesOf(firstEffect);
+        assertThat(redis.opsForSet().isMember(DIRTY_KEY, String.valueOf(USER_ID))).isFalse();
+        assertThat(redis.opsForValue().get(DEDUPE_KEY)).isEqualTo("1");
+        assertThat(redis.getExpire(DEDUPE_KEY, TimeUnit.MILLISECONDS)).isBetween(1L, 60_000L);
+    }
 }
