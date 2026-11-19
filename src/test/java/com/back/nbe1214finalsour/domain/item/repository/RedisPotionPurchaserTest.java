@@ -1,6 +1,7 @@
 package com.back.nbe1214finalsour.domain.item.repository;
 
 import com.back.nbe1214finalsour.IntegrationTest;
+import com.back.nbe1214finalsour.global.redis.RedisHandler;
 import com.back.nbe1214finalsour.global.redis.RedisKey;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -46,6 +47,12 @@ class RedisPotionPurchaserTest {
 
     @Autowired
     private StringRedisTemplate redis;
+
+    @Autowired
+    private UserEffectCache userEffectCache;
+
+    @Autowired
+    private RedisHandler redisHandler;
 
     @AfterEach
     void cleanUp() {
@@ -162,6 +169,22 @@ class RedisPotionPurchaserTest {
         assertThat(redis.opsForSet().isMember(DIRTY_KEY, String.valueOf(USER_ID))).isFalse();
         assertThat(redis.hasKey(EFFECT_KEY)).isFalse();
         assertThat(redis.hasKey(DEDUPE_KEY)).isFalse();
+    }
+
+    @Test
+    @DisplayName("구매 Lua가 쓴 효과를 효과 조회와 클릭 엔진 읽기 경로가 읽는다")
+    void purchase_effectReadableByReaders() {
+        // given
+        redis.opsForZSet().add(RANK_KEY, String.valueOf(USER_ID), 1000);
+        OffsetDateTime expiredAt = OffsetDateTime.now(ZoneOffset.UTC).plusHours(1).truncatedTo(ChronoUnit.MILLIS);
+
+        // when
+        purchaser.purchase(USER_ID, UNIVERSITY_ID, ITEM_ID, 300L, 2.0, expiredAt, KEY);
+
+        // then
+        assertThat(userEffectCache.find(USER_ID))
+                .contains(new UserEffect(ITEM_ID, 2.0, expiredAt.withOffsetSameInstant(ZoneOffset.UTC)));
+        assertThat(redisHandler.getHash(EFFECT_KEY, "multiplier", Double.class)).contains(2.0);
     }
 
     @Test
