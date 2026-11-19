@@ -1,5 +1,5 @@
 // SCRUM-163: the visit screen reads the school's detail from the API (score, rank, members, top departments and
-// contributors); the guestbook stays on the mock (SCRUM-137).
+// contributors). SCRUM-181 removes fictional guestbook previews in the API detail; the full sheet reads GET/POST.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { after, afterEach, test } from 'node:test';
@@ -100,7 +100,9 @@ test('방문 화면은 서버의 점수·순위·회원 수·상위 학과·기�
   const departments = within(screen.getByRole('list', { name: '상위 학과 목록' })).getAllByRole('listitem').map((li) => li.textContent);
   assert.deepEqual(departments, ['🥇 1위 · 기계공학부9,000점', '🥈 2위 · 경영학과3,000점']);
   assertAbsent(screen.queryByText('기여 랭커 정보 없음 (목업)'));
-  assert.ok(screen.getAllByTestId('guestbook-preview-note').length > 0, '방명록 미리보기는 목업 유지 (SCRUM-137)');
+  assertAbsent(screen.queryByTestId('guestbook-preview-note'), 'API 방문 정보에 가짜 방명록을 표시하지 않는다');
+  screen.getByText('전체보기에서 실제 글을 확인하세요. 인기순은 준비 중입니다.');
+  screen.getByRole('button', { name: '방명록 전체보기' });
   assert.match(screen.getByTestId('spectator-bar').querySelector('p')!.getAttribute('title') ?? '', /내 학교\(한양대\)/);
   assert.equal(visit.isMyUniversity, false);
 });

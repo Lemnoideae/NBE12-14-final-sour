@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type SubmitEvent, type ReactNode } from 'react';
 import { ChevronDown, Heart } from 'lucide-react';
 import { useAuthSession } from '../api/ApiProvider';
 import { errorMessage, isApiError } from '../api/errors';
@@ -50,20 +50,21 @@ function GuestbookContents({ universityId, title, member, onClose, onGoToMap, on
   const [uncertain, setUncertain] = useState(false);
   const [created, setCreated] = useState<GuestbookItem>();
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const posting = useRef(false);
   const id = useId();
   const ownSchool = member?.university.id === universityId;
   const items = mergeGuestbookPages(list.data?.pages ?? [], created);
   useEffect(() => { if (write.isError) inputRef.current?.focus(); }, [write.isError]);
 
-  function submit(event: FormEvent) {
+  function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!member || ownSchool || posting.current || uncertain) return;
     const valid = validateGuestbookContent(draft);
     if ('problem' in valid) { setProblem(valid.problem); inputRef.current?.focus(); return; }
     setProblem(''); posting.current = true;
     write.mutate(valid.content, {
-      onSuccess: (result) => { setCreated(result); setDraft(''); },
+      onSuccess: (result) => { setCreated(result); setDraft(''); if (listRef.current) listRef.current.scrollTop = 0; },
       onError: (error) => { setUncertain(!isApiError(error) || error.kind !== 'http' || error.status === null || error.status >= 500); },
       onSettled: () => { posting.current = false; },
     });
@@ -73,7 +74,7 @@ function GuestbookContents({ universityId, title, member, onClose, onGoToMap, on
     : isApiError(write.error) && write.error.code === 'GUEST_OWN_UNIVERSITY' ? '우리 학교에는 방명록을 작성할 수 없어요. 내 소속을 다시 확인해 주세요.'
       : errorMessage(write.error) : '';
   return <Frame title={title} onClose={onClose}>
-    <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 flex flex-col gap-3 text-xs" aria-busy={list.isFetching}>
+    <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 flex flex-col gap-3 text-xs" aria-busy={list.isFetching}>
       <div className="flex items-center justify-between gap-2"><span>불러온 글 {items.length}개</span>
         <button type="button" className={buttonClass} disabled={list.isFetching} onClick={() => void list.refetch()}>방명록 새로고침</button></div>
       <p className="text-[#8b5327] text-[10px]">좋아요 변경·인기순은 준비 중입니다. 좋아요 수와 내 상태는 서버 조회값입니다.</p>

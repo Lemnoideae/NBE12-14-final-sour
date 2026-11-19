@@ -4,7 +4,7 @@ import React from 'react';
 import { JSDOM } from 'jsdom';
 import type { MyInfo } from '../src/api/users';
 import type { GuestbookItem, GuestbookPage } from '../src/api/guestbooks';
-import { assertAbsent } from './helpers/domAssert';
+import { assertAbsent, assertSameNode } from './helpers/domAssert';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost', pretendToBeVisual: true });
 for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document, navigator: dom.window.navigator,
@@ -114,7 +114,7 @@ test('커서 더 보기 실패는 기존 글을 유지하며 명시적 재시도
 
 test('입력 검증은 제출 시, 오류 포커스·입력 유지·편집 시 해제, 500 emoji는 전송한다', async () => {
   const f = mount(); await screen.findByRole('textbox'); assertAbsent(screen.queryByRole('alert'));
-  fill(' '); submit(); await screen.findByText('방명록 내용을 입력해 주세요.'); assert.equal(document.activeElement, screen.getByRole('textbox'));
+  fill(' '); submit(); await screen.findByText('방명록 내용을 입력해 주세요.'); assertSameNode(document.activeElement, screen.getByRole('textbox'));
   fill('가'.repeat(501)); submit(); await screen.findByText('방명록은 500자 이하로 입력해 주세요.'); assert.equal(f.posts().length, 0);
   fill('😀'.repeat(500)); assertAbsent(screen.queryByRole('alert')); submit(); await screen.findByText('방명록을 남겼습니다.');
   assert.equal(f.posts()[0].body?.content, '😀'.repeat(500));
@@ -123,19 +123,26 @@ test('입력 검증은 제출 시, 오류 포커스·입력 유지·편집 시 �
 test('성공 201의 마스킹된 응답만 표시·같은 프레임 이중 제출 차단·서버 조회와 ID 중복 없음', async () => {
   let finish!: (response: Response) => void;
   const f = mount({ create: () => new Promise((resolve) => { finish = resolve; }) }); await screen.findByRole('textbox');
+  const listElement = screen.getByRole('list', { name: '방명록 목록' }).parentElement!;
+  listElement.scrollTop = 333;
+  f.queryClient.setQueryData(guestbookKeys.list(2, 31), { pages: [page()], pageParams: [null] });
+  f.queryClient.setQueryData(guestbookKeys.list(3, 31), { pages: [page()], pageParams: [null] });
   fill(' badword 응원 '); submit(); submit(); await waitFor(() => assert.equal(f.posts().length, 1));
   assert.deepEqual(f.posts()[0].body, { content: 'badword 응원' }); assertAbsent(screen.queryByTestId('guestbook-content'));
   assert.equal((screen.getByRole('textbox') as HTMLTextAreaElement).value, ' badword 응원 ');
   f.rows.push(item(100, '*** 응원')); await act(async () => finish(ok(item(100, '*** 응원'), 201)));
   await screen.findByText('방명록을 남겼습니다.'); await waitFor(() => assert.deepEqual(ids(), ['*** 응원']));
   assert.equal((screen.getByRole('textbox') as HTMLTextAreaElement).value, '');
+  assert.equal(listElement.scrollTop, 0, '작성한 최신 글을 확인할 수 있도록 목록 상단으로 이동');
+  assert.equal(f.queryClient.getQueryState(guestbookKeys.list(2, 31))?.isInvalidated, true);
+  assert.equal(f.queryClient.getQueryState(guestbookKeys.list(3, 31))?.isInvalidated, false);
 });
 
 for (const code of ['GUEST_TOO_FREQUENT', 'GUEST_OWN_UNIVERSITY', 'COMMON_INVALID_INPUT']) {
   test(`${code}: 서버 실패 시 입력·포커스 유지, 자동 재전송 없이 명시적 재시도`, async () => {
     const f = mount({ create: async () => fail(code === 'GUEST_TOO_FREQUENT' ? 429 : 400, code) }); await screen.findByRole('textbox');
     fill('응원 유지'); submit(); await screen.findByRole('alert');
-    assert.equal((screen.getByRole('textbox') as HTMLTextAreaElement).value, '응원 유지'); assert.equal(document.activeElement, screen.getByRole('textbox'));
+    assert.equal((screen.getByRole('textbox') as HTMLTextAreaElement).value, '응원 유지'); assertSameNode(document.activeElement, screen.getByRole('textbox'));
     if (code === 'GUEST_TOO_FREQUENT') screen.getByText(/학교와 관계없이 1분에 한 번/);
     assert.equal(f.posts().length, 1); submit(); await waitFor(() => assert.equal(f.posts().length, 2));
   });
@@ -159,6 +166,15 @@ test('학교 전환 중 늦은 POST 성공은 새 학교의 입력·목록에 �
   f.rerender(3); await screen.findByRole('textbox'); fill('새 학교');
   await act(async () => finish(ok(item(100, '이전 학교'), 201)));
   assert.equal((screen.getByRole('textbox') as HTMLTextAreaElement).value, '새 학교'); assertAbsent(screen.queryByText('이전 학교'));
+});
+
+test('없는 학교 ID는 요청하지 않으며, 회원 전환은 이전 회원의 입력과 목록을 제거한다', async () => {
+  const invalid = mount(); invalid.rerender(-1); await screen.findByText('학교를 찾을 수 없습니다.');
+  assert.equal(invalid.calls.some((call) => call.school < 0), false);
+  cleanup(); const f = mount({ initial: [item(30)] }); await screen.findByRole('textbox'); fill('이전 회원 비공개 초안');
+  await act(async () => f.queryClient.setQueryData(userKeys.me, { ...ME, id: 31 }));
+  await waitFor(() => assert.equal((screen.getByRole('textbox') as HTMLTextAreaElement).value, ''));
+  assert.equal(f.posts().length, 0);
 });
 
 test('로그아웃은 작성 입력과 내 좋아요를 제거하고 공개 캐시를 다시 조회한다', async () => {
