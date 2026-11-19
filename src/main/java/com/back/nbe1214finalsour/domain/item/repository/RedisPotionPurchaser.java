@@ -41,6 +41,6 @@ public class RedisPotionPurchaser {
                 String.valueOf(expiredAt.toInstant().toEpochMilli()),
                 idempotencyKey.toString(),
                 String.valueOf(DEDUPE_TTL_MILLIS));
-        return new PotionPurchaseOutcome((Long) result.get(0), (String) result.get(1));
+        return new PotionPurchaseOutcome((Long) result.get(0), result.size() > 1 ? (String) result.get(1) : "");
     }
 }
