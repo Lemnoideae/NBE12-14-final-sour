@@ -46,4 +46,22 @@ public class GuestBookLikeService {
         // 같은 트랜잭션에서 좋아요 INSERT와 count UPDATE를 커밋한다.
         return new GuestBookLikeResponse(guestbookId, true, likeCount);
     }
+
+    /** 등록과 동일한 글 잠금으로 본인의 좋아요 삭제와 카운트 감소를 직렬화한다. */
+    @Transactional
+    public GuestBookLikeResponse unlike(Long guestbookId, Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new BusinessException(ErrorCode.USER_SUSPENDED);
+        }
+        GuestBook guestBook = guestBookRepository.findByIdForUpdate(guestbookId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.GUEST_NOT_FOUND));
+        GuestBookLike like = guestBookLikeRepository.findById(new GuestBookLikeId(guestbookId, userId))
+                .orElseThrow(() -> new BusinessException(ErrorCode.GUEST_LIKE_NOT_FOUND));
+
+        int likeCount = guestBook.decreaseLikeCount();
+        guestBookLikeRepository.delete(like);
+        return new GuestBookLikeResponse(guestbookId, false, likeCount);
+    }
 }
