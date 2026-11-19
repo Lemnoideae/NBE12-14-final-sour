@@ -77,6 +77,7 @@ class ClickerUpgradeConcurrencyTest {
     void tearDown() {
         redisTemplate.delete(rankKey);
         redisTemplate.opsForSet().remove("dirty:user", userId.toString());
+        redisTemplate.opsForSet().remove("dirty:clicker", userId.toString());
         // 동시성 테스트는 트렌젝션을 걸지 않으므로 직접 데이터 정리해야함
         // FK 순서대로 삭제: users → department → university → clicker
         jdbcTemplate.update("DELETE FROM users WHERE id = ?", userId);
@@ -115,8 +116,8 @@ class ClickerUpgradeConcurrencyTest {
             assertThat(finished.await(10, TimeUnit.SECONDS)).isTrue();
         }
 
-        long finalLevel = jdbcTemplate.queryForObject(
-                "SELECT clicker_id FROM users WHERE id = ?", Long.class, userId);
+        // 레벨 원본은 Redis. 요청 안에서 DB는 바뀌지 않고 1분 배치가 반영한다
+        long finalLevel = Long.parseLong(redisTemplate.opsForValue().get("user:" + userId + ":clicker"));
 
         long paidScore = jdbcTemplate.queryForObject(
                 "SELECT COALESCE(SUM(required_score), 0) FROM clicker WHERE id BETWEEN 2 AND ?",
@@ -128,6 +129,8 @@ class ClickerUpgradeConcurrencyTest {
         assertThat(finalLevel).isGreaterThanOrEqualTo(2L);                  // 최소 한 번은 성공
         assertThat(successCount.get()).isEqualTo((int) (finalLevel - 1));    // 성공 횟수 == 오른 레벨 수
         assertThat(finalScore).isEqualTo(INITIAL_SCORE - paidScore);         // 낸 비용 == 오른 레벨들의 비용
-        assertThat(redisTemplate.opsForValue().get("user:" + userId + ":clicker")).isEqualTo(String.valueOf(finalLevel));   // 업그레이드 서비스가 커밋 후 클릭 엔진용 레벨 캐시를 DB와 같은 레벨로 맞춤
+        assertThat(redisTemplate.opsForSet().isMember("dirty:clicker", userId.toString())).isTrue();   // 배치가 DB에 반영할 대상으로 표시됨
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT clicker_id FROM users WHERE id = ?", Long.class, userId)).isEqualTo(1L);      // 요청 안에서 DB 레벨은 그대로
     }
 }

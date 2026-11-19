@@ -43,27 +43,15 @@ public class JdbcUserClickerLevelStoreTest {
     }
 
     @Test
-    @DisplayName("유저의 현재 클리커 레벨을 조회")
+    @DisplayName("유저의 현재 클리커 레벨을 DB에서 조회한다")
     void findLevel() {
-        assertThat(userClickerLevelStore.findLevel(userId)).isEqualTo(1L);
-    }
+        // given: 기본값(1)이 아닌 레벨로 바꿔 둔다
+        jdbcTemplate.update("UPDATE users SET clicker_id = 2 WHERE id = ?", userId);
 
-    @Test
-    @DisplayName("현재 레벨이 expectedLevel이면 newLevel로 변경하고 true 반환")
-    void changeLevel_success() {
-        boolean changed = userClickerLevelStore.changeLevel(userId, 1L, 2L);
+        // when
+        long level = userClickerLevelStore.findLevel(userId);
 
-        assertThat(changed).isTrue();
-        assertThat(userClickerLevelStore.findLevel(userId)).isEqualTo(2L);
-    }
-
-    @Test
-    @DisplayName("현재 레벨이 expectedLevel과 다르면 변경하지 않고 false 반환")
-    void changeLevel_conflict() {
-        // 다른 요청이 이미 레벨을 바꿔서, 현재 레벨(1)이 기대한 레벨(2)과 다른 상황
-        boolean changed = userClickerLevelStore.changeLevel(userId, 2L, 3L);
-
-        assertThat(changed).isFalse();
-        assertThat(userClickerLevelStore.findLevel(userId)).isEqualTo(1L);
+        // then
+        assertThat(level).isEqualTo(2L);
     }
 }

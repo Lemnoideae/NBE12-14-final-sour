@@ -6,6 +6,7 @@ import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.domain.user.repository.projections.UserUniv;
 import com.back.nbe1214finalsour.global.redis.RedisKey;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -16,6 +17,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ScoreFlushService {
@@ -29,6 +31,7 @@ public class ScoreFlushService {
         String newUserDirtyKey = RedisKey.DIRTY_USER.of() + ":flushing";
         String newUnivDirtyKey = RedisKey.DIRTY_UNIV.of() + ":flushing";
         String newDeptDirtyKey = RedisKey.DIRTY_DEPT.of() + ":flushing";
+        String newClickerDirtyKey = RedisKey.DIRTY_CLICKER.of() + ":flushing";
 
         // 개인 점수 저장
         if (detach(RedisKey.DIRTY_USER.of(), newUserDirtyKey)) {
@@ -45,8 +48,13 @@ public class ScoreFlushService {
             flushDepts(newDeptDirtyKey);
         }
 
+        // 클리커 레벨 저장 (실패해도 위의 점수 반영은 이미 끝나 있다)
+        if (detach(RedisKey.DIRTY_CLICKER.of(), newClickerDirtyKey)) {
+            flushClickerLevels(newClickerDirtyKey);
+        }
+
         // 기존 dirty 제거
-        stringRedisTemplate.delete(List.of(newUserDirtyKey, newUnivDirtyKey, newDeptDirtyKey));
+        stringRedisTemplate.delete(List.of(newUserDirtyKey, newUnivDirtyKey, newDeptDirtyKey, newClickerDirtyKey));
     }
 
     private boolean detach(String dirtyKey, String flushingKey) {
@@ -121,6 +129,41 @@ public class ScoreFlushService {
                 where u.id = x.id
                     and u.total_score is distinct from x.score
                 """, ids.toArray(Long[]::new), scores.toArray(Long[]::new));
+    }
+
+    private void flushClickerLevels(String dirtyKey) {
+        List<Long> userIds = stringRedisTemplate.opsForSet().members(dirtyKey).stream().map(Long::parseLong).toList();
+
+        List<String> values = stringRedisTemplate.opsForValue()
+                .multiGet(userIds.stream().map(RedisKey.USER_CLICKER::of).toList());
+
+        List<Long> ids = new ArrayList<>();
+        List<Long> levels = new ArrayList<>();
+        List<Long> skipped = new ArrayList<>();
+        for (int i = 0; i < userIds.size(); i++) {
+            String v = values.get(i);
+            if (v == null) {
+                skipped.add(userIds.get(i));
+                continue;
+            }
+            ids.add(userIds.get(i));
+            levels.add(Long.parseLong(v));
+        }
+
+        if (!ids.isEmpty()) {
+            jdbcTemplate.update("""
+                    update users as u
+                    set clicker_id = x.level
+                    from unnest(?::bigint[], ?::bigint[]) as x(id, level)
+                    where u.id = x.id
+                        and u.clicker_id < x.level
+                    """, ids.toArray(Long[]::new), levels.toArray(Long[]::new));
+        }
+
+        // 레벨 키가 없으면 그 회원의 레벨업이 DB에 반영되지 못한다. 수동 보정용으로 한 번만 남긴다
+        if (!skipped.isEmpty()) {
+            log.warn("레벨 키가 없어 DB 반영을 건너뜀 userIds={}", skipped);
+        }
     }
 
     private void flushUsers(String dirtyKey) {

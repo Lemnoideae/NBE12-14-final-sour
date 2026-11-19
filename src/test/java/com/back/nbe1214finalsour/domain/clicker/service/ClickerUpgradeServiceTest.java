@@ -1,9 +1,8 @@
 package com.back.nbe1214finalsour.domain.clicker.service;
 
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
+import com.back.nbe1214finalsour.domain.clicker.repository.RedisClickerUpgrader;
 import com.back.nbe1214finalsour.domain.clicker.repository.UserClickerLevelCache;
-import com.back.nbe1214finalsour.domain.clicker.repository.UserClickerLevelStore;
-import com.back.nbe1214finalsour.domain.contribution.ContributionWallet;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -13,18 +12,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataAccessResourceFailureException;
-import org.springframework.data.redis.RedisConnectionFailureException;
 
 import java.util.List;
-import java.util.OptionalLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
-import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
@@ -44,16 +39,10 @@ public class ClickerUpgradeServiceTest {
     private ClickerService clickerService;
 
     @Mock
-    private UserClickerLevelStore userClickerLevelStore;
-
-    @Mock
-    private ContributionWallet contributionWallet;
-
-    @Mock
-    private ClickerLevelUpdater clickerLevelUpdater;
-
-    @Mock
     private UserClickerLevelCache userClickerLevelCache;
+
+    @Mock
+    private RedisClickerUpgrader clickerUpgrader;
 
     @InjectMocks
     private ClickerUpgradeService clickerUpgradeService;
@@ -63,11 +52,11 @@ public class ClickerUpgradeServiceTest {
     class WhenMaxLevel {
 
         @Test
-        @DisplayName("업그레이드하면 CLICKER_MAX_LEVEL 예외가 나고, 차감·레벨 변경·캐시 갱신·복구는 하지 않는다")
+        @DisplayName("업그레이드하면 CLICKER_MAX_LEVEL 예외가 나고, Redis 업그레이드는 하지 않는다")
         void upgrade_maxLevel() {
             // given: 레벨표는 3레벨이 최고 레벨, 유저는 이미 3레벨
             given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
-            given(userClickerLevelStore.findLevel(USER_ID)).willReturn(3L);
+            given(userClickerLevelCache.loadIfAbsent(USER_ID)).willReturn(3L);
 
             // when
             Throwable thrown = catchThrowable(
@@ -79,10 +68,7 @@ public class ClickerUpgradeServiceTest {
                     .extracting("errorCode")
                     .isEqualTo(ErrorCode.CLICKER_MAX_LEVEL);
 
-            then(contributionWallet).should(never()).tryDeduct(anyLong(), anyLong(), anyLong());
-            then(clickerLevelUpdater).should(never()).changeLevel(anyLong(), anyLong(), anyLong());
-            then(userClickerLevelCache).should(never()).raiseLevel(anyLong(), anyLong());
-            then(contributionWallet).should(never()).restore(anyLong(), anyLong(), anyLong());
+            then(clickerUpgrader).should(never()).upgrade(anyLong(), anyLong(), anyLong(), anyLong());
         }
     }
 
@@ -91,12 +77,12 @@ public class ClickerUpgradeServiceTest {
     class WhenNotEnoughScore {
 
         @Test
-        @DisplayName("업그레이드하면 CLICKER_NOT_ENOUGH_SCORE 예외가 나고, 레벨 변경·캐시 갱신·복구는 하지 않는다")
+        @DisplayName("업그레이드하면 CLICKER_NOT_ENOUGH_SCORE 예외가 난다")
         void upgrade_notEnoughScore() {
-            // given: 유저는 1레벨, 다음 레벨(2) 비용은 300인데 잔액 부족
+            // given: 유저는 1레벨, 다음 레벨(2) 비용은 300인데 잔액 부족(-1)
             given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
-            given(userClickerLevelStore.findLevel(USER_ID)).willReturn(1L);
-            given(contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 300L)).willReturn(OptionalLong.empty());
+            given(userClickerLevelCache.loadIfAbsent(USER_ID)).willReturn(1L);
+            given(clickerUpgrader.upgrade(USER_ID, UNIVERSITY_ID, 1L, 300L)).willReturn(-1L);
 
             // when
             Throwable thrown = catchThrowable(
@@ -107,10 +93,6 @@ public class ClickerUpgradeServiceTest {
                     .isInstanceOf(BusinessException.class)
                     .extracting("errorCode")
                     .isEqualTo(ErrorCode.CLICKER_NOT_ENOUGH_SCORE);
-
-            then(clickerLevelUpdater).should(never()).changeLevel(anyLong(), anyLong(), anyLong());
-            then(userClickerLevelCache).should(never()).raiseLevel(anyLong(), anyLong());
-            then(contributionWallet).should(never()).restore(anyLong(), anyLong(), anyLong());
         }
     }
 
@@ -119,12 +101,12 @@ public class ClickerUpgradeServiceTest {
     class WhenSuccess {
 
         @Test
-        @DisplayName("업그레이드하면 다음 레벨 비용만큼 차감하고 레벨을 1 올린 결과를 반환한다")
+        @DisplayName("업그레이드하면 현재 레벨을 기대 레벨로 다음 레벨 비용을 Redis에서 차감하고, 올린 결과를 반환한다")
         void upgrade_success() {
             // given
             given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
-            given(userClickerLevelStore.findLevel(USER_ID)).willReturn(1L);
-            given(contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 300L)).willReturn(OptionalLong.of(700L));
+            given(userClickerLevelCache.loadIfAbsent(USER_ID)).willReturn(1L);
+            given(clickerUpgrader.upgrade(USER_ID, UNIVERSITY_ID, 1L, 300L)).willReturn(700L);
 
             // when
             ClickerUpgradeResult result = clickerUpgradeService.upgrade(USER_ID, UNIVERSITY_ID);
@@ -135,113 +117,31 @@ public class ClickerUpgradeServiceTest {
             assertThat(result.nextLevelRequiredScore()).isEqualTo(1000L);
             assertThat(result.remainingScore()).isEqualTo(700L);
 
-            then(userClickerLevelCache).should().raiseLevel(USER_ID, 2L);
-            then(clickerLevelUpdater).should().changeLevel(USER_ID, 1L, 2L);
-            then(contributionWallet).should(never()).restore(anyLong(), anyLong(), anyLong());
+            then(clickerUpgrader).should().upgrade(USER_ID, UNIVERSITY_ID, 1L, 300L);
         }
     }
 
     @Nested
-    @DisplayName("레벨 변경 중 DB 예외가 날 때")
-    class WhenDbFailure {
-
-        @Test
-        @DisplayName("업그레이드하면 차감한 기여도를 복구하고 같은 예외를 던진다")
-        void upgrade_dbFailure() {
-            // given: 300 차감에 성공했지만 레벨 변경 중 DB 연결 장애
-            given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
-            given(userClickerLevelStore.findLevel(USER_ID)).willReturn(1L);
-            given(contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 300L)).willReturn(OptionalLong.of(700L));
-            DataAccessResourceFailureException dbFailure = new DataAccessResourceFailureException("DB 연결 실패");
-            willThrow(dbFailure).given(clickerLevelUpdater).changeLevel(USER_ID, 1L, 2L);
-
-            // when
-            Throwable thrown = catchThrowable(
-                    () -> clickerUpgradeService.upgrade(USER_ID, UNIVERSITY_ID));
-
-            // then
-            assertThat(thrown).isSameAs(dbFailure);
-
-            then(contributionWallet).should().restore(USER_ID, UNIVERSITY_ID, 300L);
-            then(userClickerLevelCache).should(never()).raiseLevel(anyLong(), anyLong());
-        }
-    }
-
-    @Nested
-    @DisplayName("레벨 변경 실패 후 기여도 복구도 실패할 때")
-    class WhenRestoreFailure {
-
-        @Test
-        @DisplayName("업그레이드하면 원래 DB 예외를 던지고, 복구 예외는 suppressed로 남긴다")
-        void upgrade_restoreFailure() {
-            // given: 레벨 변경 중 DB 장애, 이어서 Redis 복구도 장애
-            given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
-            given(userClickerLevelStore.findLevel(USER_ID)).willReturn(1L);
-            given(contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 300L)).willReturn(OptionalLong.of(700L));
-            DataAccessResourceFailureException dbFailure = new DataAccessResourceFailureException("DB 연결 실패");
-            RedisConnectionFailureException redisFailure = new RedisConnectionFailureException("Redis 연결 실패");
-            willThrow(dbFailure).given(clickerLevelUpdater).changeLevel(USER_ID, 1L, 2L);
-            willThrow(redisFailure).given(contributionWallet).restore(USER_ID, UNIVERSITY_ID, 300L);
-
-            // when
-            Throwable thrown = catchThrowable(
-                    () -> clickerUpgradeService.upgrade(USER_ID, UNIVERSITY_ID));
-
-            // then
-            assertThat(thrown).isSameAs(dbFailure);
-            assertThat(thrown.getSuppressed()).containsExactly(redisFailure);
-        }
-    }
-
-    @Nested
-    @DisplayName("레벨은 올랐지만 레벨 캐시 갱신이 실패할 때")
-    class WhenCacheFailure {
-
-        @Test
-        @DisplayName("업그레이드하면 예외 없이 결과를 반환하고 기여도는 복구하지 않는다")
-        void upgrade_cacheFailure() {
-            // given: 레벨 변경은 커밋됐고, 이어진 Redis 캐시 갱신만 장애
-            given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
-            given(userClickerLevelStore.findLevel(USER_ID)).willReturn(1L);
-            given(contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 300L)).willReturn(OptionalLong.of(700L));
-            willThrow(new RedisConnectionFailureException("Redis 연결 실패"))
-                    .given(userClickerLevelCache).raiseLevel(USER_ID, 2L);
-
-            // when
-            ClickerUpgradeResult result = clickerUpgradeService.upgrade(USER_ID, UNIVERSITY_ID);
-
-            // then
-            assertThat(result.upgradedClicker().getId()).isEqualTo(2L);
-            assertThat(result.remainingScore()).isEqualTo(700L);
-
-            then(contributionWallet).should(never()).restore(anyLong(), anyLong(), anyLong());
-        }
-    }
-
-    @Nested
-    @DisplayName("레벨 변경이 충돌로 실패할 때")
+    @DisplayName("동시 요청이 먼저 레벨을 올렸을 때")
     class WhenConflict {
 
         @Test
-        @DisplayName("업그레이드하면 차감한 기여도를 복구하고 CLICKER_UPGRADE_CONFLICT 예외가 난다")
+        @DisplayName("업그레이드하면 CLICKER_UPGRADE_CONFLICT 예외가 난다")
         void upgrade_conflict() {
-            // given: 1레벨 유저가 300 차감에 성공했지만 이미 다른 요청이 레벨을 올려서 변경 실패
+            // given: 서버가 비용을 계산한 뒤 다른 요청이 먼저 레벨을 올려 Lua가 -2 반환
             given(clickerService.getLevelTable()).willReturn(LEVEL_TABLE);
-            given(userClickerLevelStore.findLevel(USER_ID)).willReturn(1L);
-            given(contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 300L)).willReturn(OptionalLong.of(700L));
-            BusinessException conflict = new BusinessException(ErrorCode.CLICKER_UPGRADE_CONFLICT);
-            willThrow(conflict).given(clickerLevelUpdater).changeLevel(USER_ID, 1L, 2L);
+            given(userClickerLevelCache.loadIfAbsent(USER_ID)).willReturn(1L);
+            given(clickerUpgrader.upgrade(USER_ID, UNIVERSITY_ID, 1L, 300L)).willReturn(-2L);
 
             // when
             Throwable thrown = catchThrowable(
                     () -> clickerUpgradeService.upgrade(USER_ID, UNIVERSITY_ID));
 
             // then
-            assertThat(thrown).isSameAs(conflict);
-
-            then(clickerLevelUpdater).should().changeLevel(USER_ID, 1L, 2L);
-            then(contributionWallet).should().restore(USER_ID, UNIVERSITY_ID, 300L);
-            then(userClickerLevelCache).should(never()).raiseLevel(anyLong(), anyLong());
+            assertThat(thrown)
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(ErrorCode.CLICKER_UPGRADE_CONFLICT);
         }
     }
 }

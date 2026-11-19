@@ -4,6 +4,7 @@ import com.back.nbe1214finalsour.domain.abuse.service.AbuseVerificationService;
 import com.back.nbe1214finalsour.domain.click.dto.ClickRequest;
 import com.back.nbe1214finalsour.domain.click.dto.ClickResponse;
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
+import com.back.nbe1214finalsour.domain.clicker.repository.UserClickerLevelCache;
 import com.back.nbe1214finalsour.domain.clicker.service.ClickerService;
 import com.back.nbe1214finalsour.domain.university.service.library.LibraryBonusChecker;
 import com.back.nbe1214finalsour.domain.user.entity.User;
@@ -81,6 +82,8 @@ class ClickServiceTest {
     @Mock
     private AbuseVerificationService abuseVerificationService;
     @Mock
+    private UserClickerLevelCache userClickerLevelCache;
+    @Mock
     private LibraryBonusChecker libraryBonusChecker;
     @Mock
     private User user;
@@ -91,7 +94,8 @@ class ClickServiceTest {
     void setUp() {
         ClickActionGuard clickActionGuard = new ClickActionGuard(
                 stringRedisTemplate, userStatusCache, userRepository,
-                actionRateLimiter, clickCountLimiter, clickerService, abuseVerificationService);
+                actionRateLimiter, clickCountLimiter, clickerService, abuseVerificationService,
+                userClickerLevelCache);
         clickService = new ClickService(stringRedisTemplate, userRepository, redisHandler, clickActionGuard,
                 libraryBonusChecker);
     }
@@ -104,7 +108,7 @@ class ClickServiceTest {
         return new ClickRequest(SUBMISSION_ID, clickCount, lat, lng);
     }
 
-    /** 활성 회원 → 중복 아님 → 레벨 캐시 히트(3레벨) → 유저 조회 성공까지의 공통 경로 */
+    /** 활성 회원 → 중복 아님 → 레벨 조회(loadIfAbsent, 3레벨) → 유저 조회 성공까지의 공통 경로 */
     private void givenHappyPathBeforeScript() {
         givenHappyPathBeforeScript(CLICKER_LV3);
     }
@@ -113,7 +117,7 @@ class ClickServiceTest {
         given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
         given(userStatusCache.find(USER_ID)).willReturn(Optional.of(UserStatus.ACTIVE));
         given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(true);
-        given(valueOperations.get("user:1:clicker")).willReturn(String.valueOf(clicker.getId()));
+        given(userClickerLevelCache.loadIfAbsent(USER_ID)).willReturn(clicker.getId());
         given(clickerService.getClickerById(clicker.getId())).willReturn(clicker);
     }
 
@@ -267,7 +271,7 @@ class ClickServiceTest {
         given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
         given(userStatusCache.find(USER_ID)).willReturn(Optional.of(UserStatus.ACTIVE));
         given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(null);
-        given(valueOperations.get("user:1:clicker")).willReturn("3");
+        given(userClickerLevelCache.loadIfAbsent(USER_ID)).willReturn(3L);
         given(clickerService.getClickerById(3L)).willReturn(CLICKER_LV3);
         given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
@@ -332,27 +336,7 @@ class ClickServiceTest {
     // --- 3단계: 클리커 레벨 캐시 ---
 
     @Test
-    @DisplayName("레벨 캐시가 없으면 DB의 clickerId로 캐시를 채우고 그 레벨을 쓴다")
-    void click_cacheMissWritesClickerLevelCache() {
-        given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
-        given(userStatusCache.find(USER_ID)).willReturn(Optional.of(UserStatus.ACTIVE));
-        given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(true);
-        given(valueOperations.get("user:1:clicker")).willReturn(null);
-        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
-        given(user.getClickerId()).willReturn(2L);
-        given(clickerService.getClickerById(2L)).willReturn(new Clicker(2L, 20, 300L));
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
-                .willReturn(SCRIPT_RESULT);
-
-        ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
-
-        verify(valueOperations).set("user:1:clicker", "2");
-        verify(clickerService).getClickerById(2L);
-        assertThat(response.earnedScore()).isEqualTo(60L); // 3 * 20
-    }
-
-    @Test
-    @DisplayName("레벨 캐시가 있으면 캐시 값을 쓰고 캐시를 다시 쓰지 않는다")
+    @DisplayName("레벨은 loadIfAbsent 값을 쓰고 레벨 키를 직접 쓰지 않는다")
     void click_cacheHitDoesNotWriteCache() {
         givenHappyPathBeforeScript();
         given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
@@ -365,7 +349,7 @@ class ClickServiceTest {
     }
 
     @Test
-    @DisplayName("레벨 캐시와 토큰의 학과 ID가 있으면 회원을 DB에서 조회하지 않는다")
+    @DisplayName("토큰의 학과 ID가 있으면 회원을 DB에서 조회하지 않는다")
     void click_cacheHitWithDepartmentClaimSkipsUserLookup() {
         givenHappyPathBeforeScript();
         given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
@@ -394,23 +378,6 @@ class ClickServiceTest {
         assertThat(argsCaptor.getAllValues().get(1)).isEqualTo("9");
         assertThat(response).extracting("department.id").isEqualTo(9L);
         verify(valueOperations, never()).set(eq("user:1:clicker"), anyString());
-    }
-
-    @Test
-    @DisplayName("회원을 조회해야 하는데(레벨 캐시 없음) 회원이 없으면 USER_NOT_FOUND 예외")
-    void click_userNotFound() {
-        given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
-        given(userStatusCache.find(USER_ID)).willReturn(Optional.of(UserStatus.ACTIVE));
-        given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(true);
-        given(valueOperations.get("user:1:clicker")).willReturn(null);
-        given(userRepository.findById(USER_ID)).willReturn(Optional.empty());
-
-        assertThatThrownBy(() -> clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3)))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.USER_NOT_FOUND);
-
-        verify(stringRedisTemplate, never()).execute(any(), anyList(), any());
     }
 
     // --- 4단계: 점수 계산 ---
