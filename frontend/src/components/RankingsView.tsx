@@ -228,7 +228,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               <span className="font-press-start text-[9px] text-[#261608] font-bold">
                 {row.score.toLocaleString('ko-KR')}
               </span>
-              {/* The server has no rank change yet (plan D-3): API rows show no badge. */}
+              {/* Null: nothing to compare against 00:00 KST (new member, or no copy for today), so no badge. */}
               {row.change !== null && (
                 <span
                   className={`text-[8px] font-mono px-0.5 py-0.2 border border-[#261608] font-bold ${

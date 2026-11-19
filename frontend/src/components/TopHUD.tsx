@@ -19,7 +19,7 @@ interface TopHUDProps {
   schoolScore: number;
   /** Null while the school has no server ranking (API visit, SCRUM-163). */
   rank: number | null;
-  /** Null hides the change badge: the API has no rank change. */
+  /** Null hides the change badge (signed out, not loaded, or nothing to compare against 00:00 KST). */
   rankDelta: string | null;
   campusLevel: number;
   soundEnabled: boolean;

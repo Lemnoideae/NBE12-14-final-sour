@@ -82,7 +82,7 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
   };
 
   const renderChange = (change: string | null) => {
-    // The server has no rank change yet (plan D-3): API rows show no badge.
+    // Null: nothing to compare against 00:00 KST (new member, or no copy for today), so no badge.
     if (change === null) return null;
     const up = change.startsWith('↑') || change.startsWith('▲');
     const down = change.startsWith('↓') || change.startsWith('▼');
