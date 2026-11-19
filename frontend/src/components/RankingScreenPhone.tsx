@@ -6,7 +6,7 @@ import { BottomNav, NavTab } from './BottomNav';
 import { useMySchool } from '../hooks/useSchoolViews';
 import { useDragScroll } from '../hooks/useDragScroll';
 import { useRankingBoard, type RankingBoardRow, type RankingTab } from '../hooks/useRankingBoard';
-import { RankingRowImage, RankingStatusNotice, rankingCaption } from './RankingParts';
+import { RANK_TREND_TONE, RankingRowImage, RankingStatusNotice, rankTrend, rankingCaption } from './RankingParts';
 
 interface RankingScreenPhoneProps {
   currentSchoolScore: number;
@@ -468,7 +468,8 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
                 {myItem.score.toLocaleString('ko-KR')}
               </span>
               {myItem.change !== null && (
-                <span className="text-[8px] font-mono px-1 py-0.2 border border-[#261608] flex items-center gap-0.5 font-bold text-white bg-[#22c55e]">
+                <span data-testid="my-rank-change" data-trend={rankTrend(myItem.change)}
+                  className={`text-[8px] font-mono px-1 py-0.2 border border-[#261608] flex items-center gap-0.5 font-bold ${RANK_TREND_TONE[rankTrend(myItem.change)]}`}>
                   {myItem.change}
                 </span>
               )}

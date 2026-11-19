@@ -1,6 +1,7 @@
 import type { SchoolId } from '../data/schoolIds.ts';
 import React from 'react';
 import { ArrowLeft, Volume2, VolumeX } from 'lucide-react';
+import { RANK_TREND_TONE, rankTrend } from './RankingParts';
 import { soundManager } from '../utils/sound';
 import { SharedImage } from './SharedImage.tsx';
 import type { SchoolView } from '../data/schoolDirectory.ts';
@@ -34,16 +35,6 @@ interface TopHUDProps {
   /** Visit mode: back to the map, left of the badge. */
   onBack?: () => void;
 }
-
-type RankTrend = 'up' | 'down' | 'same';
-/** ▲ up, ▼ down, anything else ("-") unchanged. The server's rankChange can now be a fall (SCRUM-184). */
-export const rankTrend = (delta: string): RankTrend => (delta.startsWith('▲') ? 'up' : delta.startsWith('▼') ? 'down' : 'same');
-// Same colors as the ranking lists (RankingScreenPhone, RankingsView).
-const RANK_TREND_TONE: Record<RankTrend, string> = {
-  up: 'text-[#ffffff] bg-[#22c55e]',
-  down: 'text-[#ffffff] bg-[#fb7185]',
-  same: 'text-[#261608] bg-[#faecc7]',
-};
 
 /** HUD school props for a school row (comparison screens use the player's school). */
 export const schoolHudProps = (school: Pick<SchoolView, 'name' | 'id' | 'badgeColor' | 'firstSyllable' | 'city' | 'filterRegion'>) => ({

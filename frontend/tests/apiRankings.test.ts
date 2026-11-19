@@ -275,3 +275,14 @@ test('메인 상단 변동 배지는 하락을 상승과 다른 색으로 보인
   assert.deepEqual(trends, [['▲2', 'up', 'bg-[#22c55e]'], ['▼1', 'down', 'bg-[#fb7185]'], ['-', 'same', 'bg-[#faecc7]']]);
   assert.equal(hudFor(null), null);
 });
+
+test('색 센서: 순위 변동 배지는 고정 초록 대신 rankTrend 색을 쓴다 (▼가 상승처럼 보이지 않게)', () => {
+  for (const file of ['TopHUD.tsx', 'RankingsView.tsx', 'RankingScreenPhone.tsx']) {
+    const source = readFileSync(new URL(`../src/components/${file}`, import.meta.url), 'utf8');
+    // Every element that prints a change value must pick its tone from the trend.
+    for (const [, block] of source.matchAll(/<span([^>]*)>\s*\{(?:rankDelta|myRow\.change|myItem\.change)\}/g)) {
+      assert.doesNotMatch(block, /bg-\[#22c55e\]/, `${file}: 변동 배지에 RANK_TREND_TONE[rankTrend(...)]을 쓰세요`);
+      assert.match(block, /RANK_TREND_TONE\[rankTrend\(/, `${file}: 변동 배지에 RANK_TREND_TONE[rankTrend(...)]을 쓰세요`);
+    }
+  }
+});
