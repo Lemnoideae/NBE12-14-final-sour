@@ -3,7 +3,7 @@ import type { ApiClient } from './client';
 import { EXPIRED_TOKEN_CODE } from './client';
 import { ApiError, CLIENT_ERROR_CODES } from './errors';
 import { sessionEndReason } from './session';
-import { CHAT_ERROR_DESTINATION, CHAT_SEND_DESTINATION, chatTopic, parseChatFault, parseChatMessage, type ChatMessage } from './chat';
+import { CHAT_ERROR_DESTINATION, chatSendDestination, chatTopic, parseChatFault, parseChatMessage, type ChatMessage, type ChatRoom } from './chat';
 
 export type ChatConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'blocked';
 export interface ChatCallbacks {
@@ -13,7 +13,7 @@ export interface ChatCallbacks {
   onError(error: unknown): void;
 }
 export interface ChatConnection { send(content: string): boolean; stop(): void }
-export type ChatConnectionFactory = (api: ApiClient, universityId: number, callbacks: ChatCallbacks) => ChatConnection;
+export type ChatConnectionFactory = (api: ApiClient, room: ChatRoom, callbacks: ChatCallbacks) => ChatConnection;
 type StompPort = Pick<Client, 'activate' | 'deactivate' | 'publish' | 'subscribe' | 'connected' | 'connectHeaders'>;
 
 export function chatSocketUrl(origin: string): string {
@@ -23,7 +23,7 @@ export function chatSocketUrl(origin: string): string {
 }
 
 /** No raw frames/debug logs. The library owns framing, heartbeats and exponential network reconnects. */
-export function createChatConnection(api: ApiClient, universityId: number, callbacks: ChatCallbacks,
+export function createChatConnection(api: ApiClient, room: ChatRoom, callbacks: ChatCallbacks,
   options: { origin?: string; createClient?: (config: StompConfig) => StompPort } = {}): ChatConnection {
   let stopped = false;
   let halted = false;
@@ -51,9 +51,9 @@ export function createChatConnection(api: ApiClient, universityId: number, callb
     onConnect: () => {
       if (!live()) return;
       socket.subscribe(CHAT_ERROR_DESTINATION, (frame) => { if (live()) report(frame.body); });
-      socket.subscribe(chatTopic(universityId), (frame) => {
+      socket.subscribe(chatTopic(room), (frame) => {
         if (!live()) return;
-        try { callbacks.onMessage(parseChatMessage(frame.body, universityId)); } catch (error) { callbacks.onError(error); }
+        try { callbacks.onMessage(parseChatMessage(frame.body, room)); } catch (error) { callbacks.onError(error); }
       });
       callbacks.onStatus('connected');
       // Subscribe first; history then merges with any messages arriving while HTTP is in flight.
@@ -83,7 +83,7 @@ export function createChatConnection(api: ApiClient, universityId: number, callb
   return {
     send(content) {
       if (!live() || !socket.connected) return false;
-      try { socket.publish({ destination: CHAT_SEND_DESTINATION, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content }) }); return true; }
+      try { socket.publish({ destination: chatSendDestination(room), headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content }) }); return true; }
       catch {
         callbacks.onError(new ApiError({ kind: 'network', status: null, code: CLIENT_ERROR_CODES.network }));
         return false;

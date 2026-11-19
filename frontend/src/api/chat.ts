@@ -1,12 +1,23 @@
-// SCRUM-133: ChatMessageResponse / ChatMessagePageResponse; subscribe and REST history share this schema.
+// SCRUM-133 university room, SCRUM-182 alliance room: ChatMessageResponse / ChatMessagePageResponse. Subscribe and REST
+// history share this schema. The server picks the alliance room from the member's school, so sends carry no room ID.
 import type { ApiClient } from './client';
 import { ApiError, CLIENT_ERROR_CODES } from './errors';
 
 export const CHAT_PAGE_SIZE = 20;
 export const CHAT_MAX_LENGTH = 200;
-export const CHAT_SEND_DESTINATION = '/app/chat/university';
 export const CHAT_ERROR_DESTINATION = '/user/queue/errors';
-export const chatTopic = (universityId: number) => `/topic/chat/universities/${universityId}`;
+
+export type ChatRoomKind = 'university' | 'alliance';
+export interface ChatRoom { kind: ChatRoomKind; id: number }
+export const universityRoom = (id: number): ChatRoom => ({ kind: 'university', id });
+export const allianceRoom = (id: number): ChatRoom => ({ kind: 'alliance', id });
+const ROOM = {
+  university: { prefix: 'UNIV#', path: 'universities', send: '/app/chat/university' },
+  alliance: { prefix: 'ALLIANCE#', path: 'alliances', send: '/app/chat/alliance' },
+} as const;
+export const chatTopic = (room: ChatRoom) => `/topic/chat/${ROOM[room.kind].path}/${room.id}`;
+export const chatSendDestination = (room: ChatRoom) => ROOM[room.kind].send;
+export const chatRoomId = (room: ChatRoom) => `${ROOM[room.kind].prefix}${room.id}`;
 
 export interface ChatMessage {
   messageId: string;
@@ -23,17 +34,17 @@ const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 export const invalidChatResponse = () => new ApiError({ kind: 'invalid-response', status: null, code: CLIENT_ERROR_CODES.invalidResponse });
 
-export function isChatMessage(value: unknown, universityId: number): value is ChatMessage {
+export function isChatMessage(value: unknown, room: ChatRoom): value is ChatMessage {
   return record(value) && typeof value.messageId === 'string' && ULID.test(value.messageId)
-    && value.roomId === `UNIV#${universityId}` && Number.isSafeInteger(value.userId) && Number(value.userId) > 0
+    && value.roomId === chatRoomId(room) && Number.isSafeInteger(value.userId) && Number(value.userId) > 0
     && typeof value.nickname === 'string' && typeof value.universityName === 'string' && typeof value.content === 'string'
     && typeof value.createdAt === 'string' && Number.isFinite(Date.parse(value.createdAt));
 }
 
-export function parseChatMessage(body: string, universityId: number): ChatMessage {
+export function parseChatMessage(body: string, room: ChatRoom): ChatMessage {
   let value: unknown;
   try { value = JSON.parse(body); } catch { throw invalidChatResponse(); }
-  if (!isChatMessage(value, universityId)) throw invalidChatResponse();
+  if (!isChatMessage(value, room)) throw invalidChatResponse();
   return value;
 }
 
@@ -61,9 +72,9 @@ export function mergeChatMessages(current: readonly ChatMessage[], incoming: rea
   return [...byId.values()].sort((a, b) => a.messageId < b.messageId ? -1 : a.messageId > b.messageId ? 1 : 0);
 }
 
-export async function getChatHistory(client: ApiClient, universityId: number, cursor?: string, signal?: AbortSignal): Promise<ChatPage> {
-  const page = await client.get<unknown>(`/chat/universities/${universityId}/messages`, { query: { size: CHAT_PAGE_SIZE, cursor }, signal });
-  if (!record(page) || !Array.isArray(page.items) || !page.items.every((item) => isChatMessage(item, universityId))
+export async function getChatHistory(client: ApiClient, room: ChatRoom, cursor?: string, signal?: AbortSignal): Promise<ChatPage> {
+  const page = await client.get<unknown>(`/chat/${ROOM[room.kind].path}/${room.id}/messages`, { query: { size: CHAT_PAGE_SIZE, cursor }, signal });
+  if (!record(page) || !Array.isArray(page.items) || !page.items.every((item) => isChatMessage(item, room))
     || typeof page.hasNext !== 'boolean' || !(page.nextCursor === null || typeof page.nextCursor === 'string' && ULID.test(page.nextCursor))
     || (page.hasNext && (!page.nextCursor || page.nextCursor === cursor))) throw invalidChatResponse();
   return { items: page.items, nextCursor: page.nextCursor, hasNext: page.hasNext };

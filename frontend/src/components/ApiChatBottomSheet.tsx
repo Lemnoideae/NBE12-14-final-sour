@@ -1,8 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type SubmitEvent } from 'react';
 import { ChevronDown, Send, ShieldAlert } from 'lucide-react';
 import { useApiClient, useAuthSession } from '../api/ApiProvider';
+import { useMyAlliance } from '../api/alliances';
+import { allianceRoom, universityRoom, type ChatRoom } from '../api/chat';
 import type { ChatConnectionFactory } from '../api/chatConnection';
-import { createUniversityChat } from '../api/universityChat';
+import { createRoomChat } from '../api/roomChat';
 import { errorMessage } from '../api/errors';
 import { useMyInfo, type MyInfo } from '../api/users';
 import { useChatScroll } from '../hooks/useChatScroll';
@@ -18,33 +20,55 @@ export function ApiChatBottomSheet({ onClose, onGoToLogin, connectionFactory }: 
   const signedIn = useAuthSession().status === 'signed-in';
   const me = useMyInfo();
   const [view, setView] = useState<'school' | 'union' | 'words'>('school');
+  // The alliance socket opens on the first visit to its tab and then stays, like the school room, until the sheet closes.
+  const [unionOpened, setUnionOpened] = useState(false);
   const wordsButton = useRef<HTMLButtonElement>(null);
   return <div className="w-full h-full bg-[#fdf5df] border-t-4 border-[#261608] flex flex-col overflow-hidden font-pixel text-[#261608]">
     <header className="bg-[#faecc7] border-b-2 border-[#261608] p-2 flex flex-wrap items-center gap-1 shrink-0">
       <h2 className="text-sm font-black mr-1">채팅</h2>
       <button type="button" aria-pressed={view === 'school'} onClick={() => setView('school')} className={BUTTON}>교내 채팅</button>
-      <button type="button" aria-pressed={view === 'union'} onClick={() => setView('union')} className={BUTTON}>연합 채팅</button>
+      <button type="button" aria-pressed={view === 'union'} onClick={() => { setView('union'); setUnionOpened(true); }} className={BUTTON}>연합 채팅</button>
       <button ref={wordsButton} type="button" aria-pressed={view === 'words'} onClick={() => setView('words')} className={BUTTON}>금칙어</button>
       <button type="button" aria-label="채팅창 닫기" onClick={onClose} className={`${BUTTON} ml-auto`}><ChevronDown className="w-4 h-4" aria-hidden="true" /></button>
     </header>
     {!signedIn ? <div role="status" className="p-3 text-sm">
-      <p>교내 채팅을 이용하려면 로그인해 주세요.</p>
+      <p>채팅을 이용하려면 로그인해 주세요.</p>
       {onGoToLogin && <button type="button" className={BUTTON} onClick={onGoToLogin}>로그인</button>}
     </div> : !me.data ? <div className="p-3 text-sm">
       {me.isError ? <><p role="alert">{errorMessage(me.error)}</p><button type="button" className={BUTTON} onClick={() => void me.refetch()}>내 정보 다시 불러오기</button></> : <p role="status">내 학교 정보를 확인하는 중이에요.</p>}
     </div> : <>
       {view === 'words' && <ForbiddenWordsPanel viewerId={me.data.id} onBack={() => { setView('school'); wordsButton.current?.focus(); }} />}
-      {view === 'union' && <p role="status" className="p-3 text-sm">연합 채팅은 아직 준비 중이에요. 교내 채팅을 이용해 주세요.</p>}
       <div hidden={view !== 'school'} className={view === 'school' ? 'flex flex-col flex-1 min-h-0' : 'hidden'}>
-        <UniversityChatRoom key={`${me.data.id}:${me.data.university.id}`} me={me.data} visible={view === 'school'} connectionFactory={connectionFactory} />
+        <ChatRoomPanel key={`${me.data.id}:${me.data.university.id}`} me={me.data} room={universityRoom(me.data.university.id)}
+          title={me.data.university.name} label="교내 메시지" visible={view === 'school'} connectionFactory={connectionFactory} />
       </div>
+      {unionOpened && <div hidden={view !== 'union'} className={view === 'union' ? 'flex flex-col flex-1 min-h-0' : 'hidden'}>
+        <AllianceChat key={me.data.id} me={me.data} visible={view === 'union'} connectionFactory={connectionFactory} />
+      </div>}
     </>}
   </div>;
 }
 
-function UniversityChatRoom({ me, visible, connectionFactory }: { me: MyInfo; visible: boolean; connectionFactory?: ChatConnectionFactory }) {
+interface RoomProps { me: MyInfo; visible: boolean; connectionFactory?: ChatConnectionFactory }
+
+/** The room follows GET /alliances/me: no alliance, no socket. A changed alliance remounts a fresh room. */
+function AllianceChat({ me, visible, connectionFactory }: RoomProps) {
+  const alliance = useMyAlliance(me.id);
+  const recheck = <button type="button" className={BUTTON} disabled={alliance.isFetching} onClick={() => void alliance.refetch()}>연합 다시 확인</button>;
+  if (alliance.isPending) return <p role="status" className="p-3 text-sm">우리 학교의 연합을 확인하는 중이에요.</p>;
+  if (alliance.isError) return <div className="p-3 text-sm"><p role="alert">{errorMessage(alliance.error)}</p>{recheck}</div>;
+  if (!alliance.data) return <div className="p-3 text-sm">
+    <p role="status">우리 학교가 속한 연합이 없어요. 연합을 만들거나 가입이 승인되면 연합 채팅을 이용할 수 있어요.</p>{recheck}
+  </div>;
+  const { id, name, expiredAt } = alliance.data;
+  return <ChatRoomPanel key={id} me={me} room={allianceRoom(id)} title={`${name} 연합 · ${time.format(new Date(expiredAt))} KST까지`}
+    label="연합 메시지" visible={visible} connectionFactory={connectionFactory} />;
+}
+
+function ChatRoomPanel({ me, room, title, label, visible, connectionFactory }: RoomProps & { room: ChatRoom; title: string; label: string }) {
   const client = useApiClient();
-  const chat = useMemo(() => createUniversityChat(client, me.university.id, connectionFactory), [client, me.university.id, connectionFactory]);
+  const { kind, id: roomId } = room;
+  const chat = useMemo(() => createRoomChat(client, { kind, id: roomId }, connectionFactory), [client, kind, roomId, connectionFactory]);
   const state = useSyncExternalStore(chat.subscribe, chat.getSnapshot, chat.getSnapshot);
   useEffect(() => { chat.start(); return chat.stop; }, [chat]);
   const [draft, setDraft] = useState('');
@@ -62,13 +86,13 @@ function UniversityChatRoom({ me, visible, connectionFactory }: { me: MyInfo; vi
   const latest = state.messages.at(-1);
   return <>
     <div className="m-2 p-2 border-2 border-[#261608] bg-[#f5e6c4] text-[11px] shrink-0">
-      <p className="flex gap-1 items-center"><ShieldAlert className="w-4 h-4 shrink-0" aria-hidden="true" />{me.university.name} · 욕설·비방은 서버가 가려요.</p>
+      <p className="flex gap-1 items-center"><ShieldAlert className="w-4 h-4 shrink-0" aria-hidden="true" />{title} · 욕설·비방은 서버가 가려요.</p>
       <p role="status" data-testid="chat-connection">{state.syncing ? '메시지 이력을 확인하는 중이에요.' : CONNECTION_TEXT[state.connection]}</p>
       <p>끊긴 연결은 최대 30초 간격으로 다시 시도해요. 메시지는 자동 재전송하지 않아요.</p>
       {(state.connection === 'blocked' || state.connection === 'reconnecting') && <button type="button" className={BUTTON} onClick={chat.reconnect}>다시 연결</button>}
     </div>
     {state.error && <p id={`${id}-error`} role="alert" className="px-3 pb-1 text-xs text-[#7f1d1d] break-words">{state.error}</p>}
-    <div ref={scroll.list} onScroll={scroll.onScroll} role="log" aria-label="교내 메시지" aria-live="off"
+    <div ref={scroll.list} onScroll={scroll.onScroll} role="log" aria-label={label} aria-live="off"
       data-testid="chat-history" className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-2.5 py-2 [overflow-anchor:none]">
       {state.historyError && <div className="text-xs mb-2">
         <p role="alert">{state.historyError}</p>

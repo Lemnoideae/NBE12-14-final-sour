@@ -1,7 +1,7 @@
 // An open sheet owns one controller. Stop aborts HTTP and disconnects STOMP; no state or message queue survives logout.
 import type { ApiClient } from './client';
 import { errorMessage } from './errors';
-import { getChatHistory, mergeChatMessages, validateChatContent, type ChatMessage } from './chat';
+import { getChatHistory, mergeChatMessages, validateChatContent, type ChatMessage, type ChatRoom } from './chat';
 import { createChatConnection, type ChatConnection, type ChatConnectionFactory, type ChatConnectionStatus } from './chatConnection';
 
 export interface ChatSnapshot {
@@ -16,7 +16,8 @@ export interface ChatSnapshot {
   historyError: string | null;
 }
 
-export function createUniversityChat(api: ApiClient, universityId: number, connect: ChatConnectionFactory = createChatConnection) {
+/** One room (university or alliance). Each room owns its own socket, history and recovery boundary. */
+export function createRoomChat(api: ApiClient, room: ChatRoom, connect: ChatConnectionFactory = createChatConnection) {
   let state: ChatSnapshot = { connection: 'connecting', messages: [], initialized: false, syncing: false, loadingOlder: false,
     hasOlder: false, cursor: null, error: null, historyError: null };
   const listeners = new Set<() => void>();
@@ -45,7 +46,7 @@ export function createUniversityChat(api: ApiClient, universityId: number, conne
       let cursor: string | undefined;
       const seenCursors = new Set<string>();
       do {
-        const page = await getChatHistory(api, universityId, cursor, request.signal);
+        const page = await getChatHistory(api, room, cursor, request.signal);
         if (!active(version)) return;
         const overlaps = page.items.some((item) => item.messageId === boundary);
         patch({ messages: mergeChatMessages(state.messages, page.items), ...(firstLoad ? { cursor: page.nextCursor, hasOlder: page.hasNext } : {}) });
@@ -73,7 +74,7 @@ export function createUniversityChat(api: ApiClient, universityId: number, conne
     pending = request;
     patch({ loadingOlder: true, historyError: null });
     try {
-      const page = await getChatHistory(api, universityId, state.cursor, request.signal);
+      const page = await getChatHistory(api, room, state.cursor, request.signal);
       if (active(version)) patch({ messages: mergeChatMessages(state.messages, page.items), cursor: page.nextCursor, hasOlder: page.hasNext });
     } catch (error) {
       if (active(version) && !request.signal.aborted) patch({ historyError: errorMessage(error) });
@@ -98,7 +99,7 @@ export function createUniversityChat(api: ApiClient, universityId: number, conne
     unsubscribe = api.session.subscribe(() => { if (!api.session.getAccessToken()) stop(); });
     const version = socketVersion;
     const liveSocket = () => running && version === socketVersion;
-    connection = connect(api, universityId, {
+    connection = connect(api, room, {
       onStatus(status) {
         if (!liveSocket()) return;
         if (status !== 'connected') {
@@ -127,4 +128,4 @@ export function createUniversityChat(api: ApiClient, universityId: number, conne
     },
   };
 }
-export type UniversityChat = ReturnType<typeof createUniversityChat>;
+export type RoomChat = ReturnType<typeof createRoomChat>;

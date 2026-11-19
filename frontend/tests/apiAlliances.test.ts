@@ -24,7 +24,8 @@ const { render, screen, fireEvent, cleanup, waitFor, within } = await import('@t
 const { ApiProvider } = await import('../src/api/ApiProvider');
 const { createApiClient } = await import('../src/api/client');
 const { createQueryClient } = await import('../src/api/queryClient');
-const { createAllianceMemory, createMatchMemory, createSentApplicationMemory, parseAllianceId, parseApplicationId, parseMatchId, validateAllianceName } = await import('../src/api/alliances');
+const { createAllianceMemory, createMatchMemory, createSentApplicationMemory, getMyAlliance, parseAllianceId, parseApplicationId, parseMatchId,
+  validateAllianceName } = await import('../src/api/alliances');
 const { ApiAllianceScreenPhone, remainingTime, timeLeft } = await import('../src/components/ApiAllianceScreenPhone');
 const { SCHOOL_ID } = await import('../src/data/schoolIds');
 const { assertAbsent, assertSameNode } = await import('./helpers/domAssert');
@@ -607,8 +608,11 @@ test('계약 센서: 연합 생성·상세 계약이 바뀌면 화면을 다시 
     ['ALLY_NOT_MEMBER', 'FORBIDDEN'], ['ALLY_APPLICATION_NOT_FOUND', 'NOT_FOUND'], ['ALLY_APPLICATION_NOT_PENDING', 'CONFLICT']]) {
     assert.match(errors, new RegExp(`${code}\\(HttpStatus\\.${status}, "${code}"`), fix);
   }
-  assert.doesNotMatch(controller, /@GetMapping\("\/me"\)|@GetMapping\s*\n\s*public ApiResponse<.*List|@GetMapping\("[^"]*applications/,
-    '연합 조회 API(내 연합·목록·신청 목록)가 생겼습니다. "준비 중" 안내, 브라우저 기억, 신청 번호 입력을 서버 조회로 바꾸세요.');
+  // GET /me (SCRUM-182) feeds the alliance chat tab. Moving this screen's remembered alliance to it is a recorded follow-up
+  // (.agents/03-RESULTS/*-scrum182_alliance_chat.md); the list and application-list APIs still do not exist.
+  assert.match(controller, /@GetMapping\("\/me"\)/, fix);
+  assert.doesNotMatch(controller, /@GetMapping\s*\n\s*public ApiResponse<.*List|@GetMapping\("[^"]*applications/,
+    '연합 조회 API(목록·신청 목록)가 생겼습니다. "준비 중" 안내, 브라우저 기억, 신청 번호 입력을 서버 조회로 바꾸세요.');
 
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
   const apiRoute = app.indexOf("API_MODE === 'api' && (viewMode === 'alliance_apply' || viewMode === 'current_alliance' || viewMode === 'battle_apply' || viewMode === 'battle_status') ?");
@@ -632,5 +636,16 @@ test('계약 센서: 연합 생성·상세 계약이 바뀌면 화면을 다시 
     ['MATCH_REQUEST_EXPIRED', 'CONFLICT'], ['MATCH_MEMBERS_INCOMPLETE', 'CONFLICT'], ['MATCH_SCHEDULE_CONFLICT', 'CONFLICT'],
     ['MATCH_INSUFFICIENT_TIME', 'CONFLICT']]) {
     assert.match(errors, new RegExp(`${code}\\(HttpStatus\\.${status}, "${code}"`), fix);
+  }
+});
+
+test('내 학교의 현재 연합은 /alliances/me로 읽고, 없으면 null, 형식이 틀리면 거절한다', async () => {
+  const calls: string[] = [];
+  const reply = (data: unknown) => createApiClient({ fetch: async (url) => { calls.push(String(url)); return ok(data); } });
+  assert.deepEqual(await getMyAlliance(reply(alliance(9))), alliance(9));
+  assert.equal(calls[0], '/api/v1/alliances/me');
+  assert.equal(await getMyAlliance(reply(null)), null);
+  for (const data of [{}, { ...alliance(9), id: 0 }, { ...alliance(9), id: '9' }, { ...alliance(9), expiredAt: 'bad' }, 'alliance']) {
+    await assert.rejects(getMyAlliance(reply(data)), /서버 응답을 읽지/);
   }
 });

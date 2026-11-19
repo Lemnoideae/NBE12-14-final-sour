@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { after, afterEach, test } from 'node:test';
 import React from 'react';
 import { JSDOM } from 'jsdom';
+import type { ChatRoom } from '../src/api/chat';
 import type { ChatCallbacks, ChatConnectionFactory } from '../src/api/chatConnection';
 import type { MyInfo } from '../src/api/users';
 import { flush, message, page, success } from './helpers/chat';
@@ -25,23 +26,26 @@ const ME: MyInfo = { id: 5, nickname: '우리학생', email: 'student@example.ac
   university: { id: 1, name: '한양대학교', logoUrl: null }, department: { id: 1, name: '공학과' },
   clicker: { level: 1, clickPower: 1, nextLevelRequiredScore: 10 }, totalContribScore: 0, totalAttackScore: 0 };
 
-async function mount(options: { signedOut?: boolean; history?: (url: URL) => Response | Promise<Response>; words?: () => Response } = {}) {
-  const calls: string[] = [], sends: string[] = [], callbacks: ChatCallbacks[] = [];
+async function mount(options: { signedOut?: boolean; history?: (url: URL) => Response | Promise<Response>; words?: () => Response;
+  alliance?: () => Response } = {}) {
+  const calls: string[] = [], sends: string[] = [], sentTo: string[] = [], callbacks: ChatCallbacks[] = [], rooms: ChatRoom[] = [];
   let stopped = 0, login = 0;
   const api = createApiClient({ fetch: async (url) => {
     const parsed = new URL(String(url), 'http://localhost');
     calls.push(parsed.pathname + parsed.search);
     if (parsed.pathname === '/api/v1/users/me') return success(ME);
     if (parsed.pathname === '/api/v1/forbidden-words') return options.words?.() ?? success({ words: ['바보', 'badword'] });
+    if (parsed.pathname === '/api/v1/alliances/me') return options.alliance?.() ?? success(null);
     return options.history?.(parsed) ?? success(page([]));
   } });
   if (!options.signedOut) api.session.signIn('token');
   const query = createQueryClient();
   query.setDefaultOptions({ queries: { retry: false, gcTime: Infinity } });
   clients.push(query);
-  const factory: ChatConnectionFactory = (_api, _id, events) => {
+  const factory: ChatConnectionFactory = (_api, room, events) => {
     callbacks.push(events);
-    return { send: (value) => { sends.push(value); return true; }, stop: () => { stopped++; } };
+    rooms.push(room);
+    return { send: (value) => { sends.push(value); sentTo.push(`${room.kind}#${room.id}`); return true; }, stop: () => { stopped++; } };
   };
   const ui = render(React.createElement(ApiProvider, { client: api, queryClient: query,
     children: React.createElement(ApiChatBottomSheet, { connectionFactory: factory, onGoToLogin: () => login++ }) }));
@@ -50,7 +54,7 @@ async function mount(options: { signedOut?: boolean; history?: (url: URL) => Res
     act(() => { callbacks[0].onStatus('connected'); callbacks[0].onReady(); });
     await waitFor(() => assert.equal((screen.getByLabelText('채팅 메시지') as HTMLTextAreaElement).disabled, false));
   }
-  return { api, calls, sends, callbacks, ui, counts: () => ({ stopped, login }) };
+  return { api, calls, sends, sentTo, callbacks, rooms, ui, counts: () => ({ stopped, login }) };
 }
 
 test('로그인 전에는 REST/소켓을 열지 않고 로그인으로 안내한다', async () => {
@@ -100,16 +104,55 @@ test('한글 IME와 Safari229·Shift+Enter는 보내지 않고 일반 Enter와 �
   assert.equal(input.value, '😀'.repeat(201));
 });
 
-test('오류 큐는 메시지를 알리고 연결 중단은 전송을 막으며 연합 탭은 준비 중이다', async () => {
+test('오류 큐는 메시지를 알리고 연결 중단은 전송을 막는다', async () => {
   const f = await mount();
   act(() => f.callbacks[0].onError(new ApiError({ kind: 'http', status: 429, code: 'CHAT_TOO_FREQUENT', serverMessage: '천천히 보내세요' })));
   assert.match(screen.getByRole('alert').textContent ?? '', /천천히 보내세요/);
   act(() => f.callbacks[0].onStatus('reconnecting'));
   assert.equal((screen.getByLabelText('채팅 메시지') as HTMLTextAreaElement).disabled, true);
-  fireEvent.click(screen.getByRole('button', { name: '연합 채팅' }));
-  screen.getByText('연합 채팅은 아직 준비 중이에요. 교내 채팅을 이용해 주세요.');
-  assertAbsent(screen.queryByRole('textbox'));
   assert.deepEqual(f.sends, []);
+});
+
+test('연합 탭은 처음 열 때 내 연합을 조회하고, 소속 연합이 없으면 안내만 보이며 소켓을 열지 않는다', async () => {
+  let failure = true;
+  const f = await mount({ alliance: () => failure ? new Response(JSON.stringify({ code: 'COMMON_INTERNAL_ERROR', message: '연합 조회 실패' }), { status: 500 }) : success(null) });
+  assert.ok(!f.calls.includes('/api/v1/alliances/me'), '교내 채팅만 쓰면 연합을 조회하지 않는다');
+  fireEvent.click(screen.getByRole('button', { name: '연합 채팅' }));
+  await waitFor(() => assert.match(screen.getByRole('alert').textContent ?? '', /연합 조회 실패/));
+  failure = false;
+  fireEvent.click(screen.getByRole('button', { name: '연합 다시 확인' }));
+  await screen.findByText('우리 학교가 속한 연합이 없어요. 연합을 만들거나 가입이 승인되면 연합 채팅을 이용할 수 있어요.');
+  assertAbsent(screen.queryByRole('textbox'));
+  assert.equal(f.callbacks.length, 1, '연합이 없으면 연합 소켓을 만들지 않는다');
+});
+
+test('연합 탭은 연합 방 소켓·이력을 따로 열고, 탭을 오가도 두 방의 메시지와 전송 대상이 섞이지 않는다', async () => {
+  const f = await mount({ alliance: () => success({ id: 9, name: '서울', totalScore: 0, status: 'ACTIVE', durationHours: 24, expiredAt: '2026-11-20T13:00:00+09:00' }) });
+  act(() => f.callbacks[0].onMessage(message(1, { content: '교내 인사' })));
+  fireEvent.click(screen.getByRole('button', { name: '연합 채팅' }));
+  await waitFor(() => assert.equal(f.callbacks.length, 2));
+  assert.deepEqual(f.rooms, [{ kind: 'university', id: 1 }, { kind: 'alliance', id: 9 }]);
+  act(() => { f.callbacks[1].onStatus('connected'); f.callbacks[1].onReady(); });
+  await waitFor(() => assert.ok(f.calls.includes('/api/v1/chat/alliances/9/messages?size=20')));
+  screen.getByText(/서울 연합 · .*KST까지 · 욕설·비방은 서버가 가려요\./);
+  const allianceLog = screen.getByRole('log', { name: '연합 메시지' });
+  act(() => f.callbacks[1].onMessage(message(2, { roomId: 'ALLIANCE#9', universityName: '연세대학교', content: '연합 인사' })));
+  within(allianceLog).getByText('연합 인사');
+  assert.equal(within(allianceLog).queryAllByText('교내 인사').length, 0);
+  // getByRole skips the hidden school panel; both panels stay mounted so their sockets survive tab switches.
+  const input = screen.getByRole('textbox', { name: '채팅 메시지' }) as HTMLTextAreaElement;
+  await waitFor(() => assert.equal(input.disabled, false));
+  fireEvent.change(input, { target: { value: '연합에게' } });
+  fireEvent.click(screen.getByRole('button', { name: '전송' }));
+  fireEvent.click(screen.getByRole('button', { name: '교내 채팅' }));
+  fireEvent.change(screen.getByRole('textbox', { name: '채팅 메시지' }), { target: { value: '교내에게' } });
+  fireEvent.click(screen.getByRole('button', { name: '전송' }));
+  assert.deepEqual(f.sentTo, ['alliance#9', 'university#1']);
+  assert.deepEqual(f.sends, ['연합에게', '교내에게']);
+  fireEvent.click(screen.getByRole('button', { name: '연합 채팅' }));
+  assert.equal(f.callbacks.length, 2, '탭을 다시 열어도 연합 소켓을 새로 만들지 않는다');
+  f.ui.unmount();
+  assert.equal(f.counts().stopped, 2, '시트를 닫으면 두 방의 소켓을 모두 닫는다');
 });
 
 test('공통 금칙어 목록의 로딩·오류·재시도·빈 목록과 복귀를 제공한다', async () => {

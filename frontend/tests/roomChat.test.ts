@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createApiClient } from '../src/api/client';
-import { createUniversityChat } from '../src/api/universityChat';
+import { universityRoom } from '../src/api/chat';
+import { createRoomChat } from '../src/api/roomChat';
 import { ApiError } from '../src/api/errors';
 import type { ChatCallbacks } from '../src/api/chatConnection';
 import { flush, message, page, success } from './helpers/chat';
@@ -10,7 +11,7 @@ function setup(fetch: typeof globalThis.fetch) {
   const api = createApiClient({ fetch });
   api.session.signIn('token');
   const callbacks: ChatCallbacks[] = [], sends: string[] = [], stopped: number[] = [];
-  const chat = createUniversityChat(api, 1, (_api, _id, events) => {
+  const chat = createRoomChat(api, universityRoom(1), (_api, _room, events) => {
     const index = callbacks.push(events) - 1;
     return { send: (content) => { sends.push(content); return true; }, stop: () => stopped.push(index) };
   });

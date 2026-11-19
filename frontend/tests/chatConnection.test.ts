@@ -3,20 +3,20 @@ import { test } from 'node:test';
 import { Client, FrameImpl, ReconnectionTimeMode, type messageCallbackType } from '@stomp/stompjs';
 import { createApiClient } from '../src/api/client';
 import { chatSocketUrl, createChatConnection, type ChatConnectionStatus } from '../src/api/chatConnection';
-import { CHAT_ERROR_DESTINATION, chatTopic } from '../src/api/chat';
+import { CHAT_ERROR_DESTINATION, allianceRoom, chatTopic, universityRoom, type ChatRoom } from '../src/api/chat';
 import { flush, message, success } from './helpers/chat';
 
 const frame = (body: unknown) => Object.assign(new FrameImpl({ command: 'MESSAGE', body: JSON.stringify(body) }), {
   ack() {}, nack() {}, // Real MESSAGE callbacks include acknowledgement methods even with automatic acknowledgement.
 });
-function setup(fetch?: typeof globalThis.fetch) {
+function setup(fetch?: typeof globalThis.fetch, room: ChatRoom = universityRoom(1)) {
   const api = createApiClient({ fetch });
   api.session.signIn('old');
   const statuses: ChatConnectionStatus[] = [], errors: unknown[] = [], messages: unknown[] = [], published: unknown[] = [];
   const subscriptions = new Map<string, messageCallbackType>();
   let ready = 0, activates = 0, deactivates = 0, online = true;
   let socket!: Client;
-  const connection = createChatConnection(api, 1, { onStatus: (value) => statuses.push(value), onReady: () => ready++,
+  const connection = createChatConnection(api, room, { onStatus: (value) => statuses.push(value), onReady: () => ready++,
     onError: (value) => errors.push(value), onMessage: (value) => messages.push(value) }, {
     origin: 'https://campus.example/screen', createClient: (config) => {
       socket = new Client(config);
@@ -47,7 +47,7 @@ test('same origin ws/wss, 토큰은 CONNECT 헤더만, 백오프·heartbeat는 �
   await f.socket.beforeConnect(f.socket);
   assert.deepEqual(f.socket.connectHeaders, { Authorization: 'Bearer fresh' });
   f.socket.onConnect(frame({}));
-  assert.deepEqual([...f.subscriptions.keys()], [CHAT_ERROR_DESTINATION, chatTopic(1)]);
+  assert.deepEqual([...f.subscriptions.keys()], [CHAT_ERROR_DESTINATION, chatTopic(universityRoom(1))]);
   assert.equal(f.counts().ready, 1);
   f.connection.send('서버로');
   assert.deepEqual(f.published, [{ destination: '/app/chat/university', headers: { 'content-type': 'application/json' }, body: '{"content":"서버로"}' }]);
@@ -57,7 +57,7 @@ test('same origin ws/wss, 토큰은 CONNECT 헤더만, 백오프·heartbeat는 �
 test('서버 메시지만 수신하고, 잘못된 방·프레임은 오류로 처리한다', () => {
   const f = setup();
   f.socket.onConnect(frame({}));
-  const subscription = f.subscriptions.get(chatTopic(1))!;
+  const subscription = f.subscriptions.get(chatTopic(universityRoom(1)))!;
   subscription(frame(message(1)));
   subscription(frame(message(2, { roomId: 'UNIV#2' })));
   assert.deepEqual(f.messages, [message(1)]);
@@ -75,6 +75,20 @@ test('서버 메시지만 수신하고, 잘못된 방·프레임은 오류로 �
   f.socket.onConnect(frame({}));
   assert.deepEqual(f.messages, [message(1)]);
   assert.equal(f.counts().ready, 1);
+});
+
+test('연합 방은 연합 토픽을 구독하고 방 ID 없이 연합 전송 목적지로 보낸다', () => {
+  const f = setup(undefined, allianceRoom(7));
+  f.socket.onConnect(frame({}));
+  assert.deepEqual([...f.subscriptions.keys()], [CHAT_ERROR_DESTINATION, '/topic/chat/alliances/7']);
+  const subscription = f.subscriptions.get('/topic/chat/alliances/7')!;
+  subscription(frame(message(1, { roomId: 'ALLIANCE#7' })));
+  subscription(frame(message(2, { roomId: 'UNIV#7' })));
+  assert.deepEqual(f.messages, [message(1, { roomId: 'ALLIANCE#7' })]);
+  assert.equal(f.errors.length, 1);
+  f.connection.send('연합에게');
+  assert.deepEqual(f.published, [{ destination: '/app/chat/alliance', headers: { 'content-type': 'application/json' }, body: '{"content":"연합에게"}' }]);
+  f.connection.stop();
 });
 
 test('만료 CONNECT는 공통 single-flight 재발급 후 새 토큰으로 다시 연결한다', async () => {
