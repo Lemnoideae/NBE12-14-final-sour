@@ -5,6 +5,7 @@ import com.back.nbe1214finalsour.domain.click.dto.AttackRequest;
 import com.back.nbe1214finalsour.domain.click.dto.AttackResponse;
 import com.back.nbe1214finalsour.domain.university.service.rival.RivalChecker;
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
+import com.back.nbe1214finalsour.domain.clicker.repository.UserClickerLevelCache;
 import com.back.nbe1214finalsour.domain.clicker.service.ClickerService;
 import com.back.nbe1214finalsour.domain.university.repository.UniversityCache;
 import com.back.nbe1214finalsour.domain.user.entity.UserStatus;
@@ -74,6 +75,8 @@ class AttackServiceTest {
     private UniversityCache universityCache;
     @Mock
     private AbuseVerificationService abuseVerificationService;
+    @Mock
+    private UserClickerLevelCache userClickerLevelCache;
 
     private AttackService attackService;
 
@@ -81,7 +84,8 @@ class AttackServiceTest {
     void setUp() {
         ClickActionGuard clickActionGuard = new ClickActionGuard(
                 stringRedisTemplate, userStatusCache, userRepository,
-                actionRateLimiter, clickCountLimiter, clickerService, abuseVerificationService);
+                actionRateLimiter, clickCountLimiter, clickerService, abuseVerificationService,
+                userClickerLevelCache);
         attackService = new AttackService(clickActionGuard, stringRedisTemplate, rivalChecker, universityCache);
     }
 
@@ -89,13 +93,13 @@ class AttackServiceTest {
         return new AttackRequest(SUBMISSION_ID, clickCount, targetUniversityId);
     }
 
-    /** 대상 학교 있음 → 활성 회원 → 중복 아님 → 레벨 캐시 히트(3레벨)까지의 공통 경로 */
+    /** 대상 학교 있음 → 활성 회원 → 중복 아님 → 레벨 조회(loadIfAbsent)까지의 공통 경로 */
     private void givenHappyPathBeforeScript(Clicker clicker, boolean isRival) {
         given(universityCache.getName(TARGET_UNIVERSITY_ID)).willReturn(TARGET_NAME);
         given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
         given(userStatusCache.find(USER_ID)).willReturn(Optional.of(UserStatus.ACTIVE));
         given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(true);
-        given(valueOperations.get("user:1:clicker")).willReturn(String.valueOf(clicker.getId()));
+        given(userClickerLevelCache.loadIfAbsent(USER_ID)).willReturn(clicker.getId());
         given(clickerService.getClickerById(clicker.getId())).willReturn(clicker);
         given(rivalChecker.isRival(UNIVERSITY_ID, TARGET_UNIVERSITY_ID)).willReturn(isRival);
         given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any()))
