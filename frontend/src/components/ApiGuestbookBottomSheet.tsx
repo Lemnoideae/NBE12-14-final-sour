@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type SubmitEvent, type ReactNode } 
 import { ChevronDown, Heart } from 'lucide-react';
 import { useAuthSession } from '../api/ApiProvider';
 import { errorMessage, isApiError } from '../api/errors';
-import { mergeGuestbookPages, useCreateGuestbook, useGuestbookPages, validateGuestbookContent, type GuestbookItem } from '../api/guestbooks';
+import { mergeGuestbookPages, useCreateGuestbook, useGuestbookPages, useSetGuestbookLike, validateGuestbookContent, type GuestbookItem, type GuestbookLike } from '../api/guestbooks';
 import { useMyInfo, type MyInfo } from '../api/users';
 
 interface Props {
@@ -42,6 +42,31 @@ export function ApiGuestbookBottomSheet(props: Props) {
   // A new school/member gets a fresh draft, mutation and synchronization boundary, even if the sheet stays mounted.
   return <GuestbookContents key={`${universityId}:${member?.id ?? 'guest'}`} {...props} universityId={universityId} title={title} member={member} />;
 }
+function GuestbookLikeControl({ item, universityId, viewerId, onChanged }: { item: GuestbookItem; universityId: number; viewerId: number; onChanged: (result: GuestbookLike) => void }) {
+  const mutation = useSetGuestbookLike(universityId, viewerId);
+  const list = useGuestbookPages(universityId, viewerId);
+  const sending = useRef(false);
+  const id = useId();
+  const uncertain = mutation.isError;
+  return <div className="flex flex-col items-end gap-1 max-w-[60%]">
+    <button type="button" className={`${buttonClass} flex gap-1 items-center text-[#8b5327]`} aria-label={`방명록 ${item.id} 좋아요`}
+      aria-pressed={item.likedByMe} aria-disabled={mutation.isPending || uncertain} aria-describedby={uncertain ? id : undefined}
+      onClick={() => {
+        if (sending.current || uncertain) return;
+        sending.current = true;
+        mutation.mutate({ id: item.id, liked: !item.likedByMe }, { onSuccess: onChanged, onSettled: () => { sending.current = false; } });
+      }}>
+      <Heart aria-hidden className={`w-3 h-3 ${item.likedByMe ? 'fill-rose-600 text-rose-600' : ''}`} />
+      좋아요 {item.likeCount}개
+    </button>
+    {uncertain && <div id={id} role="alert" className="text-xs break-words">
+      <p>{errorMessage(mutation.error)} 좋아요 상태를 다시 확인해 주세요. 자동 재전송하지 않습니다.</p>
+      <button type="button" className={buttonClass} disabled={list.isFetching} onClick={() => {
+        void list.refetch().then((result) => { if (result.isSuccess) mutation.reset(); });
+      }}>좋아요 상태 다시 조회</button>
+    </div>}
+  </div>;
+}
 function GuestbookContents({ universityId, title, member, onClose, onGoToMap, onGoToLogin }: Props & { universityId: number; title: string; member: MyInfo | null }) {
   const list = useGuestbookPages(universityId, member?.id ?? null);
   const write = useCreateGuestbook(universityId);
@@ -77,7 +102,7 @@ function GuestbookContents({ universityId, title, member, onClose, onGoToMap, on
     <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 flex flex-col gap-3 text-xs" aria-busy={list.isFetching}>
       <div className="flex items-center justify-between gap-2"><span>불러온 글 {items.length}개</span>
         <button type="button" className={buttonClass} disabled={list.isFetching} onClick={() => void list.refetch()}>방명록 새로고침</button></div>
-      <p className="text-[#8b5327] text-[10px]">좋아요 변경·인기순은 준비 중입니다. 좋아요 수와 내 상태는 서버 조회값입니다.</p>
+      <p className="text-[#8b5327] text-[10px]">좋아요는 로그인 후 이용할 수 있습니다. 좋아요 수와 내 상태는 서버 조회값입니다.</p>
       {list.isPending && <p role="status">방명록을 불러오고 있습니다.</p>}
       {list.isError && <div role="alert">{errorMessage(list.error)}
         {!list.isFetchNextPageError && <button type="button" className={buttonClass} onClick={() => void list.refetch()}>방명록 다시 조회</button>}
@@ -89,9 +114,12 @@ function GuestbookContents({ universityId, title, member, onClose, onGoToMap, on
           <p data-testid="guestbook-content" className="whitespace-pre-wrap break-words py-2 select-text">{item.content}</p>
           <div className="flex justify-between gap-2 items-center text-[10px]">
             <time dateTime={item.createdAt}>{dateFormat.format(new Date(item.createdAt))} KST</time>
-            <span aria-label={`좋아요 ${item.likeCount}개${item.likedByMe ? ', 내가 좋아한 글' : ''}`} className="flex gap-1 items-center text-[#8b5327]">
-              <Heart aria-hidden className={`w-3 h-3 ${item.likedByMe ? 'fill-rose-600 text-rose-600' : ''}`} />{item.likeCount}
-            </span>
+            {member ? <GuestbookLikeControl key={`${item.id}:${member.id}`} item={item} universityId={universityId} viewerId={member.id}
+              onChanged={(result) => setCreated((current) => current?.id === result.guestbookId
+                ? { ...current, likeCount: result.likeCount, likedByMe: result.liked } : current)} />
+              : <span aria-label={`좋아요 ${item.likeCount}개`} className="flex gap-1 items-center text-[#8b5327]">
+                <Heart aria-hidden className="w-3 h-3" />{item.likeCount}
+              </span>}
           </div>
         </li>)}
       </ol>

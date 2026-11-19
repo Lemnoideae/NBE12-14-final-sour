@@ -30,12 +30,22 @@ const ok = (data: unknown, status = 200) => new Response(JSON.stringify({ code: 
 const fail = (status: number, code: string) => new Response(JSON.stringify({ code, message: '서버 방명록 오류', data: null }), { status });
 interface Call { school: number; cursor: string | null; body?: { content: string } }
 function mount(options: { signedIn?: boolean; own?: boolean; initial?: GuestbookItem[]; strict?: boolean;
-  list?: (call: Call) => Promise<Response>; create?: (call: Call) => Promise<Response>; profile?: () => Promise<Response> } = {}) {
-  const calls: Call[] = [], navigation: string[] = [];
+  list?: (call: Call) => Promise<Response>; create?: (call: Call) => Promise<Response>; profile?: () => Promise<Response>;
+  like?: (call: { id: number; method: string }) => Promise<Response> } = {}) {
+  const calls: Call[] = [], navigation: string[] = [], likes: Array<{ id: number; method: string }> = [];
   const rows = [...options.initial ?? []];
   const client = createApiClient({ fetch: (async (input, init) => {
     const url = new URL(String(input), 'http://localhost');
     if (url.pathname.endsWith('/users/me')) return options.profile ? options.profile() : ok(ME);
+    const likedId = /guestbooks\/(\d+)\/likes$/.exec(url.pathname)?.[1];
+    if (likedId) {
+      const call = { id: Number(likedId), method: init?.method ?? 'GET' }; likes.push(call);
+      if (options.like) return options.like(call);
+      const index = rows.findIndex((row) => row.id === call.id);
+      const row = rows[index]; const liked = call.method === 'POST';
+      rows[index] = { ...row, likedByMe: liked, likeCount: row.likeCount + (liked ? 1 : -1) };
+      return ok({ guestbookId: call.id, liked, likeCount: rows[index].likeCount });
+    }
     const school = Number(/universities\/(\d+)/.exec(url.pathname)?.[1]);
     if (!school) throw new Error(`Unexpected ${url.pathname}`);
     const call = { school, cursor: url.searchParams.get('cursor'), body: init?.body ? JSON.parse(String(init.body)) : undefined };
@@ -55,7 +65,7 @@ function mount(options: { signedIn?: boolean; own?: boolean; initial?: Guestbook
   const ui = (id = props.universityId) => React.createElement(options.strict ? React.StrictMode : React.Fragment, null,
     React.createElement(ApiProvider, { client, queryClient, children: React.createElement(ApiGuestbookBottomSheet, { ...props, universityId: id }) }));
   const view = render(ui());
-  return { client, queryClient, calls, rows, navigation, posts: () => calls.filter((call) => call.body),
+  return { client, queryClient, calls, rows, navigation, likes, posts: () => calls.filter((call) => call.body),
     rerender: (id: number) => view.rerender(ui(id)) };
 }
 const fill = (value: string) => fireEvent.change(screen.getByLabelText('방명록 내용 (필수 · 500자 이하)'), { target: { value } });
@@ -97,7 +107,7 @@ test('목록 loading/실패/재시도와 HTML 리터럴·KST·좋아요 조회�
   await waitFor(() => assert.equal(f.calls.length, 2));
   const content = '<img src=x onerror="alert(1)">\n둘째 줄';
   await act(async () => finish(ok(page([item(31, content)])))); await screen.findByTestId('guestbook-content');
-  assert.equal(ids()[0], content); assertAbsent(document.querySelector('img')); screen.getByLabelText('좋아요 4개, 내가 좋아한 글');
+  assert.equal(ids()[0], content); assertAbsent(document.querySelector('img')); assert.equal(screen.getByRole('button', { name: '방명록 31 좋아요' }).getAttribute('aria-pressed'), 'true');
   assert.match(document.querySelector('time')?.textContent ?? '', /30\. 1\. 2\. 오전 8:59 KST/); assert.equal(f.posts().length, 0);
 });
 
@@ -181,6 +191,75 @@ test('로그아웃은 작성 입력과 내 좋아요를 제거하고 공개 캐�
   const f = mount({ initial: [item(30)] }); await screen.findByRole('textbox'); fill('비공개 작성 중');
   f.rows[0] = { ...item(30), likedByMe: false };
   await act(async () => f.client.session.signOut()); await screen.findByText('방명록을 작성하려면 로그인해 주세요.');
-  await waitFor(() => assertAbsent(screen.queryByLabelText('좋아요 4개, 내가 좋아한 글')));
+  await waitFor(() => assertAbsent(screen.queryByRole('button', { name: /방명록 \d+ 좋아요/ })));
   assertAbsent(screen.queryByRole('textbox')); assert.ok(f.queryClient.getQueryData(guestbookKeys.list(2, null)));
+});
+
+test('좋아요는 서버 성공 후만 반영, 같은 프레임 중복 차단, 고정 이름·pressed·포커스·다른 viewer 무효화', async () => {
+  let finish!: (response: Response) => void;
+  const row = { ...item(30), likedByMe: false };
+  const f = mount({ initial: [row], like: () => new Promise((resolve) => { finish = resolve; }) });
+  const button = await screen.findByRole('button', { name: '방명록 30 좋아요' }); button.focus();
+  f.queryClient.setQueryData(guestbookKeys.list(2, 31), { pages: [page([row])], pageParams: [null] });
+  f.queryClient.setQueryData(guestbookKeys.list(3, 31), { pages: [page([row])], pageParams: [null] });
+  fireEvent.click(button); fireEvent.click(button); await waitFor(() => assert.equal(f.likes.length, 1));
+  assert.equal(button.getAttribute('aria-disabled'), 'true'); assert.equal(button.getAttribute('aria-pressed'), 'false');
+  assert.match(button.textContent ?? '', /좋아요 4개/); assertSameNode(document.activeElement, button);
+  f.rows[0] = { ...row, likedByMe: true, likeCount: 9 };
+  await act(async () => finish(ok({ guestbookId: 30, liked: true, likeCount: 9 })));
+  await waitFor(() => assert.equal(button.getAttribute('aria-pressed'), 'true'));
+  assert.match(button.textContent ?? '', /좋아요 9개/); assertSameNode(document.activeElement, button);
+  assert.equal(f.queryClient.getQueryState(guestbookKeys.list(2, 31))?.isInvalidated, true);
+  assert.equal(f.queryClient.getQueryState(guestbookKeys.list(3, 31))?.isInvalidated, false);
+  fireEvent.click(button); await waitFor(() => assert.equal(f.likes.length, 2));
+  f.rows[0] = { ...row, likeCount: 8 }; await act(async () => finish(ok({ guestbookId: 30, liked: false, likeCount: 8 })));
+  await waitFor(() => assert.equal(button.getAttribute('aria-pressed'), 'false'));
+  assert.deepEqual(f.likes.map((call) => call.method), ['POST', 'DELETE']);
+});
+
+for (const failure of ['network', '500', '409', '404'] as const) {
+  test(`좋아요 ${failure}: 실패 시 상태 유지·자동 재전송 없음·재조회 성공 전 다음 변경 차단`, async () => {
+    const row = { ...item(30), likedByMe: false };
+    let readsHealthy = true;
+    const f = mount({ initial: [row], list: async () => readsHealthy ? ok(page([row])) : fail(500, 'COMMON_INTERNAL_ERROR'),
+      like: async () => {
+        readsHealthy = false;
+        if (failure === 'network') throw new TypeError('lost response');
+        return fail(Number(failure), failure === '409' ? 'GUEST_ALREADY_LIKED' : failure === '404' ? 'GUEST_LIKE_NOT_FOUND' : 'COMMON_INTERNAL_ERROR');
+      } });
+    const button = await screen.findByRole('button', { name: '방명록 30 좋아요' }); fireEvent.click(button);
+    await screen.findByText(/좋아요 상태를 다시 확인해 주세요/);
+    assert.equal(button.getAttribute('aria-pressed'), 'false'); assert.match(button.textContent ?? '', /4개/);
+    fireEvent.click(button); assert.equal(f.likes.length, 1);
+    const retry = screen.getByRole('button', { name: '좋아요 상태 다시 조회' });
+    await waitFor(() => assert.equal(retry.hasAttribute('disabled'), false)); fireEvent.click(retry);
+    await waitFor(() => assert.equal(retry.hasAttribute('disabled'), false));
+    assert.equal(button.getAttribute('aria-disabled'), 'true'); assert.equal(f.likes.length, 1);
+    readsHealthy = true; fireEvent.click(retry);
+    await waitFor(() => assertAbsent(screen.queryByRole('button', { name: '좋아요 상태 다시 조회' })));
+    assert.equal(button.getAttribute('aria-disabled'), 'false'); assert.equal(f.likes.length, 1);
+  });
+}
+
+test('최신 목록에 아직 없는 작성 응답의 좋아요도 서버 값으로 갱신한다', async () => {
+  const f = mount({ list: async () => ok(page()), create: async () => ok({ ...item(100), likeCount: 0, likedByMe: false }, 201),
+    like: async () => ok({ guestbookId: 100, liked: true, likeCount: 3 }) });
+  await screen.findByRole('textbox'); fill('새 글'); submit();
+  const button = await screen.findByRole('button', { name: '방명록 100 좋아요' }); fireEvent.click(button);
+  await waitFor(() => assert.match(button.textContent ?? '', /좋아요 3개/)); assert.equal(button.getAttribute('aria-pressed'), 'true');
+  assert.equal(f.likes.length, 1);
+});
+
+test('학교/회원 경계 뒤 늦은 좋아요 응답은 새 학교나 공개 viewer 상태를 바꾸지 않는다', async () => {
+  let finish!: (response: Response) => void;
+  const f = mount({ list: async ({ school }) => ok(page([{ ...item(school), likedByMe: false }])),
+    like: () => new Promise((resolve) => { finish = resolve; }) });
+  fireEvent.click(await screen.findByRole('button', { name: '방명록 2 좋아요' })); await waitFor(() => assert.equal(f.likes.length, 1));
+  f.rerender(3); const next = await screen.findByRole('button', { name: '방명록 3 좋아요' });
+  await act(async () => finish(ok({ guestbookId: 2, liked: true, likeCount: 99 })));
+  assert.equal(next.getAttribute('aria-pressed'), 'false'); assert.match(next.textContent ?? '', /4개/);
+  fireEvent.click(next); await waitFor(() => assert.equal(f.likes.length, 2));
+  await act(async () => f.client.session.signOut()); await screen.findByText('방명록을 작성하려면 로그인해 주세요.');
+  await act(async () => finish(ok({ guestbookId: 3, liked: true, likeCount: 99 })));
+  assertAbsent(screen.queryByRole('button', { name: /방명록 \d+ 좋아요/ })); screen.getByLabelText('좋아요 4개');
 });

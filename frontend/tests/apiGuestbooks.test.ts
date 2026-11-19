@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { createApiClient } from '../src/api/client';
-import { createGuestbook, getGuestbooks, guestbookKeys, mergeGuestbookPages, validateGuestbookContent, type GuestbookItem } from '../src/api/guestbooks';
+import { createGuestbook, getGuestbooks, setGuestbookLike, guestbookKeys, mergeGuestbookPages, validateGuestbookContent, type GuestbookItem } from '../src/api/guestbooks';
 
 const item = (id: number): GuestbookItem => ({ id, content: `응원 ${id}`, likeCount: 2, likedByMe: false,
   author: { nickname: '방문학생', universityName: '한양대학교' }, createdAt: '2026-11-19T05:00:00+09:00' });
@@ -25,6 +25,26 @@ test('방명록 GET의 공개 조회·선택 인증·커서·크기·취소 신�
     '/api/v1/universities/2/guestbooks?size=20&cursor=30', '/api/v1/universities/2/guestbooks']);
   assert.equal(calls[0].auth, null); assert.equal(calls[1].auth, 'Bearer member'); assert.equal(calls[1].signal, signal);
   assert.equal(calls[2].auth, 'Bearer member'); assert.deepEqual(calls[2].body, { content: '응원' });
+});
+
+test('좋아요 POST/DELETE는 로그인 토큰·글 ID만 전송하고 명세 응답을 그대로 반환한다', async () => {
+  const calls: Array<{ path: string; method: string | undefined; body: unknown; auth: string | null }> = [];
+  const client = createApiClient({ fetch: (async (input, init) => {
+    calls.push({ path: String(input), method: init?.method, body: init?.body, auth: new Headers(init?.headers).get('Authorization') });
+    return ok({ guestbookId: 31, liked: init?.method === 'POST', likeCount: init?.method === 'POST' ? 7 : 6 });
+  }) as typeof fetch });
+  client.session.signIn('member');
+  assert.deepEqual(await setGuestbookLike(client, 31, true), { guestbookId: 31, liked: true, likeCount: 7 });
+  assert.deepEqual(await setGuestbookLike(client, 31, false), { guestbookId: 31, liked: false, likeCount: 6 });
+  assert.deepEqual(calls, ['POST', 'DELETE'].map((method) => ({ path: '/api/v1/guestbooks/31/likes', method, body: undefined, auth: 'Bearer member' })));
+});
+
+test('다른 글·다른 의도·음수·문자열·null 좋아요 응답은 UI 캐시에 넣지 않는다', async () => {
+  for (const data of [null, { guestbookId: 99, liked: true, likeCount: 3 }, { guestbookId: 31, liked: false, likeCount: 3 },
+    { guestbookId: 31, liked: true, likeCount: -1 }, { guestbookId: 31, liked: true, likeCount: '3' }]) {
+    const client = createApiClient({ fetch: (async () => ok(data)) as typeof fetch });
+    await assert.rejects(setGuestbookLike(client, 31, true), { code: 'CLIENT_INVALID_RESPONSE' });
+  }
 });
 
 test('내용은 trim 후 Unicode 1–500자: 공백·501자는 거부하고 emoji 500자는 허용한다', () => {
