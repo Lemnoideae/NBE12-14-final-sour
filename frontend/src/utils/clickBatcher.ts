@@ -1,4 +1,4 @@
-import { CLICK_BATCH_WINDOW_MS, MAX_CLICK_BATCH_SIZE, type ClickRequest, type ClickResponse } from '../api/clicks';
+import { CLICK_BATCH_WINDOW_MS, MAX_CLICK_BATCH_SIZE, type ClickCoordinates, type ClickRequest, type ClickResponse } from '../api/clicks';
 import { isApiError } from '../api/errors';
 import { isClickLimitError, requiresClickVerification } from '../api/abuse';
 
@@ -17,6 +17,8 @@ export interface ClickBatcherOptions<TResponse = ClickResponse> {
   onAccepted: (response: TResponse, pendingScore: number, accepted: { request: ClickRequest; sentAt: number }) => void;
   onChange: (snapshot: ClickBatchSnapshot) => void;
   createId?: () => string;
+  /** Sample once for a NEW submission. Every retry must preserve the ID, count, and coordinates. */
+  getCoordinates?: () => ClickCoordinates | undefined;
   now?: () => number;
   schedule?: (callback: () => void, delay: number) => () => void;
 }
@@ -61,7 +63,7 @@ export function createClickBatcher<TResponse = ClickResponse>(options: ClickBatc
     if (!batch) {
       if (!queue.length) return;
       const points = queue.splice(0, MAX_CLICK_BATCH_SIZE);
-      batch = { request: { submissionId: createId(), clickCount: points.length }, points, startedAt: now(), retried: false };
+      batch = { request: { submissionId: createId(), clickCount: points.length, ...options.getCoordinates?.() }, points, startedAt: now(), retried: false };
     }
     const submitted = batch;
     // The backend's dedupe key expires after 10s and does not replay the original response. Never retry a late

@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiClient, useAuthSession } from '../api/ApiProvider';
-import { submitClicks } from '../api/clicks';
+import { submitClicks, type ClickResponse } from '../api/clicks';
 import { isClickLimitError, requiresClickVerification } from '../api/abuse';
 import { errorMessage } from '../api/errors';
 import { selectByMode } from '../api/mode';
 import { userKeys, useMyInfo, type MyInfo } from '../api/users';
 import { createClickBatcher, type ClickBatchSnapshot } from '../utils/clickBatcher';
+import { createClickLocation, type ClickLocationSnapshot } from '../utils/clickLocation';
 import { createOtherClicksEstimator, createOtherClicksFeed, type OtherClicksFeed } from '../utils/otherClicksFeed';
 import { useMockGame } from './useMockGame';
 
@@ -15,7 +16,14 @@ export interface ClickUpgradeGate {
   beginUpgrade: () => (() => void) | null;
 }
 
+export interface LibraryClickControl {
+  location: ClickLocationSnapshot;
+  request: () => void;
+  clear: () => void;
+  lastResult: Pick<ClickResponse, 'libraryBonus' | 'multiplier'> | null;
+}
 interface CampusClicks extends ClickUpgradeGate {
+  library: LibraryClickControl | null;
   tap: (isCrit: boolean) => number | null;
   notice: string | null;
   getPendingScore: () => number;
@@ -29,7 +37,7 @@ const EMPTY_BATCH: ClickBatchSnapshot = { pendingClicks: 0, pendingScore: 0, sen
 
 function useMockCampusClicks(): CampusClicks {
   const { tap } = useMockGame();
-  return { tap, notice: null, getPendingScore: noPendingScore, retryLimited: null, botCheck: null, upgradeBlocked: false, beginUpgrade: () => null, otherClicksFeed: null };
+  return { tap, notice: null, getPendingScore: noPendingScore, retryLimited: null, botCheck: null, upgradeBlocked: false, beginUpgrade: () => null, otherClicksFeed: null, library: null };
 }
 
 /** Mounted at the app root, not on the campus screen: changing tabs must not cancel a collected batch. */
@@ -47,16 +55,23 @@ export function useApiCampusClicks(): CampusClicks {
   const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
   const [otherClicksFeed] = useState(createOtherClicksFeed);
   const userId = signedIn ? me?.id : undefined;
+  const location = useMemo(() => createClickLocation(), [client, userId]);
+  const locationSnapshot = useSyncExternalStore(location.subscribe, location.getSnapshot, location.getSnapshot);
+  const [libraryResult, setLibraryResult] = useState<LibraryClickControl['lastResult']>(null);
+  useEffect(() => () => location.clear(), [location]);
 
   useEffect(() => {
+    setLibraryResult(null);
     if (userId === undefined) return;
     // One per queue: own batches of a previous member or session must not be subtracted from this one's counts.
     const otherClicks = createOtherClicksEstimator();
     const controller = createClickBatcher({
       send: (body) => submitClicks(client, body),
+      getCoordinates: location.getCoordinates,
       onChange: setSnapshot,
       onAccepted(response, pendingScore, { request, sentAt }) {
         setRecoveryNotice(null);
+        setLibraryResult({ libraryBonus: response.libraryBonus, multiplier: response.multiplier });
         otherClicksFeed.publish(otherClicks.accept(response.schoolClicksLastSecond, request.clickCount, sentAt));
         applyApiScores({
           contribution: response.myContribScore + pendingScore,
@@ -77,6 +92,8 @@ export function useApiCampusClicks(): CampusClicks {
     const unsubscribe = client.session.subscribe(() => {
       if (client.session.getState().status === 'signed-in') return;
       controller.dispose();
+      location.clear();
+      setLibraryResult(null);
       if (batcher.current === controller) batcher.current = null;
       setCancelledClicks(controller.getSnapshot().pendingClicks);
       setBotCheckOpen(false);
@@ -88,7 +105,7 @@ export function useApiCampusClicks(): CampusClicks {
       controller.dispose();
       if (batcher.current === controller) batcher.current = null;
     };
-  }, [client, queryClient, userId, applyApiScores, queueGeneration, otherClicksFeed]);
+  }, [client, queryClient, userId, applyApiScores, queueGeneration, otherClicksFeed, location]);
 
   useEffect(() => {
     if (signedIn && requiresClickVerification(snapshot.error)) setBotCheckOpen(true);
@@ -153,6 +170,7 @@ export function useApiCampusClicks(): CampusClicks {
   };
   return {
     tap, notice: getNotice(), getPendingScore,
+    library: userId === undefined ? null : { location: locationSnapshot, request: location.request, clear: location.clear, lastResult: libraryResult },
     upgradeBlocked: snapshot.pendingClicks > 0 || snapshot.locked,
     beginUpgrade,
     retryLimited: canRetryLimited ? retryLimited : null,
