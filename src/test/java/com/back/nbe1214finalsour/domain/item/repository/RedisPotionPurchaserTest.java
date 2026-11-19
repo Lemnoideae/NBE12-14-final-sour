@@ -246,4 +246,28 @@ class RedisPotionPurchaserTest {
         assertThat(redis.hasKey(EFFECT_KEY)).isFalse();
         assertThat(redis.hasKey(DEDUPE_KEY)).isFalse();
     }
+
+    @Test
+    @DisplayName("보상할 때 효과 주인이고 이전 효과가 있으면 이전 효과를 만료까지 그대로 복원한다")
+    void compensate_restoresPreviousEffect() {
+        // given
+        redis.opsForZSet().add(RANK_KEY, String.valueOf(USER_ID), 700);
+        givenEffect(ITEM_ID, "2.0", OffsetDateTime.now(ZoneOffset.UTC).plusHours(1).truncatedTo(ChronoUnit.MILLIS), KEY);
+        redis.opsForValue().set(DEDUPE_KEY, "1", Duration.ofMinutes(5));
+        OffsetDateTime previousExpiredAt = OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(30).truncatedTo(ChronoUnit.MILLIS);
+        Map<String, String> previous = Map.of(
+                "itemId", String.valueOf(OTHER_ITEM_ID),
+                "multiplier", "4.0",
+                "expiredAt", String.valueOf(previousExpiredAt.toInstant().toEpochMilli()),
+                "purchaseId", OTHER_KEY.toString());
+
+        // when
+        purchaser.compensate(USER_ID, UNIVERSITY_ID, 300L, KEY, JSON.writeValueAsString(previous));
+
+        // then
+        assertThat(redis.<String, String>opsForHash().entries(EFFECT_KEY)).containsExactlyInAnyOrderEntriesOf(previous);
+        assertThat(pexpireTime(EFFECT_KEY)).isEqualTo(previousExpiredAt.toInstant().toEpochMilli());
+        assertThat(redis.opsForZSet().score(RANK_KEY, String.valueOf(USER_ID))).isEqualTo(1000.0);
+        assertThat(redis.hasKey(DEDUPE_KEY)).isFalse();
+    }
 }
