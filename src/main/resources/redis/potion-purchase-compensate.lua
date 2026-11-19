@@ -14,6 +14,10 @@ else
         args[#args + 1] = field
         args[#args + 1] = value
     end
+    -- 복원 순서: DEL → HSET → PEXPIREAT. 구매 Lua는 DEL 없이 덮어쓰므로, 이전 효과가 배포 전 3필드였다면
+    -- DEL 없이 HSET만 할 때 취소된 구매의 purchaseId가 남는다.
+    -- cjson.decode는 DEL보다 앞에 둔다: 깨진 JSON이면 효과를 지우기 전에 멈춘다 (Redis는 실행된 명령을 되돌리지 않는다)
+    redis.call('DEL', KEYS[3])
     redis.call('HSET', KEYS[3], unpack(args))
     redis.call('PEXPIREAT', KEYS[3], previous['expiredAt'])
 end
