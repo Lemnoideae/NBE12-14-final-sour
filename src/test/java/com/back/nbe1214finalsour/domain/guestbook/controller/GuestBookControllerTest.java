@@ -4,11 +4,13 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.back.nbe1214finalsour.domain.guestbook.dto.GuestBookListResponse;
 import com.back.nbe1214finalsour.domain.guestbook.service.GuestBookQueryService;
+import com.back.nbe1214finalsour.domain.guestbook.service.GuestBookWriteService;
 import com.back.nbe1214finalsour.global.exception.GlobalExceptionHandler;
 import com.back.nbe1214finalsour.global.security.ApiAccessDeniedHandler;
 import com.back.nbe1214finalsour.global.security.ApiAuthenticationEntryPoint;
@@ -22,6 +24,7 @@ import com.back.nbe1214finalsour.global.security.jwt.JwtProvider;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -36,6 +39,7 @@ import org.springframework.test.web.servlet.MockMvc;
 class GuestBookControllerTest {
     @Autowired MockMvc mockMvc;
     @MockitoBean GuestBookQueryService queryService;
+    @MockitoBean GuestBookWriteService writeService;
     @MockitoBean LoginSessionStore loginSessionStore;
 
     @Test
@@ -70,6 +74,36 @@ class GuestBookControllerTest {
                 .andExpect(jsonPath("$.data.items[0].likedByMe").value(true))
                 .andExpect(jsonPath("$.data.items[0].author.universityName").value("작성자대학교"));
         verify(queryService).getGuestBooks(12L, 20L, 1, 5L);
+    }
+
+    @Test
+    void loggedInUser_canCreate_andReceives201() throws Exception {
+        var principal = new AuthUser(5L, 7L, 2L, Role.USER);
+        var auth = UsernamePasswordAuthenticationToken.authenticated(principal, null,
+                List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_USER")));
+        var item = new GuestBookListResponse.Item(10L, "응원", 0, false,
+                new GuestBookListResponse.Author("테스트유저", "작성자대학교"),
+                OffsetDateTime.parse("2026-11-19T10:00:00+09:00"));
+        given(writeService.create(12L, 5L, "응원")).willReturn(item);
+
+        mockMvc.perform(post("/api/v1/universities/12/guestbooks")
+                        .with(authentication(auth))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"응원\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.id").value(10))
+                .andExpect(jsonPath("$.data.likeCount").value(0))
+                .andExpect(jsonPath("$.data.likedByMe").value(false));
+        verify(writeService).create(12L, 5L, "응원");
+    }
+
+    @Test
+    void anonymousCannotCreate() throws Exception {
+        mockMvc.perform(post("/api/v1/universities/12/guestbooks")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"응원\"}"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
