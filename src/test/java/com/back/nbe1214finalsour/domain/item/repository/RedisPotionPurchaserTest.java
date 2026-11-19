@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
@@ -14,6 +15,7 @@ import tools.jackson.databind.json.JsonMapper;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -31,6 +33,8 @@ class RedisPotionPurchaserTest {
     private static final UUID KEY = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID OTHER_KEY = UUID.fromString("00000000-0000-0000-0000-000000000002");
     private static final JsonMapper JSON = JsonMapper.builder().build();
+    private static final RedisScript<Long> PEXPIRETIME_SCRIPT =
+            RedisScript.of("return redis.call('PEXPIRETIME', KEYS[1])", Long.class);
 
     private static final String RANK_KEY = RedisKey.RANK_USER.of(UNIVERSITY_ID);
     private static final String DIRTY_KEY = RedisKey.DIRTY_USER.of();
@@ -49,6 +53,14 @@ class RedisPotionPurchaserTest {
         redis.opsForSet().remove(DIRTY_KEY, String.valueOf(USER_ID));
         redis.delete(EFFECT_KEY);
         redis.delete(DEDUPE_KEY);
+    }
+
+    /**
+     * 만료 절대 시각(epoch ms). Spring Data Redis에 PEXPIRETIME 전용 API가 없고,
+     * connection.execute는 정수 응답을 받지 못해(ByteArrayOutput) Lua로 읽는다.
+     */
+    private Long pexpireTime(String key) {
+        return redis.execute(PEXPIRETIME_SCRIPT, List.of(key));
     }
 
     @Test
@@ -72,7 +84,7 @@ class RedisPotionPurchaserTest {
                 "multiplier", "2.0",
                 "expiredAt", String.valueOf(expiredAt.toInstant().toEpochMilli()),
                 "purchaseId", KEY.toString()));
-        assertThat(redis.getExpire(EFFECT_KEY, TimeUnit.MILLISECONDS)).isBetween(1L, 3_600_000L);
+        assertThat(pexpireTime(EFFECT_KEY)).isEqualTo(expiredAt.toInstant().toEpochMilli());
         assertThat(redis.opsForValue().get(DEDUPE_KEY)).isEqualTo("1");
         assertThat(redis.getExpire(DEDUPE_KEY, TimeUnit.MILLISECONDS)).isBetween(1L, 300_000L);
     }
