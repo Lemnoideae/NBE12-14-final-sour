@@ -33,6 +33,8 @@ export interface VisitSchool {
   mySchoolShortName: string | null;
   /** The server says this is the viewer's own school: the screen sends them to their campus instead. */
   isMyUniversity: boolean;
+  /** Same current alliance as the viewer's school (SCRUM-187): the campus assists instead of attacking. */
+  isMyAlly: boolean;
   extras: VisitSchoolExtras | null;
 }
 
@@ -45,6 +47,7 @@ export function useMockVisitSchool(schoolId: SchoolId | null): VisitSchool {
     school,
     mySchoolShortName: mySchool.shortName,
     isMyUniversity: false,
+    isMyAlly: false,
     extras: null,
   };
 }
@@ -89,6 +92,7 @@ export function useApiVisitSchool(schoolId: SchoolId | null): VisitSchool {
     school,
     mySchoolShortName: viewer ? (myRow?.shortName ?? viewer.university.name) : null,
     isMyUniversity: query.data?.isMyUniversity ?? false,
+    isMyAlly: query.data?.isMyAlly ?? false,
     extras: query.data
       ? { memberCount: query.data.memberCount, topDepartments: query.data.topDepartments, topContributors: query.data.topContributors }
       : null,
