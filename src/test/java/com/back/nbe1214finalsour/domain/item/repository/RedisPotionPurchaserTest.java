@@ -33,6 +33,7 @@ class RedisPotionPurchaserTest {
     private static final long UNIVERSITY_ID = 900_41L;
     private static final long ITEM_ID = 900_42L;
     private static final long OTHER_ITEM_ID = 900_43L;
+    private static final long TRIPLE_ITEM_ID = 900_44L;
     private static final UUID KEY = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID OTHER_KEY = UUID.fromString("00000000-0000-0000-0000-000000000002");
     private static final JsonMapper JSON = JsonMapper.builder().build();
@@ -314,5 +315,29 @@ class RedisPotionPurchaserTest {
         assertThat(redis.hasKey(EFFECT_KEY)).isFalse();
         assertThat(redis.hasKey(DEDUPE_KEY)).isFalse();
         assertThat(redis.opsForZSet().score(RANK_KEY, String.valueOf(USER_ID))).isEqualTo(1000.0);
+    }
+
+    @Test
+    @DisplayName("보상할 때 효과 주인이 다른 구매면 효과를 그대로 두고 기여도만 되돌린다")
+    void compensate_notOwner_keepsEffect() {
+        // given
+        redis.opsForZSet().add(RANK_KEY, String.valueOf(USER_ID), 400);
+        OffsetDateTime otherExpiredAt = OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(45).truncatedTo(ChronoUnit.MILLIS);
+        Map<String, String> otherEffect = givenEffect(OTHER_ITEM_ID, "4.0", otherExpiredAt, OTHER_KEY);
+        redis.opsForValue().set(DEDUPE_KEY, "1", Duration.ofMinutes(5));
+        OffsetDateTime tripleExpiredAt = OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(30).truncatedTo(ChronoUnit.MILLIS);
+        String triple = JSON.writeValueAsString(Map.of(
+                "itemId", String.valueOf(TRIPLE_ITEM_ID),
+                "multiplier", "3.0",
+                "expiredAt", String.valueOf(tripleExpiredAt.toInstant().toEpochMilli())));
+
+        // when
+        purchaser.compensate(USER_ID, UNIVERSITY_ID, 300L, KEY, triple);
+
+        // then
+        assertThat(redis.<String, String>opsForHash().entries(EFFECT_KEY)).containsExactlyInAnyOrderEntriesOf(otherEffect);
+        assertThat(pexpireTime(EFFECT_KEY)).isEqualTo(otherExpiredAt.toInstant().toEpochMilli());
+        assertThat(redis.opsForZSet().score(RANK_KEY, String.valueOf(USER_ID))).isEqualTo(700.0);
+        assertThat(redis.hasKey(DEDUPE_KEY)).isFalse();
     }
 }
