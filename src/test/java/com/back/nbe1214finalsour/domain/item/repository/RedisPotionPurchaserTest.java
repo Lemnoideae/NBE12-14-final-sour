@@ -106,4 +106,31 @@ class RedisPotionPurchaserTest {
                 .containsEntry("purchaseId", KEY.toString());
         assertThat(redis.getExpire(EFFECT_KEY, TimeUnit.MILLISECONDS)).isGreaterThan(1_800_000L);
     }
+
+    @Test
+    @DisplayName("기여도가 부족하면 -1을 돌려주고 아무것도 바꾸지 않는다")
+    void purchase_notEnoughScore() {
+        // given
+        redis.opsForZSet().add(RANK_KEY, String.valueOf(USER_ID), 100);
+        OffsetDateTime previousExpiredAt = OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(30).truncatedTo(ChronoUnit.MILLIS);
+        Map<String, String> previous = Map.of(
+                "itemId", String.valueOf(OTHER_ITEM_ID),
+                "multiplier", "4.0",
+                "expiredAt", String.valueOf(previousExpiredAt.toInstant().toEpochMilli()),
+                "purchaseId", OTHER_KEY.toString());
+        redis.opsForHash().putAll(EFFECT_KEY, previous);
+        redis.expireAt(EFFECT_KEY, previousExpiredAt.toInstant());
+        OffsetDateTime expiredAt = OffsetDateTime.now(ZoneOffset.UTC).plusHours(1).truncatedTo(ChronoUnit.MILLIS);
+
+        // when
+        PotionPurchaseOutcome outcome = purchaser.purchase(
+                USER_ID, UNIVERSITY_ID, ITEM_ID, 300L, 2.0, expiredAt, KEY);
+
+        // then
+        assertThat(outcome).isEqualTo(new PotionPurchaseOutcome(-1, ""));
+        assertThat(redis.opsForZSet().score(RANK_KEY, String.valueOf(USER_ID))).isEqualTo(100.0);
+        assertThat(redis.opsForSet().isMember(DIRTY_KEY, String.valueOf(USER_ID))).isFalse();
+        assertThat(redis.<String, String>opsForHash().entries(EFFECT_KEY)).containsExactlyInAnyOrderEntriesOf(previous);
+        assertThat(redis.hasKey(DEDUPE_KEY)).isFalse();
+    }
 }
