@@ -8,7 +8,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.back.nbe1214finalsour.domain.guestbook.dto.GuestBookLikeResponse;
-import com.back.nbe1214finalsour.domain.guestbook.repository.GuestBookLikeJdbcRepository;
+import com.back.nbe1214finalsour.domain.guestbook.entity.GuestBook;
+import com.back.nbe1214finalsour.domain.guestbook.entity.GuestBookLikeId;
+import com.back.nbe1214finalsour.domain.guestbook.repository.GuestBookLikeRepository;
 import com.back.nbe1214finalsour.domain.guestbook.repository.GuestBookRepository;
 import com.back.nbe1214finalsour.domain.user.entity.User;
 import com.back.nbe1214finalsour.domain.user.entity.UserStatus;
@@ -25,7 +27,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class GuestBookLikeServiceTest {
     @Mock GuestBookRepository guestBookRepository;
-    @Mock GuestBookLikeJdbcRepository likeRepository;
+    @Mock GuestBookLikeRepository likeRepository;
+    @Mock GuestBook guestBook;
     @Mock UserRepository userRepository;
     @Mock User user;
     @InjectMocks GuestBookLikeService service;
@@ -38,26 +41,27 @@ class GuestBookLikeServiceTest {
     @Test
     void like_addsOnceAndReturnsNewCount() {
         givenActiveUser();
-        given(guestBookRepository.existsById(10L)).willReturn(true);
-        given(likeRepository.insertIfAbsent(10L, 7L)).willReturn(1);
-        given(likeRepository.incrementLikeCount(10L)).willReturn(13);
+        given(guestBookRepository.findByIdForUpdate(10L)).willReturn(Optional.of(guestBook));
+        given(guestBook.increaseLikeCount()).willReturn(13);
 
         GuestBookLikeResponse response = service.like(10L, 7L);
 
         assertThat(response.guestbookId()).isEqualTo(10L);
         assertThat(response.liked()).isTrue();
         assertThat(response.likeCount()).isEqualTo(13);
-        verify(likeRepository).incrementLikeCount(10L);
+        verify(guestBook).increaseLikeCount();
+        verify(likeRepository).save(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
     void duplicateLike_throws409AndDoesNotIncrement() {
         givenActiveUser();
-        given(guestBookRepository.existsById(10L)).willReturn(true);
-        given(likeRepository.insertIfAbsent(10L, 7L)).willReturn(0);
+        given(guestBookRepository.findByIdForUpdate(10L)).willReturn(Optional.of(guestBook));
+        given(likeRepository.existsById(new GuestBookLikeId(10L, 7L))).willReturn(true);
 
         assertError(ErrorCode.GUEST_ALREADY_LIKED, () -> service.like(10L, 7L));
-        verify(likeRepository, never()).incrementLikeCount(10L);
+        verify(guestBook, never()).increaseLikeCount();
+        verify(likeRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
 
     @Test

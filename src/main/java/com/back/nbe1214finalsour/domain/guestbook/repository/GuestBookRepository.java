@@ -3,12 +3,20 @@ package com.back.nbe1214finalsour.domain.guestbook.repository;
 import com.back.nbe1214finalsour.domain.guestbook.dto.GuestBookListRow;
 import com.back.nbe1214finalsour.domain.guestbook.entity.GuestBook;
 import java.util.List;
+import java.util.Optional;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface GuestBookRepository extends JpaRepository<GuestBook, Long> {
+
+    /** 중복 좋아요 검사, INSERT, 카운트 증가를 같은 글 단위로 직렬화한다. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select g from GuestBook g where g.id = :id")
+    Optional<GuestBook> findByIdForUpdate(@Param("id") Long id);
 
     /** 첫 페이지. 작성자의 학교를 표시하며 이메일과 비밀번호는 조회하지 않는다. */
     @Query("""

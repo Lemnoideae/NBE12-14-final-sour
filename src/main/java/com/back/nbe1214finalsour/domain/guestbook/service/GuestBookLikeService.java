@@ -1,7 +1,10 @@
 package com.back.nbe1214finalsour.domain.guestbook.service;
 
 import com.back.nbe1214finalsour.domain.guestbook.dto.GuestBookLikeResponse;
-import com.back.nbe1214finalsour.domain.guestbook.repository.GuestBookLikeJdbcRepository;
+import com.back.nbe1214finalsour.domain.guestbook.entity.GuestBook;
+import com.back.nbe1214finalsour.domain.guestbook.entity.GuestBookLike;
+import com.back.nbe1214finalsour.domain.guestbook.entity.GuestBookLikeId;
+import com.back.nbe1214finalsour.domain.guestbook.repository.GuestBookLikeRepository;
 import com.back.nbe1214finalsour.domain.guestbook.repository.GuestBookRepository;
 import com.back.nbe1214finalsour.domain.user.entity.User;
 import com.back.nbe1214finalsour.domain.user.entity.UserStatus;
@@ -17,12 +20,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class GuestBookLikeService {
 
     private final GuestBookRepository guestBookRepository;
-    private final GuestBookLikeJdbcRepository guestBookLikeJdbcRepository;
+    private final GuestBookLikeRepository guestBookLikeRepository;
     private final UserRepository userRepository;
 
     /**
-     * 한 회원이 한 방명록에 한 번만 좋아요를 누를 수 있다.
-     * 복합 PK와 ON CONFLICT로 동시 중복 요청을 409로 돌려주고, INSERT와 카운트 원자적 증가를 한 트랜잭션으로 묶는다.
+     * 같은 방명록 행에 비관적 쓰기 락을 잡고 JPA로 중복 검사, 저장, 카운트 변경.
+     * 트랜잭션이 끝날 때 락이 해제되므로 동시 요청도 순차적으로 처리된다.
      */
     @Transactional
     public GuestBookLikeResponse like(Long guestbookId, Long userId) {
@@ -31,17 +34,16 @@ public class GuestBookLikeService {
         if (user.getStatus() != UserStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.USER_SUSPENDED);
         }
-        if (!guestBookRepository.existsById(guestbookId)) {
-            throw new BusinessException(ErrorCode.GUEST_NOT_FOUND);
-        }
-
-        // insert가 0이면 이미 눌러둔 좋아요다. 카운트를 건드리지 않는다.
-        if (guestBookLikeJdbcRepository.insertIfAbsent(guestbookId, userId) == 0) {
+        GuestBook guestBook = guestBookRepository.findByIdForUpdate(guestbookId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.GUEST_NOT_FOUND));
+        GuestBookLikeId likeId = new GuestBookLikeId(guestbookId, userId);
+        if (guestBookLikeRepository.existsById(likeId)) {
             throw new BusinessException(ErrorCode.GUEST_ALREADY_LIKED);
         }
 
-        // 카운트 UPDATE가 실패하면 INSERT도 함께 롤백된다.
-        int likeCount = guestBookLikeJdbcRepository.incrementLikeCount(guestbookId);
+        guestBookLikeRepository.save(GuestBookLike.create(guestbookId, userId));
+        int likeCount = guestBook.increaseLikeCount();
+        // 같은 트랜잭션에서 좋아요 INSERT와 count UPDATE를 커밋한다.
         return new GuestBookLikeResponse(guestbookId, true, likeCount);
     }
 }
