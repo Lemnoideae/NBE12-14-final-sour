@@ -482,6 +482,9 @@ function MatchCard({ userId, matchId, allianceId, now, onMissing, onForget }: {
               <dt>남은 시간</dt><dd>{timeLeft(match.requestExpiredAt, now()) ?? '마감 시각이 지났어요'}</dd>
             </>}
             {match.scheduledStartAt && <><dt>예약 시작</dt><dd>{kst(match.scheduledStartAt)}</dd></>}
+            {match.status === 'SCHEDULED' && match.scheduledStartAt && <>
+              <dt>시작까지</dt><dd>{timeLeft(match.scheduledStartAt, now()) ?? '시작 시각이 지났어요. 서버 상태를 확인하는 중이에요.'}</dd>
+            </>}
             {match.startedAt && <><dt>시작</dt><dd>{kst(match.startedAt)}</dd></>}
             {match.endedAt && <><dt>{match.status === 'FINISHED' ? '종료' : '종료 예정'}</dt><dd>{kst(match.endedAt)}</dd></>}
             {match.status === 'IN_PROGRESS' && match.endedAt && <><dt>남은 시간</dt><dd>{timeLeft(match.endedAt, now()) ?? '곧 정산돼요'}</dd></>}
@@ -494,8 +497,9 @@ function MatchCard({ userId, matchId, allianceId, now, onMissing, onForget }: {
               </dd>
             </>}
           </dl>
+          {match.status === 'SCHEDULED' && <p>예약을 수락했어요. 시작 여부는 서버가 결정하며 15초마다 다시 확인해요. 수락한 예약은 취소할 수 없어요.</p>}
           {match.status === 'IN_PROGRESS' && <p>진행 중 점수는 대결이 끝나면 정산돼 표시돼요.</p>}
-          {match.status === 'CANCELED' && <p>신청 취소, 거절, 수락 마감 경과 중 하나로 끝난 대결이에요.</p>}
+          {match.status === 'CANCELED' && <p>신청 취소, 거절, 수락 마감 경과 또는 예약 시작 조건 불충족으로 끝난 대결이에요.</p>}
           {side === null && <p>우리 연합(#{allianceId})의 대결이 아니에요. 보기만 할 수 있어요.</p>}
           {match.status === 'REQUESTED' && side && <MatchActions key={match.id} userId={userId} match={match} side={side} />}
         </>}
@@ -515,7 +519,9 @@ function MatchActions({ userId, match, side }: { userId: number; match: Alliance
   const [confirming, setConfirming] = useState<{ decision: MatchDecision; label: string } | null>(null);
   const decide = useDecideMatch(userId);
   const choices: Array<{ decision: MatchDecision; label: string; question: string }> = side === 'B'
-    ? [{ decision: 'accept', label: '수락', question: `대결 #${match.id}을(를) 수락할까요? 수락하면 바로 시작되고 되돌릴 수 없어요.` },
+    ? [{ decision: 'accept', label: '수락', question: match.scheduledStartAt
+        ? `대결 #${match.id}을(를) 수락할까요? ${kst(match.scheduledStartAt)}에 시작하도록 예약돼요. 수락한 예약은 취소할 수 없어요.`
+        : `대결 #${match.id}을(를) 수락할까요? 수락하면 바로 시작되고 되돌릴 수 없어요.` },
       { decision: 'cancel', label: '거절', question: `대결 #${match.id} 신청을 거절할까요? 되돌릴 수 없어요.` }]
     : [{ decision: 'cancel', label: '신청 취소', question: `대결 #${match.id} 신청을 취소할까요? 되돌릴 수 없어요.` }];
   const asking = confirming && choices.find((choice) => choice.label === confirming.label);

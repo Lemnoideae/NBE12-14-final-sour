@@ -20,7 +20,7 @@ for (const [key, value] of Object.entries({ window: dom.window, document: dom.wi
   IS_REACT_ACT_ENVIRONMENT: true,
 })) Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
 
-const { render, screen, fireEvent, cleanup, waitFor, within } = await import('@testing-library/react');
+const { render, screen, fireEvent, cleanup, waitFor, within, act } = await import('@testing-library/react');
 const { ApiProvider } = await import('../src/api/ApiProvider');
 const { createApiClient } = await import('../src/api/client');
 const { createQueryClient } = await import('../src/api/queryClient');
@@ -548,6 +548,55 @@ test('받은 연합은 대결 번호로 찾아 확인 뒤 수락하고, 진행 �
   await waitFor(() => assert.ok(f.details().length > before, '수락 뒤 연합 상세(대결 중)를 다시 읽는다'));
 });
 
+test('예약 신청 수락은 즉시 시작한다고 안내하지 않고, 수락 뒤 예약 카드에는 행동 버튼이 없다', async () => {
+  let current = matchOf(50, { scheduledStartAt: '2026-11-19T13:30:00+09:00' });
+  const f = mount({ store: ours(8, { 'sour.alliance.match.v1:5': '50' }), match: () => ok(current),
+    matchDecision: () => { current = { ...current, status: 'SCHEDULED' }; return ok(current); } });
+  const card = await matchCard();
+  await within(card).findByRole('button', { name: '수락' });
+  fireEvent.click(within(card).getByRole('button', { name: '수락' }));
+  const confirmation = within(card).getByRole('group', { name: '대결 처리 확인' });
+  assert.match(confirmation.textContent ?? '', /KST.*시작하도록 예약돼요/);
+  assert.doesNotMatch(confirmation.textContent ?? '', /바로 시작/);
+  fireEvent.click(within(confirmation).getByRole('button', { name: '수락하기' }));
+  await waitFor(() => assert.equal(within(card).getByTestId('match-status').textContent, '예약됨'));
+  assert.equal(field(card, '시작까지'), '1시간 30분');
+  assert.match(card.textContent ?? '', /수락한 예약은 취소할 수 없어요/);
+  for (const label of ['수락', '거절', '신청 취소']) assertAbsent(within(card).queryByRole('button', { name: label }));
+  assert.deepEqual(f.routes('PATCH'), ['PATCH /api/v1/alliances/matches/50/accept']);
+});
+
+test('예약은 15초마다 서버를 읽어 진행 중으로 바뀌고 연합 상세도 갱신하며, 종료되면 폴링을 멈춘다', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  let current = matchOf(50, { status: 'SCHEDULED', scheduledStartAt: '2026-11-19T13:30:00+09:00' });
+  const f = mount({ store: ours(7, { 'sour.alliance.match.v1:5': '50' }), match: () => ok(current) });
+  const card = await matchCard();
+  await waitFor(() => assert.equal(within(card).getByTestId('match-status').textContent, '예약됨'));
+  const before = f.details().length;
+  current = { ...current, status: 'IN_PROGRESS', startedAt: '2026-11-19T13:30:05+09:00', endedAt: '2026-11-19T16:30:05+09:00' };
+  await act(async () => { t.mock.timers.tick(15_000); await new Promise((resolve) => setTimeout(resolve, 10)); });
+  await waitFor(() => assert.equal(within(card).getByTestId('match-status').textContent, '진행 중'));
+  await waitFor(() => assert.ok(f.details().length > before, '서버 예약 시작 후 연합 상세도 다시 읽는다'));
+  current = { ...current, status: 'FINISHED', aScore: 12, bScore: 10, winnerAllianceId: 7 };
+  await act(async () => { t.mock.timers.tick(15_000); await new Promise((resolve) => setTimeout(resolve, 10)); });
+  await waitFor(() => assert.equal(within(card).getByTestId('match-status').textContent, '종료'));
+  const count = f.routes('GET /api/v1/alliances/matches/').length;
+  await act(async () => { t.mock.timers.tick(30_000); await new Promise((resolve) => setTimeout(resolve, 10)); });
+  assert.equal(f.routes('GET /api/v1/alliances/matches/').length, count);
+});
+
+test('예약 시각이 지나도 서버가 예약됨이면 시작 상태를 만들지 않고, 서버 취소도 표시한다', async () => {
+  let current = matchOf(50, { status: 'SCHEDULED', scheduledStartAt: '2026-11-19T11:00:00+09:00' });
+  mount({ store: ours(7, { 'sour.alliance.match.v1:5': '50' }), match: () => ok(current) });
+  const card = await matchCard();
+  await waitFor(() => assert.equal(field(card, '시작까지'), '시작 시각이 지났어요. 서버 상태를 확인하는 중이에요.'));
+  assert.equal(within(card).getByTestId('match-status').textContent, '예약됨');
+  current = { ...current, status: 'CANCELED' };
+  fireEvent.click(within(card).getByRole('button', { name: '새로고침' }));
+  await waitFor(() => assert.equal(within(card).getByTestId('match-status').textContent, '취소됨'));
+  assert.match(card.textContent ?? '', /예약 시작 조건 불충족/);
+});
+
 test('신청한 연합은 취소, 받은 연합은 거절할 수 있고 둘 다 취소됨으로 보인다', async () => {
   for (const [mine, label] of [[7, '신청 취소'], [8, '거절']] as const) {
     const f = mount({ store: ours(mine, { 'sour.alliance.match.v1:5': '50' }) });
@@ -555,7 +604,7 @@ test('신청한 연합은 취소, 받은 연합은 거절할 수 있고 둘 다 
     await within(card).findByRole('button', { name: label });
     confirmMatch(card, label);
     await waitFor(() => assert.equal(within(card).getByTestId('match-status').textContent, '취소됨'));
-    within(card).getByText('신청 취소, 거절, 수락 마감 경과 중 하나로 끝난 대결이에요.');
+    within(card).getByText('신청 취소, 거절, 수락 마감 경과 또는 예약 시작 조건 불충족으로 끝난 대결이에요.');
     assert.deepEqual(f.routes('PATCH'), ['PATCH /api/v1/alliances/matches/50/cancel']);
     cleanup();
   }
@@ -589,6 +638,7 @@ test('대결 처리 오류는 코드마다 알리고 카드는 그대로 둔다'
     [409, 'MATCH_REQUEST_EXPIRED', /수락 마감 시각이 지났어요/],
     [403, 'ALLY_NOT_MEMBER', /수락은 신청받은 연합의 회원만/],
     [409, 'MATCH_SCHEDULE_CONFLICT', /예약된 대결이 있어요/],
+    [400, 'MATCH_INVALID_SCHEDULE', /시작 시각과 대결 시간을 다시 확인/],
   ];
   let index = 0;
   mount({ store: ours(8, { 'sour.alliance.match.v1:5': '50' }), matchDecision: () => fail(cases[index][0], cases[index][1]) });

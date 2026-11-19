@@ -6,6 +6,7 @@
 // match list yet, so this browser remembers its member's alliance, sent application and latest match, and applications
 // and matches are handled by number.
 
+import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApiClient } from './ApiProvider';
 import type { ApiClient } from './client';
@@ -321,17 +322,27 @@ export function useUniversityName(universityId: number | null, viewerId: number)
   });
 }
 
-const matchMayChange = (status: AllianceMatchStatus | undefined) => status === 'REQUESTED' || status === 'IN_PROGRESS';
+const matchMayChange = (status: AllianceMatchStatus | undefined) => status === 'REQUESTED' || status === 'IN_PROGRESS' || status === 'SCHEDULED';
 
 export function useAllianceMatch(userId: number, matchId: number | null) {
   const client = useApiClient();
-  return useQuery({
+  const queryClient = useQueryClient();
+  const query = useQuery({
     queryKey: allianceKeys.match(userId, matchId ?? 0),
     queryFn: ({ signal }) => getMatch(client, matchId!, signal),
     enabled: matchId !== null,
     staleTime: 0,
     refetchInterval: (query) => matchMayChange(query.state.data?.status) ? MATCH_REFRESH_MS : false,
   });
+  const status = query.data?.status;
+  const a = query.data?.allianceAId;
+  const b = query.data?.allianceBId;
+  // A scheduler or another member may change the match without a local mutation. Refresh both alliances on status change.
+  useEffect(() => {
+    if (!status || a === undefined || b === undefined) return;
+    for (const allianceId of [a, b]) void queryClient.invalidateQueries({ queryKey: allianceKeys.detail(userId, allianceId) });
+  }, [status, a, b, userId, queryClient]);
+  return query;
 }
 
 /** After a match changes, both alliances' status (ACTIVE/IN_MATCH) may have changed too. */
