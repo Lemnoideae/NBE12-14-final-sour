@@ -74,6 +74,7 @@ export const MATCH_ERROR_CODES = {
   requestExpired: 'MATCH_REQUEST_EXPIRED',
   membersIncomplete: 'MATCH_MEMBERS_INCOMPLETE',
   scheduleConflict: 'MATCH_SCHEDULE_CONFLICT',
+  invalidSchedule: 'MATCH_INVALID_SCHEDULE',
   insufficientTime: 'MATCH_INSUFFICIENT_TIME',
 } as const;
 /** While a match can still change by itself (accepted, expired, ended), its card reads it again this often. */
@@ -116,10 +117,11 @@ export function decideApplication(client: ApiClient, applicationId: number, deci
   return client.request<AllianceApplication>(`/alliances/applications/${applicationId}/${decision}`, { method: 'PATCH' });
 }
 
-/** No scheduledStartAt: choosing a start time waits for SCRUM-183. */
+/** Omit scheduledStartAt to start on acceptance; otherwise send an ISO-8601 instant with an explicit offset. */
 export interface MatchRequest {
   opponentAllianceId: number;
   durationHours: number;
+  scheduledStartAt?: string;
 }
 
 export function requestMatch(client: ApiClient, allianceId: number, request: MatchRequest): Promise<AllianceMatch> {
