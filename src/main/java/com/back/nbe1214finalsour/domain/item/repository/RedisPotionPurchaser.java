@@ -18,9 +18,14 @@ public class RedisPotionPurchaser {
 
     private static final long DEDUPE_TTL_MILLIS = Duration.ofMinutes(5).toMillis();
 
+    private static final long VOIDED_TTL_MILLIS = Duration.ofMinutes(5).toMillis();
+
     @SuppressWarnings("rawtypes")
     private static final RedisScript<List> PURCHASE_SCRIPT =
             RedisScript.of(new ClassPathResource("redis/potion-purchase.lua"), List.class);
+
+    private static final RedisScript<Long> COMPENSATE_SCRIPT =
+            RedisScript.of(new ClassPathResource("redis/potion-purchase-compensate.lua"), Long.class);
 
     private final StringRedisTemplate redisTemplate;
 
@@ -45,5 +50,18 @@ public class RedisPotionPurchaser {
     }
 
     public void compensate(Long userId, Long universityId, long price, UUID idempotencyKey, String previousEffect) {
+        redisTemplate.execute(
+                COMPENSATE_SCRIPT,
+                List.of(
+                        RedisKey.RANK_USER.of(universityId),
+                        RedisKey.DIRTY_USER.of(),
+                        RedisKey.USER_EFFECT.of(userId),
+                        RedisKey.PURCHASE_DEDUPE.of(userId, idempotencyKey),
+                        RedisKey.USER_EFFECT_VOIDED.of(userId)),
+                String.valueOf(userId),
+                String.valueOf(price),
+                idempotencyKey.toString(),
+                previousEffect,
+                String.valueOf(VOIDED_TTL_MILLIS));
     }
 }
