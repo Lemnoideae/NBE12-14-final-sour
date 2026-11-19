@@ -32,6 +32,7 @@ const { MockGameProvider } = await import('../src/hooks/useMockGame');
 const { useApiRankingBoard, toApiRows, toApiMine } = await import('../src/hooks/useRankingBoard');
 const { RankingStatusNotice, SIGNED_OUT_RANKING_NOTICE, rankingCaption } = await import('../src/components/RankingParts');
 const { RankingScreenPhone } = await import('../src/components/RankingScreenPhone');
+const { TopHUD } = await import('../src/components/TopHUD');
 const clients: Array<ReturnType<typeof createQueryClient>> = [];
 afterEach(() => { cleanup(); for (const client of clients.splice(0)) client.clear(); });
 after(() => { assets.deregister(); dom.window.close(); });
@@ -258,4 +259,19 @@ test('연결 센서: 메인 상단 순위는 useMySchoolRank에서 받고 App이
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
   assert.match(app, /useMySchoolRank\(/, 'App.tsx: 상단 순위·변동은 useMySchoolRank에서 받으세요 (API 모드는 서버 값)');
   assert.doesNotMatch(app, /getSchoolRankings/, 'App.tsx: 목업 순위 계산은 useMySchoolRank의 목업 구현에만 둡니다');
+});
+
+test('메인 상단 변동 배지는 하락을 상승과 다른 색으로 보인다 (서버 값은 ▼도 온다)', () => {
+  const hudFor = (rankDelta: string | null) => {
+    cleanup();
+    render(React.createElement(MockGameProvider, null, React.createElement(TopHUD, { schoolName: '한양대학교', schoolId: 1, schoolBadgeColor: '#000',
+      schoolRegion: '서울 · 수도권', schoolScore: 0, rank: 2, rankDelta, campusLevel: 1, soundEnabled: false, onToggleSound: () => undefined })));
+    return screen.queryByTestId('rank-change');
+  };
+  const trends = ['▲2', '▼1', '-'].map((delta) => {
+    const badge = hudFor(delta)!;
+    return [badge.textContent, badge.dataset.trend, badge.className.match(/bg-\[#\w+\]/)?.[0]];
+  });
+  assert.deepEqual(trends, [['▲2', 'up', 'bg-[#22c55e]'], ['▼1', 'down', 'bg-[#fb7185]'], ['-', 'same', 'bg-[#faecc7]']]);
+  assert.equal(hudFor(null), null);
 });

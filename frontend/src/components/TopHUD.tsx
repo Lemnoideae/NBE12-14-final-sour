@@ -35,6 +35,16 @@ interface TopHUDProps {
   onBack?: () => void;
 }
 
+type RankTrend = 'up' | 'down' | 'same';
+/** ▲ up, ▼ down, anything else ("-") unchanged. The server's rankChange can now be a fall (SCRUM-184). */
+export const rankTrend = (delta: string): RankTrend => (delta.startsWith('▲') ? 'up' : delta.startsWith('▼') ? 'down' : 'same');
+// Same colors as the ranking lists (RankingScreenPhone, RankingsView).
+const RANK_TREND_TONE: Record<RankTrend, string> = {
+  up: 'text-[#ffffff] bg-[#22c55e]',
+  down: 'text-[#ffffff] bg-[#fb7185]',
+  same: 'text-[#261608] bg-[#faecc7]',
+};
+
 /** HUD school props for a school row (comparison screens use the player's school). */
 export const schoolHudProps = (school: Pick<SchoolView, 'name' | 'id' | 'badgeColor' | 'firstSyllable' | 'city' | 'filterRegion'>) => ({
   schoolName: school.name,
@@ -167,7 +177,11 @@ export const TopHUD: React.FC<TopHUDProps> = ({
         >
           <span>전국 <span data-testid={visiting ? 'visit-rank' : undefined}>{rank === null ? '순위 없음' : `${rank}위`}</span></span>
           {rankDelta !== null && (
-            <span className="text-[10px] font-mono text-[#ffffff] bg-[#22c55e] border border-[#261608] px-1 py-0.2 font-black shadow-[1px_1px_0px_#261608]">
+            <span
+              data-testid="rank-change"
+              data-trend={rankTrend(rankDelta)}
+              className={`text-[10px] font-mono border border-[#261608] px-1 py-0.2 font-black shadow-[1px_1px_0px_#261608] ${RANK_TREND_TONE[rankTrend(rankDelta)]}`}
+            >
               {rankDelta}
             </span>
           )}
