@@ -33,6 +33,11 @@ public class GuestBook extends BaseTimeEntity {
     @Column(name = "like_count", nullable = false)
     private int likeCount;
 
+    /** 좋아요 수 변경은 같은 글을 잠근 트랜잭션에서 처리한다. */
+    public int increaseLikeCount() {
+        return ++likeCount;
+    }
+
     /** 작성 시 좋아요 수는 0부터 시작한다. */
     public static GuestBook create(Long userId, Long universityId, String content) {
         GuestBook guestBook = new GuestBook();
