@@ -17,6 +17,8 @@ import com.back.nbe1214finalsour.global.security.Role;
 import com.back.nbe1214finalsour.global.security.SecurityConfig;
 import com.back.nbe1214finalsour.global.security.jwt.JwtProvider;
 import java.time.OffsetDateTime;
+import java.util.Optional;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -88,6 +90,33 @@ class AllianceControllerTest {
                 .andExpect(jsonPath("$.data.expiredAt").exists());
 
         verify(allianceQueryService).getAlliance(100L);
+    }
+
+    @Test
+    @DisplayName("내 학교의 연합은 토큰의 학교 ID로 조회하고, 없으면 data가 null이다")
+    void getMyAlliance() throws Exception {
+        Alliance alliance = Alliance.create("우리연합", 24, OffsetDateTime.parse("2026-11-15T09:00:00+09:00"));
+        given(allianceQueryService.findCurrentAlliance(10L)).willReturn(Optional.of(alliance), Optional.empty());
+
+        mockMvc.perform(get("/api/v1/alliances/me")
+                        .header(HttpHeaders.AUTHORIZATION, authorization()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.name").value("우리연합"))
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"));
+        mockMvc.perform(get("/api/v1/alliances/me")
+                        .header(HttpHeaders.AUTHORIZATION, authorization()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data").value(Matchers.nullValue()));
+    }
+
+    @Test
+    @DisplayName("내 학교의 연합은 로그인이 필요하다")
+    void getMyAlliance_requiresLogin() throws Exception {
+        mockMvc.perform(get("/api/v1/alliances/me"))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(allianceQueryService);
     }
 
     @Test
