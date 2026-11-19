@@ -1,20 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PhoneShell } from './PhoneShell';
 import { Crown, Sparkles, ArrowUp, ArrowDown, Minus, RefreshCw, ChevronUp, MoveVertical } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { BottomNav, NavTab } from './BottomNav';
-import { getMockRankings } from '../data/mockRankings';
-import { useMockGame } from '../hooks/useMockGame';
 import { useMySchool } from '../hooks/useSchoolViews';
 import { useDragScroll } from '../hooks/useDragScroll';
-import { SharedImage } from './SharedImage.tsx';
+import { useRankingBoard, type RankingBoardRow, type RankingTab } from '../hooks/useRankingBoard';
+import { RankingRowImage, RankingStatusNotice, rankingCaption } from './RankingParts';
 
 interface RankingScreenPhoneProps {
   currentSchoolScore: number;
   onNavigateTab: (tab: NavTab) => void;
 }
-
-type RankingTab = 'school' | 'dept' | 'personal';
 
 export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
   currentSchoolScore,
@@ -23,10 +20,6 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
   const [activeRankingTab, setActiveRankingTab] = useState<RankingTab>('school');
   const [refreshCountdown, setRefreshCountdown] = useState<number>(5);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-
-  // Pagination for infinite scrolling (starts at 15, increases by 10)
-  const [visibleCount, setVisibleCount] = useState<number>(15);
-  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
 
   // 5-second auto refresh loop
   useEffect(() => {
@@ -43,60 +36,34 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  // Official Real Universities Data with user score dynamic reflection
-  const game = useMockGame();
   const mySchool = useMySchool();
-  const { school: schoolRankings, dept: deptRankings, personal: personalRankings } = getMockRankings({ ...game.state, schoolScore: currentSchoolScore }, game.player);
+  // Mock rows or server pages, by mode (SCRUM-161). The mock keeps its pretend 350 ms load-more delay.
+  const board = useRankingBoard(activeRankingTab, currentSchoolScore, { mockLoadDelayMs: 350 });
+  const totalCount = board.totalCount;
+  const [captionScope, captionOrder] = rankingCaption(activeRankingTab, board, mySchool.shortName);
 
-  const currentDataset =
-    activeRankingTab === 'school'
-      ? schoolRankings
-      : activeRankingTab === 'dept'
-      ? deptRankings
-      : personalRankings;
-
-  const totalCount = currentDataset.length;
-
-  // Infinite scroll trigger: loads next 10 items
-  const handleLoadMore = useCallback(() => {
-    if (activeRankingTab !== 'school') return;
-    if (visibleCount >= totalCount || isLoadingMore) return;
-
-    setIsLoadingMore(true);
-    setTimeout(() => {
-      setVisibleCount((prev) => Math.min(totalCount, prev + 10));
-      setIsLoadingMore(false);
-    }, 350);
-  }, [activeRankingTab, visibleCount, totalCount, isLoadingMore]);
-
-  // Hook for drag and touch scrolling with momentum
+  // Hook for drag and touch scrolling with momentum: reaching the bottom loads the next page
   const { containerRef, isDragging, scrollTop, scrollToTop, dragHandlers } =
     useDragScroll({
-      onScrollBottom: handleLoadMore,
+      onScrollBottom: board.loadMore,
       bottomThreshold: 120,
     });
 
-  // Top 3 Podium
-  const top1 = currentDataset[0];
-  const top2 = currentDataset[1];
-  const top3 = currentDataset[2];
+  // Top 3 Podium (a short list can leave places empty)
+  const top1: RankingBoardRow | undefined = board.rows[0];
+  const top2: RankingBoardRow | undefined = board.rows[1];
+  const top3: RankingBoardRow | undefined = board.rows[2];
 
-  // Ranks 4 to visibleCount
-  const listRows = currentDataset.slice(3, visibleCount);
+  // Ranks 4 and below, as loaded
+  const listRows = board.rows.slice(3);
 
-  // My school/item
-  const myItem = currentDataset.find((item) => item.isMySchool) || currentDataset[6];
-
-  // 순위가 바뀌어도 내 항목을 찾을 수 있도록 모든 탭에서 고정 요약을 제공한다.
-  const showPinnedMySchoolBar = true;
+  // My school/item: also shown when its page is not loaded yet
+  const myItem = board.mine;
 
   // Sticky top 1st place bar appears when podium is scrolled past (scrollTop > 170px)
-  const showStickyTop1Summary = activeRankingTab === 'school' && scrollTop > 175;
+  const showStickyTop1Summary = activeRankingTab === 'school' && scrollTop > 175 && !!top1;
 
-  const renderBadge = (
-    item: { id: string | number; name: string; firstSyllable?: string; crestSymbol?: string; badgeColor?: string; crestColor?: string },
-    size: 'sm' | 'md' | 'lg' = 'sm'
-  ) => {
+  const renderBadge = (item: RankingBoardRow, size: 'sm' | 'md' | 'lg' = 'sm') => {
     const sizeClasses =
       size === 'lg'
         ? 'w-10 h-10 text-sm font-black'
@@ -104,15 +71,82 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
         ? 'w-8 h-8 text-xs font-bold'
         : 'w-6 h-6 text-[10px] font-bold';
 
-    const syllable = item.firstSyllable || item.crestSymbol || '?';
-    const bgColor = item.badgeColor || item.crestColor || '#0284c7';
-
     return (
       <div
         className={`${sizeClasses} border-2 border-[#261608] shadow-[1px_1px_0px_#261608] flex items-center justify-center text-white shrink-0 font-pixel`}
-        style={{ backgroundColor: bgColor }}
+        style={{ backgroundColor: item.badgeColor }}
       >
-        <SharedImage target={typeof item.id === 'number' ? { type: 'school', id: item.id } : { type: activeRankingTab === 'dept' ? 'department' : 'profile', id: item.id }} name={item.name} fallback={syllable} className="w-full h-full drop-shadow-[1px_1px_0px_#261608]" />
+        <RankingRowImage row={item} className="w-full h-full drop-shadow-[1px_1px_0px_#261608]" />
+      </div>
+    );
+  };
+
+  const renderChange = (change: string | null) => {
+    // The server has no rank change yet (plan D-3): API rows show no badge.
+    if (change === null) return null;
+    const up = change.startsWith('↑') || change.startsWith('▲');
+    const down = change.startsWith('↓') || change.startsWith('▼');
+    return (
+      <span
+        className={`text-[8px] font-mono px-1 py-0.2 border border-[#261608] flex items-center gap-0.5 font-bold ${
+          up ? 'text-white bg-[#22c55e]' : down ? 'text-white bg-[#fb7185]' : 'text-[#261608] bg-[#faecc7]'
+        }`}
+      >
+        {up ? <ArrowUp className="w-2.5 h-2.5" /> : down ? <ArrowDown className="w-2.5 h-2.5" /> : <Minus className="w-2.5 h-2.5" />}
+        {change.replace(/[↑↓▲▼]/g, '') || '-'}
+      </span>
+    );
+  };
+
+  const renderPodium = (item: RankingBoardRow | undefined, place: 1 | 2 | 3) => {
+    if (!item) return <div className="flex flex-col items-center" aria-hidden="true" />;
+    const first = place === 1;
+    const regionTone = place === 1 ? 'text-[#fef9c3]' : place === 2 ? 'text-[#e0f2fe]' : 'text-[#dcfce7]';
+    return (
+      <div className={`flex flex-col items-center ${first ? '-mt-2.5' : ''}`}>
+        {first && (
+          <div className="animate-bounce flex flex-col items-center mb-0.5">
+            <Crown className="w-5 h-5 text-[#facc15] fill-[#facc15] drop-shadow-[1px_1px_0px_#261608]" />
+          </div>
+        )}
+        <div className="flex flex-col items-center mb-1">
+          {renderBadge(item, first ? 'lg' : 'md')}
+          <span className={`font-pixel drop-shadow-[1px_1px_0px_#261608] text-center truncate mt-0.5 ${
+            first ? 'text-xs font-black text-[#fef08a] max-w-[100px]' : 'text-[11px] font-bold text-white max-w-[85px]'
+          }`}>
+            {item.name}
+          </span>
+          <span className={`text-[8px] font-pixel drop-shadow-[1px_1px_0px_#261608] ${regionTone}`}>
+            {item.subtitle}
+          </span>
+          <span className={`font-press-start text-[#fef08a] drop-shadow-[1px_1px_0px_#261608] mt-0.5 ${first ? 'text-[9px] font-black' : 'text-[8px]'}`}>
+            {item.score.toLocaleString('ko-KR')}
+          </span>
+        </div>
+
+        {/* Podium Block: Gold (tallest), Silver, Bronze. The block shows the server's rank (ties share one). */}
+        {place === 1 ? (
+          <div className="w-full h-20 bg-[#facc15] border-3 border-[#261608] shadow-[2px_2px_0px_#261608] flex flex-col items-center justify-center relative">
+            <div className="w-6 h-6 bg-[#ca8a04] border-2 border-[#261608] flex items-center justify-center font-press-start text-xs font-black text-[#fef08a] shadow-[1px_1px_0px_#261608]">
+              {item.rank}
+            </div>
+            <span className="font-pixel text-[9px] text-[#261608] font-black mt-0.5">CHAMPION</span>
+          </div>
+        ) : place === 2 ? (
+          <div className="w-full h-15 bg-[#cbd5e1] border-3 border-[#261608] shadow-[2px_2px_0px_#261608] flex flex-col items-center justify-center relative">
+            <div className="w-5 h-5 bg-[#94a3b8] border-2 border-[#261608] flex items-center justify-center font-press-start text-[10px] font-black text-white shadow-[1px_1px_0px_#261608]">
+              {item.rank}
+            </div>
+            <span className="font-pixel text-[8px] text-[#261608] font-bold mt-0.5">SILVER</span>
+          </div>
+        ) : (
+          <div className="w-full h-12 bg-[#d97706] border-3 border-[#261608] shadow-[2px_2px_0px_#261608] flex flex-col items-center justify-center relative">
+            <div className="w-5 h-5 bg-[#92400e] border-2 border-[#261608] flex items-center justify-center font-press-start text-[10px] font-black text-[#fde68a] shadow-[1px_1px_0px_#261608]">
+              {item.rank}
+            </div>
+            <span className="font-pixel text-[8px] text-white font-bold mt-0.5">BRONZE</span>
+          </div>
+        )}
       </div>
     );
   };
@@ -132,7 +166,7 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
 
         <div className="flex items-center gap-1 text-[10px] font-pixel text-[#8b5327]">
           <RefreshCw
-            className={`w-3 h-3 text-[#22c55e] ${isRefreshing ? 'animate-spin' : ''}`}
+            className={`w-3 h-3 text-[#22c55e] ${isRefreshing || board.refreshing ? 'animate-spin' : ''}`}
           />
           <span className="font-mono font-bold text-[#261608]">5초마다 갱신</span>
           <span className="text-[9px] font-mono text-[#e11d48] bg-[#fef08a] border border-[#261608] px-1 py-0.2">
@@ -142,8 +176,8 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
       </div>
 
       <p className="px-2 py-1 font-pixel text-[9px] text-[#8b5327] shrink-0">
-        {activeRankingTab === 'school' ? '전국 학교' : activeRankingTab === 'dept' ? `${mySchool.shortName} 교내 학과` : `${mySchool.shortName} 교내 개인 · 소비 후 보유 기여도`} · 목업 샘플<br />
-        점수 내림차순 → 이름 오름차순 · 동점 순위는 임시 연번 · 변경 즉시 반영
+        {captionScope}<br />
+        {captionOrder}
       </p>
       {/* 3. Sticky Tab Switcher */}
       <div className="w-full px-2 pt-1.5 bg-[#faecc7]/50 shrink-0 z-30">
@@ -152,7 +186,6 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
             onClick={() => {
               if (isDragging) return;
               setActiveRankingTab('school');
-              setVisibleCount(15);
               soundManager.playTabSound();
             }}
             className={`pixel-plaque py-1.5 px-1 text-center font-pixel text-xs font-bold cursor-pointer transition-transform ${
@@ -165,7 +198,6 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
             onClick={() => {
               if (isDragging) return;
               setActiveRankingTab('dept');
-              setVisibleCount(9);
               soundManager.playTabSound();
             }}
             className={`pixel-plaque py-1.5 px-1 text-center font-pixel text-xs font-bold cursor-pointer transition-transform ${
@@ -178,7 +210,6 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
             onClick={() => {
               if (isDragging) return;
               setActiveRankingTab('personal');
-              setVisibleCount(9);
               soundManager.playTabSound();
             }}
             className={`pixel-plaque py-1.5 px-1 text-center font-pixel text-xs font-bold cursor-pointer transition-transform ${
@@ -191,7 +222,7 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
       </div>
 
       {/* 4. Sticky Compact 1st Summary: Slides down when TOP 3 Podium scrolls out */}
-      {showStickyTop1Summary && (
+      {showStickyTop1Summary && top1 && (
         <div className="w-full px-2 py-1 bg-[#faecc7]/95 border-b border-[#261608]/40 shrink-0 z-20 animate-fadeIn">
           <div className="rpg-box px-2 py-1 bg-[#fef08a] border border-[#261608] flex items-center justify-between shadow-[1px_1px_0px_#261608]">
             <div className="flex items-center gap-1.5 min-w-0">
@@ -200,13 +231,13 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
                 1
               </span>
               <div className="w-4.5 h-4.5 bg-[#1d4ed8] border border-[#261608] flex items-center justify-center font-pixel text-[8px] text-white font-bold shrink-0">
-                <SharedImage target={{ type: 'school', id: schoolRankings[0].id }} name={top1.name} fallback={top1.firstSyllable} className="w-full h-full" />
+                <RankingRowImage row={top1} className="w-full h-full" />
               </div>
               <span className="font-pixel text-[11px] font-black text-[#261608] truncate">
                 {top1.name}
               </span>
               <span className="text-[8px] font-pixel text-[#8b5327] hidden sm:inline">
-                ({top1.region})
+                ({top1.subtitle})
               </span>
             </div>
 
@@ -227,7 +258,7 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
           <span>마우스 드래그 및 터치 스와이프로 스크롤</span>
         </span>
         <span className="font-bold text-[#b45309]">
-          {activeRankingTab === 'school' ? `${visibleCount} / ${totalCount}개교` : `${totalCount}개 순위`}
+          {activeRankingTab === 'school' ? `${board.rows.length} / ${totalCount}개교` : `${totalCount}개 순위`}
         </span>
       </div>
 
@@ -245,6 +276,9 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
           touchAction: 'pan-y',
         }}
       >
+        {board.status !== 'ready' ? (
+          <RankingStatusNotice board={board} />
+        ) : (<>
         {/* ========================================================= */}
         {/* TOP 3 PODIUM ON A GRASSY STAGE (Scrolls with the feed)     */}
         {/* ========================================================= */}
@@ -260,89 +294,11 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
           <span className="absolute bottom-12 left-2 text-[10px] pointer-events-none">🌼</span>
           <span className="absolute bottom-14 right-2 text-[10px] pointer-events-none">🌸</span>
 
-          {/* 3 Podium Pillars: [2nd 부산대] [1st KAIST] [3rd 전남대] */}
+          {/* 3 Podium Pillars: [2nd] [1st] [3rd] */}
           <div className="grid grid-cols-3 gap-1.5 items-end pt-7 relative z-10">
-            {/* 2nd Place: 부산대 (Left) */}
-            <div className="flex flex-col items-center">
-              <div className="flex flex-col items-center mb-1">
-                {renderBadge(top2, 'md')}
-                <span className="font-pixel text-[11px] font-bold text-white drop-shadow-[1px_1px_0px_#261608] text-center truncate max-w-[85px] mt-0.5">
-                  {top2.name}
-                </span>
-                <span className="text-[8px] font-pixel text-[#e0f2fe] drop-shadow-[1px_1px_0px_#261608]">
-                  {top2.region}
-                </span>
-                <span className="font-press-start text-[8px] text-[#fef08a] drop-shadow-[1px_1px_0px_#261608] mt-0.5">
-                  {top2.score.toLocaleString('ko-KR')}
-                </span>
-              </div>
-
-              {/* Podium Block: Silver */}
-              <div className="w-full h-15 bg-[#cbd5e1] border-3 border-[#261608] shadow-[2px_2px_0px_#261608] flex flex-col items-center justify-center relative">
-                <div className="w-5 h-5 bg-[#94a3b8] border-2 border-[#261608] flex items-center justify-center font-press-start text-[10px] font-black text-white shadow-[1px_1px_0px_#261608]">
-                  2
-                </div>
-                <span className="font-pixel text-[8px] text-[#261608] font-bold mt-0.5">
-                  SILVER
-                </span>
-              </div>
-            </div>
-
-            {/* 1st Place: KAIST (Center - Tallest) */}
-            <div className="flex flex-col items-center -mt-2.5">
-              <div className="animate-bounce flex flex-col items-center mb-0.5">
-                <Crown className="w-5 h-5 text-[#facc15] fill-[#facc15] drop-shadow-[1px_1px_0px_#261608]" />
-              </div>
-
-              <div className="flex flex-col items-center mb-1">
-                {renderBadge(top1, 'lg')}
-                <span className="font-pixel text-xs font-black text-[#fef08a] drop-shadow-[1px_1px_0px_#261608] text-center truncate max-w-[100px] mt-0.5">
-                  {top1.name}
-                </span>
-                <span className="text-[8px] font-pixel text-[#fef9c3] drop-shadow-[1px_1px_0px_#261608]">
-                  {top1.region}
-                </span>
-                <span className="font-press-start text-[9px] text-[#fef08a] drop-shadow-[1px_1px_0px_#261608] font-black mt-0.5">
-                  {top1.score.toLocaleString('ko-KR')}
-                </span>
-              </div>
-
-              {/* Podium Block: Gold (Tallest) */}
-              <div className="w-full h-20 bg-[#facc15] border-3 border-[#261608] shadow-[2px_2px_0px_#261608] flex flex-col items-center justify-center relative">
-                <div className="w-6 h-6 bg-[#ca8a04] border-2 border-[#261608] flex items-center justify-center font-press-start text-xs font-black text-[#fef08a] shadow-[1px_1px_0px_#261608]">
-                  1
-                </div>
-                <span className="font-pixel text-[9px] text-[#261608] font-black mt-0.5">
-                  CHAMPION
-                </span>
-              </div>
-            </div>
-
-            {/* 3rd Place: 전남대 (Right) */}
-            <div className="flex flex-col items-center">
-              <div className="flex flex-col items-center mb-1">
-                {renderBadge(top3, 'md')}
-                <span className="font-pixel text-[11px] font-bold text-white drop-shadow-[1px_1px_0px_#261608] text-center truncate max-w-[85px] mt-0.5">
-                  {top3.name}
-                </span>
-                <span className="text-[8px] font-pixel text-[#dcfce7] drop-shadow-[1px_1px_0px_#261608]">
-                  {top3.region}
-                </span>
-                <span className="font-press-start text-[8px] text-[#fef08a] drop-shadow-[1px_1px_0px_#261608] mt-0.5">
-                  {top3.score.toLocaleString('ko-KR')}
-                </span>
-              </div>
-
-              {/* Podium Block: Bronze */}
-              <div className="w-full h-12 bg-[#d97706] border-3 border-[#261608] shadow-[2px_2px_0px_#261608] flex flex-col items-center justify-center relative">
-                <div className="w-5 h-5 bg-[#92400e] border-2 border-[#261608] flex items-center justify-center font-press-start text-[10px] font-black text-[#fde68a] shadow-[1px_1px_0px_#261608]">
-                  3
-                </div>
-                <span className="font-pixel text-[8px] text-white font-bold mt-0.5">
-                  BRONZE
-                </span>
-              </div>
-            </div>
+            {renderPodium(top2, 2)}
+            {renderPodium(top1, 1)}
+            {renderPodium(top3, 3)}
           </div>
         </div>
 
@@ -351,23 +307,23 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
         {/* ========================================================= */}
         <div className="flex items-center justify-between text-[10px] font-pixel text-[#8b5327] px-1 mb-1 font-bold">
           <span>순위 및 소속</span>
-          <span>누적 점수 · 변동</span>
+          <span>{board.isSample ? '누적 점수 · 변동' : '누적 점수'}</span>
         </div>
 
         <div className="flex flex-col gap-1.5 pb-2">
           {listRows.map((row) => {
-            const isMy = row.isMySchool;
+            const isMy = row.isMine;
 
             return (
               <div
-                key={`${row.rank}-${row.name}`}
+                key={row.key}
                 className={`rpg-box p-1.5 flex items-center justify-between transition-colors shrink-0 ${
                   isMy
                     ? 'bg-[#fefce8] border-3 border-[#facc15] shadow-[0_0_8px_rgba(250,204,21,0.7)]'
                     : 'bg-[#fdf5df] border-2 hover:bg-[#fffbeb]'
                 }`}
               >
-                {/* Left: Rank, Badge, School Name & Region */}
+                {/* Left: Rank, Badge, Name & Subtitle */}
                 <div className="flex items-center gap-2 min-w-0">
                   <span
                     className={`font-press-start text-xs font-black w-6 text-center shrink-0 ${
@@ -391,7 +347,7 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
                       )}
                     </div>
                     <p className="text-[9px] text-[#8b5327] font-pixel truncate leading-none mt-0.5">
-                      {row.region}
+                      {row.subtitle}
                     </p>
                   </div>
                 </div>
@@ -401,24 +357,7 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
                   <span className="font-press-start text-[9px] text-[#261608] font-bold">
                     {row.score.toLocaleString('ko-KR')}
                   </span>
-                  <span
-                    className={`text-[8px] font-mono px-1 py-0.2 border border-[#261608] flex items-center gap-0.5 font-bold ${
-                      row.change.startsWith('↑') || row.change.startsWith('▲')
-                        ? 'text-white bg-[#22c55e]'
-                        : row.change.startsWith('↓') || row.change.startsWith('▼')
-                        ? 'text-white bg-[#fb7185]'
-                        : 'text-[#261608] bg-[#faecc7]'
-                    }`}
-                  >
-                    {row.change.startsWith('↑') || row.change.startsWith('▲') ? (
-                      <ArrowUp className="w-2.5 h-2.5" />
-                    ) : row.change.startsWith('↓') || row.change.startsWith('▼') ? (
-                      <ArrowDown className="w-2.5 h-2.5" />
-                    ) : (
-                      <Minus className="w-2.5 h-2.5" />
-                    )}
-                    {row.change.replace(/[↑↓▲▼]/g, '') || '-'}
-                  </span>
+                  {renderChange(row.change)}
                 </div>
               </div>
             );
@@ -427,10 +366,10 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
           {/* ========================================================= */}
           {/* INFINITE SCROLL LOADING ROW                                */}
           {/* ========================================================= */}
-          {activeRankingTab === 'school' && (
+          {(activeRankingTab === 'school' || board.hasMore || board.loadingMore) && (
             <div className="mt-1">
-              {isLoadingMore ? (
-                <div className="rpg-box p-2.5 bg-[#fdf5df] border-2 border-dashed border-[#8b5327] flex items-center justify-center gap-2">
+              {board.loadingMore ? (
+                <div role="status" className="rpg-box p-2.5 bg-[#fdf5df] border-2 border-dashed border-[#8b5327] flex items-center justify-center gap-2">
                   <div className="flex items-center gap-1">
                     <span className="w-1.5 h-1.5 bg-[#d97706] border border-[#261608] animate-pixel-blink" />
                     <span
@@ -443,26 +382,27 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
                     />
                   </div>
                   <span className="font-pixel text-[10px] font-bold text-[#8b5327]">
-                    순위 데이터를 더 불러오는 중… ({visibleCount} / {totalCount})
+                    순위 데이터를 더 불러오는 중… ({board.rows.length} / {totalCount})
                   </span>
                 </div>
-              ) : visibleCount < totalCount ? (
+              ) : board.hasMore ? (
                 <button
                   onClick={() => {
-                    if (!isDragging) handleLoadMore();
+                    if (!isDragging) board.loadMore();
                   }}
                   className="w-full py-2 bg-[#faecc7]/60 hover:bg-[#faecc7] border-2 border-dashed border-[#8b5327]/60 text-center font-pixel text-[10px] text-[#8b5327] cursor-pointer active:translate-y-0.5 transition-all"
                 >
-                  <span>아래로 스크롤하여 10개교 더 보기 ({visibleCount} / {totalCount})</span>
+                  <span>아래로 스크롤하여 {board.isSample ? '10개교 ' : ''}더 보기 ({board.rows.length} / {totalCount})</span>
                 </button>
               ) : (
                 <div className="py-2.5 text-center font-pixel text-[10px] text-[#8b5327] border-t border-[#261608]/20">
-                  <span>🏁 전국 76개 모든 대학교 순위를 확인했습니다!</span>
+                  <span>🏁 {activeRankingTab === 'school' ? `전국 ${totalCount}개 모든 대학교` : `${totalCount}개 전체`} 순위를 확인했습니다!</span>
                 </div>
               )}
             </div>
           )}
         </div>
+        </>)}
       </div>
 
       {/* ========================================================= */}
@@ -486,13 +426,13 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
       {/* 8. SMART PINNED "MY SCHOOL" BAR                           */}
       {/* Shown dynamically whenever row 7 scrolled away from view  */}
       {/* ========================================================= */}
-      {showPinnedMySchoolBar && (
+      {board.status === 'ready' && myItem && (
         <div className="w-full shrink-0 px-2 pt-1 pb-1 bg-[#fdf5df] border-t-2 border-[#261608] z-20 animate-fadeIn">
           <div className="text-[9px] font-pixel text-[#8b5327] font-bold px-1 mb-0.5 flex items-center justify-between">
             <span className="flex items-center gap-1 text-[#261608]">
               <Sparkles className="w-3 h-3 text-[#facc15]" /> 내 소속 실시간 순위
             </span>
-            <span className="text-[#22c55e] text-[8px]">실시간 반영 중</span>
+            <span className="text-[#22c55e] text-[8px]">{board.isSample ? '실시간 반영 중' : '5초마다 갱신'}</span>
           </div>
 
           <div
@@ -518,7 +458,7 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
                   </span>
                 </div>
                 <span className="text-[8px] text-[#8b5327] font-pixel truncate">
-                  {myItem.region}
+                  {myItem.subtitle}
                 </span>
               </div>
             </div>
@@ -527,9 +467,11 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
               <span className="font-press-start text-[9px] text-[#261608] font-black">
                 {myItem.score.toLocaleString('ko-KR')}
               </span>
-              <span className="text-[8px] font-mono px-1 py-0.2 border border-[#261608] flex items-center gap-0.5 font-bold text-white bg-[#22c55e]">
-                {myItem.change}
-              </span>
+              {myItem.change !== null && (
+                <span className="text-[8px] font-mono px-1 py-0.2 border border-[#261608] flex items-center gap-0.5 font-bold text-white bg-[#22c55e]">
+                  {myItem.change}
+                </span>
+              )}
             </div>
           </div>
         </div>

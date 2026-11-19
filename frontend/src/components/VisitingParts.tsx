@@ -8,6 +8,7 @@ import { getSchoolById, type SchoolView } from '../data/schoolDirectory.ts';
 import { getVisitGuestbookPreview } from '../data/mockGuestbook.ts';
 import { SharedImage } from './SharedImage.tsx';
 import { PhoneShell } from './PhoneShell';
+import type { VisitSchoolExtras, VisitSchoolView } from '../hooks/useVisitSchool.ts';
 
 // Shared pieces of the visiting screens. Plan: docs/261108-2000-m2_map_visit_return_plan.md 4-1.
 // The visited school is read by ID from the same rows the map and rankings use, so the values agree.
@@ -25,8 +26,14 @@ export function useVisitedSchool(schoolId: SchoolId | null): VisitedSchool {
   return { school: schoolId === null ? undefined : getSchoolById(views, schoolId), mySchool };
 }
 
-export function rankMedal(rank: number): string {
-  return ['🥇', '🥈', '🥉'][rank - 1] ?? '🏫';
+export function rankMedal(rank: number | null): string {
+  return (rank !== null && ['🥇', '🥈', '🥉'][rank - 1]) || '🏫';
+}
+
+/** "3위 (▲2)"; a school without a server rank reads "순위 없음", and the API has no rank change. */
+export function formatVisitRank(rank: number | null, rankChange: string | null): string {
+  const base = rank === null ? '순위 없음' : `${rank}위`;
+  return rankChange === null ? base : `${base} (${rankChange})`;
 }
 
 export function formatScore(score: number): string {
@@ -55,13 +62,13 @@ export const LiveClicksEmpty: React.FC = () => (
  * says the visit is look-only and leads back to my school. The button is as tall as the 20px icon, so the bar keeps
  * the chat preview's height and the campus sits where it does on my campus (the 44px touch area is the global ::after).
  */
-export const SpectatorBar: React.FC<{ mySchoolShortName: string; onBackToMySchool: () => void }> = ({ mySchoolShortName, onBackToMySchool }) => (
+export const SpectatorBar: React.FC<{ mySchoolShortName: string | null; onBackToMySchool: () => void }> = ({ mySchoolShortName, onBackToMySchool }) => (
   <div data-testid="spectator-bar" className="w-full bg-[#faecc7] border-2 border-[#261608] shadow-[2px_2px_0px_#261608] px-2.5 py-1 flex items-center justify-between gap-2 select-none">
     <div className="flex items-center gap-1.5 min-w-0 flex-1">
       <div className="w-5 h-5 bg-[#38bdf8] border border-[#261608] flex items-center justify-center shrink-0 shadow-[1px_1px_0px_#261608]">
         <Eye className="w-3 h-3 text-[#261608]" aria-hidden="true" />
       </div>
-      <p className="min-w-0 font-pixel text-[11px] font-bold text-[#261608] truncate" title={`내 학교(${mySchoolShortName}) 점수에 기여하려면 내 학교로 돌아가세요`}>
+      <p className="min-w-0 font-pixel text-[11px] font-bold text-[#261608] truncate" title={mySchoolShortName ? `내 학교(${mySchoolShortName}) 점수에 기여하려면 내 학교로 돌아가세요` : '로그인하면 내 학교 점수에 기여할 수 있어요'}>
         구경만 할 수 있어요
       </p>
     </div>
@@ -82,9 +89,14 @@ export const SpectatorBar: React.FC<{ mySchoolShortName: string; onBackToMySchoo
 
 /**
  * Body of the visited school's info sheet (V2, Q2), opened from the sign where my campus has 상세 스탯: the values
- * that sat in panels under the old small campus (score, contributors, guestbook preview).
+ * that sat in panels under the old small campus (score, contributors, guestbook preview). With the API (SCRUM-163)
+ * `extras` adds the member count, top departments and contributors; the mock has none and says so.
  */
-export const VisitSchoolInfoSheet: React.FC<{ school: SchoolView; onOpenGuestbook: () => void }> = ({ school, onOpenGuestbook }) => {
+export const VisitSchoolInfoSheet: React.FC<{ school: VisitSchoolView; extras?: VisitSchoolExtras | null; onOpenGuestbook: () => void }> = ({
+  school,
+  extras = null,
+  onOpenGuestbook,
+}) => {
   const stage = CAMPUS_STAGES.find((s) => s.level === school.campusLevel) ?? CAMPUS_STAGES[0];
   return (
     <div className="p-3 flex flex-col gap-2 bg-[#fdf5df] text-[#261608]">
@@ -96,14 +108,38 @@ export const VisitSchoolInfoSheet: React.FC<{ school: SchoolView; onOpenGuestboo
         </div>
         <div className="flex items-center justify-between gap-2 font-pixel text-xs font-bold">
           <span>전국 순위</span>
-          <span>{rankMedal(school.rank)} {school.rank}위 ({school.rankChange})</span>
+          <span data-testid="visit-info-rank">{rankMedal(school.rank)} {formatVisitRank(school.rank, school.rankChange)}</span>
         </div>
+        {extras && (
+          <div className="flex items-center justify-between gap-2 font-pixel text-xs font-bold">
+            <span>재학생 회원</span>
+            <span data-testid="visit-info-members">{extras.memberCount.toLocaleString('ko-KR')}명</span>
+          </div>
+        )}
         <p className="font-pixel text-xs font-bold">🏛️ 캠퍼스 Lv.{stage.level} · {stage.name}</p>
       </section>
       <section aria-label="기여 랭커" className="rpg-box p-2 flex flex-col gap-1 shadow-[2px_2px_0px_#261608]">
         <h3 className="font-pixel text-xs font-black">기여 랭커</h3>
-        <ContributorsEmpty />
+        {extras ? (
+          <VisitTopList
+            label="기여 랭커 목록"
+            empty="아직 기여한 학생이 없어요"
+            rows={extras.topContributors.map((row) => ({ key: row.userId, rank: row.rank, name: row.nickname, score: row.contribScore }))}
+          />
+        ) : (
+          <ContributorsEmpty />
+        )}
       </section>
+      {extras && (
+        <section aria-label="상위 학과" className="rpg-box p-2 flex flex-col gap-1 shadow-[2px_2px_0px_#261608]">
+          <h3 className="font-pixel text-xs font-black">상위 학과</h3>
+          <VisitTopList
+            label="상위 학과 목록"
+            empty="아직 점수를 올린 학과가 없어요"
+            rows={extras.topDepartments.map((row) => ({ key: row.id, rank: row.rank, name: row.name, score: row.totalScore }))}
+          />
+        </section>
+      )}
       <section aria-label="방명록 인기 쪽지" className="bg-[#8b5327] border-3 border-[#261608] shadow-[3px_3px_0px_#261608] p-2 flex flex-col gap-2">
         <h3 className="font-pixel text-xs font-black text-[#fffbeb] drop-shadow-[1px_1px_0px_#261608]">방명록 인기 쪽지</h3>
         <GuestbookPreviewNotes schoolId={school.id} />
@@ -122,6 +158,21 @@ export const VisitSchoolInfoSheet: React.FC<{ school: SchoolView; onOpenGuestboo
     </div>
   );
 };
+
+/** Top three rows of the server's detail (ties share a rank), or a line saying there are none yet. */
+const VisitTopList: React.FC<{ label: string; empty: string; rows: Array<{ key: number; rank: number; name: string; score: number }> }> = ({ label, empty, rows }) =>
+  rows.length === 0 ? (
+    <p className="font-pixel text-[9px] text-[#8b5327] bg-[#ffffff] border border-dashed border-[#261608]/40 px-1.5 py-1 text-center">{empty}</p>
+  ) : (
+    <ol aria-label={label} className="flex flex-col gap-0.5">
+      {rows.map((row) => (
+        <li key={row.key} className="flex items-center justify-between gap-2 font-pixel text-[11px] font-bold bg-[#ffffff] border border-[#261608]/30 px-1.5 py-0.5">
+          <span className="min-w-0 truncate">{rankMedal(row.rank)} {row.rank}위 · {row.name}</span>
+          <span className="font-press-start text-[8px] text-[#0284c7] shrink-0">{formatScore(row.score)}</span>
+        </li>
+      ))}
+    </ol>
+  );
 
 interface VisitNotFoundPhoneProps {
   schoolId: SchoolId | null;

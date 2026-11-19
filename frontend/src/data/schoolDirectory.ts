@@ -24,6 +24,8 @@ export interface SchoolView extends Omit<UniversityItem, 'score'> {
   isMySchool: boolean;
   isTop3: boolean;
   logoStatus: LogoStatus;
+  /** The server's logo (API mode, SCRUM-162). Shown before the bundled logo; absent in the mock. */
+  logoUrl?: string | null;
 }
 
 const BASE_BY_ID = new Map(REAL_UNIVERSITIES.map((school) => [school.id, school]));

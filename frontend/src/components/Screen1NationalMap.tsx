@@ -114,7 +114,7 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
             })}
 
           {isNational &&
-            getTopSchools(schools, 3).map((school) => {
+            getTopSchools(schools.filter((school) => school.isTop3), 3).map((school) => {
               const point = nationalRibbonPoint(school.id);
               if (!point) return null;
               return (
