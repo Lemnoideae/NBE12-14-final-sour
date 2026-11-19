@@ -33,6 +33,9 @@ class UserRankingQueryServiceTest {
     @Mock
     private UniversityContributorReader contributorReader;
 
+    @Mock
+    private RankSnapshotService rankSnapshotService;
+
     @InjectMocks
     private UserRankingQueryService queryService;
 
@@ -171,6 +174,23 @@ class UserRankingQueryServiceTest {
         assertThat(result.hasNext()).isTrue();
         assertThat(result.me().rank()).isEqualTo(2L);
         assertThat(result.me().contribScore()).isEqualTo(5000L);
+    }
+
+    @Test
+    @DisplayName("조회 중 Redis 순위가 사라지면 공통 내부 오류 계약으로 실패한다")
+    void getUsers_rankDisappeared() {
+        given(universityRepository.existsById(12L)).willReturn(true);
+        given(rankingService.getContributorCount(12L)).willReturn(1L);
+        given(rankingService.getContributorsRange(12L, 0, 1))
+                .willReturn(List.of(new RedisHandler.RankEntry(101L, 1000.0)));
+        given(contributorReader.findRankingProfiles(12L, List.of(101L)))
+                .willReturn(Map.of(101L, new UniversityContributorReader.RankingProfile(
+                        101L, "순위변경", null, 301L, "학과")));
+        given(rankingService.getContributorRank(12L, 101L)).willReturn(OptionalLong.empty());
+
+        assertThatThrownBy(() -> queryService.getUsers(12L, 0, 1, null, null))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.COMMON_INTERNAL_ERROR));
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.chat.websocket;
 
+import com.back.nbe1214finalsour.domain.chat.service.AllianceChatMembership;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import com.back.nbe1214finalsour.global.security.AuthUser;
@@ -25,8 +26,9 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>CONNECT: {@code Authorization: Bearer …} 헤더를 HTTP와 같은 규칙({@link AccessTokenAuthenticator})으로 검증하고
  *       세션에 {@link StompUser}를 붙인다. 연결 중 토큰이 만료돼도 연결은 유지한다(D2)</li>
- *   <li>SUBSCRIBE: 본인 학교 방({@code /topic/chat/universities/{내 학교}})과 내 에러 큐({@code /user/queue/errors})만 허용한다.
- *       다른 학교 방은 {@code CHAT_NOT_MEMBER}</li>
+ *   <li>SUBSCRIBE: 본인 학교 방({@code /topic/chat/universities/{내 학교}}), 내 학교가 지금 속한 연합 방
+ *       ({@code /topic/chat/alliances/{연합}}, DB에서 확인, SCRUM-182)과 내 에러 큐({@code /user/queue/errors})만 허용한다.
+ *       다른 학교·연합 방은 {@code CHAT_NOT_MEMBER}</li>
  *   <li>SEND: {@code /app/**}만 허용한다. 막지 않으면 클라이언트가 {@code /topic/…}에 직접 보내 저장·검사 없이 방 전체에 뿌릴 수 있다</li>
  * </ul>
  * 목록에 없는 목적지는 모두 {@code COMMON_FORBIDDEN}이다 (HTTP의 {@code denyAll}과 같은 방식).
@@ -37,11 +39,15 @@ import org.springframework.stereotype.Component;
 public class ChatStompInterceptor implements ChannelInterceptor {
 
     private static final Pattern UNIVERSITY_TOPIC = Pattern.compile("^/topic/chat/universities/(\\d{1,18})$");
+    private static final Pattern ALLIANCE_TOPIC = Pattern.compile("^/topic/chat/alliances/(\\d{1,18})$");
 
     private final AccessTokenAuthenticator accessTokenAuthenticator;
+    private final AllianceChatMembership allianceChatMembership;
 
-    public ChatStompInterceptor(JwtProvider jwtProvider, LoginSessionStore loginSessionStore) {
+    public ChatStompInterceptor(JwtProvider jwtProvider, LoginSessionStore loginSessionStore,
+                                AllianceChatMembership allianceChatMembership) {
         this.accessTokenAuthenticator = new AccessTokenAuthenticator(jwtProvider, loginSessionStore);
+        this.allianceChatMembership = allianceChatMembership;
     }
 
     @Override
@@ -78,7 +84,7 @@ public class ChatStompInterceptor implements ChannelInterceptor {
         return stompUser.authUser();
     }
 
-    private static void authorizeSubscribe(AuthUser user, @Nullable String destination) {
+    private void authorizeSubscribe(AuthUser user, @Nullable String destination) {
         if (ChatDestinations.ERROR_QUEUE.equals(destination)) {
             return;
         }
@@ -88,6 +94,11 @@ public class ChatStompInterceptor implements ChannelInterceptor {
                 throw new BusinessException(ErrorCode.CHAT_NOT_MEMBER,
                         "다른 학교 방 구독 userId=" + user.userId() + ", destination=" + destination);
             }
+            return;
+        }
+        Matcher alliance = destination == null ? null : ALLIANCE_TOPIC.matcher(destination);
+        if (alliance != null && alliance.matches()) {
+            this.allianceChatMembership.requireMember(user, Long.parseLong(alliance.group(1)));
             return;
         }
         throw new BusinessException(ErrorCode.COMMON_FORBIDDEN,

@@ -6,6 +6,7 @@ import { JSDOM } from 'jsdom';
 import { assertAbsent } from './helpers/domAssert';
 import type { ClickRequest, ClickResponse } from '../src/api/clicks';
 import type { MyInfo } from '../src/api/users';
+import type { LocationFix } from '../src/utils/clickLocation';
 import type { TurnstileApi, TurnstileLoader, TurnstileRenderOptions } from '../src/utils/turnstile';
 import { installDialogStub } from './helpers/dialogStub';
 
@@ -20,7 +21,7 @@ const assets = registerHooks({
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost', pretendToBeVisual: true });
 for (const [key, value] of Object.entries({
   window: dom.window, document: dom.window.document, navigator: dom.window.navigator,
-  HTMLElement: dom.window.HTMLElement, Node: dom.window.Node, IS_REACT_ACT_ENVIRONMENT: true,
+  HTMLElement: dom.window.HTMLElement, Node: dom.window.Node, IS_REACT_ACT_ENVIRONMENT: true, isSecureContext: true,
 })) Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
 
 installDialogStub(dom.window);
@@ -38,6 +39,7 @@ const { ApiSessionWatcher } = await import('../src/components/onboarding/ApiLogi
 const clients: Array<ReturnType<typeof createQueryClient>> = [];
 afterEach(() => {
   cleanup();
+  Reflect.deleteProperty(navigator, 'geolocation');
   for (const client of clients.splice(0)) {
     for (const mutation of client.getMutationCache().getAll()) mutation.destroy();
     client.clear();
@@ -66,6 +68,10 @@ function Probe() {
   return React.createElement(React.Fragment, null,
     React.createElement(ApiPlayerSync, { getPendingScore: clicks.getPendingScore }),
     React.createElement('output', { 'data-testid': 'game' }, JSON.stringify(game.state)),
+    clicks.library && React.createElement(React.Fragment, null,
+      React.createElement('output', { 'data-testid': 'library' }, JSON.stringify({ location: clicks.library.location, result: clicks.library.lastResult })),
+      React.createElement('button', { onClick: clicks.library.request }, '위치 확인'),
+      React.createElement('button', { onClick: clicks.library.clear }, '위치 중지')),
     clicks.notice && React.createElement('p', { role: 'alert' }, clicks.notice),
     clicks.retryLimited && React.createElement('button', { onClick: clicks.retryLimited }, '거절 배치 제외'),
     clicks.botCheck && React.createElement('button', { onClick: clicks.botCheck.onOpen }, '확인 열기'),
@@ -124,6 +130,65 @@ function mount(send: (request: ClickRequest) => Promise<Response> = async () => 
 }
 const ready = async () => waitFor(() => assert.equal(readGame().contribution, 10));
 const click = () => fireEvent.click(screen.getByRole('button', { name: '클릭' }));
+
+function locationPlatform() {
+  const callbacks: Array<(fix: LocationFix) => void> = [];
+  Object.defineProperty(navigator, 'geolocation', { configurable: true, value: {
+    getCurrentPosition: (success: (fix: LocationFix) => void) => { callbacks.push(success); },
+  } });
+  const fix = (): LocationFix => ({ timestamp: Date.now(), coords: { latitude: 37.5, longitude: 127, accuracy: 10 } });
+  return { callbacks, fix };
+}
+
+test('위치 대기 중에도 일반 클릭을 보내며 성공 뒤 좌표를 붙이고 보너스는 서버 점수만 반영한다', async () => {
+  const geo = locationPlatform();
+  let contribution = 10;
+  const { sent } = mount(async (request) => {
+    const bonus = request.latitude !== undefined;
+    const score = Math.floor(2 * request.clickCount * (bonus ? 1.2 : 1));
+    contribution += score;
+    return ok({ ...RESPONSE, acceptedClicks: request.clickCount, earnedScore: score, myContribScore: contribution,
+      university: { ...RESPONSE.university, totalScore: contribution + 90 }, department: { id: 7, totalScore: contribution + 10 },
+      libraryBonus: bonus, multiplier: bonus ? 1.2 : 1 });
+  });
+  await ready();
+  assert.equal(geo.callbacks.length, 0);
+  fireEvent.click(screen.getByRole('button', { name: '위치 확인' }));
+  click();
+  await waitFor(() => assert.equal(sent.length, 1), { timeout: 2500 });
+  assert.deepEqual(Object.keys(sent[0]), ['submissionId', 'clickCount']);
+  await act(async () => geo.callbacks[0](geo.fix()));
+  for (let i = 0; i < 5; i++) click();
+  assert.equal(readGame().contribution, 22, '미확정 점수에 임의로1.2를 곱하지 않는다');
+  await waitFor(() => assert.equal(readGame().contribution, 24), { timeout: 2500 });
+  assert.equal(sent[1].latitude, 37.5);
+  assert.equal(sent[1].longitude, 127);
+  assert.equal(readGame().schoolScore, 114);
+  assert.equal(readGame().departmentScore, 34);
+  assert.deepEqual(JSON.parse(screen.getByTestId('library').textContent!).result, { libraryBonus: true, multiplier: 1.2 });
+  fireEvent.click(screen.getByRole('button', { name: '위치 중지' }));
+  click();
+  await waitFor(() => assert.equal(sent.length, 3), { timeout: 2500 });
+  assert.deepEqual(Object.keys(sent[2]), ['submissionId', 'clickCount']);
+});
+
+test('세션 변경은 이전 위치·보너스를 비우고 늦은 위치 콜백을 다음 회원 클릭에 사용하지 않는다', async () => {
+  const geo = locationPlatform();
+  const { client, queryClient, sent, tokens } = mount();
+  await ready();
+  fireEvent.click(screen.getByRole('button', { name: '위치 확인' }));
+  await act(async () => {
+    client.session.signOut(); client.session.signIn('member-b');
+    queryClient.setQueryData<MyInfo>(userKeys.me, { ...ME, id: 11, totalContribScore: 100 });
+  });
+  await waitFor(() => assert.equal(readGame().contribution, 100));
+  await act(async () => geo.callbacks[0](geo.fix()));
+  assert.deepEqual(JSON.parse(screen.getByTestId('library').textContent!), { location: { status: 'idle', accuracy: null }, result: null });
+  click();
+  await waitFor(() => assert.equal(sent.length, 1), { timeout: 2500 });
+  assert.deepEqual(tokens, ['Bearer member-b']);
+  assert.deepEqual(Object.keys(sent[0]), ['submissionId', 'clickCount']);
+});
 
 test('API 탭은 실제 clickPower로 낙관 반영한 뒤 세 점수를 응답으로 보정하고 프로필 캐시도 갱신한다', async () => {
   const { sent, tokens, queryClient } = mount();

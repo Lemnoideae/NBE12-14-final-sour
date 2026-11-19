@@ -2,13 +2,15 @@
 // .agents/01-PLAN/261119-1123-*, -1134-* and -1150-*.
 // AllianceController: POST /api/v1/alliances (201), GET /api/v1/alliances/{id}, POST /{id}/applications (201) and
 // PATCH /applications/{id}/approve|reject. AllianceMatchController: POST /{id}/matches (201), GET /matches/{id} and
-// PATCH /matches/{id}/accept|cancel. The server has no "my alliance", alliance list, member list, application list or
-// match list yet, so this browser remembers its member's alliance, sent application and latest match, and applications
-// and matches are handled by number.
+// PATCH /matches/{id}/accept|cancel. GET /alliances/me (SCRUM-182) gives the school's current alliance; the alliance screen
+// still remembers its member's alliance, sent application and latest match in this browser because the server has no
+// alliance list, member list, application list or match list yet, and applications and matches are handled by number.
 
+import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApiClient } from './ApiProvider';
 import type { ApiClient } from './client';
+import { ApiError, CLIENT_ERROR_CODES } from './errors';
 import { getUniversityDetail, universityKeys } from './universities';
 
 export type AllianceStatus = 'ACTIVE' | 'IN_MATCH' | 'EXPIRED';
@@ -74,6 +76,7 @@ export const MATCH_ERROR_CODES = {
   requestExpired: 'MATCH_REQUEST_EXPIRED',
   membersIncomplete: 'MATCH_MEMBERS_INCOMPLETE',
   scheduleConflict: 'MATCH_SCHEDULE_CONFLICT',
+  invalidSchedule: 'MATCH_INVALID_SCHEDULE',
   insufficientTime: 'MATCH_INSUFFICIENT_TIME',
 } as const;
 /** While a match can still change by itself (accepted, expired, ended), its card reads it again this often. */
@@ -106,6 +109,20 @@ export function getAlliance(client: ApiClient, allianceId: number, signal?: Abor
   return client.get<Alliance>(`/alliances/${allianceId}`, { signal });
 }
 
+/**
+ * The alliance the member's school belongs to now (ACCEPTED, not expired), or null. The chat room ID comes from this, so
+ * the shape is checked at run time instead of trusted.
+ */
+export async function getMyAlliance(client: ApiClient, signal?: AbortSignal): Promise<Alliance | null> {
+  const value = await client.get<unknown>('/alliances/me', { signal });
+  if (value === null) return null;
+  if (typeof value !== 'object' || !Number.isSafeInteger((value as Alliance).id) || (value as Alliance).id <= 0
+    || typeof (value as Alliance).name !== 'string' || !Number.isFinite(Date.parse(String((value as Alliance).expiredAt)))) {
+    throw new ApiError({ kind: 'invalid-response', status: null, code: CLIENT_ERROR_CODES.invalidResponse });
+  }
+  return value as Alliance;
+}
+
 export function applyToAlliance(client: ApiClient, allianceId: number): Promise<AllianceApplication> {
   return client.request<AllianceApplication>(`/alliances/${allianceId}/applications`, { method: 'POST' });
 }
@@ -116,10 +133,11 @@ export function decideApplication(client: ApiClient, applicationId: number, deci
   return client.request<AllianceApplication>(`/alliances/applications/${applicationId}/${decision}`, { method: 'PATCH' });
 }
 
-/** No scheduledStartAt: choosing a start time waits for SCRUM-183. */
+/** Omit scheduledStartAt to start on acceptance; otherwise send an ISO-8601 instant with an explicit offset. */
 export interface MatchRequest {
   opponentAllianceId: number;
   durationHours: number;
+  scheduledStartAt?: string;
 }
 
 export function requestMatch(client: ApiClient, allianceId: number, request: MatchRequest): Promise<AllianceMatch> {
@@ -141,6 +159,7 @@ export function decideMatch(client: ApiClient, matchId: number, decision: MatchD
 export const allianceKeys = {
   all: ['alliances'] as const,
   detail: (userId: number, allianceId: number) => ['alliances', userId, 'detail', allianceId] as const,
+  mine: (userId: number) => ['alliances', userId, 'mine'] as const,
   match: (userId: number, matchId: number) => ['alliances', userId, 'match', matchId] as const,
 };
 
@@ -276,6 +295,17 @@ export function useAllianceDetail(userId: number, allianceId: number | null) {
   });
 }
 
+/** Membership changes on the server (approval, leave, expiry); every open checks again. */
+export function useMyAlliance(userId: number, enabled = true) {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: allianceKeys.mine(userId),
+    queryFn: ({ signal }) => getMyAlliance(client, signal),
+    enabled,
+    staleTime: 0,
+  });
+}
+
 export function useCreateAlliance(userId: number) {
   const client = useApiClient();
   const queryClient = useQueryClient();
@@ -319,17 +349,27 @@ export function useUniversityName(universityId: number | null, viewerId: number)
   });
 }
 
-const matchMayChange = (status: AllianceMatchStatus | undefined) => status === 'REQUESTED' || status === 'IN_PROGRESS';
+const matchMayChange = (status: AllianceMatchStatus | undefined) => status === 'REQUESTED' || status === 'IN_PROGRESS' || status === 'SCHEDULED';
 
 export function useAllianceMatch(userId: number, matchId: number | null) {
   const client = useApiClient();
-  return useQuery({
+  const queryClient = useQueryClient();
+  const query = useQuery({
     queryKey: allianceKeys.match(userId, matchId ?? 0),
     queryFn: ({ signal }) => getMatch(client, matchId!, signal),
     enabled: matchId !== null,
     staleTime: 0,
     refetchInterval: (query) => matchMayChange(query.state.data?.status) ? MATCH_REFRESH_MS : false,
   });
+  const status = query.data?.status;
+  const a = query.data?.allianceAId;
+  const b = query.data?.allianceBId;
+  // A scheduler or another member may change the match without a local mutation. Refresh both alliances on status change.
+  useEffect(() => {
+    if (!status || a === undefined || b === undefined) return;
+    for (const allianceId of [a, b]) void queryClient.invalidateQueries({ queryKey: allianceKeys.detail(userId, allianceId) });
+  }, [status, a, b, userId, queryClient]);
+  return query;
 }
 
 /** After a match changes, both alliances' status (ACTIVE/IN_MATCH) may have changed too. */

@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.university.service;
 
+import com.back.nbe1214finalsour.domain.alliance.service.AllianceAllyChecker;
 import com.back.nbe1214finalsour.domain.university.dto.DepartmentResponse;
 import com.back.nbe1214finalsour.domain.university.dto.UniversityDetailResponse;
 import com.back.nbe1214finalsour.domain.university.dto.UniversitySearchResponse;
@@ -31,6 +32,7 @@ public class UniversityQueryService {
     private final UniversityRankingService universityRankingService;
     private final UniversityContributorReader universityContributorReader;
     private final UniversityMemberService universityMemberService;
+    private final AllianceAllyChecker allianceAllyChecker;
 
     public List<UniversitySearchResponse> searchUniversities(
             String keyword,
@@ -296,7 +298,10 @@ public class UniversityQueryService {
         boolean myUniversity =
                 isMyUniversity(universityId, myUniversityId);
 
-        // 9. 모든 정보를 하나의 DTO로 반환
+        // 9. 같은 연합 학교면 방문 화면이 공격 대신 지원을 보인다 (SCRUM-187)
+        boolean myAlly = allianceAllyChecker.areAllies(myUniversityId, universityId);
+
+        // 10. 모든 정보를 하나의 DTO로 반환
         return new UniversityDetailResponse(
                 university.getId(),
                 university.getName(),
@@ -306,7 +311,8 @@ public class UniversityQueryService {
                 memberCount,
                 topDepartments,
                 topContributors,
-                myUniversity
+                myUniversity,
+                myAlly
         );
     }
 }

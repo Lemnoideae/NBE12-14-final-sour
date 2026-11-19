@@ -1,4 +1,5 @@
-// SCRUM-161: ranking pages from the API, joined by scrolling, with the viewer's own row and no rank-change badge.
+// SCRUM-161: ranking pages from the API, joined by scrolling, with the viewer's own row.
+// SCRUM-184: the server's rankChange (against 00:00 KST) becomes the ▲▼ badge, and the main HUD reads myUniversity.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { after, afterEach, test } from 'node:test';
@@ -25,11 +26,13 @@ const { ApiProvider } = await import('../src/api/ApiProvider');
 const { createApiClient } = await import('../src/api/client');
 const { createQueryClient } = await import('../src/api/queryClient');
 const { userKeys } = await import('../src/api/users');
-const { RANKING_PAGE_SIZE } = await import('../src/api/rankings');
+const { RANKING_PAGE_SIZE, formatRankChange } = await import('../src/api/rankings');
+const { useApiMySchoolRank } = await import('../src/hooks/useMySchoolRank');
 const { MockGameProvider } = await import('../src/hooks/useMockGame');
 const { useApiRankingBoard, toApiRows, toApiMine } = await import('../src/hooks/useRankingBoard');
 const { RankingStatusNotice, SIGNED_OUT_RANKING_NOTICE, rankingCaption } = await import('../src/components/RankingParts');
 const { RankingScreenPhone } = await import('../src/components/RankingScreenPhone');
+const { TopHUD } = await import('../src/components/TopHUD');
 const clients: Array<ReturnType<typeof createQueryClient>> = [];
 afterEach(() => { cleanup(); for (const client of clients.splice(0)) client.clear(); });
 after(() => { assets.deregister(); dom.window.close(); });
@@ -39,20 +42,20 @@ const ME: MyInfo = {
   university: { id: 1, name: '한양대학교', logoUrl: null }, department: { id: 7, name: '컴퓨터소프트웨어학부' },
   clicker: { level: 1, clickPower: 1, nextLevelRequiredScore: 10 }, totalContribScore: 30, totalAttackScore: 0,
 };
-const school = (rank: number, universityId: number, name: string, totalScore: number) => ({ rank, universityId, name, logoUrl: null, totalScore });
+const school = (rank: number, universityId: number, name: string, totalScore: number, rankChange: number | null = null) => ({ rank, universityId, name, logoUrl: null, totalScore, rankChange });
 const SCHOOL_PAGES: UniversityRankingPage[] = [
-  { items: [school(1, 4, '서버1등대', 900), school(2, 9, '서버2등대', 800), school(2, 12, '공동2등대', 800)], page: 0, size: RANKING_PAGE_SIZE,
-    totalCount: 5, hasNext: true, myUniversity: { rank: 5, universityId: 1, totalScore: 100 } },
-  { items: [school(4, 30, '서버4등대', 300), school(5, 1, '한양대학교', 100)], page: 1, size: RANKING_PAGE_SIZE,
-    totalCount: 5, hasNext: false, myUniversity: { rank: 5, universityId: 1, totalScore: 100 } },
+  { items: [school(1, 4, '서버1등대', 900, 2), school(2, 9, '서버2등대', 800, -1), school(2, 12, '공동2등대', 800, 0)], page: 0, size: RANKING_PAGE_SIZE,
+    totalCount: 5, hasNext: true, myUniversity: { rank: 5, universityId: 1, totalScore: 100, rankChange: -3 } },
+  { items: [school(4, 30, '서버4등대', 300), school(5, 1, '한양대학교', 100, -3)], page: 1, size: RANKING_PAGE_SIZE,
+    totalCount: 5, hasNext: false, myUniversity: { rank: 5, universityId: 1, totalScore: 100, rankChange: -3 } },
 ];
 const DEPT_PAGE: DepartmentRankingPage = {
-  items: [{ rank: 1, departmentId: 7, name: '컴퓨터소프트웨어학부', logoUrl: null, totalScore: 50 }, { rank: 2, departmentId: 8, name: '서버학과', logoUrl: null, totalScore: 20 }],
-  page: 0, size: RANKING_PAGE_SIZE, totalCount: 2, hasNext: false, myDepartment: { rank: 1, departmentId: 7, totalScore: 50 },
+  items: [{ rank: 1, departmentId: 7, name: '컴퓨터소프트웨어학부', logoUrl: null, totalScore: 50, rankChange: 1 }, { rank: 2, departmentId: 8, name: '서버학과', logoUrl: null, totalScore: 20, rankChange: -1 }],
+  page: 0, size: RANKING_PAGE_SIZE, totalCount: 2, hasNext: false, myDepartment: { rank: 1, departmentId: 7, totalScore: 50, rankChange: 1 },
 };
 const USER_PAGE: UserRankingPage = {
-  items: [{ rank: 1, userId: 99, nickname: '다른학생', profileImageUrl: null, department: { id: 8, name: '서버학과' }, contribScore: 70 }],
-  page: 0, size: RANKING_PAGE_SIZE, totalCount: 2, hasNext: true, me: { rank: 2, contribScore: 30 },
+  items: [{ rank: 1, userId: 99, nickname: '다른학생', profileImageUrl: null, department: { id: 8, name: '서버학과' }, contribScore: 70, rankChange: null }],
+  page: 0, size: RANKING_PAGE_SIZE, totalCount: 2, hasNext: true, me: { rank: 2, contribScore: 30, rankChange: 4 },
 };
 const ok = (data: unknown) => new Response(JSON.stringify({ code: 'SUCCESS', message: '성공', data }), { status: 200 });
 const fail = (status: number, code: string, message: string) => new Response(JSON.stringify({ code, message, data: null }), { status });
@@ -105,7 +108,9 @@ test('학교 순위는 20개 페이지를 스크롤로 이어 붙이고, 내 학
   // The second loadMore while the first was in flight sent nothing.
   assert.deepEqual(f.rankingCalls().map((call) => call.path), [
     `/api/v1/rankings/universities?page=0&size=${RANKING_PAGE_SIZE}`, `/api/v1/rankings/universities?page=1&size=${RANKING_PAGE_SIZE}`]);
-  assert.ok(board.rows.every((row) => row.change === null), 'API 행에는 순위 변동이 없다 (D-3)');
+  // ▲ up, ▼ down, - unchanged, null (nothing to compare) hides the badge. My pinned row uses myUniversity.rankChange.
+  assert.deepEqual(board.rows.map((row) => row.change), ['▲2', '▼1', '-', null, '▼3']);
+  assert.equal(board.mine?.change, '▼3');
 });
 
 test('학과·개인 순위는 내 학교 ID로 조회하고 내 학과·본인 순위를 표시한다', async () => {
@@ -114,6 +119,7 @@ test('학과·개인 순위는 내 학교 ID로 조회하고 내 학과·본인 
   assert.deepEqual(listed(), ['1 컴퓨터소프트웨어학부 (내 소속)', '2 서버학과']);
   assert.equal(screen.getByRole('status', { name: '내 순위' }).textContent, '1 컴퓨터소프트웨어학부 50');
   assert.match(dept.rankingCalls()[0].path, /^\/api\/v1\/rankings\/universities\/1\/departments\?page=0/);
+  assert.deepEqual([board.rows.map((row) => row.change), board.mine?.change], [['▲1', '▼1'], '▲1']);
   cleanup();
 
   const personal = mount('personal');
@@ -122,6 +128,7 @@ test('학과·개인 순위는 내 학교 ID로 조회하고 내 학과·본인 
   // Not on the loaded page: built from `me` and the profile.
   assert.equal(screen.getByRole('status', { name: '내 순위' }).textContent, '2 순위학생 30');
   assert.equal(board.mine?.subtitle, '한양대학교 · 컴퓨터소프트웨어학부');
+  assert.deepEqual([board.rows[0].change, board.mine?.change], [null, '▲4']);
   assert.match(personal.rankingCalls()[0].path, /^\/api\/v1\/rankings\/universities\/1\/users\?page=0/);
 });
 
@@ -209,5 +216,73 @@ test('연결 센서: 두 순위 화면은 목업 순위를 직접 읽지 않고 
     const source = readFileSync(new URL(`../src/components/${file}`, import.meta.url), 'utf8');
     assert.match(source, /useRankingBoard\(/, `${file}: 순위 데이터는 useRankingBoard에서 받으세요`);
     assert.doesNotMatch(source, /getMockRankings/, `${file}: 목업 순위는 useRankingBoard의 목업 구현만 읽습니다`);
+  }
+});
+
+test('순위 변동 표기: 양수 ▲, 음수 ▼, 0은 -, 비교할 순위가 없으면 배지를 숨긴다', () => {
+  assert.deepEqual([3, -2, 0, null, undefined].map(formatRankChange), ['▲3', '▼2', '-', null, null]);
+});
+
+let hud: ReturnType<typeof useApiMySchoolRank>;
+function HudProbe() {
+  hud = useApiMySchoolRank(123_456, 1);
+  return React.createElement('output', { 'aria-label': '상단 순위' }, `${hud.rank ?? '순위 없음'} ${hud.change ?? ''}`.trim());
+}
+function mountHud(signedIn: boolean) {
+  const calls: string[] = [];
+  const client = createApiClient({ fetch: (async (input) => {
+    const url = new URL(String(input), 'http://localhost');
+    calls.push(`${url.pathname}${url.search}`);
+    if (url.pathname.endsWith('/rankings/universities')) return ok({ ...SCHOOL_PAGES[0], items: SCHOOL_PAGES[0].items.slice(0, 1), size: 1 });
+    if (url.pathname.endsWith('/users/me')) return ok(ME);
+    throw new Error(`Unexpected path: ${url.pathname}`);
+  }) as typeof fetch });
+  const queryClient = createQueryClient(); clients.push(queryClient);
+  if (signedIn) { client.session.signIn('member-a'); queryClient.setQueryData(userKeys.me, ME); }
+  render(React.createElement(ApiProvider, { client, queryClient, children: React.createElement(HudProbe) }));
+  return calls;
+}
+
+test('메인 상단 순위는 API 모드에서 게임 점수가 아니라 서버 myUniversity의 순위와 변동을 쓴다', async () => {
+  const calls = mountHud(true);
+  await waitFor(() => assert.equal(screen.getByRole('status', { name: '상단 순위' }).textContent, '5 ▼3'));
+  // One row is enough: the server adds myUniversity to any page.
+  assert.deepEqual(calls, ['/api/v1/rankings/universities?page=0&size=1']);
+  cleanup();
+
+  const guestCalls = mountHud(false);
+  assert.equal(screen.getByRole('status', { name: '상단 순위' }).textContent, '순위 없음');
+  assert.deepEqual([hud.rank, hud.change, guestCalls], [null, null, []]);
+});
+
+test('연결 센서: 메인 상단 순위는 useMySchoolRank에서 받고 App이 목업 순위를 직접 계산하지 않는다', () => {
+  const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  assert.match(app, /useMySchoolRank\(/, 'App.tsx: 상단 순위·변동은 useMySchoolRank에서 받으세요 (API 모드는 서버 값)');
+  assert.doesNotMatch(app, /getSchoolRankings/, 'App.tsx: 목업 순위 계산은 useMySchoolRank의 목업 구현에만 둡니다');
+});
+
+test('메인 상단 변동 배지는 하락을 상승과 다른 색으로 보인다 (서버 값은 ▼도 온다)', () => {
+  const hudFor = (rankDelta: string | null) => {
+    cleanup();
+    render(React.createElement(MockGameProvider, null, React.createElement(TopHUD, { schoolName: '한양대학교', schoolId: 1, schoolBadgeColor: '#000',
+      schoolRegion: '서울 · 수도권', schoolScore: 0, rank: 2, rankDelta, campusLevel: 1, soundEnabled: false, onToggleSound: () => undefined })));
+    return screen.queryByTestId('rank-change');
+  };
+  const trends = ['▲2', '▼1', '-'].map((delta) => {
+    const badge = hudFor(delta)!;
+    return [badge.textContent, badge.dataset.trend, badge.className.match(/bg-\[#\w+\]/)?.[0]];
+  });
+  assert.deepEqual(trends, [['▲2', 'up', 'bg-[#22c55e]'], ['▼1', 'down', 'bg-[#fb7185]'], ['-', 'same', 'bg-[#faecc7]']]);
+  assert.equal(hudFor(null), null);
+});
+
+test('색 센서: 순위 변동 배지는 고정 초록 대신 rankTrend 색을 쓴다 (▼가 상승처럼 보이지 않게)', () => {
+  for (const file of ['TopHUD.tsx', 'RankingsView.tsx', 'RankingScreenPhone.tsx']) {
+    const source = readFileSync(new URL(`../src/components/${file}`, import.meta.url), 'utf8');
+    // Every element that prints a change value must pick its tone from the trend.
+    for (const [, block] of source.matchAll(/<span([^>]*)>\s*\{(?:rankDelta|myRow\.change|myItem\.change)\}/g)) {
+      assert.doesNotMatch(block, /bg-\[#22c55e\]/, `${file}: 변동 배지에 RANK_TREND_TONE[rankTrend(...)]을 쓰세요`);
+      assert.match(block, /RANK_TREND_TONE\[rankTrend\(/, `${file}: 변동 배지에 RANK_TREND_TONE[rankTrend(...)]을 쓰세요`);
+    }
   }
 });

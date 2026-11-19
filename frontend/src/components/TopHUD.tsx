@@ -1,6 +1,7 @@
 import type { SchoolId } from '../data/schoolIds.ts';
 import React from 'react';
 import { ArrowLeft, Volume2, VolumeX } from 'lucide-react';
+import { RANK_TREND_TONE, rankTrend } from './RankingParts';
 import { soundManager } from '../utils/sound';
 import { SharedImage } from './SharedImage.tsx';
 import type { SchoolView } from '../data/schoolDirectory.ts';
@@ -19,7 +20,7 @@ interface TopHUDProps {
   schoolScore: number;
   /** Null while the school has no server ranking (API visit, SCRUM-163). */
   rank: number | null;
-  /** Null hides the change badge: the API has no rank change. */
+  /** Null hides the change badge (signed out, not loaded, or nothing to compare against 00:00 KST). */
   rankDelta: string | null;
   campusLevel: number;
   soundEnabled: boolean;
@@ -167,7 +168,11 @@ export const TopHUD: React.FC<TopHUDProps> = ({
         >
           <span>전국 <span data-testid={visiting ? 'visit-rank' : undefined}>{rank === null ? '순위 없음' : `${rank}위`}</span></span>
           {rankDelta !== null && (
-            <span className="text-[10px] font-mono text-[#ffffff] bg-[#22c55e] border border-[#261608] px-1 py-0.2 font-black shadow-[1px_1px_0px_#261608]">
+            <span
+              data-testid="rank-change"
+              data-trend={rankTrend(rankDelta)}
+              className={`text-[10px] font-mono border border-[#261608] px-1 py-0.2 font-black shadow-[1px_1px_0px_#261608] ${RANK_TREND_TONE[rankTrend(rankDelta)]}`}
+            >
               {rankDelta}
             </span>
           )}

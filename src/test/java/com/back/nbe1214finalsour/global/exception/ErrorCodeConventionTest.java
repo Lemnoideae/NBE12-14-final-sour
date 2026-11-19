@@ -18,7 +18,8 @@ class ErrorCodeConventionTest {
     private static final Set<String> ALLOWED_PREFIXES = Set.of(
             "COMMON", "AUTH", "USER", "CLICK", "CLICKER", "ITEM", "UNIV", "ALLY", "MATCH", "GUEST", "PAY", "FILE", "SUPPORT",
             "ABUSE", "ATTACK", // 어뷰징 의심 시 봇 확인 (SCRUM-115)
-            "CHAT"); // 채팅 (추가 명세 §3-7, SCRUM-128)
+            "CHAT", // 채팅 (추가 명세 §3-7, SCRUM-128)
+            "ASSIST"); // 연합 학교 지원 (추가 명세 §3-3, SCRUM-187)
 
     private static final Pattern UPPER_SNAKE = Pattern.compile("^[A-Z]+(_[A-Z0-9]+)+$");
 

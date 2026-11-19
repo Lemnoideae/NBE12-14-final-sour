@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { SchoolId } from './data/schoolIds';
 import { TopHUD } from './components/TopHUD';
 import { CampusView } from './components/CampusView';
+import { LibraryBonusControl } from './components/LibraryBonusControl';
 import { PhoneShellVariantContext } from './components/PhoneShell';
 import { GameScreenLayout } from './components/GameScreenLayout';
 import { useDeviceMode } from './hooks/useDeviceMode';
@@ -29,6 +30,7 @@ import { TwoPhoneVisitingComparison } from './components/TwoPhoneVisitingCompari
 import { TwoPhoneOurSchoolGuestbookComparison } from './components/TwoPhoneOurSchoolGuestbookComparison';
 import { TwoPhoneRankingComparison } from './components/TwoPhoneRankingComparison';
 import { OurSchoolGuestbookBottomSheet } from './components/OurSchoolGuestbookBottomSheet';
+import { ApiGuestbookBottomSheet } from './components/ApiGuestbookBottomSheet';
 import { ChatPreviewBar } from './components/ChatPreviewBar';
 import { ChatBottomSheet } from './components/ChatBottomSheet';
 import { BottomSheetDialog } from './components/BottomSheetDialog';
@@ -42,7 +44,7 @@ import { ApiTestToolsNotice } from './components/AdminTestToolsPanel';
 import { DEMO_SCHOOL_NAMES, type DemoSchoolNameId } from './data/demoSchoolNames';
 import { PurchaseHistoryScreenPhone } from './components/PurchaseHistoryScreenPhone';
 import { CampusStatsSheet } from './components/CampusStatsSheet';
-import { getSchoolRankings } from './data/mockRankings';
+import { useMySchoolRank } from './hooks/useMySchoolRank';
 import { useMockGame } from './hooks/useMockGame';
 import { useCampusClicks } from './hooks/useCampusClicks';
 import { useCampusAttacks } from './hooks/useCampusAttacks';
@@ -69,6 +71,8 @@ import { Smartphone, Gamepad2, Layers, Trophy, ShoppingBag, MapPin, Image as Ima
 const SERVICE_VIEW_MODES = new Set<string>(['gameplay', 'signup', 'login', 'single_map', 'visiting', 'ranking', 'shop', 'alliance_apply', 'current_alliance', 'battle_apply', 'battle_status', 'support_guest', 'my_info', 'purchase_history', 'member_support', 'admin']);
 /** Sign-up: the backend in API mode (SCRUM-151), the mock onboarding otherwise. */
 const SignupScreen = selectByMode<React.FC<{ onGoToCampus: () => void; onGoToLogin?: () => void }>>({ api: ApiSignupPhone, mock: OnboardingPhone });
+// Load STOMP only when a member opens the API chat sheet; design-comparison screens stay mock-only.
+const ApiChatBottomSheet = React.lazy(() => import('./components/ApiChatBottomSheet').then((module) => ({ default: module.ApiChatBottomSheet })));
 
 function AppContent() {
   // Mode: 'ranking_screens' (2-phone ranking comparison with infinite scroll) | 'our_guestbook_screens' | 'visiting_screens' | etc.
@@ -97,9 +101,8 @@ function AppContent() {
   const playerInfo = game.player;
   const schoolScore = game.state.schoolScore;
   const mySchool = useMySchool();
-  const mySchoolRank = getSchoolRankings(schoolScore, playerInfo.schoolId).find((school) => school.isMySchool)!;
-  const rank = mySchoolRank.rank;
-  const rankDelta = mySchoolRank.change;
+  // API mode: the server's rank and change against 00:00 KST (SCRUM-184); the score above is still the game's own.
+  const { rank, change: rankDelta } = useMySchoolRank(schoolScore, playerInfo.schoolId);
   const campusLevel = game.campus.level;
   const myContribution = game.state.contribution;
   const [activeStudents, setActiveStudents] = useState<number>(37);
@@ -591,8 +594,8 @@ function AppContent() {
         ) : viewMode === 'our_guestbook_screens' ? (
           <TwoPhoneOurSchoolGuestbookComparison
             schoolScore={schoolScore}
-            rank={rank}
-            rankDelta={rankDelta}
+            rank={rank ?? undefined}
+            rankDelta={rankDelta ?? undefined}
             campusLevel={campusLevel}
             clickPower={clickPower}
             basePower={basePower}
@@ -619,8 +622,8 @@ function AppContent() {
         ) : viewMode === 'chat_screens' ? (
           <TwoPhoneChatComparison
             schoolScore={schoolScore}
-            rank={rank}
-            rankDelta={rankDelta}
+            rank={rank ?? undefined}
+            rankDelta={rankDelta ?? undefined}
             campusLevel={campusLevel}
             clickPower={clickPower}
             basePower={basePower}
@@ -641,7 +644,8 @@ function AppContent() {
         ) : viewMode === 'visiting' ? (
           <div className={viewWrap}>
             {isVisitGuestbookOpen && (
-              <VisitingScreen2Phone modal schoolId={visitSchoolId} onCloseGuestbook={() => setIsVisitGuestbookOpen(false)} />
+              <VisitingScreen2Phone modal schoolId={visitSchoolId} onCloseGuestbook={() => setIsVisitGuestbookOpen(false)}
+                onGoToLogin={() => { setIsVisitGuestbookOpen(false); setViewMode('login'); }} />
             )}
             <MockLoadGate key={`visit:${visitSchoolId ?? ''}`} name="방문 학교" onBack={goToMap} backLabel="지도로 돌아가기">
               <VisitingScreen1Phone
@@ -844,23 +848,24 @@ function AppContent() {
                   onOpenMap={() => setActiveTab('map')}
                 />
               }
-              previewBar={
+              previewBar={<>
+                {activeTab === 'campus' && campusClicks.library && <LibraryBonusControl control={campusClicks.library} />}
                 <ChatPreviewBar
-                  latestSender="새벽코딩러"
-                  latestMessage="도서관 앞 클릭 모임 ㄱㄱ"
-                  unreadCount={12}
+                  latestSender={API_MODE === 'api' ? '교내 채팅' : '새벽코딩러'}
+                  latestMessage={API_MODE === 'api' ? '열어서 대화하기' : '도서관 앞 클릭 모임 ㄱㄱ'}
+                  unreadCount={API_MODE === 'api' ? 0 : 12}
                   onClick={() => {
                     setIsChatSheetOpen(true);
                     soundManager.playTabSound();
                   }}
                 />
-              }
+              </>}
               nav={
                 <BottomNav
                   activeTab={activeTab}
                   onChangeTab={setActiveTab}
                   hasShopUpgrade={hasAffordableShopItem}
-                  hasRankChange={rankDelta.startsWith('▲')}
+                  hasRankChange={rankDelta?.startsWith('▲') ?? false}
                 />
               }
               overlays={
@@ -871,7 +876,11 @@ function AppContent() {
                       setIsChatSheetOpen(false);
                       soundManager.playTabSound();
                     }}>
-                      <ChatBottomSheet
+                      {API_MODE === 'api' ? <React.Suspense fallback={<p role="status" className="p-3 font-pixel text-sm">채팅 화면을 여는 중이에요.</p>}>
+                        <ApiChatBottomSheet
+                          onClose={() => { setIsChatSheetOpen(false); soundManager.playTabSound(); }}
+                          onGoToLogin={() => { setIsChatSheetOpen(false); setViewMode('login'); }} />
+                      </React.Suspense> : <ChatBottomSheet
                         onClose={() => {
                           setIsChatSheetOpen(false);
                           soundManager.playTabSound();
@@ -879,7 +888,7 @@ function AppContent() {
                         mySchoolInitial={mySchool.firstSyllable}
                         myNickname={playerInfo.nickname}
                         myDepartment={playerInfo.department}
-                      />
+                      />}
                     </BottomSheetDialog>
                   )}
 
@@ -901,18 +910,19 @@ function AppContent() {
                       setIsOurGuestbookSheetOpen(false);
                       soundManager.playTabSound();
                     }}>
-                      <OurSchoolGuestbookBottomSheet
-                        onClose={() => {
-                          setIsOurGuestbookSheetOpen(false);
-                          soundManager.playTabSound();
-                        }}
-                        onGoToMap={() => {
-                          setIsOurGuestbookSheetOpen(false);
-                          setActiveTab('map');
-                        }}
-                        mySchoolId={mySchool.id}
-                        schoolName={mySchool.name}
-                      />
+                      {API_MODE === 'api' ? <ApiGuestbookBottomSheet onClose={() => {
+                        setIsOurGuestbookSheetOpen(false);
+                        soundManager.playTabSound();
+                      }} onGoToMap={() => {
+                        setIsOurGuestbookSheetOpen(false);
+                        setActiveTab('map');
+                      }} onGoToLogin={() => { setIsOurGuestbookSheetOpen(false); setViewMode('login'); }} /> : <OurSchoolGuestbookBottomSheet onClose={() => {
+                        setIsOurGuestbookSheetOpen(false);
+                        soundManager.playTabSound();
+                      }} onGoToMap={() => {
+                        setIsOurGuestbookSheetOpen(false);
+                        setActiveTab('map');
+                      }} mySchoolId={mySchool.id} schoolName={mySchool.name} />}
                     </BottomSheetDialog>
                   )}
                 </>
@@ -921,6 +931,7 @@ function AppContent() {
               {activeTab === 'campus' && (
                 <>
                   <CampusView
+                    guestbookBadge={API_MODE === 'api' ? null : 'N 5'}
                     onTap={handleCampusTap}
                     clickPower={clickPower}
                     basePower={basePower}

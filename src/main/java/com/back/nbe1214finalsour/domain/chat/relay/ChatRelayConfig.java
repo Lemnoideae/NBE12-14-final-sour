@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.chat.relay;
 
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
@@ -10,7 +11,7 @@ import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 /**
- * 서버 간 채팅 전달 (D4, D5). 서버마다 Redis 패턴 {@code chat:univ:*}를 구독한다.
+ * 서버 간 채팅 전달 (D4, D5). 서버마다 Redis 패턴 {@code chat:univ:*}와 {@code chat:alliance:*}를 구독한다.
  *
  * <p>순서: Redis는 한 구독 연결에 발행 순서대로 보낸다(Redis Pub/Sub 문서 "Subscribers receive the messages in the order
  * that the messages are published"). 컨테이너 기본 실행기({@code SimpleAsyncTaskExecutor})는 메시지마다 새 스레드를 써서
@@ -46,7 +47,8 @@ public class ChatRelayConfig {
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
         container.setConnectionFactory(connectionFactory);
         container.setTaskExecutor(executor);
-        container.addMessageListener(subscriber, new PatternTopic(ChatRedisSubscriber.UNIVERSITY_CHANNEL_PATTERN));
+        container.addMessageListener(subscriber, List.of(new PatternTopic(ChatRedisSubscriber.UNIVERSITY_CHANNEL_PATTERN),
+                new PatternTopic(ChatRedisSubscriber.ALLIANCE_CHANNEL_PATTERN)));
         return container;
     }
 }

@@ -9,6 +9,7 @@ import { SCHOOL_ID, type SchoolId } from '../src/data/schoolIds';
 import type { MyInfo } from '../src/api/users';
 import type { UniversityDetail } from '../src/api/universities';
 import type { AttackRequest, AttackResponse } from '../src/api/attacks';
+import type { AssistResponse } from '../src/api/assists';
 import { installDialogStub } from './helpers/dialogStub';
 import { assertAbsent } from './helpers/domAssert';
 
@@ -45,17 +46,22 @@ const ME: MyInfo = {
   clicker: { level: 1, clickPower: 10, nextLevelRequiredScore: 100 }, totalContribScore: 100, totalAttackScore: 0,
 };
 const DETAIL: UniversityDetail = { id: SCHOOL_ID.pusan, name: '부산대학교', logoUrl: null, totalScore: 1000, rank: 2, memberCount: 42,
-  topDepartments: [], topContributors: [], isMyUniversity: false };
+  topDepartments: [], topContributors: [], isMyUniversity: false, isMyAlly: false };
 const ANSWER: AttackResponse = { acceptedClicks: 4, damage: 12, multiplier: 1, isRival: false,
   targetUniversity: { id: DETAIL.id, name: DETAIL.name, totalScore: 988, rank: 3 }, myAttackScore: 12 };
+const ASSIST: AssistResponse = { acceptedClicks: 4, assistScore: 12, targetUniversity: { id: DETAIL.id, name: DETAIL.name, totalScore: 1012, rank: 1 },
+  myContribScore: 140 };
 const ok = (data: unknown) => new Response(JSON.stringify({ code: 'SUCCESS', message: '성공', data }), { status: 200 });
 const fail = (status: number, code: string) => new Response(JSON.stringify({ code, message: code, data: null }), { status });
 let attacks: ReturnType<typeof useApiCampusAttacks>;
-function mount({ signedIn = true, respond, busy = false, beforeRead }: {
+function mount({ signedIn = true, respond, busy = false, beforeRead, allies = [] }: {
   signedIn?: boolean; busy?: boolean; respond?: (body: AttackRequest, n: number) => Response | Promise<Response>;
   beforeRead?: (path: string) => Response | Promise<Response> | undefined;
+  /** Schools the server reports as the viewer's current alliance (SCRUM-187). */
+  allies?: number[];
 } = {}) {
   const calls: Array<{ body: AttackRequest; auth: string | null }> = [];
+  const assistCalls: Array<{ body: AttackRequest; auth: string | null }> = [];
   let locked = false;
   let unlocks = 0;
   const begin = () => {
@@ -70,12 +76,17 @@ function mount({ signedIn = true, respond, busy = false, beforeRead }: {
       calls.push({ body, auth: new Headers(init?.headers).get('Authorization') });
       return respond ? respond(body, calls.length) : ok(ANSWER);
     }
+    if (path.endsWith('/assists')) {
+      const body = JSON.parse(String(init?.body)) as AttackRequest;
+      assistCalls.push({ body, auth: new Headers(init?.headers).get('Authorization') });
+      return respond ? respond(body, assistCalls.length) : ok(ASSIST);
+    }
     const custom = beforeRead?.(path);
     if (custom) return custom;
     if (path.endsWith('/users/me')) return ok(ME);
     if (/\/universities\/\d+$/.test(path)) {
       const id = Number(path.split('/').at(-1));
-      return ok({ ...DETAIL, id, isMyUniversity: signedIn && id === ME.university.id });
+      return ok({ ...DETAIL, id, isMyUniversity: signedIn && id === ME.university.id, isMyAlly: signedIn && allies.includes(id) });
     }
     throw new Error(`Unexpected path: ${path}`);
   }) as typeof fetch });
@@ -90,7 +101,7 @@ function mount({ signedIn = true, respond, busy = false, beforeRead }: {
   const tree = (targetId: SchoolId, visible: boolean) => React.createElement(MockGameProvider, null,
     React.createElement(ApiProvider, { client, queryClient, children: React.createElement(Root, { targetId, visible }) }));
   const view = render(tree(SCHOOL_ID.pusan, true));
-  return { calls, client, queryClient, locked: () => locked, unlocks: () => unlocks,
+  return { calls, assistCalls, client, queryClient, locked: () => locked, unlocks: () => unlocks,
     navigate: (id: SchoolId, visible = true) => view.rerender(tree(id, visible)), setBusy: (value: boolean) => { busy = value; } };
 }
 const attackButton = () => screen.getByRole('button', { name: /캠퍼스 공격/ });
@@ -197,7 +208,7 @@ test('화면을 떠나도 원래 학교에 보내고, 미확정 공격이 있는
   await waitFor(() => assert.equal((attackButton() as HTMLButtonElement).disabled, true));
   act(() => { assert.equal(attacks.tap(SCHOOL_ID.snu), false); });
   f.navigate(SCHOOL_ID.snu, false);
-  await waitFor(() => assert.equal(attacks.result?.damage, 12), { timeout: 2500 });
+  await waitFor(() => assert.equal(attacks.result?.kind === 'attack' && attacks.result.damage, 12), { timeout: 2500 });
   assert.equal(f.calls[0].body.targetUniversityId, SCHOOL_ID.pusan);
   const cached = f.queryClient.getQueryData<UniversityDetail>(universityKeys.detail(SCHOOL_ID.pusan, ME.id));
   assert.equal(cached?.totalScore, 988);
@@ -297,4 +308,61 @@ test('계약 센서: 공격 경로·필드·자기 학교 거절·공유 한도�
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
   assert.match(app, /useCampusAttacks\(campusClicks.beginUpgrade\)/);
   assert.match(app, /attacks=\{campusAttacks\}/);
+});
+
+// SCRUM-187: an ally school (server isMyAlly) is assisted through /assists instead of attacked.
+const assistButton = () => screen.getByRole('button', { name: /캠퍼스 지원/ });
+
+test('연합 학교는 지원 버튼으로 바뀌어 /assists로 보내고, 서버 점수와 내 기여도를 반영한다', async () => {
+  const f = mount({ allies: [SCHOOL_ID.pusan] });
+  await waitFor(() => assert.ok(assistButton()));
+  assertAbsent(screen.queryByRole('button', { name: /캠퍼스 공격/ }), '연합 학교에는 공격 버튼이 없다');
+  assert.equal(screen.getByTestId('visit-attack-bar').dataset.mode, 'assist');
+  for (let i = 0; i < 4; i++) fireEvent.click(assistButton());
+  assert.equal(f.locked(), true, '공격과 같은 잠금을 쓴다');
+  assert.equal(screen.getByTestId('visit-score').textContent, '1,000점', '서버 응답 전 점수를 추측하지 않는다');
+  await waitFor(() => assert.match(screen.getByTestId('attack-result').textContent ?? '', /연합 지원/), { timeout: 2500 });
+  assert.equal(f.calls.length, 0, '공격 API는 부르지 않는다');
+  assert.deepEqual(f.assistCalls.map(({ auth, body }) => ({ auth, clickCount: body.clickCount, target: body.targetUniversityId })),
+    [{ auth: 'Bearer member-a', clickCount: 4, target: SCHOOL_ID.pusan }]);
+  assert.match(screen.getByTestId('attack-result').textContent ?? '', /연합 지원 · 4회 · 학교 \+12점 · 상대 1,012점 · 내 기여도 140점/);
+  assert.equal(screen.getByTestId('visit-score').textContent, '1,012점');
+  assert.equal(screen.getByTestId('visit-rank').textContent, '1위');
+  assert.deepEqual(f.queryClient.getQueryData<MyInfo>(userKeys.me), { ...ME, totalContribScore: 140 }, '공격 점수는 그대로');
+  assert.equal(f.locked(), false);
+});
+
+test('연합이 아닌 학교는 그대로 공격하고, 지원 대기 중에는 다른 종류로 바꾸지 않는다', async () => {
+  const f = mount({ allies: [SCHOOL_ID.pusan] });
+  await waitFor(() => assert.ok(assistButton()));
+  fireEvent.click(assistButton());
+  act(() => { assert.equal(attacks.tap(SCHOOL_ID.pusan, 'attack'), false, '같은 학교라도 묶음 종류는 하나'); });
+  assert.match(screen.getByRole('alert').textContent ?? '', /이전 학교의 지원 전송이 끝난 뒤/);
+  await waitFor(() => assert.equal(attacks.pendingClicks, 0), { timeout: 2500 });
+  f.navigate(SCHOOL_ID.snu);
+  await waitFor(() => assert.ok(attackButton()));
+  fireEvent.click(attackButton());
+  assert.equal(attacks.pendingKind, 'attack');
+  await waitFor(() => assert.equal(attacks.pendingClicks, 0), { timeout: 2500 });
+  assert.equal(f.assistCalls.length, 1);
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.calls[0].body.targetUniversityId, SCHOOL_ID.snu);
+});
+
+test('계약 센서: 지원 경로·필드·동맹 거절·0.3배·기여도는 백엔드와 일치한다', () => {
+  const root = new URL('../../src/main/java/com/back/nbe1214finalsour/domain/click/', import.meta.url);
+  const request = readFileSync(new URL('dto/AssistRequest.java', root), 'utf8');
+  for (const field of ['submissionId', 'clickCount', 'targetUniversityId']) assert.match(request, new RegExp(`\\b${field}\\b`));
+  assert.match(request, /@Max\(value = 20/);
+  const response = readFileSync(new URL('dto/AssistResponse.java', root), 'utf8');
+  for (const field of ['acceptedClicks', 'assistScore', 'targetUniversity', 'myContribScore']) assert.match(response, new RegExp(`\\b${field}\\b`));
+  const controller = readFileSync(new URL('controller/AssistController.java', root), 'utf8');
+  assert.match(controller, /@RequestMapping\("\/api\/v1\/assists"\)/);
+  const service = readFileSync(new URL('service/AssistService.java', root), 'utf8');
+  assert.match(service, /ASSIST_NOT_ALLY/);
+  assert.match(service, /clickActionGuard.verifyAndGetBaseScore/);
+  const api = readFileSync(new URL('../src/api/assists.ts', import.meta.url), 'utf8');
+  assert.match(api, /'\/assists'/);
+  const phone = readFileSync(new URL('../src/components/VisitingScreen1Phone.tsx', import.meta.url), 'utf8');
+  assert.match(phone, /visit\.isMyAlly \? 'assist' : 'attack'/);
 });

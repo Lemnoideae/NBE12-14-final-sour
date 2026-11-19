@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { CLICK_BATCH_WINDOW_MS, MAX_CLICK_BATCH_SIZE, submitClicks, type ClickRequest, type ClickResponse } from '../src/api/clicks';
+import { CLICK_BATCH_WINDOW_MS, MAX_CLICK_BATCH_SIZE, submitClicks, type ClickCoordinates, type ClickRequest, type ClickResponse } from '../src/api/clicks';
 import { createApiClient } from '../src/api/client';
 import { ApiError } from '../src/api/errors';
 import { createClickBatcher, type ClickBatchSnapshot } from '../src/utils/clickBatcher';
@@ -13,7 +13,7 @@ const response: ClickResponse = {
 };
 const network = () => new ApiError({ kind: 'network', code: 'CLIENT_NETWORK_ERROR', status: null });
 
-function fixture(send: (request: ClickRequest) => Promise<ClickResponse> = async () => response) {
+function fixture(send: (request: ClickRequest) => Promise<ClickResponse> = async () => response, getCoordinates?: () => ClickCoordinates | undefined) {
   let time = 0;
   let sequence = 0;
   const tasks = new Map<number, { at: number; run: () => void }>();
@@ -22,6 +22,7 @@ function fixture(send: (request: ClickRequest) => Promise<ClickResponse> = async
   const snapshots: ClickBatchSnapshot[] = [];
   const controller = createClickBatcher({
     now: () => time,
+    getCoordinates,
     createId: () => `submission-${++sequence}`,
     schedule(run, delay) {
       const id = ++sequence;
@@ -47,6 +48,44 @@ function fixture(send: (request: ClickRequest) => Promise<ClickResponse> = async
   }
   return { controller, sent, accepted, snapshots, advance, tasks, suspend: (ms: number) => { time += ms; } };
 }
+
+for (const initial of [undefined, { latitude: 37.5, longitude: 127 }]) {
+  test(`위치${initial ? '있음' : '없음'}: 새 제출에서만 읽고 네트워크 재시도는 위치 변경·중지와 무관하게 본문을 유지한다`, async () => {
+    let coordinates = initial;
+    let attempts = 0, reads = 0;
+    const f = fixture(async () => { if (++attempts === 1) throw network(); return response; }, () => { reads++; return coordinates; });
+    f.controller.enqueue(2);
+    await f.advance(1000);
+    assert.deepEqual(f.sent[0], { submissionId: f.sent[0].submissionId, clickCount: 1, ...initial });
+    coordinates = initial ? undefined : { latitude: 0, longitude: 0 };
+    f.controller.enqueue(2);
+    await f.advance(1000);
+    assert.deepEqual(f.sent[1], f.sent[0], '재시도에 위치를 새로 붙이거나 빼지 않는다');
+    assert.equal(reads, 1);
+    await f.advance(1000);
+    assert.deepEqual(f.sent[2], { submissionId: f.sent[2].submissionId, clickCount: 1, ...coordinates });
+    assert.equal(reads, 2);
+    assert.notEqual(f.sent[2].submissionId, f.sent[0].submissionId);
+    f.controller.dispose();
+  });
+}
+
+test('봇 확인 뒤 재개도 같은 제출에 처음 위치를 유지한다', async () => {
+  let coordinates: ClickCoordinates | undefined = { latitude: 37.5, longitude: 127 };
+  let attempts = 0;
+  const f = fixture(async () => {
+    if (++attempts === 1) throw new ApiError({ kind: 'http', status: 403, code: 'ABUSE_VERIFICATION_REQUIRED' });
+    return response;
+  }, () => coordinates);
+  f.controller.enqueue(2);
+  await f.advance(1000);
+  coordinates = undefined;
+  assert.equal(f.controller.resumeAfterVerification(), true);
+  await f.advance(1000);
+  assert.deepEqual(f.sent[1], f.sent[0]);
+  assert.equal(f.sent[1].latitude, 37.5);
+  f.controller.dispose();
+});
 
 test('idle 잠금은 같은 프레임의 클릭·중복 강화를 막고 이전 release가 다음 잠금을 풀지 못한다', () => {
   const f = fixture();
@@ -346,7 +385,7 @@ test('클릭 응답 필드·입력 상한·중복 TTL 센서: Java 계약 변경
   const requestSource = readFileSync(new URL('dto/ClickRequest.java', javaRoot), 'utf8');
   assert.match(requestSource, new RegExp(`@Max\\(value = ${MAX_CLICK_BATCH_SIZE},`), fix);
   assert.match(requestSource, /@Min\(value = 1,/, fix);
-  // The location stays optional: the frontend sends none until SCRUM-185 (library bonus).
+  // Location remains optional: declining it must not block ordinary clicks.
   assert.match(requestSource, /Integer clickCount,\s*Double latitude,\s*Double longitude\s*\)/, fix);
   assert.equal(CLICK_BATCH_WINDOW_MS, 1000);
   assert.match(readFileSync(new URL('service/ClickActionGuard.java', javaRoot), 'utf8'), /Duration.ofSeconds\(10L\)/,

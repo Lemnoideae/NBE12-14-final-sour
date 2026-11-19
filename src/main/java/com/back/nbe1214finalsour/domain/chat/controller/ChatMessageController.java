@@ -17,7 +17,7 @@ import org.springframework.messaging.simp.annotation.SendToUser;
 import org.springframework.stereotype.Controller;
 
 /**
- * 채팅 보내기 (STOMP {@code /app/chat/university}, 계획 §3-1).
+ * 채팅 보내기 (STOMP {@code /app/chat/university}, {@code /app/chat/alliance}, 계획 §3-1).
  *
  * <p>받는 쪽에는 보낸 사람도 포함된다. 보낸 사람도 방 구독으로 자기 메시지를 받는다(서버 간 전달, {@code ChatRedisSubscriber}).
  * 처리 중 에러는 연결을 유지하고 보낸 세션의 {@code /user/queue/errors}로만 보낸다 (D15).
@@ -32,6 +32,12 @@ public class ChatMessageController {
     @MessageMapping("/chat/university")
     public void sendToUniversity(@Payload ChatSendRequest request, StompUser user) {
         this.chatMessageService.sendToUniversity(user.authUser(), request.content());
+    }
+
+    /** 내 학교가 지금 속한 연합 방으로 보낸다. 방은 요청이 아니라 서버가 정한다 (명세 §3-7) */
+    @MessageMapping("/chat/alliance")
+    public void sendToAlliance(@Payload ChatSendRequest request, StompUser user) {
+        this.chatMessageService.sendToAlliance(user.authUser(), request.content());
     }
 
     @MessageExceptionHandler

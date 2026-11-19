@@ -218,9 +218,19 @@ class ChatStompIntegrationTest {
     }
 
     @Test
-    @DisplayName("허용 목록에 없는 목적지(연합 방은 2단계, 브로커 큐 직접 구독)는 ERROR COMMON_FORBIDDEN")
+    @DisplayName("소속 연합이 없는 학교 회원이 연합 방을 구독하면 ERROR CHAT_NOT_MEMBER (연합 방 소속 판정은 AllianceChatIntegrationTest)")
+    void subscribe_allianceWithoutMembership() throws Exception {
+        try (RawStompClient client = connected()) {
+            client.subscribe("sub-0", ChatDestinations.alliance(1));
+
+            assertRejected(client, "CHAT_NOT_MEMBER");
+        }
+    }
+
+    @Test
+    @DisplayName("허용 목록에 없는 목적지(브로커 큐 직접 구독, 숫자가 아닌 방 ID)는 ERROR COMMON_FORBIDDEN")
     void subscribe_unlistedDestination() throws Exception {
-        for (String destination : new String[] {"/topic/chat/alliances/1", "/queue/errors", "/topic/chat/universities/abc"}) {
+        for (String destination : new String[] {"/queue/errors", "/topic/chat/universities/abc", "/topic/chat/alliances/abc"}) {
             try (RawStompClient client = connected()) {
                 client.subscribe("sub-0", destination);
 
