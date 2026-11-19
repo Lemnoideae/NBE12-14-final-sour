@@ -5,6 +5,17 @@
 -- 반환: 1
 redis.call('ZINCRBY', KEYS[1], tonumber(ARGV[2]), ARGV[1])
 redis.call('SADD', KEYS[2], ARGV[1])
-redis.call('DEL', KEYS[3])
+if ARGV[4] == '' then
+    redis.call('DEL', KEYS[3])
+else
+    local previous = cjson.decode(ARGV[4])
+    local args = {}
+    for field, value in pairs(previous) do
+        args[#args + 1] = field
+        args[#args + 1] = value
+    end
+    redis.call('HSET', KEYS[3], unpack(args))
+    redis.call('PEXPIREAT', KEYS[3], previous['expiredAt'])
+end
 redis.call('DEL', KEYS[4])
 return 1
