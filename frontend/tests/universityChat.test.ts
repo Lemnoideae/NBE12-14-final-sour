@@ -40,6 +40,22 @@ test('구독 후 최신20개를 받으며 실시간·이력 중복을 제거하�
   f.chat.stop();
 });
 
+test('최초 이력 실패 뒤에는 소켓이 연결되어도 전송하지 않고 이력 재시도 성공 뒤 허용한다', async () => {
+  let failure = true;
+  const f = setup(async () => failure ? new Response(JSON.stringify({ code: 'COMMON_INTERNAL_ERROR', message: '이력 실패' }), { status: 500 }) : success(page([])));
+  f.ready(); await flush();
+  assert.equal(f.chat.getSnapshot().connection, 'connected');
+  assert.equal(f.chat.getSnapshot().syncing, false);
+  assert.equal(f.chat.getSnapshot().initialized, false);
+  assert.equal(f.chat.send('아직 보내지 않음'), false);
+  assert.deepEqual(f.sends, []);
+  failure = false;
+  await f.chat.refresh();
+  assert.equal(f.chat.send('이력 확인 뒤 전송'), true);
+  assert.deepEqual(f.sends, ['이력 확인 뒤 전송']);
+  f.chat.stop();
+});
+
 test('과거 메시지는20개 커서로 중복 요청 없이 읽고 hasNext=false에서 멈춘다', async () => {
   const cursors: Array<string | null> = [];
   let finish!: (value: Response) => void;
