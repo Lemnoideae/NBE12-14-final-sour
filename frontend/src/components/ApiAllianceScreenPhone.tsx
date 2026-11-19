@@ -3,9 +3,10 @@ import { ChevronLeft, RefreshCw } from 'lucide-react';
 import { useAuthSession } from '../api/ApiProvider';
 import {
   ALLIANCE_DURATION_PRESETS, ALLIANCE_ERROR_CODES, ALLIANCE_LIMITS, ALLIANCE_MAX_SCHOOLS, ALLIANCE_STATUS_LABEL, createAllianceMemory,
-  createSentApplicationMemory, parseAllianceId, parseApplicationId, useAllianceDetail, useApplyToAlliance, useCreateAlliance,
-  useDecideApplication, useUniversityName, validateAllianceName, type AllianceApplication, type AllianceMemory, type ApplicationDecision,
-  type SentApplication, type SentApplicationMemory,
+  createMatchMemory, createSentApplicationMemory, MATCH_DURATION_PRESETS, MATCH_ERROR_CODES, MATCH_LIMITS, MATCH_STATUS_LABEL,
+  parseAllianceId, parseApplicationId, parseMatchId, useAllianceDetail, useAllianceMatch, useApplyToAlliance, useCreateAlliance,
+  useDecideApplication, useDecideMatch, useRequestMatch, useUniversityName, validateAllianceName, type AllianceApplication,
+  type AllianceMatch, type AllianceMemory, type ApplicationDecision, type MatchDecision, type SentApplication, type SentApplicationMemory,
 } from '../api/alliances';
 import { errorMessage, fieldErrorMap, isApiError } from '../api/errors';
 import { useMyInfo } from '../api/users';
@@ -15,9 +16,9 @@ import { DurationPicker, formatDurationHours } from './DurationPicker';
 import { LoadNotice } from './LoadNotice';
 import { PhoneShell } from './PhoneShell';
 
-// Alliance screen in API mode: create and detail (SCRUM-177), join applications by number (SCRUM-178). Plans in
-// .agents/01-PLAN/261119-1123-* and -1134-*. Replaces the mock school-to-school proposal screens; the mock keeps them
-// with their [시연] buttons and virtual clock.
+// Alliance screen in API mode: create and detail (SCRUM-177), join applications by number (SCRUM-178), matches by number
+// (SCRUM-179). Plans in .agents/01-PLAN/261119-1123-*, -1134-* and -1150-*. Replaces the mock alliance and battle
+// screens; the mock keeps them with their [시연] buttons and virtual clock.
 
 const BUTTON = 'pixel-plaque plaque-wood min-h-11 min-w-11 px-3 py-2 text-xs font-bold cursor-pointer disabled:opacity-50 disabled:cursor-default';
 const BOX = 'rpg-box p-3 bg-[#fdf5df] border-2 border-[#261608] shadow-[2px_2px_0px_#261608] flex flex-col gap-2';
@@ -25,6 +26,7 @@ const INPUT = 'w-full min-h-12 border-2 border-[#261608] bg-white px-2 py-2 text
 const dateFormat = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'medium', timeStyle: 'short' });
 const defaultMemory = createAllianceMemory();
 const defaultApplications = createSentApplicationMemory();
+const defaultMatches = createMatchMemory();
 const ERROR_TEXT = 'text-[#7f1d1d]';
 
 export function remainingTime(expiredAt: string, now: number): string {
@@ -35,6 +37,16 @@ export function remainingTime(expiredAt: string, now: number): string {
   return `만료까지 ${Math.floor(minutes / 60)}시간 ${minutes % 60}분`;
 }
 
+/** "3시간 5분" until the instant, or null once it has passed or cannot be read. */
+export function timeLeft(iso: string, now: number): string | null {
+  const diff = Date.parse(iso) - now;
+  if (!Number.isFinite(diff) || diff <= 0) return null;
+  const minutes = Math.floor(diff / 60_000);
+  return `${Math.floor(minutes / 60)}시간 ${minutes % 60}분`;
+}
+
+const kst = (iso: string) => `${dateFormat.format(new Date(iso))} (KST)`;
+
 interface ApiAllianceScreenPhoneProps {
   onBack: () => void;
   onGoToLogin: () => void;
@@ -42,11 +54,12 @@ interface ApiAllianceScreenPhoneProps {
   /** Tests pass their own storage and clock. */
   memory?: AllianceMemory;
   applications?: SentApplicationMemory;
+  matches?: AllianceMemory;
   now?: () => number;
 }
 
 export function ApiAllianceScreenPhone({
-  onBack, onGoToLogin, onNavigateTab, memory = defaultMemory, applications = defaultApplications, now = Date.now,
+  onBack, onGoToLogin, onNavigateTab, memory = defaultMemory, applications = defaultApplications, matches = defaultMatches, now = Date.now,
 }: ApiAllianceScreenPhoneProps) {
   const signedIn = useAuthSession().status === 'signed-in';
   const me = useMyInfo();
@@ -62,7 +75,7 @@ export function ApiAllianceScreenPhone({
       </header>
       <div className="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col gap-3 font-pixel text-[#261608]">
         {signedIn && me.data ? <AllianceHome key={me.data.id} userId={me.data.id} universityName={me.data.university.name}
-          memory={memory} applications={applications} now={now} /> : (
+          memory={memory} applications={applications} matches={matches} now={now} /> : (
           <div role="status" className={`${BOX} items-center text-center`}>
             <p className="text-sm font-bold">연합을 만들거나 보려면 로그인해 주세요</p>
             <button type="button" className={BUTTON} onClick={onGoToLogin}>로그인</button>
@@ -74,8 +87,8 @@ export function ApiAllianceScreenPhone({
   );
 }
 
-function AllianceHome({ userId, universityName, memory, applications, now }: {
-  userId: number; universityName: string; memory: AllianceMemory; applications: SentApplicationMemory; now: () => number;
+function AllianceHome({ userId, universityName, memory, applications, matches, now }: {
+  userId: number; universityName: string; memory: AllianceMemory; applications: SentApplicationMemory; matches: AllianceMemory; now: () => number;
 }) {
   const [remembered, setRemembered] = useState(() => memory.get(userId));
   const [sent, setSent] = useState(() => applications.get(userId));
@@ -128,6 +141,8 @@ function AllianceHome({ userId, universityName, memory, applications, now }: {
       </>}
     </section>
 
+    {remembered !== null && <AllianceMatches key={remembered} userId={userId} allianceId={remembered} memory={matches} now={now} />}
+
     <AllianceLookup userId={userId} now={now} inputRef={lookupInput} allianceId={lookedUp} onLookup={setLookedUp}
       actions={lookedUp === null ? null : lookedUp === remembered ? <p className="text-[11px] font-bold">우리 연합이에요.</p> : <>
         <ApplyButton key={lookedUp} allianceId={lookedUp}
@@ -141,7 +156,7 @@ function AllianceHome({ userId, universityName, memory, applications, now }: {
 
     <section aria-labelledby="alliance-soon" className={`${BOX} text-xs`}>
       <h2 id="alliance-soon" className="font-black text-sm">준비 중</h2>
-      <p>연합 목록, 소속 학교, 받은 가입 신청 목록, 대결은 서버 조회 기능이 생기면 열려요.</p>
+      <p>연합 목록, 소속 학교, 받은 가입 신청 목록, 받은 대결 신청 목록, 진행 중 대결 점수, 대결 시작 시각 예약은 서버 기능이 생기면 열려요.</p>
     </section>
   </>;
 }
@@ -260,6 +275,233 @@ function ApplicationDecisionForm({ userId, allianceId }: { userId: number; allia
       )}
       {decide.error && !decide.isPending && <p role="alert" data-testid="application-decision-error" className={ERROR_TEXT}>{reason}</p>}
     </form>
+  );
+}
+
+function AllianceMatches({ userId, allianceId, memory, now }: { userId: number; allianceId: number; memory: AllianceMemory; now: () => number }) {
+  const [matchId, setMatchId] = useState(() => memory.get(userId));
+  const [notice, setNotice] = useState<string | null>(null);
+  const show = (id: number, message: string | null) => {
+    memory.set(userId, id);
+    setMatchId(id);
+    setNotice(message);
+  };
+  const forget = (message: string | null) => {
+    memory.forget(userId);
+    setMatchId(null);
+    setNotice(message);
+  };
+  return (
+    <section aria-labelledby="alliance-matches" className="flex flex-col gap-2">
+      <h2 id="alliance-matches" className="text-sm font-black">연합 대결</h2>
+      {notice && <p role="status" className={`${BOX} text-xs`}>{notice}</p>}
+      {matchId !== null ? (
+        <MatchCard key={matchId} userId={userId} matchId={matchId} allianceId={allianceId} now={now}
+          onMissing={() => forget(`기억해 둔 대결 #${matchId}을(를) 찾을 수 없어 지웠어요.`)} onForget={() => forget(null)} />
+      ) : <p className="text-xs">이 브라우저에 기억한 대결이 없어요. 대결을 신청하거나, 상대에게 받은 대결 번호로 찾아보세요.</p>}
+      <MatchRequestForm userId={userId} allianceId={allianceId}
+        onRequested={(match) => show(match.id, `대결 신청 #${match.id}을(를) 보냈어요. 상대 연합 회원에게 대결 번호 #${match.id}을(를) 알려 주세요.`)} />
+      <MatchLookup onLookup={(id) => show(id, null)} />
+    </section>
+  );
+}
+
+/** What went wrong with a match request or decision, for every code AllianceMatchService can answer. */
+function matchErrorText(error: unknown, fallback: string, matchId: number | null): string {
+  const code = isApiError(error) ? error.code : null;
+  const answered = isApiError(error) && error.kind === 'http';
+  const number = matchId === null ? '' : ` #${matchId}`;
+  switch (code) {
+    case MATCH_ERROR_CODES.notFound: return `대결${number}을(를) 찾을 수 없어요. 번호를 확인해 주세요.`;
+    case MATCH_ERROR_CODES.notPending: return `대결${number}은(는) 이미 수락·취소됐거나 마감됐어요. 새로고침해 상태를 확인하세요.`;
+    case MATCH_ERROR_CODES.requestExpired: return '수락 마감 시각이 지났어요.';
+    case MATCH_ERROR_CODES.alreadyRequested: return '두 연합 사이에 수락을 기다리는 대결 신청이 이미 있어요.';
+    case MATCH_ERROR_CODES.membersIncomplete: return `두 연합 모두 학교 ${ALLIANCE_MAX_SCHOOLS}곳이 가입해야 대결할 수 있어요.`;
+    case MATCH_ERROR_CODES.scheduleConflict: return '두 연합 중 하나에 예약된 대결이 있어요.';
+    case MATCH_ERROR_CODES.insufficientTime: return '두 연합 중 먼저 만료되는 연합이 끝나기 전에 대결을 마칠 시간이 부족해요. 대결 시간을 줄여 보세요.';
+    case ALLIANCE_ERROR_CODES.notJoinable: return '두 연합 중 하나가 지금 대결할 수 없어요. 이미 대결 중이거나 만료된 연합이에요.';
+    case ALLIANCE_ERROR_CODES.notFound: return '상대 연합을 찾을 수 없어요.';
+    case ALLIANCE_ERROR_CODES.notMember: return '우리 학교는 이 대결을 처리할 수 있는 연합의 소속이 아니에요. 신청은 신청하는 연합, 수락은 신청받은 연합의 회원만 할 수 있어요.';
+    case ALLIANCE_ERROR_CODES.notActiveUser: return '활동 중인 회원만 대결을 신청하거나 처리할 수 있어요.';
+    default: {
+      const fields = fieldErrorMap(error);
+      const reason = fields.opponentAllianceId ?? fields.durationHours ?? errorMessage(error);
+      return `${fallback} ${reason}${answered ? '' : ' 응답을 받지 못했다면 서버에서는 처리됐을 수 있어요. 다시 누르기 전에 새로고침해 확인하세요.'}`;
+    }
+  }
+}
+
+function MatchRequestForm({ userId, allianceId, onRequested }: { userId: number; allianceId: number; onRequested: (match: AllianceMatch) => void }) {
+  const id = useId();
+  const [opponent, setOpponent] = useState('');
+  const [hours, setHours] = useState<number>(MATCH_LIMITS.defaultHours);
+  const [problem, setProblem] = useState<string | null>(null);
+  const request = useRequestMatch(userId, allianceId);
+  const submit = (event: SubmitEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (request.isPending) return;
+    const parsed = parseAllianceId(opponent);
+    if ('problem' in parsed) { setProblem(parsed.problem.replace('연합 ID', '상대 연합 ID')); return; }
+    if (parsed.allianceId === allianceId) { setProblem('우리 연합과는 대결할 수 없어요.'); return; }
+    setProblem(null);
+    request.mutate({ opponentAllianceId: parsed.allianceId, durationHours: hours }, {
+      onSuccess: (match) => { setOpponent(''); onRequested(match); },
+    });
+  };
+  return (
+    <form noValidate onSubmit={submit} aria-label="대결 신청" className={`${BOX} text-xs`}>
+      <h3 className="text-sm font-black">대결 신청</h3>
+      <p>
+        두 연합 모두 학교 {ALLIANCE_MAX_SCHOOLS}곳이 차 있어야 해요. 상대가 수락하면 바로 시작하고, 두 연합 중 먼저 만료되는 연합이 끝나기 전에
+        대결이 끝나야 해요. 시작 시각 예약은 아직 지원하지 않아요.
+      </p>
+      <label htmlFor={`${id}-opponent`} className="font-bold">상대 연합 ID</label>
+      <input id={`${id}-opponent`} inputMode="numeric" autoComplete="off" value={opponent} disabled={request.isPending}
+        aria-invalid={problem !== null} aria-describedby={problem ? `${id}-problem` : undefined}
+        onChange={(event) => { setOpponent(event.target.value); setProblem(null); }} className={INPUT} />
+      {problem && <p id={`${id}-problem`} role="alert" className={ERROR_TEXT}>{problem}</p>}
+      <fieldset disabled={request.isPending} className="contents">
+        <DurationPicker label="대결 시간" value={hours} min={MATCH_LIMITS.minHours} max={MATCH_LIMITS.maxHours}
+          presets={MATCH_DURATION_PRESETS} onChange={setHours} />
+      </fieldset>
+      {request.error && !request.isPending && (
+        <p role="alert" data-testid="match-request-error" className={ERROR_TEXT}>{matchErrorText(request.error, '대결을 신청하지 못했어요.', null)}</p>
+      )}
+      <button type="submit" className={`${BUTTON} plaque-yellow self-start`} disabled={request.isPending}>
+        {request.isPending ? '신청하는 중…' : '대결 신청하기'}
+      </button>
+    </form>
+  );
+}
+
+function MatchLookup({ onLookup }: { onLookup: (matchId: number) => void }) {
+  const id = useId();
+  const [input, setInput] = useState('');
+  const [problem, setProblem] = useState<string | null>(null);
+  const submit = (event: SubmitEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const parsed = parseMatchId(input);
+    if ('problem' in parsed) { setProblem(parsed.problem); return; }
+    setProblem(null);
+    setInput('');
+    onLookup(parsed.matchId);
+  };
+  return (
+    <form noValidate onSubmit={submit} aria-label="대결 번호로 찾기" className={`${BOX} text-xs`}>
+      <label htmlFor={`${id}-id`} className="font-bold">대결 번호로 찾기</label>
+      <p>상대 연합에게 받은 대결 번호를 넣으면 위 카드에 보여요. 받은 대결 신청 목록은 서버 조회 기능이 생기면 보여요.</p>
+      <input id={`${id}-id`} inputMode="numeric" autoComplete="off" value={input} aria-invalid={problem !== null}
+        aria-describedby={problem ? `${id}-problem` : undefined}
+        onChange={(event) => { setInput(event.target.value); setProblem(null); }} className={INPUT} />
+      {problem && <p id={`${id}-problem`} role="alert" className={ERROR_TEXT}>{problem}</p>}
+      <button type="submit" className={`${BUTTON} self-start`}>찾기</button>
+    </form>
+  );
+}
+
+function AllianceName({ userId, allianceId, ours }: { userId: number; allianceId: number; ours: boolean }) {
+  const detail = useAllianceDetail(userId, allianceId);
+  return <>{detail.data?.name ?? '연합'} #{allianceId}{ours && <strong> (우리)</strong>}</>;
+}
+
+function MatchCard({ userId, matchId, allianceId, now, onMissing, onForget }: {
+  userId: number; matchId: number; allianceId: number; now: () => number; onMissing: () => void; onForget: () => void;
+}) {
+  const query = useAllianceMatch(userId, matchId);
+  const missing = isApiError(query.error) && query.error.code === MATCH_ERROR_CODES.notFound;
+  // Runs once when the 404 arrives; the parent passes a new callback on every render, so it is not a dependency.
+  useEffect(() => { if (missing) onMissing(); }, [missing]);
+  const match = query.data;
+  const side = match ? (match.allianceAId === allianceId ? 'A' : match.allianceBId === allianceId ? 'B' : null) : null;
+
+  return (
+    <article aria-label={`대결 #${matchId}`} data-testid="match-card" aria-busy={query.isFetching} className={`${BOX} text-xs`}>
+      {query.isPending ? <p role="status">대결 #{matchId} 정보를 불러오는 중…</p>
+        : query.isError ? (
+          <div role="alert" className="flex flex-col gap-1.5">
+            <p className={`font-bold ${ERROR_TEXT}`}>{missing ? `대결 #${matchId}을(를) 찾을 수 없어요.` : '대결 정보를 불러오지 못했어요.'}</p>
+            {!missing && <p>{errorMessage(query.error)}</p>}
+          </div>
+        ) : match && <>
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="text-sm font-black">대결 #{match.id}</h3>
+            <span data-testid="match-status" className="shrink-0 border-2 border-[#261608] px-1.5 py-0.5 text-[11px] font-bold bg-white">
+              {MATCH_STATUS_LABEL[match.status]}
+            </span>
+          </div>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+            <dt>신청한 연합</dt><dd><AllianceName userId={userId} allianceId={match.allianceAId} ours={side === 'A'} /></dd>
+            <dt>받은 연합</dt><dd><AllianceName userId={userId} allianceId={match.allianceBId} ours={side === 'B'} /></dd>
+            <dt>대결 시간</dt><dd>{formatDurationHours(match.durationHours)}</dd>
+            {match.status === 'REQUESTED' && <>
+              <dt>수락 마감</dt><dd>{kst(match.requestExpiredAt)}</dd>
+              <dt>남은 시간</dt><dd>{timeLeft(match.requestExpiredAt, now()) ?? '마감 시각이 지났어요'}</dd>
+            </>}
+            {match.scheduledStartAt && <><dt>예약 시작</dt><dd>{kst(match.scheduledStartAt)}</dd></>}
+            {match.startedAt && <><dt>시작</dt><dd>{kst(match.startedAt)}</dd></>}
+            {match.endedAt && <><dt>{match.status === 'FINISHED' ? '종료' : '종료 예정'}</dt><dd>{kst(match.endedAt)}</dd></>}
+            {match.status === 'IN_PROGRESS' && match.endedAt && <><dt>남은 시간</dt><dd>{timeLeft(match.endedAt, now()) ?? '곧 정산돼요'}</dd></>}
+            {match.status === 'FINISHED' && <>
+              <dt>점수</dt><dd>{match.aScore.toLocaleString()} : {match.bScore.toLocaleString()}</dd>
+              <dt>결과</dt><dd data-testid="match-result">
+                {match.winnerAllianceId === null ? '무승부'
+                  : match.winnerAllianceId === allianceId ? '우리 연합 승리'
+                  : side ? '우리 연합 패배' : `연합 #${match.winnerAllianceId} 승리`}
+              </dd>
+            </>}
+          </dl>
+          {match.status === 'IN_PROGRESS' && <p>진행 중 점수는 대결이 끝나면 정산돼 표시돼요.</p>}
+          {match.status === 'CANCELED' && <p>신청 취소, 거절, 수락 마감 경과 중 하나로 끝난 대결이에요.</p>}
+          {side === null && <p>우리 연합(#{allianceId})의 대결이 아니에요. 보기만 할 수 있어요.</p>}
+          {match.status === 'REQUESTED' && side && <MatchActions key={match.id} userId={userId} match={match} side={side} />}
+        </>}
+      <div className="flex flex-wrap gap-2">
+        {!missing && (
+          <button type="button" className={`${BUTTON} flex items-center gap-1`} disabled={query.isFetching} onClick={() => void query.refetch()}>
+            <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" /> {query.isFetching && !query.isPending ? '새로고침 중…' : '새로고침'}
+          </button>
+        )}
+        <button type="button" className={BUTTON} onClick={onForget}>이 대결 잊기</button>
+      </div>
+    </article>
+  );
+}
+
+function MatchActions({ userId, match, side }: { userId: number; match: AllianceMatch; side: 'A' | 'B' }) {
+  const [confirming, setConfirming] = useState<{ decision: MatchDecision; label: string } | null>(null);
+  const decide = useDecideMatch(userId);
+  const choices: Array<{ decision: MatchDecision; label: string; question: string }> = side === 'B'
+    ? [{ decision: 'accept', label: '수락', question: `대결 #${match.id}을(를) 수락할까요? 수락하면 바로 시작되고 되돌릴 수 없어요.` },
+      { decision: 'cancel', label: '거절', question: `대결 #${match.id} 신청을 거절할까요? 되돌릴 수 없어요.` }]
+    : [{ decision: 'cancel', label: '신청 취소', question: `대결 #${match.id} 신청을 취소할까요? 되돌릴 수 없어요.` }];
+  const asking = confirming && choices.find((choice) => choice.label === confirming.label);
+  return (
+    <div className="flex flex-col gap-1.5">
+      {asking ? (
+        <div role="group" aria-label="대결 처리 확인" className="flex flex-col gap-1.5 border-2 border-[#261608] bg-white p-2">
+          <p className="font-bold">{asking.question}</p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={`${BUTTON} plaque-yellow`} onClick={() => {
+              decide.mutate({ matchId: match.id, decision: asking.decision });
+              setConfirming(null);
+            }}>{asking.label}하기</button>
+            <button type="button" className={BUTTON} onClick={() => setConfirming(null)}>돌아가기</button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {choices.map((choice) => (
+            <button key={choice.label} type="button" className={`${BUTTON} ${choice.decision === 'accept' ? 'plaque-yellow' : ''}`}
+              disabled={decide.isPending} onClick={() => setConfirming(choice)}>
+              {decide.isPending && decide.variables?.decision === choice.decision ? '처리하는 중…' : choice.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {decide.error && !decide.isPending && (
+        <p role="alert" data-testid="match-decision-error" className={ERROR_TEXT}>{matchErrorText(decide.error, '대결을 처리하지 못했어요.', match.id)}</p>
+      )}
+    </div>
   );
 }
 

@@ -731,8 +731,9 @@ function AppContent() {
               />
             </MockLoadGate>
           </div>
-        ) : API_MODE === 'api' && (viewMode === 'alliance_apply' || viewMode === 'current_alliance') ? (
-          // API mode: create and detail against the server (SCRUM-177). The mock proposal screens stay mock-only.
+        ) : API_MODE === 'api' && (viewMode === 'alliance_apply' || viewMode === 'current_alliance' || viewMode === 'battle_apply' || viewMode === 'battle_status') ? (
+          // API mode: alliances, applications and matches against the server (SCRUM-177~179). The mock alliance and battle
+          // screens stay mock-only.
           <div className={viewWrap}>
             <ApiAllianceScreenPhone onBack={() => setViewMode('gameplay')} onGoToLogin={() => setViewMode('login')} onNavigateTab={navigateTab} />
           </div>

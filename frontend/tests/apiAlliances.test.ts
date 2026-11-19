@@ -24,13 +24,14 @@ const { render, screen, fireEvent, cleanup, waitFor, within } = await import('@t
 const { ApiProvider } = await import('../src/api/ApiProvider');
 const { createApiClient } = await import('../src/api/client');
 const { createQueryClient } = await import('../src/api/queryClient');
-const { createAllianceMemory, createSentApplicationMemory, parseAllianceId, parseApplicationId, validateAllianceName } = await import('../src/api/alliances');
-const { ApiAllianceScreenPhone, remainingTime } = await import('../src/components/ApiAllianceScreenPhone');
+const { createAllianceMemory, createMatchMemory, createSentApplicationMemory, parseAllianceId, parseApplicationId, parseMatchId, validateAllianceName } = await import('../src/api/alliances');
+const { ApiAllianceScreenPhone, remainingTime, timeLeft } = await import('../src/components/ApiAllianceScreenPhone');
 const { SCHOOL_ID } = await import('../src/data/schoolIds');
 const { assertAbsent, assertSameNode } = await import('./helpers/domAssert');
 type MyInfo = import('../src/api/users').MyInfo;
 type Alliance = import('../src/api/alliances').Alliance;
 type AllianceApplication = import('../src/api/alliances').AllianceApplication;
+type AllianceMatch = import('../src/api/alliances').AllianceMatch;
 
 const queryClients: Array<ReturnType<typeof createQueryClient>> = [];
 afterEach(async () => {
@@ -67,6 +68,11 @@ const YONSEI = 2;
 const application = (id: number, allianceId: number, status: AllianceApplication['status'], universityId = YONSEI): AllianceApplication =>
   ({ id, allianceId, universityId, status });
 
+const matchOf = (id: number, overrides: Partial<AllianceMatch> = {}): AllianceMatch => ({
+  id, allianceAId: 7, allianceBId: 8, winnerAllianceId: null, status: 'REQUESTED', durationHours: 3,
+  requestExpiredAt: '2026-11-20T12:00:00+09:00', scheduledStartAt: null, startedAt: null, endedAt: null, aScore: 0, bScore: 0, ...overrides,
+});
+
 function fakeStorage(initial: Record<string, string> = {}) {
   const data = new Map(Object.entries(initial));
   return {
@@ -76,13 +82,16 @@ function fakeStorage(initial: Record<string, string> = {}) {
 }
 
 interface Call { route: string; body: unknown }
-function mount({ create, detail, apply, decide, signedIn = true, store = fakeStorage(), memory }: {
+function mount({ create, detail, apply, decide, matchRequest, match, matchDecision, signedIn = true, store = fakeStorage(), memory }: {
   create?: (body: unknown) => Response; detail?: (id: number) => Response; signedIn?: boolean;
   apply?: (allianceId: number) => Response; decide?: (applicationId: number, decision: string) => Response;
+  matchRequest?: (allianceId: number, body: unknown) => Response; match?: (matchId: number) => Response;
+  matchDecision?: (matchId: number, decision: string) => Response;
   store?: ReturnType<typeof fakeStorage>; memory?: ReturnType<typeof createAllianceMemory>;
 } = {}) {
   const calls: Call[] = [];
   const created = new Map<number, Alliance>();
+  const matches = new Map<number, AllianceMatch>();
   const client = createApiClient({ fetch: (async (input, init) => {
     const url = new URL(String(input), 'http://localhost');
     const call = { route: `${init?.method ?? 'GET'} ${url.pathname}`, body: init?.body ? JSON.parse(String(init.body)) : undefined };
@@ -94,6 +103,26 @@ function mount({ create, detail, apply, decide, signedIn = true, store = fakeSto
       const made = alliance(7, { name: body.name, durationHours: body.durationHours, totalScore: 0 });
       created.set(made.id, made);
       return ok(made, 201);
+    }
+    const requested = /^POST \/api\/v1\/alliances\/(\d+)\/matches$/.exec(call.route);
+    if (requested) {
+      if (matchRequest) return matchRequest(Number(requested[1]), call.body);
+      const body = call.body as { opponentAllianceId: number; durationHours: number };
+      const made = matchOf(50, { allianceAId: Number(requested[1]), allianceBId: body.opponentAllianceId, durationHours: body.durationHours });
+      matches.set(made.id, made);
+      return ok(made, 201);
+    }
+    const matchRead = /^GET \/api\/v1\/alliances\/matches\/(\d+)$/.exec(call.route);
+    if (matchRead) return match ? match(Number(matchRead[1])) : ok(matches.get(Number(matchRead[1])) ?? matchOf(Number(matchRead[1])));
+    const matchDecided = /^PATCH \/api\/v1\/alliances\/matches\/(\d+)\/(accept|cancel)$/.exec(call.route);
+    if (matchDecided) {
+      if (matchDecision) return matchDecision(Number(matchDecided[1]), matchDecided[2]);
+      const before = matches.get(Number(matchDecided[1])) ?? matchOf(Number(matchDecided[1]));
+      const after = matchDecided[2] === 'accept'
+        ? { ...before, status: 'IN_PROGRESS' as const, startedAt: '2026-11-19T12:00:00+09:00', endedAt: '2026-11-19T15:00:00+09:00' }
+        : { ...before, status: 'CANCELED' as const };
+      matches.set(after.id, after);
+      return ok(after);
     }
     const applied = /^POST \/api\/v1\/alliances\/(\d+)\/applications$/.exec(call.route);
     if (applied) return apply ? apply(Number(applied[1])) : ok(application(31, Number(applied[1]), 'PENDING'), 201);
@@ -112,10 +141,11 @@ function mount({ create, detail, apply, decide, signedIn = true, store = fakeSto
   const navigation: string[] = [];
   render(React.createElement(ApiProvider, { client, queryClient, children: React.createElement(ApiAllianceScreenPhone, {
     onBack: () => navigation.push('back'), onGoToLogin: () => navigation.push('login'),
-    memory: memory ?? createAllianceMemory(() => store.storage), applications: createSentApplicationMemory(() => store.storage), now: () => NOW,
+    memory: memory ?? createAllianceMemory(() => store.storage), applications: createSentApplicationMemory(() => store.storage),
+    matches: createMatchMemory(() => store.storage), now: () => NOW,
   }) }));
   const posts = () => calls.filter(({ route }) => route === 'POST /api/v1/alliances').map(({ body }) => body);
-  const details = () => calls.filter(({ route }) => route.startsWith('GET /api/v1/alliances/')).map(({ route }) => route.slice('GET /api/v1/alliances/'.length));
+  const details = () => calls.filter(({ route }) => /^GET \/api\/v1\/alliances\/\d+$/.test(route)).map(({ route }) => route.slice('GET /api/v1/alliances/'.length));
   const routes = (prefix: string) => calls.filter(({ route }) => route.startsWith(prefix)).map(({ route }) => route);
   return { calls, posts, details, routes, store, navigation };
 }
@@ -149,7 +179,7 @@ test('연합을 만들면 다듬은 이름과 기간을 보내고, 만든 연합
   screen.getByText('연합을 만들었어요.');
   assert.equal(f.store.data.get('sour.alliance.created.v1:5'), '7');
   assertAbsent(screen.queryByRole('form', { name: '연합 만들기' }), '소속된 뒤에는 만들기 폼을 숨긴다');
-  screen.getByText(/연합 목록, 소속 학교, 받은 가입 신청 목록, 대결은 서버 조회 기능이 생기면 열려요/);
+  screen.getByText(/연합 목록, 소속 학교, 받은 가입 신청 목록, 받은 대결 신청 목록, 진행 중 대결 점수, 대결 시작 시각 예약은 서버 기능이 생기면 열려요/);
 });
 
 test('기억한 연합이 있으면 다시 들어왔을 때 서버에서 그 연합을 조회해 보인다', async () => {
@@ -385,10 +415,163 @@ test('보낸 신청의 연합이 없어지면(404) 신청 기억을 지운다. �
   assert.equal(createSentApplicationMemory(() => fakeStorage({ 'sour.alliance.application.v1:5': 'not json' }).storage).get(5), null);
 });
 
+const ours = (allianceId: number, extra: Record<string, string> = {}) => fakeStorage({ 'sour.alliance.created.v1:5': String(allianceId), ...extra });
+const matchCard = () => screen.findByTestId('match-card');
+const lookupMatch = async (id: number) => {
+  const form = await screen.findByRole('form', { name: '대결 번호로 찾기' });
+  fireEvent.change(within(form).getByLabelText('대결 번호로 찾기'), { target: { value: String(id) } });
+  fireEvent.click(within(form).getByRole('button', { name: '찾기' }));
+};
+const confirmMatch = (card: HTMLElement, label: string) => {
+  fireEvent.click(within(card).getByRole('button', { name: label }));
+  fireEvent.click(within(within(card).getByRole('group', { name: '대결 처리 확인' })).getByRole('button', { name: `${label}하기` }));
+};
+
+test('우리 연합에서 상대 연합에 대결을 신청하면 본문을 보내고, 대결 번호를 알리며 수락 대기 카드를 보인다', async () => {
+  const f = mount({ store: ours(7) });
+  const form = await screen.findByRole('form', { name: '대결 신청' });
+  screen.getByText('이 브라우저에 기억한 대결이 없어요. 대결을 신청하거나, 상대에게 받은 대결 번호로 찾아보세요.');
+  const submit = () => fireEvent.click(within(form).getByRole('button', { name: '대결 신청하기' }));
+  submit();
+  assert.equal(within(form).getByRole('alert').textContent, '상대 연합 ID를 입력해 주세요.');
+  fireEvent.change(within(form).getByLabelText('상대 연합 ID'), { target: { value: '7' } });
+  submit();
+  assert.equal(within(form).getByRole('alert').textContent, '우리 연합과는 대결할 수 없어요.');
+  assert.deepEqual(f.routes('POST /api/v1/alliances/'), []);
+  fireEvent.change(within(form).getByLabelText('상대 연합 ID'), { target: { value: '8' } });
+  fireEvent.click(within(within(form).getByRole('group', { name: '대결 시간' })).getByRole('button', { name: '3h' }));
+  submit();
+
+  const card = await matchCard();
+  screen.getByText('대결 신청 #50을(를) 보냈어요. 상대 연합 회원에게 대결 번호 #50을(를) 알려 주세요.');
+  assert.deepEqual(f.calls.filter(({ route }) => route === 'POST /api/v1/alliances/7/matches').map(({ body }) => body), [{ opponentAllianceId: 8, durationHours: 3 }]);
+  assert.equal(f.store.data.get('sour.alliance.match.v1:5'), '50');
+  assert.equal((within(form).getByLabelText('상대 연합 ID') as HTMLInputElement).value, '', '보낸 뒤 상대 ID를 지운다');
+  assert.equal(within(card).getByTestId('match-status').textContent, '수락 대기');
+  await waitFor(() => assert.equal(field(card, '신청한 연합'), '연합 7 #7 (우리)'));
+  await waitFor(() => assert.equal(field(card, '받은 연합'), '연합 8 #8'));
+  assert.equal(field(card, '대결 시간'), '3시간');
+  assert.match(field(card, '수락 마감') ?? '', /2026.*11.*20.*\(KST\)$/);
+  assert.equal(field(card, '남은 시간'), '24시간 0분');
+  within(card).getByRole('button', { name: '신청 취소' });
+  assertAbsent(within(card).queryByRole('button', { name: '수락' }), '신청한 쪽은 수락할 수 없다');
+});
+
+test('받은 연합은 대결 번호로 찾아 확인 뒤 수락하고, 진행 중 현황과 연합 상태 갱신을 본다', async () => {
+  const f = mount({ store: ours(8) });
+  await lookupMatch(50);
+  const card = await matchCard();
+  await waitFor(() => assert.equal(field(card, '받은 연합'), '연합 8 #8 (우리)'));
+  assert.equal(f.store.data.get('sour.alliance.match.v1:5'), '50', '찾은 대결을 기억한다');
+  within(card).getByRole('button', { name: '거절' });
+  fireEvent.click(within(card).getByRole('button', { name: '수락' }));
+  within(card).getByText('대결 #50을(를) 수락할까요? 수락하면 바로 시작되고 되돌릴 수 없어요.');
+  fireEvent.click(within(card).getByRole('button', { name: '돌아가기' }));
+  assert.deepEqual(f.routes('PATCH'), [], '확인 전에는 보내지 않는다');
+  const before = f.details().length;
+  confirmMatch(card, '수락');
+  await waitFor(() => assert.equal(within(card).getByTestId('match-status').textContent, '진행 중'));
+  assert.deepEqual(f.routes('PATCH'), ['PATCH /api/v1/alliances/matches/50/accept']);
+  assert.match(field(card, '시작') ?? '', /\(KST\)$/);
+  assert.match(field(card, '종료 예정') ?? '', /\(KST\)$/);
+  assert.equal(field(card, '남은 시간'), '3시간 0분');
+  within(card).getByText('진행 중 점수는 대결이 끝나면 정산돼 표시돼요.');
+  assertAbsent(within(card).queryByRole('button', { name: '수락' }));
+  await waitFor(() => assert.ok(f.details().length > before, '수락 뒤 연합 상세(대결 중)를 다시 읽는다'));
+});
+
+test('신청한 연합은 취소, 받은 연합은 거절할 수 있고 둘 다 취소됨으로 보인다', async () => {
+  for (const [mine, label] of [[7, '신청 취소'], [8, '거절']] as const) {
+    const f = mount({ store: ours(mine, { 'sour.alliance.match.v1:5': '50' }) });
+    const card = await matchCard();
+    await within(card).findByRole('button', { name: label });
+    confirmMatch(card, label);
+    await waitFor(() => assert.equal(within(card).getByTestId('match-status').textContent, '취소됨'));
+    within(card).getByText('신청 취소, 거절, 수락 마감 경과 중 하나로 끝난 대결이에요.');
+    assert.deepEqual(f.routes('PATCH'), ['PATCH /api/v1/alliances/matches/50/cancel']);
+    cleanup();
+  }
+});
+
+test('대결 신청 오류는 코드마다 알리고 기억하지 않는다', async () => {
+  const cases: Array<[number, string, RegExp]> = [
+    [409, 'MATCH_MEMBERS_INCOMPLETE', /두 연합 모두 학교 2곳이 가입해야/],
+    [409, 'MATCH_ALREADY_REQUESTED', /수락을 기다리는 대결 신청이 이미 있어요/],
+    [409, 'MATCH_INSUFFICIENT_TIME', /대결 시간을 줄여 보세요/],
+    [409, 'ALLY_NOT_ACTIVE', /이미 대결 중이거나 만료된 연합/],
+    [404, 'ALLY_NOT_FOUND', /상대 연합을 찾을 수 없어요/],
+    [403, 'ALLY_NOT_MEMBER', /소속이 아니에요/],
+    [400, 'COMMON_INVALID_INPUT', /^대결을 신청하지 못했어요\. 서버 연합 오류$/],
+  ];
+  let index = 0;
+  const f = mount({ store: ours(7), matchRequest: () => fail(cases[index][0], cases[index][1]) });
+  const form = await screen.findByRole('form', { name: '대결 신청' });
+  for (; index < cases.length; index++) {
+    fireEvent.change(within(form).getByLabelText('상대 연합 ID'), { target: { value: '8' } });
+    fireEvent.click(within(form).getByRole('button', { name: '대결 신청하기' }));
+    await waitFor(() => assert.match(within(form).getByTestId('match-request-error').textContent ?? '', cases[index][2]));
+  }
+  assert.equal(f.routes('POST /api/v1/alliances/7/matches').length, cases.length, '누를 때마다 한 번');
+  assert.equal(f.store.data.has('sour.alliance.match.v1:5'), false);
+});
+
+test('대결 처리 오류는 코드마다 알리고 카드는 그대로 둔다', async () => {
+  const cases: Array<[number, string, RegExp]> = [
+    [409, 'MATCH_NOT_PENDING', /^대결 #50은\(는\) 이미 수락·취소됐거나 마감됐어요/],
+    [409, 'MATCH_REQUEST_EXPIRED', /수락 마감 시각이 지났어요/],
+    [403, 'ALLY_NOT_MEMBER', /수락은 신청받은 연합의 회원만/],
+    [409, 'MATCH_SCHEDULE_CONFLICT', /예약된 대결이 있어요/],
+  ];
+  let index = 0;
+  mount({ store: ours(8, { 'sour.alliance.match.v1:5': '50' }), matchDecision: () => fail(cases[index][0], cases[index][1]) });
+  const card = await matchCard();
+  await within(card).findByRole('button', { name: '수락' });
+  for (; index < cases.length; index++) {
+    confirmMatch(card, '수락');
+    await waitFor(() => assert.match(within(card).getByTestId('match-decision-error').textContent ?? '', cases[index][2]));
+    assert.equal(within(card).getByTestId('match-status').textContent, '수락 대기');
+  }
+});
+
+test('종료된 대결은 점수와 승패·무승부를, 남의 대결은 보기만, 없어진 대결은 기억을 지운다', async () => {
+  const finished = (winner: number | null) => matchOf(50, { status: 'FINISHED', winnerAllianceId: winner, aScore: 1200, bScore: 980,
+    startedAt: '2026-11-18T09:00:00+09:00', endedAt: '2026-11-18T12:00:00+09:00' });
+  for (const [mine, winner, label] of [[7, 7, '우리 연합 승리'], [8, 7, '우리 연합 패배'], [7, null, '무승부']] as const) {
+    mount({ store: ours(mine, { 'sour.alliance.match.v1:5': '50' }), match: () => ok(finished(winner)) });
+    const card = await matchCard();
+    await waitFor(() => assert.equal(within(card).getByTestId('match-result').textContent, label));
+    assert.equal(field(card, '점수'), '1,200 : 980');
+    assert.match(field(card, '종료') ?? '', /\(KST\)$/);
+    cleanup();
+  }
+
+  mount({ store: ours(9, { 'sour.alliance.match.v1:5': '50' }) });
+  const other = await matchCard();
+  await within(other).findByText('우리 연합(#9)의 대결이 아니에요. 보기만 할 수 있어요.');
+  assertAbsent(within(other).queryByRole('button', { name: '신청 취소' }));
+  assertAbsent(within(other).queryByRole('button', { name: '수락' }));
+  cleanup();
+
+  const gone = mount({ store: ours(7, { 'sour.alliance.match.v1:5': '51' }), match: () => fail(404, 'MATCH_NOT_FOUND', '대결을 찾을 수 없습니다.') });
+  await screen.findByText('기억해 둔 대결 #51을(를) 찾을 수 없어 지웠어요.');
+  assert.equal(gone.store.data.has('sour.alliance.match.v1:5'), false);
+  assertAbsent(screen.queryByTestId('match-card'));
+});
+
+test('우리 연합이 없으면 대결 영역을 보이지 않는다', async () => {
+  mount();
+  await screen.findByRole('form', { name: '연합 만들기' });
+  assertAbsent(screen.queryByRole('form', { name: '대결 신청' }));
+});
+
 test('입력 검사와 남은 시간 계산', () => {
   assert.deepEqual(validateAllianceName(' a '), { name: 'a' });
   assert.deepEqual(parseAllianceId(' 12 '), { allianceId: 12 });
   assert.deepEqual(parseApplicationId(' 31 '), { applicationId: 31 });
+  assert.deepEqual(parseMatchId('50'), { matchId: 50 });
+  assert.ok('problem' in parseMatchId('x'));
+  assert.equal(timeLeft('2026-11-19T13:05:00+09:00', NOW), '1시간 5분');
+  assert.equal(timeLeft('2026-11-19T11:00:00+09:00', NOW), null);
   assert.ok('problem' in parseApplicationId('0'));
   for (const value of ['', '-1', '1.5', '1e3', '9007199254740993']) assert.ok('problem' in parseAllianceId(value), value);
   assert.equal(remainingTime('2026-11-19T12:30:00+09:00', NOW), '만료까지 0시간 30분');
@@ -428,7 +611,26 @@ test('계약 센서: 연합 생성·상세 계약이 바뀌면 화면을 다시 
     '연합 조회 API(내 연합·목록·신청 목록)가 생겼습니다. "준비 중" 안내, 브라우저 기억, 신청 번호 입력을 서버 조회로 바꾸세요.');
 
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
-  const apiRoute = app.indexOf("API_MODE === 'api' && (viewMode === 'alliance_apply' || viewMode === 'current_alliance') ?");
-  assert.ok(apiRoute >= 0 && apiRoute < app.indexOf("viewMode === 'alliance_apply' ? ("),
-    'API 모드의 연합 화면은 ApiAllianceScreenPhone이다. 목업 제안 화면([시연] 버튼·가상 시계)은 목업 모드 전용이다.');
+  const apiRoute = app.indexOf("API_MODE === 'api' && (viewMode === 'alliance_apply' || viewMode === 'current_alliance' || viewMode === 'battle_apply' || viewMode === 'battle_status') ?");
+  assert.ok(apiRoute >= 0 && apiRoute < app.indexOf("viewMode === 'alliance_apply' ? (") && apiRoute < app.indexOf("viewMode === 'battle_apply' ? ("),
+    'API 모드의 연합·대결 화면은 ApiAllianceScreenPhone이다. 목업 연합·대결 화면([시연] 버튼·가상 시계)은 목업 모드 전용이다.');
+
+  const matches = read('domain/alliance/controller/AllianceMatchController.java');
+  assert.match(matches, /@RequestMapping\("\/api\/v1\/alliances"\)/, fix);
+  assert.match(matches, /@PostMapping\("\/\{allianceId\}\/matches"\)\s*\n\s*@ResponseStatus\(HttpStatus\.CREATED\)/, fix);
+  for (const path of ['accept', 'cancel']) assert.match(matches, new RegExp(`@PatchMapping\\("/matches/\\{matchId\\}/${path}"\\)`), fix);
+  assert.match(matches, /@GetMapping\("\/matches\/\{matchId\}"\)/, fix);
+  assert.equal(matches.match(/@GetMapping/g)?.length, 1, '대결 조회 API(목록 등)가 생겼습니다. 대결 번호 입력과 브라우저 기억을 서버 조회로 바꾸세요.');
+  assert.match(read('domain/alliance/dto/AllianceMatchCreateRequest.java'),
+    /@NotNull Long opponentAllianceId,\s*@Min\(1\) @Max\(24\) int durationHours,\s*OffsetDateTime scheduledStartAt/, fix);
+  assert.match(read('domain/alliance/dto/AllianceMatchResponse.java'), new RegExp([
+    'Long id, Long allianceAId, Long allianceBId, Long winnerAllianceId,', 'AllianceMatchStatus status, Integer durationHours,',
+    'OffsetDateTime requestExpiredAt, OffsetDateTime scheduledStartAt,', 'OffsetDateTime startedAt, OffsetDateTime endedAt,',
+    'Long aScore, Long bScore'].join('\\s*')), fix);
+  assert.match(read('domain/alliance/entity/AllianceMatchStatus.java'), /REQUESTED,\s*SCHEDULED,\s*IN_PROGRESS,\s*FINISHED,\s*CANCELED\s*\}/, fix);
+  for (const [code, status] of [['MATCH_ALREADY_REQUESTED', 'CONFLICT'], ['MATCH_NOT_FOUND', 'NOT_FOUND'], ['MATCH_NOT_PENDING', 'CONFLICT'],
+    ['MATCH_REQUEST_EXPIRED', 'CONFLICT'], ['MATCH_MEMBERS_INCOMPLETE', 'CONFLICT'], ['MATCH_SCHEDULE_CONFLICT', 'CONFLICT'],
+    ['MATCH_INSUFFICIENT_TIME', 'CONFLICT']]) {
+    assert.match(errors, new RegExp(`${code}\\(HttpStatus\\.${status}, "${code}"`), fix);
+  }
 });
