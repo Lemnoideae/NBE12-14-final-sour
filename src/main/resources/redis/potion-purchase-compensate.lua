@@ -42,6 +42,7 @@ if redis.call('HGET', KEYS[3], 'purchaseId') == ARGV[3] then
         -- cjson.decode는 DEL보다 앞에 둔다: 깨진 JSON이면 효과를 지우기 전에 멈춘다 (Redis는 실행된 명령을 되돌리지 않는다)
         redis.call('DEL', KEYS[3])
         -- 만료 시각이 없는 효과는 복원하지 않는다 (TTL 없는 키가 남으면 ClickService가 배율을 영구 적용한다)
+        -- 현재 효과를 쓰는 코드는 항상 expiredAt과 PEXPIREAT을 함께 써서 이 분기에 들어올 경로는 없다(방어용)
         if previous['expiredAt'] then
             redis.call('HSET', KEYS[3], unpack(args))
             redis.call('PEXPIREAT', KEYS[3], previous['expiredAt'])
