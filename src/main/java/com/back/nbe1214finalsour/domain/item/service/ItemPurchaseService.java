@@ -48,7 +48,7 @@ public class ItemPurchaseService {
         }
 
         // 기여도 아이템(물약)
-        return this.contributionPurchaseService.purchase(userId, universityId, item, null);
+        return this.contributionPurchaseService.purchase(userId, universityId, item, idempotencyKey);
     }
 
     // 검증 → 업로드 → 크레딧 구매(트랜잭션). 구매가 실패하면(커밋 실패 포함) 올린 이미지를 지운다
