@@ -21,6 +21,7 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.redis.RedisSystemException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Clock;
@@ -38,6 +39,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.AdditionalAnswers.returnsFirstArg;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willReturn;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
@@ -169,6 +171,25 @@ class ContributionPurchaseServiceTest {
         then(this.contributionWallet).shouldHaveNoInteractions();
         // 구매가 성립하지 않았으니 효과 적용 이벤트도 없음
         then(this.eventPublisher).should(never()).publishEvent(any(PotionPurchasedEvent.class));
+    }
+
+    @Test
+    @DisplayName("보상 Lua까지 실패해도 던지는 예외는 원래 저장 실패 예외이고, 보상 예외는 suppressed로 남긴다")
+    void purchase_compensateAlsoFails_keepsOriginalFailure() {
+        // given
+        given(this.redisPotionPurchaser.purchase(USER_ID, UNIVERSITY_ID, 2L, 1000L, 4.0, EXPIRED_AT, KEY))
+                .willReturn(new PotionPurchaseOutcome(1500L, ""));
+        DataIntegrityViolationException failure = new DataIntegrityViolationException("user_item 저장 실패");
+        given(this.potionPurchaseRecorder.record(any())).willThrow(failure);
+        RedisSystemException compensateFailure = new RedisSystemException("보상 Lua 실패", new RuntimeException("Redis 연결 끊김"));
+        willThrow(compensateFailure).given(this.redisPotionPurchaser).compensate(any(), any(), anyLong(), any(), any());
+
+        // when
+        Throwable thrown = catchThrowable(() -> this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY));
+
+        // then
+        assertThat(thrown).isSameAs(failure);
+        assertThat(thrown.getSuppressed()).containsExactly(compensateFailure);
     }
 
     @Test
