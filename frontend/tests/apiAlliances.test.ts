@@ -82,12 +82,13 @@ function fakeStorage(initial: Record<string, string> = {}) {
 }
 
 interface Call { route: string; body: unknown }
-function mount({ create, detail, mine, apply, decide, matchRequest, match, matchDecision, signedIn = true, store = fakeStorage(), now = () => NOW, profile = () => ME, watchSession = false }: {
+function mount({ create, detail, mine, apply, decide, matchRequest, match, matchDecision, list, signedIn = true, store = fakeStorage(), now = () => NOW, profile = () => ME, watchSession = false }: {
   create?: (body: unknown) => Response; detail?: (id: number) => Response; signedIn?: boolean;
   mine?: () => Response | Promise<Response>; now?: () => number; profile?: () => MyInfo | Promise<MyInfo>; watchSession?: boolean;
   apply?: (allianceId: number) => Response; decide?: (applicationId: number, decision: string) => Response;
   matchRequest?: (allianceId: number, body: unknown) => Response; match?: (matchId: number) => Response;
   matchDecision?: (matchId: number, decision: string) => Response;
+  list?: (url: URL) => Response | undefined;
   store?: ReturnType<typeof fakeStorage>;
 } = {}) {
   const calls: Call[] = [];
@@ -135,6 +136,9 @@ function mount({ create, detail, mine, apply, decide, matchRequest, match, match
       : ok(application(Number(decided[1]), 7, decided[2] === 'approve' ? 'ACCEPTED' : 'REJECTED'));
     const school = /^GET \/api\/v1\/universities\/(\d+)$/.exec(call.route);
     if (school) return Number(school[1]) === YONSEI ? ok({ id: YONSEI, name: '연세대학교' }) : fail(404, 'UNIVERSITY_NOT_FOUND', '학교 없음');
+    if (/^GET \/api\/v1\/alliances(?:\/(?:applications\/me|\d+\/(?:applications|matches|universities)))?$/.test(call.route)) {
+      return list?.(url) ?? (url.pathname.endsWith('/universities') ? ok([]) : ok({ items: [], nextCursor: null }));
+    }
     const found = /^GET \/api\/v1\/alliances\/(\d+)$/.exec(call.route);
     if (found) return detail ? detail(Number(found[1])) : ok(created.get(Number(found[1])) ?? alliance(Number(found[1])));
     throw new Error(`Unexpected ${call.route}`);
@@ -195,7 +199,8 @@ test('연합을 만들면 다듬은 이름과 기간을 보내고 서버 소속�
   assert.equal(f.membershipReads(), 2);
   assert.equal(f.store.data.has('sour.alliance.created.v1:5'), false);
   assertAbsent(screen.queryByRole('form', { name: '연합 만들기' }), '소속된 뒤에는 만들기 폼을 숨긴다');
-  screen.getByText(/연합 목록, 소속 학교, 받은 가입 신청 목록, 받은 대결 신청 목록, 진행 중 대결 점수는 서버 기능이 생기면 열려요/);
+  screen.getByRole('heading', { name: '연합 목록' });
+  screen.getByRole('region', { name: '받은 가입 신청' });
 });
 
 test('낡은 로컬 값은 서버 소속과 무관하며 로딩·오류를 미가입으로 표시하지 않는다', async () => {
@@ -391,7 +396,7 @@ test('가입 신청 번호는 보조로 기억하고, 외부 승인 뒤 서버 �
   await screen.findByRole('form', { name: '연합 만들기' });
   const found = await lookup(9);
   fireEvent.click(within(found).getByRole('button', { name: '이 연합에 가입 신청' }));
-  await within(found).findByText('가입 신청 #31을(를) 보냈어요. 연합 회원에게 신청 번호 #31를 알려 주세요.');
+  await within(found).findByText('가입 신청 #31을(를) 보냈어요.');
   assert.deepEqual(f.routes('POST /api/v1/alliances/'), ['POST /api/v1/alliances/9/applications']);
   assert.deepEqual(JSON.parse(f.store.data.get('sour.alliance.application.v1:5') ?? 'null'), { applicationId: 31, allianceId: 9 });
   const card = screen.getByTestId('sent-application');
@@ -510,7 +515,7 @@ const confirmMatch = (card: HTMLElement, label: string) => {
 test('우리 연합에서 상대 연합에 대결을 신청하면 본문을 보내고, 대결 번호를 알리며 수락 대기 카드를 보인다', async () => {
   const f = mount({ mine: () => ok(alliance(7)) });
   const form = await screen.findByRole('form', { name: '대결 신청' });
-  screen.getByText('이 브라우저에 기억한 대결이 없어요. 대결을 신청하거나, 상대에게 받은 대결 번호로 찾아보세요.');
+  await screen.findByText('표시할 대결이 없어요.');
   const submit = () => fireEvent.click(within(form).getByRole('button', { name: '대결 신청하기' }));
   submit();
   assert.equal(within(form).getByRole('alert').textContent, '상대 연합 ID를 입력해 주세요.');
@@ -523,7 +528,7 @@ test('우리 연합에서 상대 연합에 대결을 신청하면 본문을 보�
   submit();
 
   const card = await matchCard();
-  screen.getByText('대결 신청 #50을(를) 보냈어요. 상대 연합 회원에게 대결 번호 #50을(를) 알려 주세요.');
+  screen.getByText('대결 신청 #50을(를) 보냈어요.');
   assert.deepEqual(f.calls.filter(({ route }) => route === 'POST /api/v1/alliances/7/matches').map(({ body }) => body), [{ opponentAllianceId: 8, durationHours: 3 }]);
   assert.equal(f.store.data.get('sour.alliance.match.v1:5'), '50');
   assert.equal((within(form).getByLabelText('상대 연합 ID') as HTMLInputElement).value, '', '보낸 뒤 상대 ID를 지운다');
@@ -804,10 +809,12 @@ test('계약 센서: 연합 생성·상세 계약이 바뀌면 화면을 다시 
     ['ALLY_NOT_MEMBER', 'FORBIDDEN'], ['ALLY_APPLICATION_NOT_FOUND', 'NOT_FOUND'], ['ALLY_APPLICATION_NOT_PENDING', 'CONFLICT']]) {
     assert.match(errors, new RegExp(`${code}\\(HttpStatus\\.${status}, "${code}"`), fix);
   }
-  // GET /me feeds both the home and chat tab; alliance and application lists still do not exist.
   assert.match(controller, /@GetMapping\("\/me"\)/, fix);
-  assert.doesNotMatch(controller, /@GetMapping\s*\n\s*public ApiResponse<.*List|@GetMapping\("[^"]*applications/,
-    '연합 조회 API(목록·신청 목록)가 생겼습니다. "준비 중" 안내, 브라우저 기억, 신청 번호 입력을 서버 조회로 바꾸세요.');
+  const lists = read('domain/alliance/controller/AllianceListController.java');
+  assert.match(lists, /@GetMapping\s*\n\s*public ApiResponse<Page<Summary>> directory/, fix);
+  for (const path of ['/{allianceId}/universities', '/{allianceId}/applications', '/applications/me', '/{allianceId}/matches', '/matches/{matchId}']) {
+    assert.ok(lists.includes(`@GetMapping("${path}")`), `${fix} Missing ${path}`);
+  }
 
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
   const apiRoute = app.indexOf("API_MODE === 'api' && (viewMode === 'alliance_apply' || viewMode === 'current_alliance' || viewMode === 'battle_apply' || viewMode === 'battle_status') ?");
@@ -818,8 +825,7 @@ test('계약 센서: 연합 생성·상세 계약이 바뀌면 화면을 다시 
   assert.match(matches, /@RequestMapping\("\/api\/v1\/alliances"\)/, fix);
   assert.match(matches, /@PostMapping\("\/\{allianceId\}\/matches"\)\s*\n\s*@ResponseStatus\(HttpStatus\.CREATED\)/, fix);
   for (const path of ['accept', 'cancel']) assert.match(matches, new RegExp(`@PatchMapping\\("/matches/\\{matchId\\}/${path}"\\)`), fix);
-  assert.match(matches, /@GetMapping\("\/matches\/\{matchId\}"\)/, fix);
-  assert.equal(matches.match(/@GetMapping/g)?.length, 1, '대결 조회 API(목록 등)가 생겼습니다. 대결 번호 입력과 브라우저 기억을 서버 조회로 바꾸세요.');
+  assert.doesNotMatch(matches, /@GetMapping/, '대결 조회는 목록과 같은 접근 정책을 적용하는 AllianceListController에 있어야 합니다.');
   assert.match(read('domain/alliance/dto/AllianceMatchCreateRequest.java'),
     /@NotNull Long opponentAllianceId,\s*@Min\(1\) @Max\(24\) int durationHours,\s*OffsetDateTime scheduledStartAt/, fix);
   assert.match(read('domain/alliance/dto/AllianceMatchResponse.java'), new RegExp([
@@ -832,6 +838,38 @@ test('계약 센서: 연합 생성·상세 계약이 바뀌면 화면을 다시 
     ['MATCH_INSUFFICIENT_TIME', 'CONFLICT']]) {
     assert.match(errors, new RegExp(`${code}\\(HttpStatus\\.${status}, "${code}"`), fix);
   }
+});
+
+test('연합 목록에서 추가 페이지를 불러오고 번호 입력 없이 가입 신청한다', async () => {
+  const summary = (id: number, name: string) => ({ ...alliance(id, { name }), memberCount: 1 });
+  const h = mount({ list(url) {
+    if (url.pathname !== '/api/v1/alliances') return undefined;
+    return url.searchParams.has('cursor') ? ok({ items: [summary(7, '다음 연합')], nextCursor: null })
+      : ok({ items: [summary(8, '첫 연합')], nextCursor: 8 });
+  } });
+  await screen.findByRole('button', { name: '첫 연합 상세 보기' });
+  fireEvent.click(screen.getByRole('button', { name: '연합 목록 더 보기' }));
+  fireEvent.click(await screen.findByRole('button', { name: '다음 연합 상세 보기' }));
+  fireEvent.click(await screen.findByRole('button', { name: '이 연합에 가입 신청' }));
+  await waitFor(() => assert.deepEqual(h.routes('POST /api/v1/alliances/7/applications'), ['POST /api/v1/alliances/7/applications']));
+});
+
+test('받은 신청 목록은 번호 없이 승인되고 권한 오류가 나면 이전 신청을 숨긴다', async () => {
+  let approved = false;
+  mount({ mine: () => ok(alliance(7)), decide: () => {
+    approved = true;
+    return ok(application(31, 7, 'ACCEPTED'));
+  }, list(url) {
+    if (!url.pathname.endsWith('/7/applications')) return undefined;
+    return approved ? fail(403, 'ALLY_NOT_MEMBER', '소속 변경') : ok({ items: [{ id: 31,
+      alliance: { id: 7, name: '우리 연합' }, university: { id: YONSEI, name: '연세대학교', logoUrl: null },
+      status: 'PENDING', createdAt: '2026-11-19T10:00:00+09:00' }], nextCursor: null });
+  } });
+  fireEvent.click(await screen.findByRole('button', { name: '연세대학교 가입 신청 승인' }));
+  fireEvent.click(screen.getByRole('button', { name: '승인하기' }));
+  const inbox = screen.getByRole('region', { name: '받은 가입 신청' });
+  await within(inbox).findByRole('alert');
+  assertAbsent(within(inbox).queryByRole('button', { name: '연세대학교 가입 신청 승인' }));
 });
 
 test('내 학교의 현재 연합은 /alliances/me로 읽고, 없으면 null, 형식이 틀리면 거절한다', async () => {

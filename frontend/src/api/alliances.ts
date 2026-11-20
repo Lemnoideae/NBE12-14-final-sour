@@ -2,9 +2,8 @@
 // .agents/01-PLAN/261119-1123-*, -1134-* and -1150-*.
 // AllianceController: POST /api/v1/alliances (201), GET /api/v1/alliances/{id}, POST /{id}/applications (201) and
 // PATCH /applications/{id}/approve|reject. AllianceMatchController: POST /{id}/matches (201), GET /matches/{id} and
-// PATCH /matches/{id}/accept|cancel. GET /alliances/me (SCRUM-182) gives the school's current alliance; the alliance screen
-// still remembers its member's alliance, sent application and latest match in this browser because the server has no
-// alliance list, member list, application list or match list yet, and applications and matches are handled by number.
+// PATCH /matches/{id}/accept|cancel. GET /alliances/me gives the school's current alliance.
+// See allianceLists.ts for server-backed lists.
 
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -160,6 +159,7 @@ export function decideMatch(client: ApiClient, matchId: number, decision: MatchD
 /** Keyed by the member, so one member's alliance never shows from another member's cache. */
 export const allianceKeys = {
   all: ['alliances'] as const,
+  lists: (userId: number) => ['alliances', userId, 'lists'] as const,
   detail: (userId: number, allianceId: number) => ['alliances', userId, 'detail', allianceId] as const,
   mine: (userId: number) => ['alliances', userId, 'mine'] as const,
   match: (userId: number, matchId: number) => ['alliances', userId, 'match', matchId] as const,
@@ -324,16 +324,23 @@ export function useCreateAlliance(userId: number) {
       queryClient.setQueryData(allianceKeys.detail(userId, alliance.id), alliance);
       void queryClient.invalidateQueries({ queryKey: allianceKeys.mine(userId), exact: true });
     },
+    onSettled: () => refreshLists(queryClient, userId),
   });
 }
 
 /** Join applications are not idempotent either: a lost response may have left one pending on the server. */
-export function useApplyToAlliance() {
+export function useApplyToAlliance(userId: number) {
   const client = useApiClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (allianceId: number) => applyToAlliance(client, allianceId),
     retry: false,
+    onSettled: () => refreshLists(queryClient, userId),
   });
+}
+
+function refreshLists(queryClient: ReturnType<typeof useQueryClient>, userId: number) {
+  void queryClient.invalidateQueries({ queryKey: allianceKeys.lists(userId) });
 }
 
 export function useDecideApplication(userId: number) {
@@ -347,6 +354,7 @@ export function useDecideApplication(userId: number) {
       void queryClient.invalidateQueries({ queryKey: allianceKeys.detail(userId, application.allianceId), exact: true });
       void queryClient.invalidateQueries({ queryKey: allianceKeys.mine(userId), exact: true });
     },
+    onSettled: () => refreshLists(queryClient, userId),
   });
 }
 
@@ -408,6 +416,7 @@ export function useRequestMatch(userId: number, allianceId: number) {
     mutationFn: (request: MatchRequest) => requestMatch(client, allianceId, request),
     retry: false,
     onSuccess: (match) => refreshAfterMatch(queryClient, userId, match),
+    onSettled: () => refreshLists(queryClient, userId),
   });
 }
 
@@ -418,5 +427,11 @@ export function useDecideMatch(userId: number) {
     mutationFn: ({ matchId, decision }: { matchId: number; decision: MatchDecision }) => decideMatch(client, matchId, decision),
     retry: false,
     onSuccess: (match) => refreshAfterMatch(queryClient, userId, match),
+    onError: (error, { matchId }) => {
+      if (error instanceof ApiError && [MATCH_ERROR_CODES.notPending, MATCH_ERROR_CODES.requestExpired, ALLIANCE_ERROR_CODES.notMember].some((code) => code === error.code)) {
+        void queryClient.invalidateQueries({ queryKey: allianceKeys.match(userId, matchId), exact: true });
+      }
+    },
+    onSettled: () => refreshLists(queryClient, userId),
   });
 }

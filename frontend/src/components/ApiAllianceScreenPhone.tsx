@@ -14,6 +14,7 @@ import { kstDateTimeInput, validateMatchSchedule } from '../api/matchSchedule';
 import { soundManager } from '../utils/sound';
 import { BottomNavFooter, type NavTab } from './BottomNav';
 import { DurationPicker, formatDurationHours } from './DurationPicker';
+import { AllianceApplicationList, AllianceDirectory, AllianceHistory, AllianceMatchList, AllianceSchoolList } from './AllianceListPanels';
 import { LoadNotice } from './LoadNotice';
 import { PhoneShell } from './PhoneShell';
 
@@ -122,7 +123,7 @@ function AllianceHome({ userId, universityName, applications, matches, now }: {
     mineContent = <>
       <article aria-label={`연합 #${mine.id}`} data-testid="alliance-detail" aria-busy={membership.isFetching} className={`${BOX} text-xs`}>
         <AllianceFields alliance={mine} now={now} />
-        <p className="text-[11px]">다른 학교에 연합 ID(#{mine.id})를 알려 주면 가입 신청할 수 있어요. 신청 번호를 받으면 아래에서 승인하거나 거절하세요.</p>
+        <AllianceSchoolList userId={userId} allianceId={mine.id} />
         {recheck}
       </article>
       <ApplicationDecisionForm key={mine.id} userId={userId} allianceId={mine.id} />
@@ -144,7 +145,7 @@ function AllianceHome({ userId, universityName, applications, matches, now }: {
     lookupActions = <p className="text-[11px] font-bold">우리 연합이에요.</p>;
   } else if (lookedUp !== null && mine === null) {
     lookupActions = (
-      <ApplyButton key={lookedUp} allianceId={lookedUp} onSent={(application) => {
+      <ApplyButton key={lookedUp} userId={userId} allianceId={lookedUp} onSent={(application) => {
         const next = { applicationId: application.id, allianceId: application.allianceId };
         applications.set(userId, next);
         setSent(next);
@@ -161,12 +162,11 @@ function AllianceHome({ userId, universityName, applications, matches, now }: {
 
     {mine && <AllianceMatches key={mine.id} userId={userId} alliance={mine} memory={matches} now={now} />}
 
+    <AllianceApplicationList userId={userId} />
+    <AllianceDirectory userId={userId} mode="recruiting" onSelect={(alliance) => setLookedUp(alliance.id)} />
     <AllianceLookup userId={userId} now={now} allianceId={lookedUp} onLookup={setLookedUp} actions={lookupActions} />
-
-    <section aria-labelledby="alliance-soon" className={`${BOX} text-xs`}>
-      <h2 id="alliance-soon" className="font-black text-sm">준비 중</h2>
-      <p>연합 목록, 소속 학교, 받은 가입 신청 목록, 받은 대결 신청 목록, 진행 중 대결 점수는 서버 기능이 생기면 열려요.</p>
-    </section>
+    <AllianceHistory userId={userId} detail={(alliance, matchId, close) =>
+      <MatchCard key={matchId} userId={userId} alliance={alliance} matchId={matchId} now={now} history onMissing={close} onForget={close} />} />
   </>;
 }
 
@@ -183,7 +183,7 @@ function SentApplicationCard({ userId, sent, now, onMissing, onForget }: {
     <section aria-label="보낸 가입 신청" data-testid="sent-application" className={`${BOX} text-xs`}>
       <h3 className="text-sm font-black">보낸 가입 신청 #{sent.applicationId}</h3>
       <p>
-        연합 #{sent.allianceId}에 가입을 신청했어요. 그 연합의 회원에게 신청 번호 <strong>#{sent.applicationId}</strong>를 알려 주세요.
+        연합 #{sent.allianceId}에 가입을 신청했어요. 현재 상태는 아래 가입 신청 목록에서 확인할 수 있어요.
         승인되면 위의 ‘우리 연합’에 자동으로 표시돼요.
       </p>
       <AllianceDetail userId={userId} allianceId={sent.allianceId} now={now} onMissing={onMissing}
@@ -192,8 +192,8 @@ function SentApplicationCard({ userId, sent, now, onMissing, onForget }: {
   );
 }
 
-function ApplyButton({ allianceId, onSent }: { allianceId: number; onSent: (application: AllianceApplication) => void }) {
-  const apply = useApplyToAlliance();
+function ApplyButton({ userId, allianceId, onSent }: { userId: number; allianceId: number; onSent: (application: AllianceApplication) => void }) {
+  const apply = useApplyToAlliance(userId);
   const code = isApiError(apply.error) ? apply.error.code : null;
   const answered = isApiError(apply.error) && apply.error.kind === 'http';
   const reason = code === ALLIANCE_ERROR_CODES.alreadyJoined ? '우리 학교는 이미 연합에 소속돼 있어요. 한 학교는 연합 하나에만 소속될 수 있어요.'
@@ -208,7 +208,7 @@ function ApplyButton({ allianceId, onSent }: { allianceId: number; onSent: (appl
       onClick={() => apply.mutate(allianceId, { onSuccess: onSent })}>
       {apply.isPending ? '신청하는 중…' : '이 연합에 가입 신청'}
     </button>
-    {apply.data && <p role="status" className="basis-full font-bold">가입 신청 #{apply.data.id}을(를) 보냈어요. 연합 회원에게 신청 번호 #{apply.data.id}를 알려 주세요.</p>}
+    {apply.data && <p role="status" className="basis-full font-bold">가입 신청 #{apply.data.id}을(를) 보냈어요.</p>}
     {apply.error && <p role="alert" data-testid="alliance-apply-error" className={`basis-full ${ERROR_TEXT}`}>{reason}</p>}
   </>;
 }
@@ -249,7 +249,8 @@ function ApplicationDecisionForm({ userId, allianceId }: { userId: number; allia
   return (
     <form noValidate onSubmit={(event) => { event.preventDefault(); ask('approve'); }} aria-label="가입 신청 처리" className={`${BOX} text-xs`}>
       <h3 className="text-sm font-black">가입 신청 처리</h3>
-      <p>가입을 신청한 학교에게 받은 신청 번호를 입력하세요. 받은 신청 목록은 서버 조회 기능이 생기면 보여요.</p>
+      <AllianceApplicationList userId={userId} allianceId={allianceId} busy={decide.isPending}
+        onDecide={(applicationId, decision) => { setProblem(null); setConfirming({ applicationId, decision }); }} />
       <label htmlFor={`${id}-id`} className="font-bold">신청 번호</label>
       <input id={`${id}-id`} inputMode="numeric" autoComplete="off" value={input} disabled={decide.isPending} aria-invalid={problem !== null}
         aria-describedby={problem ? `${id}-problem` : undefined}
@@ -303,13 +304,14 @@ function AllianceMatches({ userId, alliance, memory, now }: { userId: number; al
   return (
     <section aria-labelledby="alliance-matches" className="flex flex-col gap-2">
       <h2 id="alliance-matches" className="text-sm font-black">연합 대결</h2>
+      <AllianceMatchList userId={userId} allianceId={alliance.id} selected={matchId} onSelect={(id) => show(id, null)} />
       {notice && <p role="status" className={`${BOX} text-xs`}>{notice}</p>}
       {matchId !== null ? (
         <MatchCard key={matchId} userId={userId} matchId={matchId} alliance={alliance} now={now}
           onMissing={() => forget(`기억해 둔 대결 #${matchId}을(를) 찾을 수 없어 지웠어요.`)} onForget={() => forget(null)} />
-      ) : <p className="text-xs">이 브라우저에 기억한 대결이 없어요. 대결을 신청하거나, 상대에게 받은 대결 번호로 찾아보세요.</p>}
+      ) : null}
       <MatchRequestForm userId={userId} allianceId={alliance.id} expiredAt={alliance.expiredAt}
-        onRequested={(match) => show(match.id, `대결 신청 #${match.id}을(를) 보냈어요. 상대 연합 회원에게 대결 번호 #${match.id}을(를) 알려 주세요.`)} now={now} />
+        onRequested={(match) => show(match.id, `대결 신청 #${match.id}을(를) 보냈어요.`)} now={now} />
       <MatchLookup onLookup={(id) => show(id, null)} />
     </section>
   );
@@ -382,6 +384,8 @@ function MatchRequestForm({ userId, allianceId, expiredAt, onRequested, now }: {
       <p>
         두 연합 모두 학교 {ALLIANCE_MAX_SCHOOLS}곳이 차 있어야 해요. 두 연합 중 먼저 만료되는 연합이 끝나기 전에 대결이 끝나야 해요.
       </p>
+      <AllianceDirectory userId={userId} mode="opponents" ownId={allianceId} disabled={request.isPending}
+        onSelect={(item) => { setOpponent(String(item.id)); setProblem(null); request.reset(); }} />
       <label htmlFor={`${id}-opponent`} className="font-bold">상대 연합 ID</label>
       <input ref={opponentRef} id={`${id}-opponent`} name="opponentAllianceId" inputMode="numeric" autoComplete="off" value={opponent} disabled={request.isPending}
         aria-invalid={problem !== null} aria-describedby={problem ? `${id}-problem` : undefined}
@@ -440,7 +444,7 @@ function MatchLookup({ onLookup }: { onLookup: (matchId: number) => void }) {
   return (
     <form noValidate onSubmit={submit} aria-label="대결 번호로 찾기" className={`${BOX} text-xs`}>
       <label htmlFor={`${id}-id`} className="font-bold">대결 번호로 찾기</label>
-      <p>상대 연합에게 받은 대결 번호를 넣으면 위 카드에 보여요. 받은 대결 신청 목록은 서버 조회 기능이 생기면 보여요.</p>
+      <p>번호를 알고 있다면 직접 조회할 수도 있어요.</p>
       <input id={`${id}-id`} inputMode="numeric" autoComplete="off" value={input} aria-invalid={problem !== null}
         aria-describedby={problem ? `${id}-problem` : undefined}
         onChange={(event) => { setInput(event.target.value); setProblem(null); }} className={INPUT} />
@@ -450,15 +454,15 @@ function MatchLookup({ onLookup }: { onLookup: (matchId: number) => void }) {
   );
 }
 
-function AllianceName({ userId, allianceId, mine }: { userId: number; allianceId: number; mine: Alliance }) {
+function AllianceName({ userId, allianceId, mine }: { userId: number; allianceId: number; mine: Pick<Alliance, 'id' | 'name'> }) {
   const isMine = mine.id === allianceId;
   const detail = useAllianceDetail(userId, isMine ? null : allianceId);
   const name = isMine ? mine.name : detail.data?.name ?? '연합';
   return <>{name} #{allianceId}{isMine && <strong> (우리)</strong>}</>;
 }
 
-function MatchCard({ userId, matchId, alliance, now, onMissing, onForget }: {
-  userId: number; matchId: number; alliance: Alliance; now: () => number; onMissing: () => void; onForget: () => void;
+function MatchCard({ userId, matchId, alliance, now, history = false, onMissing, onForget }: {
+  userId: number; matchId: number; alliance: Pick<Alliance, 'id' | 'name'>; now: () => number; history?: boolean; onMissing: () => void; onForget: () => void;
 }) {
   const allianceId = alliance.id;
   const query = useAllianceMatch(userId, matchId);
@@ -511,7 +515,7 @@ function MatchCard({ userId, matchId, alliance, now, onMissing, onForget }: {
           {match.status === 'IN_PROGRESS' && <p>진행 중 점수는 대결이 끝나면 정산돼 표시돼요.</p>}
           {match.status === 'CANCELED' && <p>신청 취소, 거절, 수락 마감 경과 또는 예약 시작 조건 불충족으로 끝난 대결이에요.</p>}
           {side === null && <p>우리 연합(#{allianceId})의 대결이 아니에요. 보기만 할 수 있어요.</p>}
-          {match.status === 'REQUESTED' && side && <MatchActions key={match.id} userId={userId} match={match} side={side} />}
+          {!history && match.status === 'REQUESTED' && side && <MatchActions key={match.id} userId={userId} match={match} side={side} />}
         </>}
       <div className="flex flex-wrap gap-2">
         {!missing && (
@@ -519,7 +523,7 @@ function MatchCard({ userId, matchId, alliance, now, onMissing, onForget }: {
             <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" /> {query.isFetching && !query.isPending ? '새로고침 중…' : '새로고침'}
           </button>
         )}
-        <button type="button" className={BUTTON} onClick={onForget}>이 대결 잊기</button>
+        <button type="button" className={BUTTON} onClick={onForget}>{history ? '상세 닫기' : '이 대결 잊기'}</button>
       </div>
     </article>
   );
@@ -679,6 +683,7 @@ function AllianceDetail({ userId, allianceId, now, onMissing, actions }: {
           </div>
         ) : alliance && <>
           <AllianceFields alliance={alliance} now={now} />
+          <AllianceSchoolList userId={userId} allianceId={allianceId} />
           {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
         </>}
       <div className="flex flex-wrap gap-2">
