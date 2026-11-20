@@ -45,8 +45,4 @@ public class AllianceMatchController {
         return ApiResponse.ok(new AllianceMatchResponse(matchService.cancelMatch(authUser.userId(), matchId)));
     }
 
-    @GetMapping("/matches/{matchId}")
-    public ApiResponse<AllianceMatchResponse> getMatch(@PathVariable Long matchId) {
-        return ApiResponse.ok(new AllianceMatchResponse(matchService.getMatch(matchId)));
-    }
 }
