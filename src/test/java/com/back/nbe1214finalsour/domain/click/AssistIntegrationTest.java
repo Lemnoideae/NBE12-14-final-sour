@@ -25,6 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -64,6 +65,7 @@ class AssistIntegrationTest {
     private long allianceId;
     private User user;
     private String token;
+    private final List<Long> matchIds = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -107,7 +109,14 @@ class AssistIntegrationTest {
                 RedisKey.RATELIMIT_ACTION.of(user.getId()),
                 RedisKey.RATELIMIT_CLICK.of(user.getId()),
                 RedisKey.SUBMIT_DEDUPE.of(user.getId(), "sub-1"),
-                RedisKey.SUBMIT_DEDUPE.of(user.getId(), "sub-2")));
+                RedisKey.SUBMIT_DEDUPE.of(user.getId(), "sub-2"),
+                RedisKey.UNIV_ALLIANCE.of(universityId), RedisKey.UNIV_ALLIANCE.of(allyId),
+                RedisKey.UNIV_MATCH.of(universityId), RedisKey.UNIV_MATCH.of(allyId),
+                RedisKey.ALLIANCE_SCORE.of(allianceId)));
+        redis.delete(matchIds.stream().map(RedisKey.MATCH_SCORE::of).toList());
+
+        jdbcTemplate.update("DELETE FROM alliance_match WHERE alliance_a_id IN (SELECT id FROM alliance WHERE name LIKE '지원테스트%')"
+                + " OR alliance_b_id IN (SELECT id FROM alliance WHERE name LIKE '지원테스트%')");
 
         jdbcTemplate.update("DELETE FROM alliance_university WHERE university_id IN (?, ?, ?)",
                 universityId, allyId, strangerId);
@@ -232,6 +241,46 @@ class AssistIntegrationTest {
                 .andExpect(jsonPath("$.data.isMyAlly").value(false));
         mockMvc.perform(get("/api/v1/universities/{id}", allyId))
                 .andExpect(jsonPath("$.data.isMyAlly").value(false));
+    }
+
+    @Test
+    @DisplayName("연합 학교를 지원하면 지원 점수(0.3배)가 연합 점수의 대상 학교 칸에 쌓이고, 내 학교 칸은 그대로다")
+    void assistAddsToAllianceScoreOfTarget() throws Exception {
+        assist("sub-1", allyId, 10).andExpect(status().isOk());
+        assist("sub-2", allyId, 10).andExpect(status().isOk());   // 두 번째는 캐시에서 연합을 읽는다
+
+        // floor(10 * 0.3) = 3, 두 번
+        assertThat(redis.opsForHash().get(RedisKey.ALLIANCE_SCORE.of(allianceId), String.valueOf(allyId)))
+                .isEqualTo("6");
+        assertThat(redis.opsForHash().get(RedisKey.ALLIANCE_SCORE.of(allianceId), String.valueOf(universityId)))
+                .isNull();
+        assertThat(redis.opsForValue().get(RedisKey.UNIV_ALLIANCE.of(allyId))).isEqualTo(String.valueOf(allianceId));
+        assertThat(redis.opsForValue().get(RedisKey.UNIV_MATCH.of(allyId))).isEqualTo("none");
+        assertThat(redis.hasKey(RedisKey.UNIV_ALLIANCE.of(universityId))).isFalse();
+    }
+
+    @Test
+    @DisplayName("연합 대결 중이면 지원 점수가 대결 점수의 우리 편에 들어간다")
+    void assistDuringMatchAddsToMatchScore() throws Exception {
+        long rivalAllianceId = jdbcTemplate.queryForObject("""
+                INSERT INTO alliance (name, duration_hours, expired_at)
+                VALUES ('지원테스트상대연합', 24, now() + INTERVAL '24 hours') RETURNING id""", Long.class);
+        long matchId = jdbcTemplate.queryForObject("""
+                INSERT INTO alliance_match (alliance_a_id, alliance_b_id, started_at, ended_at, duration_hours,
+                                            request_expired_at, status)
+                VALUES (?, ?, now() - INTERVAL '1 hour', now() + INTERVAL '2 hours', 3, now(), 'IN_PROGRESS')
+                RETURNING id""", Long.class, allianceId, rivalAllianceId);
+        matchIds.add(matchId);
+
+        assist("sub-1", allyId, 10).andExpect(status().isOk());
+        assist("sub-2", allyId, 10).andExpect(status().isOk());   // 두 번째는 캐시에서 대결을 읽는다
+
+        assertThat(redis.opsForHash().get(RedisKey.MATCH_SCORE.of(matchId), "A")).isEqualTo("6");
+        assertThat(redis.opsForHash().get(RedisKey.MATCH_SCORE.of(matchId), "B")).isNull();
+        assertThat(redis.opsForValue().get(RedisKey.UNIV_MATCH.of(allyId))).isEqualTo(matchId + ":A");
+        assertThat(redis.getExpire(RedisKey.UNIV_MATCH.of(allyId))).isPositive();
+        assertThat(redis.opsForHash().get(RedisKey.ALLIANCE_SCORE.of(allianceId), String.valueOf(allyId)))
+                .isEqualTo("6");
     }
 
     private void member(long university, String memberStatus) {

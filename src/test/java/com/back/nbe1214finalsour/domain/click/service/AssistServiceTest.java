@@ -1,5 +1,9 @@
 package com.back.nbe1214finalsour.domain.click.service;
 
+import com.back.nbe1214finalsour.domain.alliance.entity.Alliance;
+import com.back.nbe1214finalsour.domain.alliance.entity.AllianceMatch;
+import com.back.nbe1214finalsour.domain.alliance.repository.AllianceMatchRepository;
+import com.back.nbe1214finalsour.domain.alliance.repository.AllianceRepository;
 import com.back.nbe1214finalsour.domain.alliance.service.AllianceAllyChecker;
 import com.back.nbe1214finalsour.domain.click.dto.AssistRequest;
 import com.back.nbe1214finalsour.domain.click.dto.AssistResponse;
@@ -16,7 +20,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
+import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,6 +34,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
@@ -49,12 +57,17 @@ class AssistServiceTest {
     @Mock private RedisHandler redisHandler;
     @Mock private UniversityCache universityCache;
     @Mock private AllianceAllyChecker allianceAllyChecker;
+    @Mock private AllianceRepository allianceRepository;
+    @Mock private AllianceMatchRepository allianceMatchRepository;
+    @Mock private ValueOperations<String, String> valueOperations;
+    @Mock private Alliance alliance;
+    @Mock private AllianceMatch match;
 
     private AssistService assistService;
 
     @BeforeEach
     void setUp() {
-        assistService = new AssistService(clickActionGuard, stringRedisTemplate, redisHandler, universityCache, allianceAllyChecker);
+        assistService = new AssistService(clickActionGuard, stringRedisTemplate, redisHandler, universityCache, allianceAllyChecker, allianceRepository, allianceMatchRepository);
     }
 
     private AssistRequest request(Long target, int clickCount) {
@@ -89,7 +102,7 @@ class AssistServiceTest {
         assertThatThrownBy(() -> assistService.assist(USER_ID, UNIVERSITY_ID, request(ALLY_ID, 3)))
                 .extracting("errorCode").isEqualTo(ErrorCode.ASSIST_NOT_ALLY);
         verify(clickActionGuard, never()).verifyAndGetBaseScore(anyLong(), anyString(), anyInt());
-        verify(stringRedisTemplate, never()).execute(any(), anyList(), any(), any(), any(), any());
+        verify(stringRedisTemplate, never()).execute(any(), anyList(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -100,19 +113,100 @@ class AssistServiceTest {
         // clickCount 7 × clickPower 3
         given(clickActionGuard.verifyAndGetBaseScore(USER_ID, "sub-1", 7)).willReturn(21L);
         given(redisHandler.getHash(RedisKey.USER_EFFECT.of(USER_ID), "multiplier", Double.class)).willReturn(Optional.of(1.5));
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any()))
                 .willReturn(List.of("5402322", "41", "12928"));
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
 
         AssistResponse response = assistService.assist(USER_ID, UNIVERSITY_ID, request(ALLY_ID, 7));
 
         ArgumentCaptor<List<String>> keys = ArgumentCaptor.captor();
         ArgumentCaptor<Object> args = ArgumentCaptor.captor();
-        verify(stringRedisTemplate).execute(any(), keys.capture(), args.capture(), args.capture(), args.capture(), args.capture());
+        verify(stringRedisTemplate).execute(any(), keys.capture(), args.capture(), args.capture(), args.capture(), args.capture(), args.capture(), args.capture());
         assertThat(keys.getValue()).containsExactly(RedisKey.RANK_UNIV.of(), RedisKey.RANK_USER.of(UNIVERSITY_ID),
-                RedisKey.DIRTY_UNIV.of(), RedisKey.DIRTY_USER.of());
+                RedisKey.DIRTY_UNIV.of(), RedisKey.DIRTY_USER.of(),
+                RedisKey.ALLIANCE_SCORE.of(0), RedisKey.MATCH_SCORE.of(0));
         // floor(21 * 0.3) = 6, floor(21 * 1.5) = 31
-        assertThat(args.getAllValues()).containsExactly("15", "6", "1", "31");
+        assertThat(args.getAllValues()).containsExactly("15", "6", "1", "31", "0", "");
         assertThat(response).isEqualTo(new AssistResponse(7L, 6L,
                 new AssistResponse.AssistUniversityResponse(ALLY_ID, "서울시립대학교", 5402322L, 41L), 12928L));
+    }
+
+    // --- 연합·대결 점수 ---
+    // 지원 점수는 대상 학교 점수이므로 연합·대결도 대상 학교(ALLY_ID) 기준으로 찾고 캐시한다. 내 학교 키는 건드리지 않는다.
+
+    private static final Long ALLIANCE_ID = 7L;
+    private static final Long OTHER_ALLIANCE_ID = 8L;
+    private static final Long MATCH_ID = 42L;
+    private static final String TARGET_ALLIANCE_KEY = "univ:15:alliance";
+    private static final String TARGET_MATCH_KEY = "univ:15:match";
+    private static final String MY_ALLIANCE_KEY = "univ:12:alliance";
+
+    private void givenAssistAllowed() {
+        given(universityCache.getName(ALLY_ID)).willReturn("서울시립대학교");
+        given(allianceAllyChecker.areAllies(UNIVERSITY_ID, ALLY_ID)).willReturn(true);
+        given(clickActionGuard.verifyAndGetBaseScore(USER_ID, "sub-1", 7)).willReturn(21L);
+        given(redisHandler.getHash(RedisKey.USER_EFFECT.of(USER_ID), "multiplier", Double.class)).willReturn(Optional.empty());
+        given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any()))
+                .willReturn(List.of("100", "3", "21"));
+    }
+
+    /** 스크립트에 넘긴 KEYS[5], KEYS[6]과 ARGV[5], ARGV[6] */
+    private List<String> allianceKeysAndArgs() {
+        ArgumentCaptor<List<String>> keys = ArgumentCaptor.captor();
+        ArgumentCaptor<Object> args = ArgumentCaptor.captor();
+        verify(stringRedisTemplate).execute(any(), keys.capture(), args.capture(), args.capture(), args.capture(),
+                args.capture(), args.capture(), args.capture());
+        return List.of(keys.getValue().get(4), keys.getValue().get(5),
+                (String) args.getAllValues().get(4), (String) args.getAllValues().get(5));
+    }
+
+    @Test
+    @DisplayName("대상 학교의 연합이 캐시에도 DB에도 없으면 대상 학교 키에 \"none\"을 10초 캐시하고, 내 학교 키는 건드리지 않는다")
+    void noAllianceCachesNoneOnTargetKey() {
+        givenAssistAllowed();
+
+        assistService.assist(USER_ID, UNIVERSITY_ID, request(ALLY_ID, 7));
+
+        verify(allianceRepository).findCurrentByUniversityId(eq(ALLY_ID), any(OffsetDateTime.class));
+        verify(valueOperations).set(TARGET_ALLIANCE_KEY, "none", Duration.ofSeconds(10));
+        verify(valueOperations, never()).set(eq(MY_ALLIANCE_KEY), anyString(), any(Duration.class));
+        verify(allianceMatchRepository, never()).findByAllianceId(anyLong(), any());
+        assertThat(allianceKeysAndArgs()).containsExactly("alliance:0:score", "match:0:score", "0", "");
+    }
+
+    @Test
+    @DisplayName("DB에서 대상 학교의 연합과 B편 대결을 찾으면 대상 학교 키에 캐시하고 연합·대결 점수 키를 넘긴다")
+    void allianceAndMatchFromDbAreCachedOnTargetKeys() {
+        givenAssistAllowed();
+        given(allianceRepository.findCurrentByUniversityId(eq(ALLY_ID), any(OffsetDateTime.class)))
+                .willReturn(Optional.of(alliance));
+        given(alliance.getId()).willReturn(ALLIANCE_ID);
+        given(alliance.getExpiredAt()).willReturn(OffsetDateTime.now().plusHours(24));
+        given(allianceMatchRepository.findByAllianceId(eq(ALLIANCE_ID), any(OffsetDateTime.class)))
+                .willReturn(Optional.of(match));
+        given(match.getId()).willReturn(MATCH_ID);
+        given(match.getAllianceAId()).willReturn(OTHER_ALLIANCE_ID);
+        given(match.getEndedAt()).willReturn(OffsetDateTime.now().plusHours(3));
+
+        assistService.assist(USER_ID, UNIVERSITY_ID, request(ALLY_ID, 7));
+
+        verify(valueOperations).set(eq(TARGET_ALLIANCE_KEY), eq("7"), any(Duration.class));
+        verify(valueOperations).set(eq(TARGET_MATCH_KEY), eq("42:B"), any(Duration.class));
+        assertThat(allianceKeysAndArgs()).containsExactly("alliance:7:score", "match:42:score", "7", "B");
+    }
+
+    @Test
+    @DisplayName("대상 학교의 연합·대결이 캐시에 있으면 DB를 조회하지 않고 캐시 값을 넘긴다")
+    void cachedAllianceAndMatchSkipDb() {
+        givenAssistAllowed();
+        given(valueOperations.get(TARGET_ALLIANCE_KEY)).willReturn("7");
+        given(valueOperations.get(TARGET_MATCH_KEY)).willReturn("42:A");
+
+        assistService.assist(USER_ID, UNIVERSITY_ID, request(ALLY_ID, 7));
+
+        verify(allianceRepository, never()).findCurrentByUniversityId(anyLong(), any());
+        verify(allianceMatchRepository, never()).findByAllianceId(anyLong(), any());
+        assertThat(allianceKeysAndArgs()).containsExactly("alliance:7:score", "match:42:score", "7", "A");
     }
 }
