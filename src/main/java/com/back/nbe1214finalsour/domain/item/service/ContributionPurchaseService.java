@@ -55,10 +55,6 @@ public class ContributionPurchaseService {
             throw e;
         }
 
-        // Redis user:{userId}:effect에 효과 적용 (커밋 후 리스너가 처리)
-        this.eventPublisher.publishEvent(
-                new PotionPurchasedEvent(userId, item.getId(), item.getMultiplier(), userItem.getExpiredAt()));
-
         // 기여도 아이템이라 크레딧은 차감되지 않은 현재 값
         return new ItemPurchaseResult(
                 userItem.getId(),
