@@ -50,7 +50,11 @@ export function createChatConnection(api: ApiClient, room: ChatRoom, callbacks: 
     },
     onConnect: () => {
       if (!live()) return;
-      socket.subscribe(CHAT_ERROR_DESTINATION, (frame) => { if (live()) report(frame.body); });
+      socket.subscribe(CHAT_ERROR_DESTINATION, (frame) => {
+        if (!live()) return;
+        const fault = report(frame.body);
+        if (fault.code === 'CHAT_NOT_MEMBER') halt();
+      });
       socket.subscribe(chatTopic(room), (frame) => {
         if (!live()) return;
         try { callbacks.onMessage(parseChatMessage(frame.body, room)); } catch (error) { callbacks.onError(error); }

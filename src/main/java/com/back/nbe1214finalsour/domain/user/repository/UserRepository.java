@@ -1,6 +1,7 @@
 package com.back.nbe1214finalsour.domain.user.repository;
 
 import com.back.nbe1214finalsour.domain.user.entity.User;
+import com.back.nbe1214finalsour.domain.user.entity.UserStatus;
 
 import java.util.Collection;
 import java.util.List;
@@ -12,6 +13,10 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface UserRepository extends JpaRepository<User, Long> {
+
+    /** 채팅 수신 직전 최신 회원/학교 소속을 확인한다. 개인정보 엔티티나 TTL 상태 캐시는 읽지 않는다. */
+    boolean existsByIdAndUniversityIdAndStatusAndDeletedAtIsNull(Long id, Long universityId,
+            UserStatus status);
 
     /** 탈퇴하지 않은 회원 중에 이 이메일 해시가 있는지. {@code uk_users_email_hash}와 같은 조건이다 */
     boolean existsByEmailHashAndDeletedAtIsNull(String emailHash);

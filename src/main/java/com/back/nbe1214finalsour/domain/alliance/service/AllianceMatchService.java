@@ -101,9 +101,7 @@ public class AllianceMatchService {
                 earlier(pair[0].getExpiredAt(), pair[1].getExpiredAt()))) {
             throw new BusinessException(ErrorCode.MATCH_INSUFFICIENT_TIME);
         }
-        match.accept(now);
-        pair[0].startMatch(now);
-        pair[1].startMatch(now);
+        startMatch(match, pair, now, membersA, membersB);
         return match;
     }
 
@@ -125,13 +123,24 @@ public class AllianceMatchService {
                 || pair[0].getDeletedAt() != null || pair[1].getDeletedAt() != null
                 || pair[0].getExpiredAt() == null || pair[1].getExpiredAt() == null
                 || now.plusHours(match.getDurationHours()).isAfter(
-                        earlier(pair[0].getExpiredAt(), pair[1].getExpiredAt()))
-                || members(match.getAllianceAId()).size() != REQUIRED_MEMBER_COUNT
-                || members(match.getAllianceBId()).size() != REQUIRED_MEMBER_COUNT) {
+                        earlier(pair[0].getExpiredAt(), pair[1].getExpiredAt()))) {
             match.cancelScheduled();
             return;
         }
-        match.startScheduled(now);
+        List<AllianceUniversity> membersA = members(match.getAllianceAId());
+        List<AllianceUniversity> membersB = members(match.getAllianceBId());
+        if (membersA.size() != REQUIRED_MEMBER_COUNT || membersB.size() != REQUIRED_MEMBER_COUNT) {
+            match.cancelScheduled();
+            return;
+        }
+        startMatch(match, pair, now, membersA, membersB);
+    }
+
+    private static void startMatch(AllianceMatch match, Alliance[] pair, OffsetDateTime now,
+                                   List<AllianceUniversity> membersA, List<AllianceUniversity> membersB) {
+        // 이미 승인 소속 행 ID 오름차순으로 읽었으므로 정산의 첫 번째/두 번째 학교가 고정된다.
+        match.startWithRoster(now, membersA.get(0).getUniversityId(), membersA.get(1).getUniversityId(),
+                membersB.get(0).getUniversityId(), membersB.get(1).getUniversityId());
         pair[0].startMatch(now);
         pair[1].startMatch(now);
     }

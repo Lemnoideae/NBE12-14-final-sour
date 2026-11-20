@@ -120,6 +120,7 @@ public enum ErrorCode {
 
     // ===== ATTACK =====
     ATTACK_OWN_UNIVERSITY(HttpStatus.BAD_REQUEST, "ATTACK_OWN_UNIVERSITY", "모교를 공격할 수 없습니다."),
+    ATTACK_ALLY_UNIVERSITY(HttpStatus.BAD_REQUEST, "ATTACK_ALLY_UNIVERSITY", "같은 연합의 학교는 공격할 수 없습니다. 지원을 이용해 주세요."),
 
     // ===== ASSIST (추가 명세 §3-3, SCRUM-187) =====
     ASSIST_NOT_ALLY(HttpStatus.BAD_REQUEST, "ASSIST_NOT_ALLY", "같은 연합의 다른 학교만 지원할 수 있습니다."),

@@ -1,6 +1,7 @@
 package com.back.nbe1214finalsour.domain.click.service;
 
 import com.back.nbe1214finalsour.domain.abuse.service.AbuseVerificationService;
+import com.back.nbe1214finalsour.domain.alliance.service.AllianceAllyChecker;
 import com.back.nbe1214finalsour.domain.click.dto.AttackRequest;
 import com.back.nbe1214finalsour.domain.click.dto.AttackResponse;
 import com.back.nbe1214finalsour.domain.university.service.rival.RivalChecker;
@@ -34,6 +35,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * 공격 검증 순서, 피해량 계산, 스크립트 호출과 응답 매핑을 검증한다.
@@ -74,6 +76,8 @@ class AttackServiceTest {
     @Mock
     private UniversityCache universityCache;
     @Mock
+    private AllianceAllyChecker allianceAllyChecker;
+    @Mock
     private AbuseVerificationService abuseVerificationService;
     @Mock
     private UserClickerLevelCache userClickerLevelCache;
@@ -86,7 +90,7 @@ class AttackServiceTest {
                 stringRedisTemplate, userStatusCache, userRepository,
                 actionRateLimiter, clickCountLimiter, clickerService, abuseVerificationService,
                 userClickerLevelCache);
-        attackService = new AttackService(clickActionGuard, stringRedisTemplate, rivalChecker, universityCache);
+        attackService = new AttackService(clickActionGuard, stringRedisTemplate, rivalChecker, universityCache, allianceAllyChecker);
     }
 
     private AttackRequest request(Long targetUniversityId, int clickCount) {
@@ -125,6 +129,7 @@ class AttackServiceTest {
                 .isEqualTo(ErrorCode.ATTACK_OWN_UNIVERSITY);
 
         verify(universityCache, never()).getName(anyLong());
+        verifyNoInteractions(allianceAllyChecker);
         verify(userStatusCache, never()).find(anyLong());
         verify(stringRedisTemplate, never()).execute(any(), anyList(), any(), any(), any());
     }
@@ -140,11 +145,27 @@ class AttackServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.UNIV_NOT_FOUND);
 
-        // 대상 학교 확인이 회원 검증보다 먼저다
+        // 대상 학교 확인이 소속·회원 검증보다 먼저다
+        verifyNoInteractions(allianceAllyChecker);
         verify(userStatusCache, never()).find(anyLong());
         verify(valueOperations, never()).setIfAbsent(anyString(), anyString(), any(Duration.class));
         verify(actionRateLimiter, never()).check(anyLong());
         verify(stringRedisTemplate, never()).execute(any(), anyList(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("동맹 공격은 ATTACK_ALLY_UNIVERSITY, guard와 점수 Redis를 호출하지 않는다")
+    void attack_allyUniversity() {
+        given(universityCache.getName(TARGET_UNIVERSITY_ID)).willReturn(TARGET_NAME);
+        given(allianceAllyChecker.areAllies(UNIVERSITY_ID, TARGET_UNIVERSITY_ID)).willReturn(true);
+
+        assertThatThrownBy(() -> attackService.attack(USER_ID, UNIVERSITY_ID, request(TARGET_UNIVERSITY_ID, 3)))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.ATTACK_ALLY_UNIVERSITY);
+
+        verifyNoInteractions(stringRedisTemplate, userStatusCache, userRepository, actionRateLimiter,
+                clickCountLimiter, abuseVerificationService, userClickerLevelCache, clickerService, rivalChecker);
     }
 
     // --- 1단계: 클릭과 같은 검증 (ClickActionGuard) ---

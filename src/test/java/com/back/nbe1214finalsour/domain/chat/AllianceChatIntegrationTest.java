@@ -29,6 +29,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -245,6 +247,72 @@ class AllianceChatIntegrationTest {
         assertThat(next(fromB, "err").get("code").asString()).isEqualTo("CHAT_NOT_MEMBER");
         assertThat(fromB.nextFrame(NO_MESSAGE_WAIT)).isNull();
         assertThat(stored()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("LEFT 이후 기존 구독은 새 본문을 받지 않고, 정상 상대와 같은 세션의 학교·오류 큐는 계속 받는다")
+    void leftUniversityCannotReceive() throws Exception {
+        RawStompClient fromA = joined(this.a);
+        RawStompClient fromB = joined(this.b);
+        RawStompClient otherB = connect(this.b); // 같은 회원이어도 안내는 기존 연합 구독 세션에만 간다.
+        otherB.subscribe("err", ChatDestinations.ERROR_QUEUE);
+        awaitErrorQueue(otherB, this.b);
+        drain(fromB);
+        fromB.subscribe("campus", ChatDestinations.university(this.b.universityId()));
+        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        String ready = null;
+        while (ready == null && System.nanoTime() < deadline) {
+            this.messagingTemplate.convertAndSend(ChatDestinations.university(this.b.universityId()), (Object) Map.of("probe", true));
+            ready = fromB.nextFrame(Duration.ofMillis(200));
+        }
+        assertThat(ready).isNotNull().contains("\nsubscription:campus\n");
+        drain(fromA);
+        drain(fromB);
+        this.jdbcTemplate.update("UPDATE alliance_university SET status = 'LEFT' WHERE alliance_id = ? AND university_id = ?",
+                this.allianceId, this.b.universityId());
+
+        send(fromA, "정상 상대에게만 전달");
+
+        assertThat(next(fromA, "room").get("content").asString()).isEqualTo("정상 상대에게만 전달");
+        assertThat(next(fromB, "err").get("code").asString()).isEqualTo("CHAT_NOT_MEMBER");
+        assertThat(fromB.nextFrame(NO_MESSAGE_WAIT)).isNull();
+        assertThat(otherB.nextFrame(NO_MESSAGE_WAIT)).isNull();
+        this.messagingTemplate.convertAndSend(ChatDestinations.university(this.b.universityId()), (Object) Map.of("content", "학교는 유지"));
+        assertThat(next(fromB, "campus").get("content").asString()).isEqualTo("학교는 유지");
+        assertThat(stored()).hasSize(1);
+    }
+
+    private void awaitErrorQueue(RawStompClient client, Member member) throws Exception {
+        String frame = null;
+        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (frame == null && System.nanoTime() < deadline) {
+            this.messagingTemplate.convertAndSendToUser(String.valueOf(member.user().getId()), "/queue/errors", "ready");
+            frame = client.nextFrame(Duration.ofMillis(200));
+        }
+        assertThat(frame).isNotNull().contains("\nsubscription:err\n");
+        drain(client);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"suspended", "deleted-membership", "deleted-alliance", "expired"})
+    @DisplayName("상태 변경 뒤 열린 연합 구독에는 본문 대신 권한 오류만 전달한다")
+    void existingSubscriptionRechecksAuthorization(String change) throws Exception {
+        RawStompClient subscribed = joined(this.b);
+        switch (change) {
+            case "suspended" -> this.jdbcTemplate.update("UPDATE users SET status = 'SUSPENDED' WHERE id = ?", this.b.user().getId());
+            case "deleted-membership" -> this.jdbcTemplate.update(
+                    "UPDATE alliance_university SET deleted_at = now() WHERE alliance_id = ? AND university_id = ?",
+                    this.allianceId, this.b.universityId());
+            case "deleted-alliance" -> this.jdbcTemplate.update("UPDATE alliance SET deleted_at = now() WHERE id = ?", this.allianceId);
+            case "expired" -> this.jdbcTemplate.update("UPDATE alliance SET expired_at = now() WHERE id = ?", this.allianceId);
+            default -> throw new AssertionError(change);
+        }
+
+        // 발행 쪽 권한과 무관하게 이미 구독한 소비자의 전송 처리가 차단되어야 한다.
+        this.messagingTemplate.convertAndSend(ChatDestinations.alliance(this.allianceId), (Object) Map.of("content", "차단 대상"));
+
+        assertThat(next(subscribed, "err").get("code").asString()).isEqualTo("CHAT_NOT_MEMBER");
+        assertThat(subscribed.nextFrame(NO_MESSAGE_WAIT)).isNull();
     }
 
     @Test

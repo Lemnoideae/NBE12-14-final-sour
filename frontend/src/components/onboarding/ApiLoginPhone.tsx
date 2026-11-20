@@ -8,6 +8,7 @@ import { userKeys, useMyInfo } from '../../api/users';
 import { itemKeys } from '../../api/items';
 import { supportKeys } from '../../api/supports';
 import { adminKeys } from '../../api/admin';
+import { allianceKeys } from '../../api/alliances';
 import { LoginStep, PhoneFrame, SignedInStep } from './OnboardingSteps.tsx';
 
 // Login, logout and the session restore in API mode (SCRUM-152). The access token stays in memory (SCRUM-148); after
@@ -115,23 +116,24 @@ export const ApiSessionWatcher: React.FC<{ onEnded: () => void }> = ({ onEnded }
   const client = useApiClient();
   const session = useAuthSession();
   const queryClient = useQueryClient();
-  // The profile belongs to whoever was signed in; the next login must not show it, even for a moment.
-  // Query.reset() only clears it. removeQueries would orphan a query a screen still watches (its gc timer can then
-  // never be cleared), and resetQueries refetches it at once, before the screens see the session ended.
+  // Subscribe synchronously: a logout and login may happen before React renders the signed-out state.
+  // Reset cancels and clears private queries without refetching them while signed out.
   useEffect(() => {
-    if (session.status === 'signed-out') queryClient.getQueryCache().find({ queryKey: userKeys.me, exact: true })?.reset();
-  }, [session.status, queryClient]);
-  // Subscribe synchronously: sign-out + another sign-in in one frame must still abort private history/support/admin GETs.
-  // Query.reset also cancels consumed signals, including the client's pre-HTTP fault delay, without refetching.
-  useEffect(() => {
-    const clearPrivateQueries = () => {
-      if (client.session.getState().status !== 'signed-out') return;
-      for (const queryKey of [itemKeys.histories, supportKeys.all, adminKeys.all]) {
-        for (const query of queryClient.getQueryCache().findAll({ queryKey })) query.reset();
+    let wasSignedOut = false;
+    const syncPrivateQueries = () => {
+      if (client.session.getState().status === 'signed-out') {
+        wasSignedOut = true;
+        for (const queryKey of [userKeys.me, allianceKeys.all, itemKeys.histories, supportKeys.all, adminKeys.all]) {
+          for (const query of queryClient.getQueryCache().findAll({ queryKey })) query.reset();
+        }
+      } else if (wasSignedOut) {
+        wasSignedOut = false;
+        // If React skipped the signed-out render, the existing enabled profile observer needs a new fetch.
+        void queryClient.invalidateQueries({ queryKey: userKeys.me, exact: true });
       }
     };
-    clearPrivateQueries();
-    return client.session.subscribe(clearPrivateQueries);
+    syncPrivateQueries();
+    return client.session.subscribe(syncPrivateQueries);
   }, [client, queryClient]);
   const onEndedRef = useRef(onEnded);
   onEndedRef.current = onEnded;

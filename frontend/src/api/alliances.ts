@@ -2,9 +2,8 @@
 // .agents/01-PLAN/261119-1123-*, -1134-* and -1150-*.
 // AllianceController: POST /api/v1/alliances (201), GET /api/v1/alliances/{id}, POST /{id}/applications (201) and
 // PATCH /applications/{id}/approve|reject. AllianceMatchController: POST /{id}/matches (201), GET /matches/{id} and
-// PATCH /matches/{id}/accept|cancel. GET /alliances/me (SCRUM-182) gives the school's current alliance; the alliance screen
-// still remembers its member's alliance, sent application and latest match in this browser because the server has no
-// alliance list, member list, application list or match list yet, and applications and matches are handled by number.
+// PATCH /matches/{id}/accept|cancel. GET /alliances/me gives the school's current alliance.
+// See allianceLists.ts for server-backed lists.
 
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -110,17 +109,19 @@ export function getAlliance(client: ApiClient, allianceId: number, signal?: Abor
 }
 
 /**
- * The alliance the member's school belongs to now (ACCEPTED, not expired), or null. The chat room ID comes from this, so
- * the shape is checked at run time instead of trusted.
+ * Current membership (ACCEPTED, not expired) or null. The alliance home and chat both use this response.
  */
 export async function getMyAlliance(client: ApiClient, signal?: AbortSignal): Promise<Alliance | null> {
   const value = await client.get<unknown>('/alliances/me', { signal });
   if (value === null) return null;
-  if (typeof value !== 'object' || !Number.isSafeInteger((value as Alliance).id) || (value as Alliance).id <= 0
-    || typeof (value as Alliance).name !== 'string' || !Number.isFinite(Date.parse(String((value as Alliance).expiredAt)))) {
-    throw new ApiError({ kind: 'invalid-response', status: null, code: CLIENT_ERROR_CODES.invalidResponse });
+  const alliance = typeof value === 'object' ? value as Partial<Alliance> : undefined;
+  if (alliance && positiveId(alliance.id) && typeof alliance.name === 'string'
+    && typeof alliance.totalScore === 'number' && Number.isFinite(alliance.totalScore)
+    && (alliance.status === 'ACTIVE' || alliance.status === 'IN_MATCH') && positiveId(alliance.durationHours)
+    && typeof alliance.expiredAt === 'string' && Number.isFinite(Date.parse(alliance.expiredAt))) {
+    return alliance as Alliance;
   }
-  return value as Alliance;
+  throw new ApiError({ kind: 'invalid-response', status: null, code: CLIENT_ERROR_CODES.invalidResponse });
 }
 
 export function applyToAlliance(client: ApiClient, allianceId: number): Promise<AllianceApplication> {
@@ -158,6 +159,7 @@ export function decideMatch(client: ApiClient, matchId: number, decision: MatchD
 /** Keyed by the member, so one member's alliance never shows from another member's cache. */
 export const allianceKeys = {
   all: ['alliances'] as const,
+  lists: (userId: number) => ['alliances', userId, 'lists'] as const,
   detail: (userId: number, allianceId: number) => ['alliances', userId, 'detail', allianceId] as const,
   mine: (userId: number) => ['alliances', userId, 'mine'] as const,
   match: (userId: number, matchId: number) => ['alliances', userId, 'match', matchId] as const,
@@ -196,11 +198,10 @@ export function parseApplicationId(input: string): { applicationId: number } | {
   return applicationId === null ? { problem: '신청 번호는 1 이상의 정수로 입력해 주세요.' } : { applicationId };
 }
 
-// ---- The alliance this browser's member created (until GET /alliances/me exists). ----
-
-export interface AllianceMemory {
+/** The last match number this member opened, until the server can list matches. */
+export interface MatchMemory {
   get(userId: number): number | null;
-  set(userId: number, allianceId: number): void;
+  set(userId: number, matchId: number): void;
   forget(userId: number): void;
 }
 
@@ -217,13 +218,12 @@ export interface SentApplicationMemory {
 }
 
 type MemoryStorage = () => Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | undefined;
-const memoryKey = (userId: number) => `sour.alliance.created.v1:${userId}`;
 const applicationKey = (userId: number) => `sour.alliance.application.v1:${userId}`;
 const matchKey = (userId: number) => `sour.alliance.match.v1:${userId}`;
 
 /**
  * Storage can be missing or throw (private window, blocked site data), so every access is guarded and the screen works
- * without it: the member just has to look the alliance up by ID again.
+ * without it: the member just has to look up a match or keep track of a sent application number.
  */
 function guarded(storage: MemoryStorage) {
   return {
@@ -241,27 +241,17 @@ function guarded(storage: MemoryStorage) {
 
 const positiveId = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 
-function idMemory(key: (userId: number) => string, storage: MemoryStorage): AllianceMemory {
+/** localStorage, per member: the match this member requested or looked up last. */
+export function createMatchMemory(storage: MemoryStorage = () => globalThis.localStorage): MatchMemory {
   const store = guarded(storage);
   return {
     get(userId) {
-      const raw = store.read(key(userId));
-      const parsed = raw === null ? NaN : Number(raw);
-      return positiveId(parsed) ? parsed : null;
+      const id = Number(store.read(matchKey(userId)));
+      return positiveId(id) ? id : null;
     },
-    set(userId, id) { store.write(key(userId), String(id)); },
-    forget(userId) { store.remove(key(userId)); },
+    set(userId, id) { store.write(matchKey(userId), String(id)); },
+    forget(userId) { store.remove(matchKey(userId)); },
   };
-}
-
-/** localStorage, per member: the alliance this member created or chose to remember. */
-export function createAllianceMemory(storage: MemoryStorage = () => globalThis.localStorage): AllianceMemory {
-  return idMemory(memoryKey, storage);
-}
-
-/** localStorage, per member: the match this member requested or looked up last. Same shape as the alliance memory. */
-export function createMatchMemory(storage: MemoryStorage = () => globalThis.localStorage): AllianceMemory {
-  return idMemory(matchKey, storage);
 }
 
 /** localStorage, per member: the last join application this member sent. */
@@ -295,15 +285,32 @@ export function useAllianceDetail(userId: number, allianceId: number | null) {
   });
 }
 
-/** Membership changes on the server (approval, leave, expiry); every open checks again. */
-export function useMyAlliance(userId: number, enabled = true) {
+const MEMBERSHIP_REFRESH_MS = 15_000;
+
+/** One membership query key shared by the alliance home and chat. No polling in hidden tabs or hidden chat panels. */
+export function useMyAlliance(userId: number, { visible = true, now = Date.now } = {}) {
   const client = useApiClient();
-  return useQuery({
+  const query = useQuery({
     queryKey: allianceKeys.mine(userId),
     queryFn: ({ signal }) => getMyAlliance(client, signal),
-    enabled,
     staleTime: 0,
+    refetchOnWindowFocus: visible,
+    refetchInterval: visible ? MEMBERSHIP_REFRESH_MS : false,
+    refetchIntervalInBackground: false,
   });
+  const { refetch } = query;
+  const expiredAt = query.data?.expiredAt;
+  useEffect(() => {
+    if (!visible || !expiredAt) return;
+    const delay = Date.parse(expiredAt) - now();
+    // Mount/focus and periodic refresh handle expired replies or clock skew without a tight retry loop.
+    if (delay <= 0 || delay > 2 ** 31 - 1) return;
+    const timer = setTimeout(() => {
+      if (document.visibilityState === 'visible') void refetch({ cancelRefetch: false });
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [visible, expiredAt, now, refetch]);
+  return query;
 }
 
 export function useCreateAlliance(userId: number) {
@@ -313,17 +320,27 @@ export function useCreateAlliance(userId: number) {
     mutationFn: (request: AllianceCreateRequest) => createAlliance(client, request),
     // Creating is not idempotent: a retry after a lost response could make a second alliance attempt. Let the member decide.
     retry: false,
-    onSuccess: (alliance) => queryClient.setQueryData(allianceKeys.detail(userId, alliance.id), alliance),
+    onSuccess: (alliance) => {
+      queryClient.setQueryData(allianceKeys.detail(userId, alliance.id), alliance);
+      void queryClient.invalidateQueries({ queryKey: allianceKeys.mine(userId), exact: true });
+    },
+    onSettled: () => refreshLists(queryClient, userId),
   });
 }
 
 /** Join applications are not idempotent either: a lost response may have left one pending on the server. */
-export function useApplyToAlliance() {
+export function useApplyToAlliance(userId: number) {
   const client = useApiClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (allianceId: number) => applyToAlliance(client, allianceId),
     retry: false,
+    onSettled: () => refreshLists(queryClient, userId),
   });
+}
+
+function refreshLists(queryClient: ReturnType<typeof useQueryClient>, userId: number) {
+  void queryClient.invalidateQueries({ queryKey: allianceKeys.lists(userId) });
 }
 
 export function useDecideApplication(userId: number) {
@@ -333,7 +350,11 @@ export function useDecideApplication(userId: number) {
     mutationFn: ({ applicationId, decision }: { applicationId: number; decision: ApplicationDecision }) =>
       decideApplication(client, applicationId, decision),
     retry: false,
-    onSuccess: (application) => queryClient.invalidateQueries({ queryKey: [...allianceKeys.all, userId, 'detail', application.allianceId] }),
+    onSuccess: (application) => {
+      void queryClient.invalidateQueries({ queryKey: allianceKeys.detail(userId, application.allianceId), exact: true });
+      void queryClient.invalidateQueries({ queryKey: allianceKeys.mine(userId), exact: true });
+    },
+    onSettled: () => refreshLists(queryClient, userId),
   });
 }
 
@@ -367,17 +388,24 @@ export function useAllianceMatch(userId: number, matchId: number | null) {
   // A scheduler or another member may change the match without a local mutation. Refresh both alliances on status change.
   useEffect(() => {
     if (!status || a === undefined || b === undefined) return;
-    for (const allianceId of [a, b]) void queryClient.invalidateQueries({ queryKey: allianceKeys.detail(userId, allianceId) });
+    refreshMatchAlliances(queryClient, userId, a, b);
   }, [status, a, b, userId, queryClient]);
   return query;
 }
 
-/** After a match changes, both alliances' status (ACTIVE/IN_MATCH) may have changed too. */
+/** Both alliances may have changed status. Only refresh the membership view if it includes a participant. */
+function refreshMatchAlliances(queryClient: ReturnType<typeof useQueryClient>, userId: number, a: number, b: number) {
+  for (const allianceId of [a, b]) {
+    void queryClient.invalidateQueries({ queryKey: allianceKeys.detail(userId, allianceId), exact: true });
+  }
+  const mineKey = allianceKeys.mine(userId);
+  const currentId = queryClient.getQueryData<Alliance | null>(mineKey)?.id;
+  if (currentId === a || currentId === b) void queryClient.invalidateQueries({ queryKey: mineKey, exact: true }, { cancelRefetch: false });
+}
+
 function refreshAfterMatch(queryClient: ReturnType<typeof useQueryClient>, userId: number, match: AllianceMatch) {
   queryClient.setQueryData(allianceKeys.match(userId, match.id), match);
-  for (const allianceId of [match.allianceAId, match.allianceBId]) {
-    void queryClient.invalidateQueries({ queryKey: allianceKeys.detail(userId, allianceId) });
-  }
+  refreshMatchAlliances(queryClient, userId, match.allianceAId, match.allianceBId);
 }
 
 /** Not idempotent: a lost response may have left a request on the server, so the member decides whether to resend. */
@@ -388,6 +416,7 @@ export function useRequestMatch(userId: number, allianceId: number) {
     mutationFn: (request: MatchRequest) => requestMatch(client, allianceId, request),
     retry: false,
     onSuccess: (match) => refreshAfterMatch(queryClient, userId, match),
+    onSettled: () => refreshLists(queryClient, userId),
   });
 }
 
@@ -398,5 +427,11 @@ export function useDecideMatch(userId: number) {
     mutationFn: ({ matchId, decision }: { matchId: number; decision: MatchDecision }) => decideMatch(client, matchId, decision),
     retry: false,
     onSuccess: (match) => refreshAfterMatch(queryClient, userId, match),
+    onError: (error, { matchId }) => {
+      if (error instanceof ApiError && [MATCH_ERROR_CODES.notPending, MATCH_ERROR_CODES.requestExpired, ALLIANCE_ERROR_CODES.notMember].some((code) => code === error.code)) {
+        void queryClient.invalidateQueries({ queryKey: allianceKeys.match(userId, matchId), exact: true });
+      }
+    },
+    onSettled: () => refreshLists(queryClient, userId),
   });
 }

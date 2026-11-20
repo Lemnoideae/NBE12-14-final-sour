@@ -16,6 +16,8 @@ export interface ClickBatcherOptions<TResponse = ClickResponse> {
   /** `sentAt` is when the attempt that succeeded was sent (`now()`), so callers can relate it to earlier batches. */
   onAccepted: (response: TResponse, pendingScore: number, accepted: { request: ClickRequest; sentAt: number }) => void;
   onChange: (snapshot: ClickBatchSnapshot) => void;
+  /** Only a first-attempt HTTP rejection reaches this callback. True cancels the rejected batch AND its queued successors. */
+  onRejected?: (error: unknown, pendingClicks: number) => boolean;
   createId?: () => string;
   /** Sample once for a NEW submission. Every retry must preserve the ID, count, and coordinates. */
   getCoordinates?: () => ClickCoordinates | undefined;
@@ -93,6 +95,16 @@ export function createClickBatcher<TResponse = ClickResponse>(options: ClickBatc
         submitted.retried = true;
         publish();
         arm();
+        return;
+      }
+      // A domain may cancel an explicitly rejected action, but never after response loss: an earlier attempt
+      // could have committed. Never convert or replay the queued successors under a different action kind.
+      if (!submitted.retried && isApiError(caught) && caught.kind === 'http'
+        && options.onRejected?.(caught, submitted.points.length + queue.length)) {
+        batch = null;
+        queue.length = 0;
+        error = null;
+        publish();
         return;
       }
       // 429/403/409 and ambiguous failures pause the queue. Keeping the exact batch and its successors makes the
