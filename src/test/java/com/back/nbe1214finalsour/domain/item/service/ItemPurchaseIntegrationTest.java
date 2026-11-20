@@ -22,6 +22,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.willCallRealMethod;
 import static org.mockito.BDDMockito.willThrow;
 
 @IntegrationTest
@@ -116,6 +117,25 @@ public class ItemPurchaseIntegrationTest {
                 "SELECT count(*) FROM user_item WHERE user_id = ?", Long.class, userId)).isEqualTo(1L);
         // 구매 Lua가 효과를 적용 → 클릭 엔진이 읽는 배율, 효과 주인은 요청의 멱등 키
         assertThat(redisTemplate.opsForHash().get(effectKey(), "multiplier")).isEqualTo("2.0");
+        assertThat(redisTemplate.opsForHash().get(effectKey(), "purchaseId")).isEqualTo(KEY.toString());
+    }
+
+    @Test
+    @DisplayName("구매 이력 기록 실패로 보상된 뒤 같은 멱등 키로 다시 사면 성공한다")
+    void purchase_retryWithSameKeyAfterFailure() {
+        // given: 첫 구매는 이력 기록이 실패해 보상된다
+        willThrow(new DataIntegrityViolationException("강제 실패")).given(potionPurchaseRecorder).record(any());
+        Throwable firstFailure = catchThrowable(() -> itemPurchaseService.purchase(userId, universityId, null, ITEM_ID, null, KEY));
+        assertThat(firstFailure).isInstanceOf(DataIntegrityViolationException.class);
+        willCallRealMethod().given(potionPurchaseRecorder).record(any());
+
+        // when
+        itemPurchaseService.purchase(userId, universityId, null, ITEM_ID, null, KEY);
+
+        // then
+        assertThat(redisTemplate.opsForZSet().score(rankKey(), String.valueOf(userId))).isEqualTo(500.0);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM user_item WHERE user_id = ?", Long.class, userId)).isEqualTo(1L);
         assertThat(redisTemplate.opsForHash().get(effectKey(), "purchaseId")).isEqualTo(KEY.toString());
     }
 
