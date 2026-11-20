@@ -7,7 +7,6 @@ import com.back.nbe1214finalsour.domain.item.event.PotionPurchasedEvent;
 import com.back.nbe1214finalsour.domain.item.repository.PotionPurchaseOutcome;
 import com.back.nbe1214finalsour.domain.item.repository.RedisPotionPurchaser;
 import com.back.nbe1214finalsour.domain.userItem.entity.UserItem;
-import com.back.nbe1214finalsour.domain.userItem.repository.UserItemRepository;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +27,7 @@ public class ContributionPurchaseService {
     private final ContributionWallet contributionWallet;
     private final CreditWallet creditWallet;
     private final RedisPotionPurchaser redisPotionPurchaser;
-    private final UserItemRepository userItemRepository;
+    private final PotionPurchaseRecorder potionPurchaseRecorder;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
@@ -47,8 +46,9 @@ public class ContributionPurchaseService {
 
         // 구매 이력 저장
         UserItem userItem = UserItem.ofPotion(userId, item, expiredAt);
+        UserItem saved;
         try {
-            this.userItemRepository.save(userItem);
+            saved = this.potionPurchaseRecorder.record(userItem);
         } catch (RuntimeException e) {
             // Redis 차감은 DB 롤백으로 돌아오지 않으므로 직접 되돌린 뒤 원래 예외를 그대로 던진다
             this.contributionWallet.restore(userId, universityId, item.getPrice());
@@ -57,10 +57,10 @@ public class ContributionPurchaseService {
 
         // 기여도 아이템이라 크레딧은 차감되지 않은 현재 값
         return new ItemPurchaseResult(
-                userItem.getId(),
+                saved.getId(),
                 item,
-                userItem.getPrice(),
-                userItem.getExpiredAt(),
+                saved.getPrice(),
+                saved.getExpiredAt(),
                 myContribScore,
                 this.creditWallet.findBalance(userId)
         );

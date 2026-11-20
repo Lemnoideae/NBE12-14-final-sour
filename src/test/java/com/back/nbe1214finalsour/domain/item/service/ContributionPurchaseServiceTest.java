@@ -9,7 +9,6 @@ import com.back.nbe1214finalsour.domain.item.event.PotionPurchasedEvent;
 import com.back.nbe1214finalsour.domain.item.repository.PotionPurchaseOutcome;
 import com.back.nbe1214finalsour.domain.item.repository.RedisPotionPurchaser;
 import com.back.nbe1214finalsour.domain.userItem.entity.UserItem;
-import com.back.nbe1214finalsour.domain.userItem.repository.UserItemRepository;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -34,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.AdditionalAnswers.returnsFirstArg;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 
@@ -50,7 +50,7 @@ class ContributionPurchaseServiceTest {
     private CreditWallet creditWallet;
 
     @Mock
-    private UserItemRepository userItemRepository;
+    private PotionPurchaseRecorder potionPurchaseRecorder;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -80,6 +80,7 @@ class ContributionPurchaseServiceTest {
         // given
         given(this.redisPotionPurchaser.purchase(USER_ID, UNIVERSITY_ID, 2L, 1000L, 4.0, EXPIRED_AT, KEY))
                 .willReturn(new PotionPurchaseOutcome(1500L, ""));
+        given(this.potionPurchaseRecorder.record(any())).willAnswer(returnsFirstArg());
 
         // when
         this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY);
@@ -103,7 +104,7 @@ class ContributionPurchaseServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ITEM_NOT_ENOUGH_SCORE);
-        then(this.userItemRepository).should(never()).save(any());
+        then(this.potionPurchaseRecorder).should(never()).record(any());
         then(this.eventPublisher).should(never()).publishEvent(any(PotionPurchasedEvent.class));
     }
 
@@ -113,13 +114,14 @@ class ContributionPurchaseServiceTest {
         // given
         given(this.redisPotionPurchaser.purchase(USER_ID, UNIVERSITY_ID, 2L, 1000L, 4.0, EXPIRED_AT, KEY))
                 .willReturn(new PotionPurchaseOutcome(1500L, ""));
+        given(this.potionPurchaseRecorder.record(any())).willAnswer(returnsFirstArg());
 
         // when
         this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY);
 
         // then
         ArgumentCaptor<UserItem> captor = ArgumentCaptor.forClass(UserItem.class);
-        then(this.userItemRepository).should().save(captor.capture());
+        then(this.potionPurchaseRecorder).should().record(captor.capture());
 
         UserItem saved = captor.getValue();
         assertThat(saved.getUserId()).isEqualTo(USER_ID);
@@ -135,6 +137,7 @@ class ContributionPurchaseServiceTest {
         // given
         given(this.redisPotionPurchaser.purchase(USER_ID, UNIVERSITY_ID, 2L, 1000L, 4.0, EXPIRED_AT, KEY))
                 .willReturn(new PotionPurchaseOutcome(1500L, ""));
+        given(this.potionPurchaseRecorder.record(any())).willAnswer(returnsFirstArg());
 
         // when
         this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY);
@@ -149,7 +152,7 @@ class ContributionPurchaseServiceTest {
         // given
         given(this.redisPotionPurchaser.purchase(USER_ID, UNIVERSITY_ID, 2L, 1000L, 4.0, EXPIRED_AT, KEY))
                 .willReturn(new PotionPurchaseOutcome(1500L, ""));
-        given(this.userItemRepository.save(any()))
+        given(this.potionPurchaseRecorder.record(any()))
                 .willThrow(new DataIntegrityViolationException("user_item 저장 실패"));
 
         // when
@@ -170,7 +173,7 @@ class ContributionPurchaseServiceTest {
         given(this.redisPotionPurchaser.purchase(USER_ID, UNIVERSITY_ID, 2L, 1000L, 4.0, EXPIRED_AT, KEY))
                 .willReturn(new PotionPurchaseOutcome(1500L, ""));
         // IDENTITY 저장 시 DB가 같은 객체에 id를 채워 주는 것을 흉내
-        given(this.userItemRepository.save(any()))
+        given(this.potionPurchaseRecorder.record(any()))
                 .willAnswer(invocation -> {
                     UserItem userItem = invocation.getArgument(0);
                     ReflectionTestUtils.setField(userItem, "id", 5530L);
