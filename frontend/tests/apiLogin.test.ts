@@ -25,7 +25,7 @@ for (const [key, value] of Object.entries({
   IS_REACT_ACT_ENVIRONMENT: true,
 })) Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
 
-const { render, screen, fireEvent, cleanup, act } = await import('@testing-library/react');
+const { render, screen, fireEvent, cleanup, act, within } = await import('@testing-library/react');
 const { ApiProvider } = await import('../src/api/ApiProvider');
 const { createApiClient } = await import('../src/api/client');
 const { createApiFaults } = await import('../src/api/faults');
@@ -53,6 +53,8 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 const ok = (data: unknown) => json(200, { code: 'SUCCESS', message: '요청이 성공했습니다.', data });
 const fail = (status: number, code: string, message: string) => json(status, { code, message, data: null });
 const REPLACED_MESSAGE = '다른 기기에서 로그인해 로그아웃되었습니다. 다시 로그인해주세요.';
+const PUBLIC_TOP = 'GET /api/v1/rankings/universities?page=0&size=10';
+const publicPage = (items: unknown[]) => ok({ items, page: 0, size: 10, totalCount: items.length, hasNext: items.length > 10, myUniversity: null });
 const PROFILE = {
   id: 3, nickname: '새내기', email: EMAIL, role: 'USER', status: 'ACTIVE', profileImageUrl: null,
   university: { id: 8, name: '한양대학교', logoUrl: null }, department: { id: 7, name: '컴퓨터소프트웨어학부' },
@@ -72,13 +74,15 @@ function mount({ restore = true, overrides = {}, entry = false }: { restore?: bo
       ? ok({ accessToken: 'login-token', expiresInSeconds: 3600, user: { id: 3, nickname: '새내기', universityId: 8, role: 'USER' } })
       : fail(401, 'AUTH_INVALID_CREDENTIALS', '이메일 또는 비밀번호가 올바르지 않습니다.')),
     'POST /api/v1/auth/logout': () => new Response(null, { status: 204 }),
+    [PUBLIC_TOP]: () => publicPage([]),
     // The account screen shows the nickname from the profile (SCRUM-153); apiMyInfo.test.ts covers the profile itself.
     'GET /api/v1/users/me': () => ok(PROFILE),
     ...overrides,
   };
   const calls: Array<{ route: string; authorization: string | null }> = [];
   const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const route = `${init?.method ?? 'GET'} ${new URL(String(input), 'http://localhost').pathname}`;
+    const url = new URL(String(input), 'http://localhost');
+    const route = `${init?.method ?? 'GET'} ${url.pathname}${url.search}`;
     calls.push({ route, authorization: new Headers(init?.headers).get('Authorization') });
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) as Record<string, unknown> : {};
     const handler = routes[route];
@@ -239,7 +243,7 @@ test('SCRUM-210: 첫 화면에서 로그인 후 내 캠퍼스로, 세션 종료 
   fireEvent.click(screen.getByRole('button', { name: '로그인' }));
   await logIn();
   await screen.findByRole('heading', { name: '내 캠퍼스' });
-  assert.deepEqual(routes(), ['POST /api/v1/auth/reissue', 'POST /api/v1/auth/login']);
+  assert.deepEqual(routes(), ['POST /api/v1/auth/reissue', PUBLIC_TOP, 'POST /api/v1/auth/login']);
 
   await act(async () => {
     client.faults.setClickRefusal(true);
@@ -247,5 +251,44 @@ test('SCRUM-210: 첫 화면에서 로그인 후 내 캠퍼스로, 세션 종료 
   });
   assert.equal(client.faults.getClickRefusal(), false);
   assertAbsent(screen.queryByRole('heading', { name: '내 캠퍼스' }));
-  assert.match(screen.getByRole('status').textContent ?? '', /새 비밀번호로 다시 로그인/);
+  assert.ok(screen.getByText(/새 비밀번호로 다시 로그인/) !== null);
+});
+
+test('SCRUM-211: 무인증 첫 페이지만 요청하고 공동 순위·서버 순서대로 최대 10개를 표시한다', async () => {
+  const rows = Array.from({ length: 12 }, (_, index) => ({ universityId: 200 - index, rank: index < 2 ? 1 : index + 1,
+    name: index === 0 ? '하늘대학교' : index === 1 ? '가람대학교' : `검증대 ${index + 1}`, logoUrl: null, totalScore: 12345, rankChange: null }));
+  const { calls } = mount({ entry: true, restore: false, overrides: { [PUBLIC_TOP]: () => publicPage(rows) } });
+  const table = await screen.findByRole('table', { name: '전국 대학 TOP 10' });
+  assert.equal(within(table).getAllByRole('row').length, 11);
+  assert.deepEqual(within(table).getAllByRole('rowheader').map((node) => node.textContent), rows.slice(0, 10).map(({ name }) => name));
+  assert.deepEqual(within(table).getAllByRole('cell').slice(0, 4).map((node) => node.textContent), ['1위', '12,345점', '1위', '12,345점']);
+  assertAbsent(within(table).queryByRole('button'));
+  assertAbsent(within(table).queryByRole('link'));
+  fireEvent.click(screen.getByRole('button', { name: '로그인' }));
+  assertAbsent(screen.queryByRole('table'));
+  fireEvent.click(screen.getByRole('button', { name: '첫 화면으로' }));
+  await screen.findByRole('table', { name: '전국 대학 TOP 10' });
+  assert.deepEqual(calls, [{ route: 'POST /api/v1/auth/reissue', authorization: null }, { route: PUBLIC_TOP, authorization: null }]);
+});
+
+test('SCRUM-211: 순위 조회 중과 실패에도 가입할 수 있고, 명시적 재시도 후 빈 상태를 표시한다', async () => {
+  let answer: (value: Response) => void = () => { throw new Error('순위 요청이 시작되지 않았습니다'); };
+  const pending = new Promise<Response>((resolve) => { answer = resolve; });
+  let attempts = 0;
+  const { routes } = mount({ entry: true, restore: false, overrides: { [PUBLIC_TOP]: () => ++attempts === 1 ? pending : publicPage([]) } });
+  await screen.findByText('대학 순위를 불러오는 중이에요.');
+  assertAbsent(screen.queryByRole('table'));
+  fireEvent.click(screen.getByRole('button', { name: '회원가입' }));
+  assert.ok(screen.getByRole('region', { name: '회원가입' }) !== null);
+  fireEvent.click(screen.getByRole('button', { name: '첫 화면으로' }));
+  await act(async () => { answer(fail(503, 'COMMON_SERVICE_UNAVAILABLE', '일시적으로 순위를 조회할 수 없습니다.')); });
+  await screen.findByText('대학 순위를 불러오지 못했어요.');
+  assertAbsent(screen.queryByRole('table'));
+  assert.ok(screen.getByRole('button', { name: '로그인' }) !== null);
+  assert.ok(screen.getByRole('button', { name: '회원가입' }) !== null);
+  assert.equal(attempts, 1);
+  fireEvent.click(screen.getByRole('button', { name: '순위 다시 불러오기' }));
+  await screen.findByText('아직 공개된 대학 순위가 없어요.');
+  assertAbsent(screen.queryByRole('table'));
+  assert.deepEqual(routes(), ['POST /api/v1/auth/reissue', PUBLIC_TOP, PUBLIC_TOP]);
 });

@@ -14,6 +14,9 @@ export const RANKING_REFRESH_MS = 5_000;
 /** The main screen's own-school rank. Ranks move with the 1-minute score batch, so a slower poll is enough. */
 export const MY_SCHOOL_RANK_REFRESH_MS = 30_000;
 
+const PUBLIC_TOP_LIMIT = 10;
+const PUBLIC_TOP_STALE_MS = 60_000;
+
 interface RankingPage<Item> {
   items: Item[];
   page: number;
@@ -68,10 +71,12 @@ export function rankingPath(kind: RankingKind, universityId: number | null): str
 export function getRankingPage<K extends RankingKind>(
   client: ApiClient,
   kind: K,
-  { universityId = null, page, size = RANKING_PAGE_SIZE, signal }: { universityId?: number | null; page: number; size?: number; signal?: AbortSignal },
+  { universityId = null, page, size = RANKING_PAGE_SIZE, signal, anonymous = false }: {
+    universityId?: number | null; page: number; size?: number; signal?: AbortSignal; anonymous?: boolean;
+  },
 ): Promise<RankingPageByKind[K]> {
-  // Not anonymous: a session token makes the server fill in the caller's own row.
-  return client.get<RankingPageByKind[K]>(rankingPath(kind, universityId), { query: { page, size }, signal });
+  // The default attaches a session token so full ranking screens can include the caller's own row.
+  return client.get<RankingPageByKind[K]>(rankingPath(kind, universityId), { query: { page, size }, signal, anonymous });
 }
 
 export const rankingKeys = {
@@ -80,7 +85,25 @@ export const rankingKeys = {
   list: (kind: RankingKind, universityId: number | null, viewerId: number | null) =>
     [...rankingKeys.all, kind, universityId, viewerId ?? 'guest'] as const,
   mySchool: (viewerId: number) => [...rankingKeys.all, 'my-school', viewerId] as const,
+  publicTop: ['rankings', 'public-top', PUBLIC_TOP_LIMIT] as const,
 };
+
+/** Public landing snapshot: no polling or session-specific data. Keep one in-flight read across brief screen changes. */
+export function usePublicUniversityTop() {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: rankingKeys.publicTop,
+    queryFn: async () => {
+      const { items } = await getRankingPage(client, 'school', { page: 0, size: PUBLIC_TOP_LIMIT, anonymous: true });
+      return items.slice(0, PUBLIC_TOP_LIMIT).map(({ universityId, rank, name, totalScore }) => ({ universityId, rank, name, totalScore }));
+    },
+    staleTime: PUBLIC_TOP_STALE_MS,
+    retry: false,
+    retryOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+}
 
 /**
  * Offset pages joined by scrolling. Nothing is sent while `enabled` is false (a school-scoped tab without a school).

@@ -4,6 +4,7 @@ import { useSessionRestore } from '../api/auth';
 import { errorMessage } from '../api/errors';
 import campusArt from '../assets/campus-shots/lv07.webp';
 import { PhoneShellVariantContext } from './PhoneShell';
+import { PublicUniversityTop } from './PublicUniversityTop';
 import { SupportGuestScreenPhone } from './SupportGuestScreenPhone';
 import { ApiLoginPhone, ApiSessionWatcher } from './onboarding/ApiLoginPhone';
 import { ApiSignupPhone } from './onboarding/ApiSignupPhone';
@@ -34,6 +35,7 @@ function GuestLanding({ notice, onNavigate }: {
           </div>
           <img src={campusArt} alt="" width={716} height={734} className="guest-hero-art" />
         </header>
+        <PublicUniversityTop />
       </div>
     </main>
   );

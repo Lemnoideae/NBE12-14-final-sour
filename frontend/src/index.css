@@ -432,15 +432,22 @@
   padding-block: max(.75rem, env(safe-area-inset-top)) max(.75rem, env(safe-area-inset-bottom));
   padding-inline: max(.75rem, env(safe-area-inset-left)) max(.75rem, env(safe-area-inset-right));
 }
-.guest-landing { inline-size: 100%; max-inline-size: 74rem; margin-inline: auto; }
-.guest-hero { display: grid; grid-template-columns: minmax(0, 1fr); background: #fffbeb; }
+.guest-landing {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 1rem;
+  inline-size: 100%;
+  max-inline-size: 74rem;
+  margin-inline: auto;
+}
+.guest-hero { min-inline-size: 0; background: #fffbeb; }
 .guest-hero-copy {
   display: flex;
   flex-direction: column;
   align-items: start;
-  align-self: center;
   gap: .875rem;
-  padding: clamp(1rem, 4%, 2rem);
+  padding: clamp(1rem, 5%, 2rem);
 }
 .guest-hero-art { display: block; inline-size: 100%; block-size: auto; aspect-ratio: 16 / 9; object-fit: cover; }
 .guest-actions { display: flex; flex-wrap: wrap; gap: .75rem; inline-size: 100%; }
@@ -452,10 +459,21 @@
 .guest-step > button { justify-self: start; }
 .guest-step > .phone-shell-full { border: 2px solid #49331d; }
 .guest-restore { display: grid; place-items: center; }
-@media (min-width: 48rem) {
-  .guest-hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .guest-hero-copy { padding: clamp(1.5rem, 6%, 3rem); }
-  .guest-hero-art { block-size: 100%; aspect-ratio: 4 / 3; }
+.guest-rankings { min-inline-size: 0; padding: clamp(.75rem, 3%, 1.25rem); background: #fffbeb; }
+.guest-rankings h2 { font-size: 1.25rem; font-weight: 900; }
+.guest-rankings-caption { margin-block-start: .25rem; color: #65431f; font-size: .875rem; }
+.guest-rankings-status:not(:empty), .guest-rankings-error { margin-block-start: .625rem; }
+.guest-rankings-error { color: #792e17; }
+.guest-rankings-error button { margin-block-start: .5rem; }
+.guest-rankings table { inline-size: 100%; margin-block-start: .75rem; font-size: .875rem; }
+.guest-rankings :is(th, td) { overflow-wrap: anywhere; padding: .5rem .25rem; border-block-end: 1px solid #d5bd8d; text-align: start; }
+.guest-rankings thead { background: #f7e9be; }
+.guest-rankings tbody th { font-weight: 700; }
+.guest-rankings tr > :is(:first-child, :last-child) { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.guest-rankings tr > :last-child { text-align: end; }
+@media (min-width: 64rem) {
+  .guest-landing { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+  .guest-hero-art { aspect-ratio: 2 / 1; }
 }
 .game-width { inline-size: 100%; max-inline-size: 90rem; margin-inline: auto; }
 .game-top-bar {
