@@ -30,12 +30,14 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -54,6 +56,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 public class ItemControllerTest {
     // 토큰의 회원: userId 1, universityId 7, departmentId 34
     private static final AuthUser USER = new AuthUser(1L, 7L, 34L, Role.USER);
+
+    private static final UUID KEY = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
 
     private static final Item POTION =
             new Item(2L, "4배 물약", "1시간 동안 클릭 점수 4배", ItemType.MULTIPLIER, PayType.CONTRIBUTION, 1000L, 3600, 4.0);
@@ -129,16 +133,36 @@ public class ItemControllerTest {
     }
 
     @Test
+    @DisplayName("[POST] /api/v1/items/{itemId}/purchase는 Idempotency-Key 헤더가 없으면 400 COMMON_INVALID_INPUT")
+    void purchase_missingIdempotencyKey() throws Exception {
+        mockMvc.perform(post("/api/v1/items/2/purchase")
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("COMMON_INVALID_INPUT"));
+    }
+
+    @Test
+    @DisplayName("[POST] /api/v1/items/{itemId}/purchase는 Idempotency-Key가 UUID 형식이 아니면 400 COMMON_INVALID_INPUT")
+    void purchase_invalidIdempotencyKey() throws Exception {
+        mockMvc.perform(post("/api/v1/items/2/purchase")
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .header("Idempotency-Key", "not-a-uuid"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("COMMON_INVALID_INPUT"));
+    }
+
+    @Test
     @DisplayName("[POST] /api/v1/items/{itemId}/purchase는 토큰의 회원·학교로 구매하고 201과 구매 결과를 응답")
     void purchase() throws Exception {
         // given: 1시간 뒤 만료(UTC 04:00 = KST 13:00), 차감 후 기여도 1500, 크레딧 1100
         OffsetDateTime expiredAt = OffsetDateTime.of(2026, 11, 14, 4, 0, 0, 0, ZoneOffset.UTC);
-        given(itemPurchaseService.purchase(1L, 7L, 34L, 2L, null))
+        given(itemPurchaseService.purchase(1L, 7L, 34L, 2L, null, KEY))
                 .willReturn(new ItemPurchaseResult(5530L, POTION, 1000L, expiredAt, 1500L, 1100L));
 
         // when & then
         mockMvc.perform(post("/api/v1/items/2/purchase")
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .header("Idempotency-Key", KEY.toString()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.userItemId").value(5530))
@@ -150,16 +174,20 @@ public class ItemControllerTest {
                 .andExpect(jsonPath("$.data.expiredAt").value("2026-11-14T13:00:00+09:00"))
                 .andExpect(jsonPath("$.data.myContribScore").value(1500))
                 .andExpect(jsonPath("$.data.myCreditBalance").value(1100));
+
+        // 헤더 값이 그대로 서비스에 전달됨
+        then(itemPurchaseService).should().purchase(1L, 7L, 34L, 2L, null, KEY);
     }
 
     @Test
     @DisplayName("[POST] /api/v1/items/{itemId}/purchase는 없는 아이템이면 404 ITEM_NOT_FOUND")
     void purchase_itemNotFound() throws Exception {
-        given(itemPurchaseService.purchase(1L, 7L, 34L, 9999L, null))
+        given(itemPurchaseService.purchase(1L, 7L, 34L, 9999L, null, KEY))
                 .willThrow(new BusinessException(ErrorCode.ITEM_NOT_FOUND));
 
         mockMvc.perform(post("/api/v1/items/9999/purchase")
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .header("Idempotency-Key", KEY.toString()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ITEM_NOT_FOUND"));
     }
@@ -167,11 +195,12 @@ public class ItemControllerTest {
     @Test
     @DisplayName("[POST] /api/v1/items/{itemId}/purchase는 기여도가 부족하면 400 ITEM_NOT_ENOUGH_SCORE")
     void purchase_notEnoughScore() throws Exception {
-        given(itemPurchaseService.purchase(1L, 7L, 34L, 2L, null))
+        given(itemPurchaseService.purchase(1L, 7L, 34L, 2L, null, KEY))
                 .willThrow(new BusinessException(ErrorCode.ITEM_NOT_ENOUGH_SCORE));
 
         mockMvc.perform(post("/api/v1/items/2/purchase")
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .header("Idempotency-Key", KEY.toString()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("ITEM_NOT_ENOUGH_SCORE"));
     }
@@ -181,12 +210,13 @@ public class ItemControllerTest {
     @Test
     @DisplayName("[POST] /api/v1/items/{itemId}/purchase는 로고 아이템이면 multipart의 logoImage 파트로 이미지를 받아 구매하고 201을 응답")
     void purchase_logoItem_multipart() throws Exception {
-        given(itemPurchaseService.purchase(eq(1L), eq(7L), eq(34L), eq(3L), any(MultipartFile.class)))
+        given(itemPurchaseService.purchase(eq(1L), eq(7L), eq(34L), eq(3L), any(MultipartFile.class), eq(KEY)))
                 .willReturn(new ItemPurchaseResult(7001L, UNIVERSITY_LOGO, 3900L, null, 12888L, 1100L));
 
         mockMvc.perform(multipart("/api/v1/items/3/purchase")
                         .file(logoImage())
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .header("Idempotency-Key", KEY.toString()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.userItemId").value(7001))
@@ -197,7 +227,7 @@ public class ItemControllerTest {
 
         // 보낸 파일이 그대로 서비스에 전달됨
         ArgumentCaptor<MultipartFile> file = ArgumentCaptor.forClass(MultipartFile.class);
-        verify(itemPurchaseService).purchase(eq(1L), eq(7L), eq(34L), eq(3L), file.capture());
+        verify(itemPurchaseService).purchase(eq(1L), eq(7L), eq(34L), eq(3L), file.capture(), eq(KEY));
         assertThat(file.getValue().getOriginalFilename()).isEqualTo("logo.png");
         assertThat(file.getValue().getBytes()).isEqualTo(PNG_BYTES);
     }
@@ -206,12 +236,13 @@ public class ItemControllerTest {
     @DisplayName("[POST] /api/v1/items/{itemId}/purchase는 업로드 크기 제한을 넘으면 400 ITEM_LOGO_IMAGE_TOO_LARGE")
     void purchase_uploadTooLarge() throws Exception {
         // 실제로는 서블릿이 요청 본문을 읽다가 던지는 예외. MockMvc는 크기 제한을 적용하지 않으므로 서비스가 던지게 해서 응답 형식만 확인한다
-        given(itemPurchaseService.purchase(eq(1L), eq(7L), eq(34L), eq(3L), any(MultipartFile.class)))
+        given(itemPurchaseService.purchase(eq(1L), eq(7L), eq(34L), eq(3L), any(MultipartFile.class), eq(KEY)))
                 .willThrow(new MaxUploadSizeExceededException(5L * 1024 * 1024));
 
         mockMvc.perform(multipart("/api/v1/items/3/purchase")
                         .file(logoImage())
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .header("Idempotency-Key", KEY.toString()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("ITEM_LOGO_IMAGE_TOO_LARGE"));
     }

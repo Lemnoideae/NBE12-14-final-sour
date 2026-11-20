@@ -131,6 +131,8 @@ class RedisKeyTest {
                 "USER_EFFECT|user:%s:effect|HASH|JSON",
                 // 아이템 (Item)
                 "ITEM_EFFECT|item:%s|HASH|JSON",
+                "PURCHASE_DEDUPE|purchase:%s:%s|STRING|PLAIN",
+                "USER_EFFECT_VOIDED|user:%s:effect:voided|HASH|JSON",
                 // 순위 (ZSet)
                 "RANK_UNIV|rank:univ|ZSET|PLAIN",
                 "RANK_DEPT|rank:univ:%s:dept|ZSET|PLAIN",
