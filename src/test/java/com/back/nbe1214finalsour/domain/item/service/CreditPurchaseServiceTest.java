@@ -105,8 +105,6 @@ class CreditPurchaseServiceTest {
         this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, UNIVERSITY_LOGO, LOGO_URL);
 
         verify(this.creditWallet).tryDeduct(USER_ID, 3900L);
-        verify(this.contributionWallet, never())
-                .tryDeduct(anyLong(), anyLong(), anyLong());
     }
 
     @Test

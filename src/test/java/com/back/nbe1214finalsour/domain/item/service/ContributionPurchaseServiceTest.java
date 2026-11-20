@@ -1,6 +1,5 @@
 package com.back.nbe1214finalsour.domain.item.service;
 
-import com.back.nbe1214finalsour.domain.contribution.ContributionWallet;
 import com.back.nbe1214finalsour.domain.credit.repository.CreditWallet;
 import com.back.nbe1214finalsour.domain.item.entity.Item;
 import com.back.nbe1214finalsour.domain.item.entity.ItemType;
@@ -42,9 +41,6 @@ import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class ContributionPurchaseServiceTest {
-
-    @Mock
-    private ContributionWallet contributionWallet;
 
     @Mock
     private RedisPotionPurchaser redisPotionPurchaser;
@@ -147,7 +143,6 @@ class ContributionPurchaseServiceTest {
         assertThat(thrown).isSameAs(failure);
         // Redis는 롤백되지 않으므로 보상 Lua로 기여도와 효과를 되돌림 (이전 효과는 Lua가 준 문자열 그대로)
         then(this.redisPotionPurchaser).should().compensate(USER_ID, UNIVERSITY_ID, 1000L, KEY, previousEffect);
-        then(this.contributionWallet).shouldHaveNoInteractions();
     }
 
     @Test

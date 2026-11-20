@@ -1,6 +1,5 @@
 package com.back.nbe1214finalsour.domain.item.service;
 
-import com.back.nbe1214finalsour.domain.contribution.ContributionWallet;
 import com.back.nbe1214finalsour.domain.credit.repository.CreditWallet;
 import com.back.nbe1214finalsour.domain.item.entity.Item;
 import com.back.nbe1214finalsour.domain.item.repository.PotionPurchaseOutcome;
@@ -24,7 +23,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ContributionPurchaseService {
 
-    private final ContributionWallet contributionWallet;
     private final CreditWallet creditWallet;
     private final RedisPotionPurchaser redisPotionPurchaser;
     private final PotionPurchaseRecorder potionPurchaseRecorder;
