@@ -471,12 +471,21 @@
 .game-school-summary h2 { font-size: 1.125rem; font-weight: 900; }
 .game-school-summary dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .125rem .5rem; margin-block-start: .25rem; }
 .game-school-summary dd { text-align: end; font-weight: 700; }
-.game-school-tabs { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .25rem; }
-.game-school-tabs .game-workspace-action { position: relative; font-family: var(--font-pixel); font-size: .8125rem; padding-inline: .375rem; }
-.game-school-tabs [aria-selected='true'] { background: #fde9aa; }
-.game-school-tabs [aria-selected='true']::before { content: ''; position: absolute; inset: auto 0 0; border-block-end: 3px solid #8b5327; }
-.game-school-tabs :focus-visible, .game-school-tabpanel:focus-visible { outline: 2px solid #49331d; outline-offset: 2px; }
-.game-school-tabpanel { flex: 1; min-block-size: 16rem; min-inline-size: 0; overflow: auto; overscroll-behavior: contain; border: 1px solid #bd9e65; }
+.game-panel-tabs { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .25rem; }
+.game-panel-tabs .game-workspace-action { position: relative; font-family: var(--font-pixel); font-size: .8125rem; padding-inline: .375rem; }
+.game-panel-tabs [aria-selected='true'] { background: #fde9aa; }
+.game-panel-tabs [aria-selected='true']::before { content: ''; position: absolute; inset: auto 0 0; border-block-end: 3px solid #8b5327; }
+.game-panel-tabs :focus-visible, .game-panel-content:focus-visible { outline: 2px solid #49331d; outline-offset: 2px; }
+.game-panel-content { flex: 1; min-block-size: 16rem; min-inline-size: 0; overflow: auto; overscroll-behavior: contain; border: 1px solid #bd9e65; }
+.game-panel-content [data-phone-shell='embedded'] { overflow: hidden; }
+.game-panel-ranking { padding: .375rem; }
+.game-map-preview { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .375rem; padding: .5rem; background: #fff4d1; border-block-end: 1px solid #bd9e65; font-family: var(--font-pixel); }
+.game-map-preview button { min-block-size: 2.75rem; }
+.game-map-preview button[aria-disabled='true'] { color: #5c4631; cursor: not-allowed; }
+.game-map-visit-notice { grid-column: 1 / -1; color: #672b14; }
+.game-map-list { padding: .5rem; background: #fdf5df; font-family: var(--font-pixel); font-size: .8125rem; }
+.game-map-row { display: flex; align-items: center; gap: .5rem; width: 100%; min-height: 2.75rem; }
+.game-map-row[aria-pressed='true'] { background: #fde9aa; border-color: #8b5327; }
 .game-workspace-action {
   min-block-size: 44px;
   padding: .25rem .625rem;

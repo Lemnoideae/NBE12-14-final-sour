@@ -5,6 +5,7 @@ import React, { useLayoutEffect, useRef, useState } from 'react';
 import { Search, Crown, X, ChevronUp, ChevronDown } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { BottomNav, type NavTab } from './BottomNav';
+import { PhoneShell } from './PhoneShell';
 import { ImageFallback, SharedImage } from './SharedImage.tsx';
 import { SCHOOL_LOGO_ASSETS } from '../data/schoolLogos.ts';
 import { MAP_DESIGN_FRAME_PX, MAP_REGIONS, mapLayerFit, type MapRegion } from '../data/schoolMapLayout.ts';
@@ -67,6 +68,25 @@ export interface MapControlsProps {
   onQueryChange: (query: string) => void;
   onSelectSchool: (schoolId: SchoolId) => void;
   onNavigateTab?: (tab: NavTab) => void;
+  /** In the workspace, the preview and visit action sit above the scrollable map and list. */
+  preview?: React.ReactNode;
+  renderPanelList?: (schools: readonly SchoolView[]) => React.ReactNode;
+}
+
+export function MapFrame({ preview, search, list, searching, children }: {
+  preview?: React.ReactNode; search: React.ReactNode; list: React.ReactNode; searching: boolean; children: React.ReactNode;
+}) {
+  const embedded = preview !== undefined;
+  return <PhoneShell embedded={embedded} background="bg-[#38bdf8]">
+    {preview}
+    <MapScrollBody>
+      {search}
+      {embedded && searching && list}
+      {children}
+      {embedded && !searching && list}
+    </MapScrollBody>
+    {!embedded && list}
+  </PhoneShell>;
 }
 
 export function MapSearchHeader({

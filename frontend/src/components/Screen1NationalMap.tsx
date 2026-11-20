@@ -2,8 +2,7 @@ import React from 'react';
 import { Hand, ZoomIn } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { MapArt } from './MapArt.tsx';
-import { MAP_AREA_HEIGHT, MapLayer, MapScrollBody, MapSearchHeader, SchoolListSheet, SchoolMarker, SchoolBadge, RankRibbon, type MapControlsProps } from './MapParts.tsx';
-import { PhoneShell } from './PhoneShell';
+import { MAP_AREA_HEIGHT, MapLayer, MapFrame, MapSearchHeader, SchoolListSheet, SchoolMarker, SchoolBadge, RankRibbon, type MapControlsProps } from './MapParts.tsx';
 import { countByRegion, filterSchools, getTopSchools } from '../data/schoolDirectory.ts';
 import {
   MAP_CLUSTERS,
@@ -31,6 +30,8 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
   onQueryChange,
   onSelectSchool,
   onNavigateTab,
+  preview,
+  renderPanelList,
 }) => {
   const isNational = region === '전체';
   const regionSchools = filterSchools(schools, region, '');
@@ -40,9 +41,11 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
   const viewport = isNational ? undefined : regionViewport(region as SchoolFilterRegion);
 
   return (
-    <PhoneShell background="bg-[#38bdf8]">
-
-      <MapScrollBody>
+    <MapFrame preview={preview} searching={query.trim().length > 0} list={renderPanelList?.(listed) ?? <SchoolListSheet
+      title={`${isNational ? '전체' : region} 대학 ${regionSchools.length}개`}
+      schools={listed} query={query} selectedSchoolId={selectedSchoolId}
+      onQueryChange={onQueryChange} onSelectSchool={onSelectSchool} onNavigateTab={onNavigateTab}
+    />} search={
       <MapSearchHeader
         region={region}
         query={query}
@@ -56,7 +59,7 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
           </div>
         }
       />
-
+    }>
       <div className={`${MAP_AREA_HEIGHT} relative overflow-hidden isolate bg-[#38bdf8] select-none`} data-testid="map-area" data-region={region}>
         <MapLayer>
         <div
@@ -122,6 +125,7 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
                   type="button"
                   key={school.id}
                   aria-label={`${school.name} 전국 ${school.rank}위`}
+                  aria-pressed={preview === undefined ? undefined : selectedSchoolId === school.id}
                   data-school-id={school.id}
                   data-top-rank={school.rank}
                   data-no-touch44
@@ -179,17 +183,6 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
         </div>
       </div>
 
-      </MapScrollBody>
-
-      <SchoolListSheet
-        title={`${isNational ? '전체' : region} 대학 ${regionSchools.length}개`}
-        schools={listed}
-        query={query}
-        selectedSchoolId={selectedSchoolId}
-        onQueryChange={onQueryChange}
-        onSelectSchool={onSelectSchool}
-        onNavigateTab={onNavigateTab}
-      />
-    </PhoneShell>
+    </MapFrame>
   );
 };

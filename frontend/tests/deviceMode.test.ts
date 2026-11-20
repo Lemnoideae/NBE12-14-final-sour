@@ -134,9 +134,9 @@ test('SCRUM-207: 방문 학교 요약·상세·방명록을 바꾸고 채팅 탭
   assert.equal(panel().getAllByText('동시 플레이 메시지').length, 1);
   assertAbsent(screen.queryByRole('dialog'));
 
-  fireEvent.click(within(screen.getByRole('complementary', { name: '전국 경쟁 패널' })).getByRole('button', { name: '지도' }));
-  fireEvent.click(screen.getByRole('button', { name: '전국 지도' }));
-  fireEvent.click(screen.getByRole('button', { name: 'KAIST 방문' }));
+  const competition = within(screen.getByRole('complementary', { name: '전국 경쟁 패널' }));
+  fireEvent.click(competition.getByRole('button', { name: /^KAIST 전국/ }));
+  fireEvent.click(competition.getByRole('button', { name: 'KAIST 방문' }));
   assert.match(panel().getByRole('region', { name: '학교 요약' }).textContent ?? '', /방문 학교KAIST/);
   assert.equal(panel().getByRole('tab', { name: '우리 학교 채팅' }).getAttribute('aria-selected'), 'true');
   const visitCampus = screen.getByRole('button', { name: 'KAIST 캠퍼스 (관전 모드)' });
@@ -154,6 +154,55 @@ test('SCRUM-207: 방문 학교 요약·상세·방명록을 바꾸고 채팅 탭
   fireEvent.click(screen.getByRole('button', { name: '내 학교로 돌아가기' }));
   panel().getByRole('heading', { name: '한양대학교 방명록' });
   assertAbsent(panel().queryByRole('textbox'));
+});
+
+test('SCRUM-208: 지도 선택은 미리보기만 갱신하고 방문 버튼만 캠퍼스를 바꾼다', () => {
+  const wideQuery = Object.assign(new dom.window.EventTarget(), { matches: true });
+  const otherQuery = Object.assign(new dom.window.EventTarget(), { matches: false });
+  Object.defineProperty(win, 'matchMedia', { configurable: true, value: (query: string) => query === GAME_WIDE_QUERY ? wideQuery : otherQuery });
+  const resize = (wide: boolean) => act(() => {
+    wideQuery.matches = wide;
+    wideQuery.dispatchEvent(new dom.window.Event('change'));
+  });
+  mountApp();
+  const panel = () => within(screen.getByRole('complementary', { name: '전국 경쟁 패널' }));
+  const campus = screen.getByRole('button', { name: '캠퍼스 클릭 영역' });
+  const map = panel().getByRole('tab', { name: '지도' });
+  assert.equal(map.getAttribute('aria-selected'), 'true');
+  map.focus();
+  fireEvent.keyDown(map, { key: 'End' });
+  const alliance = panel().getByRole('tab', { name: '연합 대결' });
+  assertSameNode(document.activeElement, alliance);
+  assert.equal(map.getAttribute('aria-selected'), 'true');
+  fireEvent.click(alliance);
+  panel().getByRole('tabpanel', { name: '연합 대결' });
+  fireEvent.click(panel().getByRole('tab', { name: '순위' }));
+  panel().getByRole('button', { name: '학교 순위' });
+  assertSameNode(screen.getByRole('button', { name: '캠퍼스 클릭 영역' }), campus);
+  resize(false);
+  assertAbsent(screen.queryByRole('complementary', { name: '전국 경쟁 패널' }));
+  resize(true);
+  panel().getByRole('tabpanel', { name: '순위' });
+  fireEvent.click(panel().getByRole('tab', { name: '지도' }));
+  fireEvent.click(panel().getByRole('button', { name: /^KAIST 전국/ }));
+  assert.match(panel().getByRole('region', { name: '학교 미리보기' }).textContent ?? '', /KAIST/);
+  assertSameNode(screen.getByRole('button', { name: '캠퍼스 클릭 영역' }), campus);
+  const list = within(panel().getByRole('region', { name: '학교 목록' }));
+  fireEvent.click(list.getByRole('button', { name: '서울대학교' }));
+  assertSameNode(screen.getByRole('button', { name: '캠퍼스 클릭 영역' }), campus);
+  assertAbsent(panel().queryByRole('button', { name: 'KAIST 방문' }));
+  const visit = panel().getByRole('button', { name: '서울대학교 방문' });
+  fireEvent.click(screen.getByRole('button', { name: '상점' }));
+  fireEvent.click(screen.getByRole('button', { name: '커피 한 잔 구매 선택' }));
+  assert.equal(visit.getAttribute('aria-disabled'), 'true');
+  fireEvent.click(visit);
+  const confirmation = within(screen.getByRole('dialog', { name: '아이템 구매 확인' }));
+  fireEvent.click(confirmation.getByRole('button', { name: '아니오' }));
+  assert.equal(visit.getAttribute('aria-disabled'), 'false');
+  assertAbsent(screen.queryByRole('button', { name: '서울대학교 캠퍼스 (관전 모드)' }), '차단한 방문을 나중에 자동 실행하지 않는다');
+  fireEvent.click(visit);
+  screen.getByRole('button', { name: '서울대학교 캠퍼스 (관전 모드)' });
+  assertAbsent(screen.queryByRole('button', { name: '캠퍼스 클릭 영역' }));
 });
 
 test('T2: 폰에서는 서비스 화면이 전체 화면 셸이 되고, 메뉴·도구는 “목업” 시트로 들어간다 (Q5)', () => {

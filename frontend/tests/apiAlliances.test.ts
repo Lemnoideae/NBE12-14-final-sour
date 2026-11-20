@@ -816,10 +816,13 @@ test('계약 센서: 연합 생성·상세 계약이 바뀌면 화면을 다시 
     assert.ok(lists.includes(`@GetMapping("${path}")`), `${fix} Missing ${path}`);
   }
 
-  const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
-  const apiRoute = app.indexOf("API_MODE === 'api' && (viewMode === 'alliance_apply' || viewMode === 'current_alliance' || viewMode === 'battle_apply' || viewMode === 'battle_status') ?");
-  assert.ok(apiRoute >= 0 && apiRoute < app.indexOf("viewMode === 'alliance_apply' ? (") && apiRoute < app.indexOf("viewMode === 'battle_apply' ? ("),
+  const flow = readFileSync(new URL('../src/components/GameAllianceFlow.tsx', import.meta.url), 'utf8');
+  assert.match(flow, /if \(API_MODE === 'api'\) return <ApiAllianceScreenPhone[^;]+;\s*switch \(screen\)/,
     'API 모드의 연합·대결 화면은 ApiAllianceScreenPhone이다. 목업 연합·대결 화면([시연] 버튼·가상 시계)은 목업 모드 전용이다.');
+  for (const file of ['App.tsx', 'components/GameCompetitionPanel.tsx']) {
+    const source = readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8');
+    assert.match(source, /<GameAllianceFlow\b/, '단일 화면과 3열 패널 모두 공통 연합 진입점을 사용해야 합니다.');
+  }
 
   const matches = read('domain/alliance/controller/AllianceMatchController.java');
   assert.match(matches, /@RequestMapping\("\/api\/v1\/alliances"\)/, fix);

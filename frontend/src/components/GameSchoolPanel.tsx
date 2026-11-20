@@ -1,4 +1,4 @@
-import { lazy, Suspense, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { errorMessage } from '../api/errors';
 import { API_MODE, selectByMode } from '../api/mode';
 import { useMyInfo } from '../api/users';
@@ -6,7 +6,7 @@ import type { SchoolView } from '../data/schoolDirectory';
 import { useMockGame } from '../hooks/useMockGame';
 import type { MySchoolRank } from '../hooks/useMySchoolRank';
 import type { VisitSchool, VisitSchoolView } from '../hooks/useVisitSchool';
-import { soundManager } from '../utils/sound';
+import { GamePanelTabs } from './GamePanelTabs';
 import { ApiGuestbookBottomSheet } from './ApiGuestbookBottomSheet';
 import { CampusStatsSheet } from './CampusStatsSheet';
 import { ChatBottomSheet } from './ChatBottomSheet';
@@ -36,27 +36,8 @@ interface Props {
 }
 
 export function GameSchoolPanel({ tab, onTabChange, mySchool, ranking, visit, onGoToMap, onGoToShop }: Props) {
-  const id = useId();
-  const buttons = useRef<Array<HTMLButtonElement | null>>([]);
-  const [focusedTab, setFocusedTab] = useState<SchoolPanelTab | null>(null);
   const own = useOwnSchool(mySchool);
   const visited = visit?.status === 'ready' ? visit.school : undefined;
-  const choose = (next: SchoolPanelTab) => {
-    onTabChange(next);
-    soundManager.playTabSound();
-  };
-  const moveFocus = (event: KeyboardEvent, index: number) => {
-    let next: number;
-    switch (event.key) {
-      case 'ArrowLeft': next = (index + tabs.length - 1) % tabs.length; break;
-      case 'ArrowRight': next = (index + 1) % tabs.length; break;
-      case 'Home': next = 0; break;
-      case 'End': next = tabs.length - 1; break;
-      default: return;
-    }
-    event.preventDefault();
-    buttons.current[next]?.focus();
-  };
 
   return <>
     <section className="game-school-summary" aria-label="학교 요약">
@@ -65,29 +46,16 @@ export function GameSchoolPanel({ tab, onTabChange, mySchool, ranking, visit, on
         : <OwnSchoolSummary name={own.name} notice={own.notice} ranking={ranking} />}
       {visit && !visited && <VisitSchoolNotice visit={visit} />}
     </section>
-    <div className="game-school-tabs" role="tablist" aria-label="학교 패널 메뉴"
-      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocusedTab(null); }}>
-      {tabs.map(({ id: value, label }, index) => <button key={value} ref={(node) => { buttons.current[index] = node; }}
-        type="button" role="tab" id={`${id}-${value}`} aria-controls={`${id}-${value}-panel`}
-        tabIndex={(focusedTab ?? tab) === value ? 0 : -1} aria-selected={tab === value} className="game-workspace-action"
-        onFocus={() => setFocusedTab(value)} onKeyDown={(event) => moveFocus(event, index)} onClick={() => choose(value)}>{label}</button>)}
-    </div>
-    {tabs.map(({ id: value }) => <div key={value} id={`${id}-${value}-panel`} role="tabpanel" aria-labelledby={`${id}-${value}`}
-      tabIndex={tab === value ? 0 : -1} hidden={tab !== value} className="game-school-tabpanel">
-      {tab === value && renderTab(value)}
-    </div>)}
+    <GamePanelTabs label="학교 패널 메뉴" tabs={tabs} selected={tab} onSelect={onTabChange}>{renderTab}</GamePanelTabs>
   </>;
 
-  function renderTab(value: SchoolPanelTab) {
+  function renderTab(value: SchoolPanelTab, openAndFocus: (value: SchoolPanelTab) => void) {
     // No visit ID on this branch: the live room uses the authenticated member and stays mounted during visits.
     if (value === 'chat') return <SchoolChat mySchool={mySchool} />;
     if (visit && !visited) return <p className="p-2">방문 학교 정보를 확인하면 이용할 수 있어요.</p>;
     if (!visit && !own.ready) return <p className="p-2">내 소속을 확인하면 이용할 수 있어요.</p>;
     if (value === 'guestbook') return <SchoolGuestbook key={visited?.id ?? own.id} school={visited} mySchool={mySchool} onGoToMap={onGoToMap} />;
-    if (visited) return <VisitSchoolInfoSheet key={visited.id} school={visited} extras={visit?.extras} onOpenGuestbook={() => {
-      onTabChange('guestbook');
-      buttons.current[2]?.focus();
-    }} />;
+    if (visited) return <VisitSchoolInfoSheet key={visited.id} school={visited} extras={visit?.extras} onOpenGuestbook={() => openAndFocus('guestbook')} />;
     return <CampusStatsSheet onGoToShop={onGoToShop} />;
   }
 }

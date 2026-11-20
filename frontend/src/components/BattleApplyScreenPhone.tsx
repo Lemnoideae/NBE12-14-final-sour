@@ -30,6 +30,7 @@ import { DurationPicker, formatDurationHours } from './DurationPicker.tsx';
 import { soundManager } from '../utils/sound.ts';
 
 interface BattleApplyScreenPhoneProps {
+  embedded?: boolean;
   onBack?: () => void;
   /** 하단 내비의 다른 탭으로 이동한다(T4, 계획서 §7). 없으면(단독 렌더링) 내비를 그리지 않는다. */
   onNavigateTab?: (tab: NavTab) => void;
@@ -38,6 +39,7 @@ interface BattleApplyScreenPhoneProps {
 }
 
 export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
+  embedded = false,
   onBack = () => {},
   onNavigateTab,
   onNavigateToBattleStatus = () => {},
@@ -200,7 +202,7 @@ export const BattleApplyScreenPhone: React.FC<BattleApplyScreenPhoneProps> = ({
   };
 
   return (
-    <PhoneShell>
+    <PhoneShell embedded={embedded}>
       {/* 2. Top Header Navigation */}
       <div className="w-full bg-[#faecc7] border-b-2 border-[#261608] px-3 py-2 flex items-center justify-between shrink-0 z-30">
         <div className="flex items-center gap-2">

@@ -13,6 +13,7 @@ import { PhoneShell } from './PhoneShell';
 
 interface ShopScreenPhoneProps {
   embedded?: boolean;
+  onPurchaseStateChange?: (state: 'idle' | 'confirming' | 'buying') => void;
   onNavigateTab: (tab: NavTab) => void;
 }
 
@@ -28,6 +29,7 @@ function ShopFrame({ embedded, children }: { embedded: boolean; children: React.
 
 export const ShopScreenPhone: React.FC<ShopScreenPhoneProps> = ({
   embedded = false,
+  onPurchaseStateChange,
   onNavigateTab,
 }) => {
   const game = useMockGame();
@@ -58,6 +60,14 @@ export const ShopScreenPhone: React.FC<ShopScreenPhoneProps> = ({
   }, [showConfirmDialog, selectedItemId]);
 
   const selectedItem = storeItems.find((item) => item.id === selectedItemId) || storeItems[0];
+  const confirming = showConfirmDialog && !!selectedItem && !selectedItem.previewOnly;
+  useEffect(() => { onPurchaseStateChange?.('idle'); return () => onPurchaseStateChange?.('idle'); }, [onPurchaseStateChange]);
+  useEffect(() => {
+    let state: 'idle' | 'confirming' | 'buying' = 'idle';
+    if (buying) state = 'buying';
+    else if (confirming) state = 'confirming';
+    onPurchaseStateChange?.(state);
+  }, [buying, confirming, onPurchaseStateChange]);
 
   const showToast = (msg: string) => setToastMessage(msg);
   useEffect(() => {

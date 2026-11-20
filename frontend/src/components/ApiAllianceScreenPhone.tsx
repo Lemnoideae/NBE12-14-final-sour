@@ -49,6 +49,7 @@ export function timeLeft(iso: string, now: number): string | null {
 const kst = (iso: string) => `${dateFormat.format(new Date(iso))} (KST)`;
 
 interface ApiAllianceScreenPhoneProps {
+  embedded?: boolean;
   onBack: () => void;
   onGoToLogin: () => void;
   onNavigateTab?: (tab: NavTab) => void;
@@ -59,14 +60,14 @@ interface ApiAllianceScreenPhoneProps {
 }
 
 export function ApiAllianceScreenPhone({
-  onBack, onGoToLogin, onNavigateTab, applications = defaultApplications, matches = defaultMatches, now = Date.now,
+  embedded = false, onBack, onGoToLogin, onNavigateTab, applications = defaultApplications, matches = defaultMatches, now = Date.now,
 }: ApiAllianceScreenPhoneProps) {
   const signedIn = useAuthSession().status === 'signed-in';
   const me = useMyInfo();
   if (signedIn && !me.data) return <LoadNotice status={me.isError ? 'failed' : 'loading'} name="내 정보"
-    failureDetail={errorMessage(me.error)} onRetry={() => void me.refetch()} onBack={onBack} backLabel="이전 화면으로" />;
+    failureDetail={errorMessage(me.error)} onRetry={() => void me.refetch()} onBack={onBack} backLabel="이전 화면으로" variant={embedded ? 'panel' : 'phone'} />;
   return (
-    <PhoneShell>
+    <PhoneShell embedded={embedded}>
       <header className="bg-[#faecc7] border-b-2 border-[#261608] p-2 flex items-center gap-3 shrink-0 font-pixel text-[#261608]">
         <button type="button" onClick={() => { soundManager.playTabSound(); onBack(); }} className={BUTTON} aria-label="이전 화면으로 돌아가기">
           <ChevronLeft className="w-4 h-4 inline" aria-hidden="true" /> 뒤로

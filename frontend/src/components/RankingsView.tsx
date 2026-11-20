@@ -9,7 +9,7 @@ interface RankingsViewProps {
   currentSchoolScore: number;
   onCheer?: () => void;
   cheerCooldown?: number;
-  onBackToCampus: () => void;
+  onBackToCampus?: () => void;
 }
 
 export const RankingsView: React.FC<RankingsViewProps> = ({
@@ -36,10 +36,10 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   const top3: RankingBoardRow | undefined = board.rows[2];
   const remainingRows = board.rows.slice(3);
   const myRow = board.mine;
+  const moreLabel = board.isSample ? '+ 10개 대학 더 불러오기' : '+ 더 불러오기';
 
   const renderPixelCrest = (item: RankingBoardRow, size: 'sm' | 'md' | 'lg' = 'sm') => {
-    const sizeClass =
-      size === 'lg' ? 'w-10 h-10 text-sm font-black' : size === 'md' ? 'w-8 h-8 text-xs font-bold' : 'w-6 h-6 text-[10px] font-bold';
+    const sizeClass = { lg: 'w-10 h-10 text-sm font-black', md: 'w-8 h-8 text-xs font-bold', sm: 'w-6 h-6 text-[10px] font-bold' }[size];
 
     const syllable = item.firstSyllable;
     const bgColor = item.badgeColor;
@@ -72,12 +72,10 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
             <RefreshCw className={`w-2.5 h-2.5 text-[#22c55e] ${board.refreshing ? 'animate-spin' : ''}`} />
             5초마다 갱신 ({refreshCountdown}s)
           </span>
-          <button
-            onClick={onBackToCampus}
-            className="pixel-plaque plaque-parchment text-[10px] font-pixel font-bold px-1.5 py-0.5 text-[#261608] cursor-pointer"
-          >
+          {onBackToCampus && <button type="button" onClick={onBackToCampus}
+            className="pixel-plaque plaque-parchment text-[10px] font-pixel font-bold px-1.5 py-0.5 text-[#261608] cursor-pointer">
             돌아가기
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -87,7 +85,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
       </p>
       {/* Top 3 Pixel Tab Switcher */}
       <div className="grid grid-cols-3 gap-1 p-1 rpg-box bg-[#fdf5df]">
-        <button
+        <button type="button"
           onClick={() => {
             setActiveRankingTab('school');
             soundManager.playTabSound();
@@ -99,7 +97,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           학교 순위
         </button>
 
-        <button
+        <button type="button"
           onClick={() => {
             setActiveRankingTab('dept');
             soundManager.playTabSound();
@@ -111,7 +109,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           교내 학과
         </button>
 
-        <button
+        <button type="button"
           onClick={() => {
             setActiveRankingTab('personal');
             soundManager.playTabSound();
@@ -124,11 +122,10 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
         </button>
       </div>
 
-      {board.status !== 'ready' ? (
-        <RankingStatusNotice board={board} />
-      ) : (<>
+      {board.status === 'ready' ? (<>
+      {board.rows.length === 0 && <p role="status" className="rpg-box p-3 font-pixel text-xs">표시할 순위가 없어요.</p>}
       {/* Pixel Podium on Grassy Stage */}
-      <div className="w-full border-3 border-[#261608] shadow-[2px_2px_0px_#261608] bg-[#38a134] overflow-hidden shrink-0 relative flex flex-col justify-end pt-2 pb-1 px-1.5">
+      {top1 && <div className="w-full border-3 border-[#261608] shadow-[2px_2px_0px_#261608] bg-[#38a134] overflow-hidden shrink-0 relative flex flex-col justify-end pt-2 pb-1 px-1.5">
         <div className="absolute inset-x-0 top-0 h-6 bg-[#38bdf8] border-b-2 border-[#261608] flex items-center justify-between px-2">
           <span className="font-pixel text-[8px] text-white font-bold">
             👑 TOP 3 명예의 전당
@@ -192,7 +189,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
             </div>
           ) : <div aria-hidden="true" />}
         </div>
-      </div>
+      </div>}
 
       {/* Scrollable Parchment Rows (rank 4 and below, as loaded) */}
       <div
@@ -241,12 +238,12 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
         ))}
 
         {(board.hasMore || board.loadingMore) && (
-          <button
+          <button type="button"
             onClick={board.loadMore}
             disabled={board.loadingMore}
             className="w-full py-1.5 text-center font-pixel text-[9px] text-[#8b5327] bg-[#faecc7]/80 hover:bg-[#faecc7] border border-dashed border-[#8b5327] cursor-pointer mt-0.5 active:translate-y-0.5"
           >
-            {board.loadingMore ? '순위 더 불러오는 중…' : board.isSample ? '+ 10개 대학 더 불러오기' : '+ 더 불러오기'} ({board.rows.length} / {board.totalCount})
+            {board.loadingMore ? '순위 더 불러오는 중…' : moreLabel} ({board.rows.length} / {board.totalCount})
           </button>
         )}
       </div>
@@ -289,7 +286,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           </div>
         </div>
       )}
-      </>)}
+      </>) : <RankingStatusNotice board={board} />}
     </div>
   );
 };
