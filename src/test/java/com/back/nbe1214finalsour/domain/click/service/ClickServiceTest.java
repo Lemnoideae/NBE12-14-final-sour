@@ -1,6 +1,10 @@
 package com.back.nbe1214finalsour.domain.click.service;
 
 import com.back.nbe1214finalsour.domain.abuse.service.AbuseVerificationService;
+import com.back.nbe1214finalsour.domain.alliance.entity.Alliance;
+import com.back.nbe1214finalsour.domain.alliance.entity.AllianceMatch;
+import com.back.nbe1214finalsour.domain.alliance.repository.AllianceMatchRepository;
+import com.back.nbe1214finalsour.domain.alliance.repository.AllianceRepository;
 import com.back.nbe1214finalsour.domain.click.dto.ClickRequest;
 import com.back.nbe1214finalsour.domain.click.dto.ClickResponse;
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
@@ -21,13 +25,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -56,11 +60,15 @@ class ClickServiceTest {
     private static final Clicker CLICKER_LV3 = new Clicker(3L, 10, 1000L);
     private static final Clicker CLICKER_LV1 = new Clicker(1L, 1, 0L);
 
-    /** 클릭한 위치. 반경 판정 자체는 {@code LibraryBonusCheckerTest}에서 보고, 여기서는 판정 결과만 목으로 정한다 */
+    /**
+     * 클릭한 위치. 반경 판정 자체는 {@code LibraryBonusCheckerTest}에서 보고, 여기서는 판정 결과만 목으로 정한다
+     */
     private static final Double LAT = 37.563764;
     private static final Double LNG = 126.937012;
 
-    /** apply-click.lua 반환: univTotal, deptTotal, myContrib, univRank, lastSecond */
+    /**
+     * apply-click.lua 반환: univTotal, deptTotal, myContrib, univRank, lastSecond
+     */
     private static final List<String> SCRIPT_RESULT = List.of("100", "50", "30", "4", "7");
 
     @Mock
@@ -87,6 +95,14 @@ class ClickServiceTest {
     private LibraryBonusChecker libraryBonusChecker;
     @Mock
     private User user;
+    @Mock
+    private AllianceMatchRepository allianceMatchRepository;
+    @Mock
+    private AllianceRepository allianceRepository;
+    @Mock
+    private Alliance alliance;
+    @Mock
+    private AllianceMatch match;
 
     private ClickService clickService;
 
@@ -97,7 +113,7 @@ class ClickServiceTest {
                 actionRateLimiter, clickCountLimiter, clickerService, abuseVerificationService,
                 userClickerLevelCache);
         clickService = new ClickService(stringRedisTemplate, userRepository, redisHandler, clickActionGuard,
-                libraryBonusChecker);
+                libraryBonusChecker, allianceMatchRepository, allianceRepository);
     }
 
     private ClickRequest request(int clickCount) {
@@ -108,7 +124,9 @@ class ClickServiceTest {
         return new ClickRequest(SUBMISSION_ID, clickCount, lat, lng);
     }
 
-    /** 활성 회원 → 중복 아님 → 레벨 조회(loadIfAbsent, 3레벨) → 유저 조회 성공까지의 공통 경로 */
+    /**
+     * 활성 회원 → 중복 아님 → 레벨 조회(loadIfAbsent, 3레벨) → 유저 조회 성공까지의 공통 경로
+     */
     private void givenHappyPathBeforeScript() {
         givenHappyPathBeforeScript(CLICKER_LV3);
     }
@@ -126,7 +144,7 @@ class ClickServiceTest {
     }
 
     private void givenScriptResult() {
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
     }
 
@@ -234,7 +252,7 @@ class ClickServiceTest {
     @DisplayName("한도 안이면 의심 표시를 남기지 않는다")
     void click_withinLimitsDoesNotFlag() {
         givenHappyPathBeforeScript();
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
@@ -273,7 +291,7 @@ class ClickServiceTest {
         given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(null);
         given(userClickerLevelCache.loadIfAbsent(USER_ID)).willReturn(3L);
         given(clickerService.getClickerById(3L)).willReturn(CLICKER_LV3);
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
@@ -306,7 +324,7 @@ class ClickServiceTest {
     @DisplayName("요청 한도를 통과하면 clickCount를 그대로 클릭 수 한도에 넘긴다")
     void click_passesClickCountToClickCountLimiter() {
         givenHappyPathBeforeScript();
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(7));
@@ -330,7 +348,7 @@ class ClickServiceTest {
 
         verify(actionRateLimiter).check(USER_ID);
         verify(userRepository, never()).findById(anyLong());
-        verify(stringRedisTemplate, never()).execute(any(), anyList(), any(), any(), any(), any(), any());
+        verify(stringRedisTemplate, never()).execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any());
     }
 
     // --- 3단계: 클리커 레벨 캐시 ---
@@ -339,7 +357,7 @@ class ClickServiceTest {
     @DisplayName("레벨은 loadIfAbsent 값을 쓰고 레벨 키를 직접 쓰지 않는다")
     void click_cacheHitDoesNotWriteCache() {
         givenHappyPathBeforeScript();
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
@@ -352,7 +370,7 @@ class ClickServiceTest {
     @DisplayName("토큰의 학과 ID가 있으면 회원을 DB에서 조회하지 않는다")
     void click_cacheHitWithDepartmentClaimSkipsUserLookup() {
         givenHappyPathBeforeScript();
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
@@ -366,7 +384,7 @@ class ClickServiceTest {
         givenHappyPathBeforeScript();
         given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
         given(user.getDepartmentId()).willReturn(9L);
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, null, request(3));
@@ -374,7 +392,7 @@ class ClickServiceTest {
         ArgumentCaptor<Object> argsCaptor = ArgumentCaptor.captor();
         verify(stringRedisTemplate).execute(any(), anyList(),
                 argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(),
-                argsCaptor.capture(), argsCaptor.capture());
+                argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture());
         assertThat(argsCaptor.getAllValues().get(1)).isEqualTo("9");
         assertThat(response).extracting("department.id").isEqualTo(9L);
         verify(valueOperations, never()).set(eq("user:1:clicker"), anyString());
@@ -387,7 +405,7 @@ class ClickServiceTest {
     void click_scoreWithoutMultiplier() {
         givenHappyPathBeforeScript();
         given(redisHandler.getHash("user:1:effect", "multiplier", Double.class)).willReturn(Optional.empty());
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
@@ -401,7 +419,7 @@ class ClickServiceTest {
     void click_scoreWithMultiplier() {
         givenHappyPathBeforeScript();
         given(redisHandler.getHash("user:1:effect", "multiplier", Double.class)).willReturn(Optional.of(1.5));
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
@@ -415,7 +433,7 @@ class ClickServiceTest {
     void click_scoreIsFloored() {
         givenHappyPathBeforeScript();
         given(redisHandler.getHash("user:1:effect", "multiplier", Double.class)).willReturn(Optional.of(1.09));
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
@@ -509,10 +527,207 @@ class ClickServiceTest {
         ArgumentCaptor<Object> argsCaptor = ArgumentCaptor.captor();
         verify(stringRedisTemplate).execute(any(), anyList(),
                 argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(),
-                argsCaptor.capture(), argsCaptor.capture());
+                argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture());
 
-        // ARGV: universityId, departmentId, userId, earnedScore, clickCount
-        assertThat(argsCaptor.getAllValues()).containsExactly("12", "5", "1", "36", "3");
+        // ARGV: universityId, departmentId, userId, earnedScore, clickCount, allianceId(없음 0), team(없음 "")
+        assertThat(argsCaptor.getAllValues()).containsExactly("12", "5", "1", "36", "3", "0", "");
+    }
+
+    // --- 4.7단계: 연합·대결 점수 ---
+    // 학교의 연합은 univ:{u}:alliance, 진행 중 대결은 univ:{u}:match("{matchId}:{A|B}")에 캐시한다.
+    // 캐시가 없을 때만 DB를 보고, 없다는 결과도 "none"으로 10초 캐시한다. 연합이 없으면 대결은 보지 않는다.
+
+    private static final Long ALLIANCE_ID = 7L;
+    private static final Long OTHER_ALLIANCE_ID = 8L;
+    private static final Long MATCH_ID = 42L;
+    private static final String ALLIANCE_KEY = "univ:12:alliance";
+    private static final String MATCH_KEY = "univ:12:match";
+
+    private void givenCached(String key, String value) {
+        given(valueOperations.get(key)).willReturn(value);
+    }
+
+    private void givenCurrentAllianceInDb() {
+        given(allianceRepository.findCurrentByUniversityId(eq(UNIVERSITY_ID), any(OffsetDateTime.class)))
+                .willReturn(Optional.of(alliance));
+        given(alliance.getId()).willReturn(ALLIANCE_ID);
+        given(alliance.getExpiredAt()).willReturn(OffsetDateTime.now().plusHours(24));
+    }
+
+    private void givenMatchInDb(Long allianceAId) {
+        given(allianceMatchRepository.findByAllianceId(eq(ALLIANCE_ID), any(OffsetDateTime.class)))
+                .willReturn(Optional.of(match));
+        given(match.getId()).willReturn(MATCH_ID);
+        given(match.getAllianceAId()).willReturn(allianceAId);
+        given(match.getEndedAt()).willReturn(OffsetDateTime.now().plusHours(3));
+    }
+
+    /**
+     * 스크립트에 넘긴 KEYS[9], KEYS[10]과 ARGV[6], ARGV[7]
+     */
+    private List<String> allianceKeysAndArgs() {
+        ArgumentCaptor<List<String>> keysCaptor = ArgumentCaptor.captor();
+        ArgumentCaptor<Object> argsCaptor = ArgumentCaptor.captor();
+        verify(stringRedisTemplate).execute(any(), keysCaptor.capture(),
+                argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(),
+                argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture());
+        List<String> keys = keysCaptor.getValue();
+        List<Object> args = argsCaptor.getAllValues();
+        return List.of(keys.get(8), keys.get(9), (String) args.get(5), (String) args.get(6));
+    }
+
+    @Test
+    @DisplayName("캐시도 DB도 연합이 없으면 \"none\"을 10초 캐시하고, 대결은 조회하지 않고 연합·대결 점수를 건너뛴다")
+    void click_noAllianceCachesNoneAndSkipsScores() {
+        givenHappyPathBeforeScript();
+        givenItemMultiplier(null);
+        givenScriptResult();
+
+        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
+
+        verify(valueOperations).set(ALLIANCE_KEY, "none", Duration.ofSeconds(10));
+        verify(allianceMatchRepository, never()).findByAllianceId(anyLong(), any());
+        verify(valueOperations, never()).get(MATCH_KEY);
+        assertThat(allianceKeysAndArgs()).containsExactly("alliance:0:score", "match:0:score", "0", "");
+    }
+
+    @Test
+    @DisplayName("연합 캐시가 \"none\"이면 DB를 조회하지 않는다")
+    void click_noneAllianceCacheSkipsDb() {
+        givenHappyPathBeforeScript();
+        givenItemMultiplier(null);
+        givenCached(ALLIANCE_KEY, "none");
+        givenScriptResult();
+
+        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
+
+        verify(allianceRepository, never()).findCurrentByUniversityId(anyLong(), any());
+        verify(allianceMatchRepository, never()).findByAllianceId(anyLong(), any());
+        assertThat(allianceKeysAndArgs()).containsExactly("alliance:0:score", "match:0:score", "0", "");
+    }
+
+    @Test
+    @DisplayName("연합 캐시가 없고 DB에 연합이 있으면 연합 만료 시각까지 캐시하고 연합 점수를 쌓는다")
+    void click_allianceFromDbIsCachedUntilExpiry() {
+        givenHappyPathBeforeScript();
+        givenItemMultiplier(null);
+        givenCached(ALLIANCE_KEY, null);
+        givenCurrentAllianceInDb();
+        givenCached(MATCH_KEY, "none");
+        givenScriptResult();
+
+        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
+
+        ArgumentCaptor<Duration> ttlCaptor = ArgumentCaptor.captor();
+        verify(valueOperations).set(eq(ALLIANCE_KEY), eq("7"), ttlCaptor.capture());
+        // 만료까지 24시간. 테스트가 도는 동안 몇 초 줄어들 수 있다
+        assertThat(ttlCaptor.getValue()).isBetween(Duration.ofHours(23), Duration.ofHours(24));
+        assertThat(allianceKeysAndArgs()).containsExactly("alliance:7:score", "match:0:score", "7", "");
+    }
+
+    @Test
+    @DisplayName("연합 캐시가 있으면 연합 DB를 조회하지 않는다")
+    void click_cachedAllianceSkipsDb() {
+        givenHappyPathBeforeScript();
+        givenItemMultiplier(null);
+        givenCached(ALLIANCE_KEY, "7");
+        givenCached(MATCH_KEY, "none");
+        givenScriptResult();
+
+        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
+
+        verify(allianceRepository, never()).findCurrentByUniversityId(anyLong(), any());
+        assertThat(allianceKeysAndArgs()).containsExactly("alliance:7:score", "match:0:score", "7", "");
+    }
+
+    @Test
+    @DisplayName("연합 캐시가 있어도 대결 캐시가 없으면 대결을 DB에서 찾는다 (연합보다 나중에 시작한 대결)")
+    void click_cachedAllianceStillLooksUpNewMatch() {
+        givenHappyPathBeforeScript();
+        givenItemMultiplier(null);
+        givenCached(ALLIANCE_KEY, "7");
+        givenMatchInDb(ALLIANCE_ID);
+        givenScriptResult();
+
+        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
+
+        assertThat(allianceKeysAndArgs()).containsExactly("alliance:7:score", "match:42:score", "7", "A");
+    }
+
+    @Test
+    @DisplayName("내 연합이 대결의 A면 \"{matchId}:A\"를 대결 종료 시각까지 캐시하고 A에 쌓는다")
+    void click_matchAsSideA() {
+        givenHappyPathBeforeScript();
+        givenItemMultiplier(null);
+        givenCached(ALLIANCE_KEY, "7");
+        givenMatchInDb(ALLIANCE_ID);
+        givenScriptResult();
+
+        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
+
+        ArgumentCaptor<Duration> ttlCaptor = ArgumentCaptor.captor();
+        verify(valueOperations).set(eq(MATCH_KEY), eq("42:A"), ttlCaptor.capture());
+        assertThat(ttlCaptor.getValue()).isBetween(Duration.ofHours(2), Duration.ofHours(3));
+        assertThat(allianceKeysAndArgs()).containsExactly("alliance:7:score", "match:42:score", "7", "A");
+    }
+
+    @Test
+    @DisplayName("내 연합이 대결의 B면 \"{matchId}:B\"로 캐시하고 B에 쌓는다")
+    void click_matchAsSideB() {
+        givenHappyPathBeforeScript();
+        givenItemMultiplier(null);
+        givenCached(ALLIANCE_KEY, "7");
+        givenMatchInDb(OTHER_ALLIANCE_ID);
+        givenScriptResult();
+
+        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
+
+        verify(valueOperations).set(eq(MATCH_KEY), eq("42:B"), any(Duration.class));
+        assertThat(allianceKeysAndArgs()).containsExactly("alliance:7:score", "match:42:score", "7", "B");
+    }
+
+    @Test
+    @DisplayName("연합은 있지만 진행 중 대결이 없으면 대결 캐시에 \"none\"을 10초 캐시하고 연합 점수만 쌓는다")
+    void click_allianceWithoutMatchCachesNone() {
+        givenHappyPathBeforeScript();
+        givenItemMultiplier(null);
+        givenCached(ALLIANCE_KEY, "7");
+        givenScriptResult();
+
+        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
+
+        verify(valueOperations).set(MATCH_KEY, "none", Duration.ofSeconds(10));
+        assertThat(allianceKeysAndArgs()).containsExactly("alliance:7:score", "match:0:score", "7", "");
+    }
+
+    @Test
+    @DisplayName("대결 캐시가 있으면 대결 DB를 조회하지 않고 캐시의 대결·편을 쓴다")
+    void click_cachedMatchSkipsDb() {
+        givenHappyPathBeforeScript();
+        givenItemMultiplier(null);
+        givenCached(ALLIANCE_KEY, "7");
+        givenCached(MATCH_KEY, "42:B");
+        givenScriptResult();
+
+        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
+
+        verify(allianceMatchRepository, never()).findByAllianceId(anyLong(), any());
+        assertThat(allianceKeysAndArgs()).containsExactly("alliance:7:score", "match:42:score", "7", "B");
+    }
+
+    @Test
+    @DisplayName("대결 캐시가 \"none\"이면 대결 DB를 조회하지 않는다")
+    void click_noneMatchCacheSkipsDb() {
+        givenHappyPathBeforeScript();
+        givenItemMultiplier(null);
+        givenCached(ALLIANCE_KEY, "7");
+        givenCached(MATCH_KEY, "none");
+        givenScriptResult();
+
+        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
+
+        verify(allianceMatchRepository, never()).findByAllianceId(anyLong(), any());
+        assertThat(allianceKeysAndArgs()).containsExactly("alliance:7:score", "match:0:score", "7", "");
     }
 
     // --- 5단계: 스크립트 호출과 응답 매핑 ---
@@ -522,7 +737,7 @@ class ClickServiceTest {
     void click_passesKeysAndArgsInLuaOrder() {
         givenHappyPathBeforeScript();
         given(redisHandler.getHash("user:1:effect", "multiplier", Double.class)).willReturn(Optional.of(1.5));
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
@@ -531,10 +746,10 @@ class ClickServiceTest {
         ArgumentCaptor<Object> argsCaptor = ArgumentCaptor.captor();
         verify(stringRedisTemplate).execute(any(), keysCaptor.capture(),
                 argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(),
-                argsCaptor.capture(), argsCaptor.capture());
+                argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture());
 
         List<String> keys = keysCaptor.getValue();
-        assertThat(keys).hasSize(8);
+        assertThat(keys).hasSize(10);
         assertThat(keys.subList(0, 6)).containsExactly(
                 "rank:univ",            // KEYS[1]
                 "rank:univ:12:dept",    // KEYS[2]
@@ -548,9 +763,11 @@ class ClickServiceTest {
         assertThat(keys.get(7)).matches("clicks:univ:12:\\d+");
         assertThat(Long.parseLong(keys.get(6).split(":")[3]) - Long.parseLong(keys.get(7).split(":")[3]))
                 .isEqualTo(1L);
+        // KEYS[9], KEYS[10]: 연합·대결이 없으면 0번 자리 키를 넘기고 Lua가 ARGV로 건너뛴다
+        assertThat(keys.subList(8, 10)).containsExactly("alliance:0:score", "match:0:score");
 
-        // ARGV: universityId, departmentId, userId, earnedScore, clickCount
-        assertThat(argsCaptor.getAllValues()).containsExactly("12", "5", "1", "45", "3");
+        // ARGV: universityId, departmentId, userId, earnedScore, clickCount, allianceId, team
+        assertThat(argsCaptor.getAllValues()).containsExactly("12", "5", "1", "45", "3", "0", "");
     }
 
     @Test
@@ -558,7 +775,7 @@ class ClickServiceTest {
     void click_mapsScriptResultToResponse() {
         givenHappyPathBeforeScript();
         given(redisHandler.getHash("user:1:effect", "multiplier", Double.class)).willReturn(Optional.of(1.5));
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));

@@ -4,14 +4,25 @@
 -- KEYS[4] dirty:univ   KEYS[5] dirty:dept   KEYS[6] dirty:user
 -- KEYS[7] clicks:univ:{u}:{nowSec}      이번 초 학교 클릭 수
 -- KEYS[8] clicks:univ:{u}:{nowSec-1}    직전 1초 학교 클릭 수
+-- KEYS[9] alliance:{a}:score            연합 점수 HASH universityId
+-- KEYS[10] match:{m}:score               대결 점수 HASH A, B
 -- ARGV[1] universityId  ARGV[2] departmentId  ARGV[3] userId
 -- ARGV[4] earnedScore (정수)  ARGV[5] clickCount
+-- ARGV[6] allianceId    ARGV[7] team(A|B)
 
 local earned = tonumber(ARGV[4])
 
 local univTotal = redis.call('ZINCRBY', KEYS[1], earned, ARGV[1])
 local deptTotal = redis.call('ZINCRBY', KEYS[2], earned, ARGV[2])
 local myContrib = redis.call('ZINCRBY', KEYS[3], earned, ARGV[3])
+
+if ARGV[6] ~= '0' then
+    redis.call('HINCRBY', KEYS[9], ARGV[1], earned)
+end
+
+if ARGV[7] ~= '' then
+    redis.call('HINCRBY', KEYS[10], ARGV[7], earned)
+end
 
 -- 1분 배치가 바뀐 대상만 DB에 쓰도록 표시
 redis.call('SADD', KEYS[4], ARGV[1])

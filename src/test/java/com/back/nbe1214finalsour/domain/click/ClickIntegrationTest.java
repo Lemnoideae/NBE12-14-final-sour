@@ -29,6 +29,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.LongStream;
 
@@ -83,6 +84,9 @@ class ClickIntegrationTest {
     private Long otherDepartmentId;
     private User user;
     private String token;
+    /** 연합·대결 테스트가 만든 연합·대결. tearDown에서 점수 키를 지운다 */
+    private final List<Long> allianceIds = new ArrayList<>();
+    private final List<Long> matchIds = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -124,6 +128,14 @@ class ClickIntegrationTest {
         redis.delete(LongStream.rangeClosed(nowSec - 8, nowSec + 2)
                 .mapToObj(sec -> RedisKey.CLICKS_UNIV_SECOND.of(universityId, sec))
                 .toList());
+
+        redis.delete(List.of(RedisKey.UNIV_ALLIANCE.of(universityId), RedisKey.UNIV_MATCH.of(universityId)));
+        redis.delete(allianceIds.stream().map(RedisKey.ALLIANCE_SCORE::of).toList());
+        redis.delete(matchIds.stream().map(RedisKey.MATCH_SCORE::of).toList());
+        // 연합 행은 회원(applicant/approver)을 참조하므로 회원보다 먼저 지운다
+        jdbcTemplate.update("DELETE FROM alliance_match WHERE alliance_a_id IN (SELECT id FROM alliance WHERE name = '클릭테스트연합')");
+        jdbcTemplate.update("DELETE FROM alliance_university WHERE university_id = ?", universityId);
+        jdbcTemplate.update("DELETE FROM alliance WHERE name = '클릭테스트연합'");
 
         jdbcTemplate.update("DELETE FROM users WHERE university_id = ?", universityId);
         jdbcTemplate.update("DELETE FROM department WHERE university_id = ?", universityId);
@@ -433,6 +445,116 @@ class ClickIntegrationTest {
                 .andExpect(jsonPath("$.data.earnedScore").value(18)) // 10 * 1 * 1.5 * 1.2
                 .andExpect(jsonPath("$.data.multiplier").value(1.8))
                 .andExpect(jsonPath("$.data.libraryBonus").value(true));
+    }
+
+    // --- 연합·대결 점수 ---
+    // 기본 클리커 레벨 1이라 인정 점수 = clickCount다.
+
+    @Test
+    @DisplayName("연합이 없는 학교는 \"none\"을 캐시하고 연합·대결 점수 키를 만들지 않는다")
+    void clickWithoutAllianceAddsNoAllianceScore() throws Exception {
+        click("sub-1", 3).andExpect(status().isOk());
+        click("sub-2", 2).andExpect(status().isOk());   // "none" 캐시를 읽는 두 번째 클릭도 성공해야 한다
+
+        assertThat(redis.opsForValue().get(RedisKey.UNIV_ALLIANCE.of(universityId))).isEqualTo("none");
+        assertThat(redis.hasKey(RedisKey.ALLIANCE_SCORE.of(0))).isFalse();
+        assertThat(redis.hasKey(RedisKey.MATCH_SCORE.of(0))).isFalse();
+    }
+
+    @Test
+    @DisplayName("연합만 있으면 연합 점수 HASH의 내 학교 field에 쌓이고, 대결 점수는 없다")
+    void clickInAllianceAddsAllianceScoreByUniversity() throws Exception {
+        long myAlliance = givenMyAlliance("now() + INTERVAL '24 hours'");
+
+        click("sub-1", 3).andExpect(status().isOk());
+        click("sub-2", 2).andExpect(status().isOk());   // 두 번째는 캐시에서 연합을 읽는다
+
+        assertThat(redis.opsForHash().get(RedisKey.ALLIANCE_SCORE.of(myAlliance), String.valueOf(universityId)))
+                .isEqualTo("5");
+        assertThat(redis.opsForValue().get(RedisKey.UNIV_ALLIANCE.of(universityId)))
+                .isEqualTo(String.valueOf(myAlliance));
+        assertThat(redis.getExpire(RedisKey.UNIV_ALLIANCE.of(universityId))).isPositive();
+        assertThat(redis.opsForValue().get(RedisKey.UNIV_MATCH.of(universityId))).isEqualTo("none");
+    }
+
+    @Test
+    @DisplayName("진행 중 대결의 B 연합이면 대결 점수 HASH의 B에 쌓이고 A에는 쌓이지 않는다")
+    void clickInMatchAddsToMySide() throws Exception {
+        long myAlliance = givenMyAlliance("now() + INTERVAL '24 hours'");
+        long rivalAlliance = givenAlliance("now() + INTERVAL '24 hours'");
+        long matchId = givenMatch(rivalAlliance, myAlliance, "now() - INTERVAL '1 hour'");
+
+        click("sub-1", 3).andExpect(status().isOk());
+        click("sub-2", 2).andExpect(status().isOk());   // 두 번째는 캐시에서 대결을 읽는다
+
+        assertThat(redis.opsForHash().get(RedisKey.MATCH_SCORE.of(matchId), "B")).isEqualTo("5");
+        assertThat(redis.opsForHash().get(RedisKey.MATCH_SCORE.of(matchId), "A")).isNull();
+        assertThat(redis.opsForValue().get(RedisKey.UNIV_MATCH.of(universityId))).isEqualTo(matchId + ":B");
+        assertThat(redis.getExpire(RedisKey.UNIV_MATCH.of(universityId))).isPositive();
+        // 대결 중에도 연합 점수는 따로 쌓인다
+        assertThat(redis.opsForHash().get(RedisKey.ALLIANCE_SCORE.of(myAlliance), String.valueOf(universityId)))
+                .isEqualTo("5");
+    }
+
+    @Test
+    @DisplayName("종료 시각이 지난 대결은 상태가 IN_PROGRESS여도 점수를 쌓지 않는다 (정산 전 클릭)")
+    void clickAfterMatchEndAddsNoMatchScore() throws Exception {
+        long myAlliance = givenMyAlliance("now() + INTERVAL '24 hours'");
+        long rivalAlliance = givenAlliance("now() + INTERVAL '24 hours'");
+        long matchId = givenMatch(myAlliance, rivalAlliance, "now() - INTERVAL '4 hours'");
+
+        click("sub-1", 3).andExpect(status().isOk());
+
+        assertThat(redis.hasKey(RedisKey.MATCH_SCORE.of(matchId))).isFalse();
+        assertThat(redis.opsForValue().get(RedisKey.UNIV_MATCH.of(universityId))).isEqualTo("none");
+    }
+
+    @Test
+    @DisplayName("만료 시각이 지난 연합은 만료 배치 전이라 ACCEPTED여도 연합이 없는 것으로 보고 클릭은 성공한다")
+    void clickInExpiredAllianceIsTreatedAsNoAlliance() throws Exception {
+        long expiredAlliance = jdbcTemplate.queryForObject("""
+                INSERT INTO alliance (name, duration_hours, created_at, expired_at)
+                VALUES ('클릭테스트연합', 24, now() - INTERVAL '2 days', now() - INTERVAL '1 day') RETURNING id""",
+                Long.class);
+        allianceIds.add(expiredAlliance);
+        joinAlliance(expiredAlliance);
+
+        click("sub-1", 3).andExpect(status().isOk());
+
+        assertThat(redis.opsForValue().get(RedisKey.UNIV_ALLIANCE.of(universityId))).isEqualTo("none");
+        assertThat(redis.hasKey(RedisKey.ALLIANCE_SCORE.of(expiredAlliance))).isFalse();
+    }
+
+    private long givenAlliance(String expiredAtSql) {
+        long id = jdbcTemplate.queryForObject("""
+                INSERT INTO alliance (name, duration_hours, expired_at)
+                VALUES ('클릭테스트연합', 24, %s) RETURNING id""".formatted(expiredAtSql), Long.class);
+        allianceIds.add(id);
+        return id;
+    }
+
+    /** 연합을 만들고 테스트 학교를 승인된 소속으로 넣는다 */
+    private long givenMyAlliance(String expiredAtSql) {
+        long id = givenAlliance(expiredAtSql);
+        joinAlliance(id);
+        return id;
+    }
+
+    private void joinAlliance(long allianceId) {
+        jdbcTemplate.update("""
+                INSERT INTO alliance_university (alliance_id, university_id, applicant_user_id, approver_user_id, status)
+                VALUES (?, ?, ?, ?, 'ACCEPTED')""", allianceId, universityId, user.getId(), user.getId());
+    }
+
+    /** 3시간짜리 IN_PROGRESS 대결. 종료 시각 = 시작 시각 + 3시간 */
+    private long givenMatch(long allianceAId, long allianceBId, String startedAtSql) {
+        long id = jdbcTemplate.queryForObject("""
+                INSERT INTO alliance_match (alliance_a_id, alliance_b_id, started_at, ended_at, duration_hours,
+                                            request_expired_at, status)
+                VALUES (?, ?, %1$s, %1$s + INTERVAL '3 hours', 3, now(), 'IN_PROGRESS') RETURNING id"""
+                .formatted(startedAtSql), Long.class, allianceAId, allianceBId);
+        matchIds.add(id);
+        return id;
     }
 
     private void givenLibraryOfMyUniversity() {
