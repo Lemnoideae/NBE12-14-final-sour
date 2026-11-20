@@ -1,12 +1,12 @@
-import { useEffect, useId, useRef, useState, type ReactNode, type RefObject, type SubmitEvent } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode, type SubmitEvent } from 'react';
 import { ChevronLeft, RefreshCw } from 'lucide-react';
 import { useAuthSession } from '../api/ApiProvider';
 import {
-  ALLIANCE_DURATION_PRESETS, ALLIANCE_ERROR_CODES, ALLIANCE_LIMITS, ALLIANCE_MAX_SCHOOLS, ALLIANCE_STATUS_LABEL, createAllianceMemory,
+  ALLIANCE_DURATION_PRESETS, ALLIANCE_ERROR_CODES, ALLIANCE_LIMITS, ALLIANCE_MAX_SCHOOLS, ALLIANCE_STATUS_LABEL,
   createMatchMemory, createSentApplicationMemory, MATCH_DURATION_PRESETS, MATCH_ERROR_CODES, MATCH_LIMITS, MATCH_STATUS_LABEL,
   parseAllianceId, parseApplicationId, parseMatchId, useAllianceDetail, useAllianceMatch, useApplyToAlliance, useCreateAlliance,
-  useDecideApplication, useDecideMatch, useRequestMatch, useUniversityName, validateAllianceName, type AllianceApplication,
-  type AllianceMatch, type AllianceMemory, type ApplicationDecision, type MatchDecision, type SentApplication, type SentApplicationMemory,
+  useDecideApplication, useDecideMatch, useMyAlliance, useRequestMatch, useUniversityName, validateAllianceName, type Alliance,
+  type AllianceApplication, type AllianceMatch, type ApplicationDecision, type MatchDecision, type MatchMemory, type SentApplication, type SentApplicationMemory,
 } from '../api/alliances';
 import { errorMessage, fieldErrorMap, isApiError } from '../api/errors';
 import { useMyInfo } from '../api/users';
@@ -25,7 +25,6 @@ const BUTTON = 'pixel-plaque plaque-wood min-h-11 min-w-11 px-3 py-2 text-xs fon
 const BOX = 'rpg-box p-3 bg-[#fdf5df] border-2 border-[#261608] shadow-[2px_2px_0px_#261608] flex flex-col gap-2';
 const INPUT = 'w-full min-h-12 border-2 border-[#261608] bg-white px-2 py-2 text-base focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#261608] disabled:bg-stone-100';
 const dateFormat = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'medium', timeStyle: 'short' });
-const defaultMemory = createAllianceMemory();
 const defaultApplications = createSentApplicationMemory();
 const defaultMatches = createMatchMemory();
 const ERROR_TEXT = 'text-[#7f1d1d]';
@@ -53,14 +52,13 @@ interface ApiAllianceScreenPhoneProps {
   onGoToLogin: () => void;
   onNavigateTab?: (tab: NavTab) => void;
   /** Tests pass their own storage and clock. */
-  memory?: AllianceMemory;
   applications?: SentApplicationMemory;
-  matches?: AllianceMemory;
+  matches?: MatchMemory;
   now?: () => number;
 }
 
 export function ApiAllianceScreenPhone({
-  onBack, onGoToLogin, onNavigateTab, memory = defaultMemory, applications = defaultApplications, matches = defaultMatches, now = Date.now,
+  onBack, onGoToLogin, onNavigateTab, applications = defaultApplications, matches = defaultMatches, now = Date.now,
 }: ApiAllianceScreenPhoneProps) {
   const signedIn = useAuthSession().status === 'signed-in';
   const me = useMyInfo();
@@ -76,7 +74,7 @@ export function ApiAllianceScreenPhone({
       </header>
       <div className="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col gap-3 font-pixel text-[#261608]">
         {signedIn && me.data ? <AllianceHome key={me.data.id} userId={me.data.id} universityName={me.data.university.name}
-          memory={memory} applications={applications} matches={matches} now={now} /> : (
+          applications={applications} matches={matches} now={now} /> : (
           <div role="status" className={`${BOX} items-center text-center`}>
             <p className="text-sm font-bold">연합을 만들거나 보려면 로그인해 주세요</p>
             <button type="button" className={BUTTON} onClick={onGoToLogin}>로그인</button>
@@ -88,72 +86,82 @@ export function ApiAllianceScreenPhone({
   );
 }
 
-function AllianceHome({ userId, universityName, memory, applications, matches, now }: {
-  userId: number; universityName: string; memory: AllianceMemory; applications: SentApplicationMemory; matches: AllianceMemory; now: () => number;
+function AllianceHome({ userId, universityName, applications, matches, now }: {
+  userId: number; universityName: string; applications: SentApplicationMemory; matches: MatchMemory; now: () => number;
 }) {
-  const [remembered, setRemembered] = useState(() => memory.get(userId));
+  const membership = useMyAlliance(userId, { now });
+  const mine = membership.isSuccess ? membership.data : undefined;
+  const refresh = () => void membership.refetch({ cancelRefetch: false });
   const [sent, setSent] = useState(() => applications.get(userId));
   const [notice, setNotice] = useState<string | null>(null);
   const [lookedUp, setLookedUp] = useState<number | null>(null);
-  const lookupInput = useRef<HTMLInputElement>(null);
-  const forget = (message: string | null) => {
-    memory.forget(userId);
-    setRemembered(null);
-    setNotice(message);
-  };
-  const remember = (allianceId: number, message: string) => {
-    memory.set(userId, allianceId);
-    setRemembered(allianceId);
+  const joinedId = mine?.id ?? null;
+  useEffect(() => {
+    if (joinedId === null) return;
     applications.forget(userId);
     setSent(null);
-    setNotice(message);
-  };
+  }, [joinedId, applications, userId]);
   const forgetSent = (message: string | null) => {
     applications.forget(userId);
     setSent(null);
     setNotice(message);
   };
-  const rememberButton = (allianceId: number) => (
-    <button type="button" className={BUTTON} onClick={() => remember(allianceId, `연합 #${allianceId}을(를) 우리 연합으로 기억했어요.`)}>
-      우리 연합으로 기억
-    </button>
-  );
+  const recheck = <button type="button" className={`${BUTTON} self-start`} disabled={membership.isFetching} onClick={refresh}>우리 연합 다시 확인</button>;
+
+  let mineContent: ReactNode;
+  if (membership.isPending) {
+    mineContent = <p role="status" className={`${BOX} text-xs`}>우리 연합을 확인하는 중이에요.</p>;
+  } else if (membership.isError) {
+    mineContent = (
+      <div className={`${BOX} text-xs`}>
+        <p role="alert" className={ERROR_TEXT}>우리 연합을 확인하지 못했어요. {errorMessage(membership.error)}</p>
+        {recheck}
+      </div>
+    );
+  } else if (mine) {
+    mineContent = <>
+      <article aria-label={`연합 #${mine.id}`} data-testid="alliance-detail" aria-busy={membership.isFetching} className={`${BOX} text-xs`}>
+        <AllianceFields alliance={mine} now={now} />
+        <p className="text-[11px]">다른 학교에 연합 ID(#{mine.id})를 알려 주면 가입 신청할 수 있어요. 신청 번호를 받으면 아래에서 승인하거나 거절하세요.</p>
+        {recheck}
+      </article>
+      <ApplicationDecisionForm key={mine.id} userId={userId} allianceId={mine.id} />
+    </>;
+  } else {
+    mineContent = <>
+      <p role="status" className="text-xs">우리 학교가 속한 연합이 없어요.</p>
+      {recheck}
+      {sent && <SentApplicationCard userId={userId} sent={sent} now={now}
+        onMissing={() => forgetSent(`가입 신청한 연합 #${sent.allianceId}을(를) 찾을 수 없어 신청 기억을 지웠어요.`)}
+        onForget={() => forgetSent(null)} />}
+      <CreateAllianceForm userId={userId} universityName={universityName} onCreated={() => forgetSent('연합을 만들었어요.')}
+        onCheckMembership={refresh} />
+    </>;
+  }
+
+  let lookupActions: ReactNode = null;
+  if (lookedUp !== null && lookedUp === mine?.id) {
+    lookupActions = <p className="text-[11px] font-bold">우리 연합이에요.</p>;
+  } else if (lookedUp !== null && mine === null) {
+    lookupActions = (
+      <ApplyButton key={lookedUp} allianceId={lookedUp} onSent={(application) => {
+        const next = { applicationId: application.id, allianceId: application.allianceId };
+        applications.set(userId, next);
+        setSent(next);
+      }} />
+    );
+  }
 
   return <>
     <section aria-labelledby="alliance-mine" className="flex flex-col gap-2">
       <h2 id="alliance-mine" className="text-sm font-black">우리 연합</h2>
       {notice && <p role="status" className={`${BOX} text-xs`}>{notice}</p>}
-      {remembered !== null ? <>
-        <AllianceDetail userId={userId} allianceId={remembered} now={now} mine
-          onMissing={() => forget(`기억해 둔 연합 #${remembered}을(를) 찾을 수 없어 목록에서 지웠어요.`)}
-          onForget={() => forget(null)} />
-        <ApplicationDecisionForm userId={userId} allianceId={remembered} />
-      </> : <>
-        <p className="text-xs">
-          이 브라우저에 기억한 연합이 없어요. 같은 학교 회원이 만들었거나 우리 학교가 가입한 연합은 아래 "연합 ID로 찾기"에서 찾아
-          "우리 연합으로 기억"할 수 있어요.
-        </p>
-        {sent && <SentApplicationCard userId={userId} sent={sent} now={now} rememberButton={rememberButton(sent.allianceId)}
-          onMissing={() => forgetSent(`가입 신청한 연합 #${sent.allianceId}을(를) 찾을 수 없어 신청 기억을 지웠어요.`)}
-          onForget={() => forgetSent(null)} />}
-        <CreateAllianceForm userId={userId} universityName={universityName}
-          onCreated={(id) => remember(id, '연합을 만들었어요.')}
-          onFindById={() => lookupInput.current?.focus()} />
-      </>}
+      {mineContent}
     </section>
 
-    {remembered !== null && <AllianceMatches key={remembered} userId={userId} allianceId={remembered} memory={matches} now={now} />}
+    {mine && <AllianceMatches key={mine.id} userId={userId} alliance={mine} memory={matches} now={now} />}
 
-    <AllianceLookup userId={userId} now={now} inputRef={lookupInput} allianceId={lookedUp} onLookup={setLookedUp}
-      actions={lookedUp === null ? null : lookedUp === remembered ? <p className="text-[11px] font-bold">우리 연합이에요.</p> : <>
-        <ApplyButton key={lookedUp} allianceId={lookedUp}
-          onSent={(application) => {
-            const next = { applicationId: application.id, allianceId: application.allianceId };
-            applications.set(userId, next);
-            setSent(next);
-          }} />
-        {rememberButton(lookedUp)}
-      </>} />
+    <AllianceLookup userId={userId} now={now} allianceId={lookedUp} onLookup={setLookedUp} actions={lookupActions} />
 
     <section aria-labelledby="alliance-soon" className={`${BOX} text-xs`}>
       <h2 id="alliance-soon" className="font-black text-sm">준비 중</h2>
@@ -168,18 +176,18 @@ function SchoolName({ universityId, viewerId }: { universityId: number; viewerId
   return <>{name.data ?? `학교 #${universityId}`}</>;
 }
 
-function SentApplicationCard({ userId, sent, now, rememberButton, onMissing, onForget }: {
-  userId: number; sent: SentApplication; now: () => number; rememberButton: ReactNode; onMissing: () => void; onForget: () => void;
+function SentApplicationCard({ userId, sent, now, onMissing, onForget }: {
+  userId: number; sent: SentApplication; now: () => number; onMissing: () => void; onForget: () => void;
 }) {
   return (
     <section aria-label="보낸 가입 신청" data-testid="sent-application" className={`${BOX} text-xs`}>
       <h3 className="text-sm font-black">보낸 가입 신청 #{sent.applicationId}</h3>
       <p>
         연합 #{sent.allianceId}에 가입을 신청했어요. 그 연합의 회원에게 신청 번호 <strong>#{sent.applicationId}</strong>를 알려 주세요.
-        승인되면 "우리 연합으로 기억"을 눌러 연합을 보세요. 승인 여부는 서버 조회 기능이 생기면 여기에 표시돼요.
+        승인되면 위의 ‘우리 연합’에 자동으로 표시돼요.
       </p>
       <AllianceDetail userId={userId} allianceId={sent.allianceId} now={now} onMissing={onMissing}
-        actions={<>{rememberButton}<button type="button" className={BUTTON} onClick={onForget}>신청 기억 지우기</button></>} />
+        actions={<button type="button" className={BUTTON} onClick={onForget}>신청 기억 지우기</button>} />
     </section>
   );
 }
@@ -279,7 +287,7 @@ function ApplicationDecisionForm({ userId, allianceId }: { userId: number; allia
   );
 }
 
-function AllianceMatches({ userId, allianceId, memory, now }: { userId: number; allianceId: number; memory: AllianceMemory; now: () => number }) {
+function AllianceMatches({ userId, alliance, memory, now }: { userId: number; alliance: Alliance; memory: MatchMemory; now: () => number }) {
   const [matchId, setMatchId] = useState(() => memory.get(userId));
   const [notice, setNotice] = useState<string | null>(null);
   const show = (id: number, message: string | null) => {
@@ -297,10 +305,10 @@ function AllianceMatches({ userId, allianceId, memory, now }: { userId: number; 
       <h2 id="alliance-matches" className="text-sm font-black">연합 대결</h2>
       {notice && <p role="status" className={`${BOX} text-xs`}>{notice}</p>}
       {matchId !== null ? (
-        <MatchCard key={matchId} userId={userId} matchId={matchId} allianceId={allianceId} now={now}
+        <MatchCard key={matchId} userId={userId} matchId={matchId} alliance={alliance} now={now}
           onMissing={() => forget(`기억해 둔 대결 #${matchId}을(를) 찾을 수 없어 지웠어요.`)} onForget={() => forget(null)} />
       ) : <p className="text-xs">이 브라우저에 기억한 대결이 없어요. 대결을 신청하거나, 상대에게 받은 대결 번호로 찾아보세요.</p>}
-      <MatchRequestForm userId={userId} allianceId={allianceId}
+      <MatchRequestForm userId={userId} allianceId={alliance.id} expiredAt={alliance.expiredAt}
         onRequested={(match) => show(match.id, `대결 신청 #${match.id}을(를) 보냈어요. 상대 연합 회원에게 대결 번호 #${match.id}을(를) 알려 주세요.`)} now={now} />
       <MatchLookup onLookup={(id) => show(id, null)} />
     </section>
@@ -333,8 +341,8 @@ function matchErrorText(error: unknown, fallback: string, matchId: number | null
   }
 }
 
-function MatchRequestForm({ userId, allianceId, onRequested, now }: {
-  userId: number; allianceId: number; onRequested: (match: AllianceMatch) => void; now: () => number;
+function MatchRequestForm({ userId, allianceId, expiredAt, onRequested, now }: {
+  userId: number; allianceId: number; expiredAt: string; onRequested: (match: AllianceMatch) => void; now: () => number;
 }) {
   const id = useId();
   const [opponent, setOpponent] = useState('');
@@ -345,7 +353,6 @@ function MatchRequestForm({ userId, allianceId, onRequested, now }: {
   const [scheduleProblem, setScheduleProblem] = useState<string | null>(null);
   const opponentRef = useRef<HTMLInputElement>(null);
   const scheduleRef = useRef<HTMLInputElement>(null);
-  const own = useAllianceDetail(userId, allianceId);
   const request = useRequestMatch(userId, allianceId);
   const serverScheduleError = !request.isPending && isApiError(request.error) &&
     (request.error.code === MATCH_ERROR_CODES.invalidSchedule || Boolean(fieldErrorMap(request.error).scheduledStartAt));
@@ -362,7 +369,7 @@ function MatchRequestForm({ userId, allianceId, onRequested, now }: {
     }
     setProblem(null);
     const schedule: { scheduledStartAt?: string } | { problem: string } = mode === 'scheduled'
-      ? validateMatchSchedule(startInput, now(), hours, own.data?.expiredAt) : {};
+      ? validateMatchSchedule(startInput, now(), hours, expiredAt) : {};
     if ('problem' in schedule) { setScheduleProblem(schedule.problem); scheduleRef.current?.focus(); return; }
     setScheduleProblem(null);
     request.mutate({ opponentAllianceId: parsed.allianceId, durationHours: hours, ...schedule }, {
@@ -400,7 +407,7 @@ function MatchRequestForm({ userId, allianceId, onRequested, now }: {
         <label htmlFor={`${id}-scheduled`} className="font-bold">예약 시작 시각 (한국 시각 KST)</label>
         <input ref={scheduleRef} id={`${id}-scheduled`} name="scheduledStartAt" type="datetime-local" required step="60"
           value={startInput} min={kstDateTimeInput(Math.floor(now() / 60_000 + 1) * 60_000)}
-          max={own.data ? kstDateTimeInput(Date.parse(own.data.expiredAt) - hours * 60 * 60_000) : undefined}
+          max={kstDateTimeInput(Date.parse(expiredAt) - hours * 60 * 60_000)}
           disabled={request.isPending} aria-invalid={Boolean(scheduleProblem || serverScheduleError)}
           aria-describedby={`${id}-schedule-help${scheduleProblem ? ` ${id}-schedule-problem` : ''}${serverScheduleError ? ` ${id}-server-error` : ''}`}
           onChange={(event) => { setStartInput(event.target.value); setScheduleProblem(null); request.reset(); }} className={INPUT} />
@@ -443,14 +450,17 @@ function MatchLookup({ onLookup }: { onLookup: (matchId: number) => void }) {
   );
 }
 
-function AllianceName({ userId, allianceId, ours }: { userId: number; allianceId: number; ours: boolean }) {
-  const detail = useAllianceDetail(userId, allianceId);
-  return <>{detail.data?.name ?? '연합'} #{allianceId}{ours && <strong> (우리)</strong>}</>;
+function AllianceName({ userId, allianceId, mine }: { userId: number; allianceId: number; mine: Alliance }) {
+  const isMine = mine.id === allianceId;
+  const detail = useAllianceDetail(userId, isMine ? null : allianceId);
+  const name = isMine ? mine.name : detail.data?.name ?? '연합';
+  return <>{name} #{allianceId}{isMine && <strong> (우리)</strong>}</>;
 }
 
-function MatchCard({ userId, matchId, allianceId, now, onMissing, onForget }: {
-  userId: number; matchId: number; allianceId: number; now: () => number; onMissing: () => void; onForget: () => void;
+function MatchCard({ userId, matchId, alliance, now, onMissing, onForget }: {
+  userId: number; matchId: number; alliance: Alliance; now: () => number; onMissing: () => void; onForget: () => void;
 }) {
+  const allianceId = alliance.id;
   const query = useAllianceMatch(userId, matchId);
   const missing = isApiError(query.error) && query.error.code === MATCH_ERROR_CODES.notFound;
   // Runs once when the 404 arrives; the parent passes a new callback on every render, so it is not a dependency.
@@ -474,8 +484,8 @@ function MatchCard({ userId, matchId, allianceId, now, onMissing, onForget }: {
             </span>
           </div>
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-            <dt>신청한 연합</dt><dd><AllianceName userId={userId} allianceId={match.allianceAId} ours={side === 'A'} /></dd>
-            <dt>받은 연합</dt><dd><AllianceName userId={userId} allianceId={match.allianceBId} ours={side === 'B'} /></dd>
+            <dt>신청한 연합</dt><dd><AllianceName userId={userId} allianceId={match.allianceAId} mine={alliance} /></dd>
+            <dt>받은 연합</dt><dd><AllianceName userId={userId} allianceId={match.allianceBId} mine={alliance} /></dd>
             <dt>대결 시간</dt><dd>{formatDurationHours(match.durationHours)}</dd>
             {match.status === 'REQUESTED' && <>
               <dt>수락 마감</dt><dd>{kst(match.requestExpiredAt)}</dd>
@@ -555,8 +565,8 @@ function MatchActions({ userId, match, side }: { userId: number; match: Alliance
   );
 }
 
-function CreateAllianceForm({ userId, universityName, onCreated, onFindById }: {
-  userId: number; universityName: string; onCreated: (allianceId: number) => void; onFindById: () => void;
+function CreateAllianceForm({ userId, universityName, onCreated, onCheckMembership }: {
+  userId: number; universityName: string; onCreated: () => void; onCheckMembership: () => void;
 }) {
   const id = useId();
   const [name, setName] = useState('');
@@ -572,7 +582,7 @@ function CreateAllianceForm({ userId, universityName, onCreated, onFindById }: {
     const checked = validateAllianceName(name);
     if ('problem' in checked) { setProblem(checked.problem); return; }
     setProblem(null);
-    create.mutate({ name: checked.name, durationHours: hours }, { onSuccess: (alliance) => onCreated(alliance.id) });
+    create.mutate({ name: checked.name, durationHours: hours }, { onSuccess: onCreated });
   };
   const code = isApiError(create.error) ? create.error.code : null;
   const fields = fieldErrorMap(create.error);
@@ -601,12 +611,12 @@ function CreateAllianceForm({ userId, universityName, onCreated, onFindById }: {
         <div ref={alert} tabIndex={-1} role="alert" data-testid="alliance-create-error" className="text-[#7f1d1d] flex flex-col gap-1.5">
           {code === ALLIANCE_ERROR_CODES.alreadyJoined ? <>
             <p className="font-bold">우리 학교는 이미 연합에 소속돼 있어요.</p>
-            <p>한 학교는 연합 하나에만 소속될 수 있어요. 같은 학교 회원이 만들었거나 가입한 연합일 수 있어요. 연합 ID를 알면 찾아볼 수 있어요.</p>
-            <button type="button" className={`${BUTTON} self-start`} onClick={onFindById}>연합 ID로 찾기</button>
+            <p>한 학교는 연합 하나에만 소속될 수 있어요. 같은 학교 회원이 만들었거나 가입한 연합일 수 있어요.</p>
+            <button type="button" className={`${BUTTON} self-start`} onClick={onCheckMembership}>우리 연합 다시 확인</button>
           </> : code === ALLIANCE_ERROR_CODES.notActiveUser ? (
             <p>활동 중인 회원만 연합을 만들 수 있어요. {errorMessage(create.error)}</p>
           ) : (
-            <p>연합을 만들지 못했어요. {fieldReason ?? errorMessage(create.error)}{answered ? '' : ' 응답을 받지 못했다면 같은 학교 연합이 이미 생겼을 수 있어요. 다시 누르기 전에 연합 ID로 확인해 보세요.'}</p>
+            <p>연합을 만들지 못했어요. {fieldReason ?? errorMessage(create.error)}{answered ? '' : ' 응답을 받지 못했다면 같은 학교 연합이 이미 생겼을 수 있어요. 다시 만들기 전에 ‘우리 연합’을 확인해 보세요.'}</p>
           )}
         </div>
       )}
@@ -617,8 +627,8 @@ function CreateAllianceForm({ userId, universityName, onCreated, onFindById }: {
   );
 }
 
-function AllianceLookup({ userId, now, inputRef, allianceId, onLookup, actions }: {
-  userId: number; now: () => number; inputRef: RefObject<HTMLInputElement | null>; allianceId: number | null; onLookup: (id: number) => void;
+function AllianceLookup({ userId, now, allianceId, onLookup, actions }: {
+  userId: number; now: () => number; allianceId: number | null; onLookup: (id: number) => void;
   actions: ReactNode;
 }) {
   const id = useId();
@@ -636,7 +646,7 @@ function AllianceLookup({ userId, now, inputRef, allianceId, onLookup, actions }
       <h2 id={`${id}-title`} className="text-sm font-black">연합 ID로 찾기</h2>
       <form noValidate onSubmit={submit} aria-label="연합 ID로 찾기" className={`${BOX} text-xs`}>
         <label htmlFor={`${id}-id`} className="font-bold">연합 ID</label>
-        <input ref={inputRef} id={`${id}-id`} inputMode="numeric" autoComplete="off" value={input} aria-invalid={problem !== null}
+        <input id={`${id}-id`} inputMode="numeric" autoComplete="off" value={input} aria-invalid={problem !== null}
           aria-describedby={problem ? `${id}-problem` : undefined}
           onChange={(event) => { setInput(event.target.value); setProblem(null); }} className={INPUT} />
         {problem && <p id={`${id}-problem`} role="alert" className="text-[#7f1d1d]">{problem}</p>}
@@ -647,8 +657,8 @@ function AllianceLookup({ userId, now, inputRef, allianceId, onLookup, actions }
   );
 }
 
-function AllianceDetail({ userId, allianceId, now, mine = false, onMissing, onForget, actions }: {
-  userId: number; allianceId: number; now: () => number; mine?: boolean; onMissing?: () => void; onForget?: () => void;
+function AllianceDetail({ userId, allianceId, now, onMissing, actions }: {
+  userId: number; allianceId: number; now: () => number; onMissing?: () => void;
   /** Shown once the alliance has loaded. */
   actions?: ReactNode;
 }) {
@@ -668,24 +678,7 @@ function AllianceDetail({ userId, allianceId, now, mine = false, onMissing, onFo
             {!missing && <button type="button" className={`${BUTTON} self-start`} onClick={() => void query.refetch()}>다시 조회</button>}
           </div>
         ) : alliance && <>
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="text-sm font-black break-words min-w-0">{alliance.name}</h3>
-            <span data-testid="alliance-status" className="shrink-0 border-2 border-[#261608] px-1.5 py-0.5 text-[11px] font-bold bg-white">
-              {ALLIANCE_STATUS_LABEL[alliance.status]}
-            </span>
-          </div>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-            <dt>연합 ID</dt><dd>#{alliance.id}</dd>
-            <dt>총점</dt><dd>{alliance.totalScore.toLocaleString()}점</dd>
-            <dt>유지 기간</dt><dd>{formatDurationHours(alliance.durationHours)}</dd>
-            <dt>만료 시각</dt><dd>{dateFormat.format(new Date(alliance.expiredAt))} (KST)</dd>
-            <dt>남은 시간</dt><dd>{alliance.status === 'EXPIRED' ? '만료됨' : remainingTime(alliance.expiredAt, now())}</dd>
-          </dl>
-          {mine && alliance.status === 'EXPIRED' && <p>만료된 연합이에요. 이 연합을 잊으면 새 연합을 만들 수 있어요.</p>}
-          {mine && <p className="text-[11px]">
-            다른 학교에 이 연합 ID(#{alliance.id})를 알려 주면 "연합 ID로 찾기"에서 가입 신청할 수 있어요. 신청 번호를 받으면 아래에서 승인하거나 거절하세요.
-            "이 연합 잊기"는 이 브라우저의 기억만 지우고 연합은 그대로 둬요.
-          </p>}
+          <AllianceFields alliance={alliance} now={now} />
           {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
         </>}
       <div className="flex flex-wrap gap-2">
@@ -694,8 +687,25 @@ function AllianceDetail({ userId, allianceId, now, mine = false, onMissing, onFo
             <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" /> {query.isFetching && !query.isPending ? '새로고침 중…' : '새로고침'}
           </button>
         )}
-        {onForget && <button type="button" className={BUTTON} onClick={onForget}>이 연합 잊기</button>}
       </div>
     </article>
   );
+}
+
+function AllianceFields({ alliance, now }: { alliance: Alliance; now: () => number }) {
+  return <>
+    <div className="flex items-start justify-between gap-2">
+      <h3 className="text-sm font-black break-words min-w-0">{alliance.name}</h3>
+      <span data-testid="alliance-status" className="shrink-0 border-2 border-[#261608] px-1.5 py-0.5 text-[11px] font-bold bg-white">
+        {ALLIANCE_STATUS_LABEL[alliance.status]}
+      </span>
+    </div>
+    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+      <dt>연합 ID</dt><dd>#{alliance.id}</dd>
+      <dt>총점</dt><dd>{alliance.totalScore.toLocaleString()}점</dd>
+      <dt>유지 기간</dt><dd>{formatDurationHours(alliance.durationHours)}</dd>
+      <dt>만료 시각</dt><dd>{kst(alliance.expiredAt)}</dd>
+      <dt>남은 시간</dt><dd>{alliance.status === 'EXPIRED' ? '만료됨' : remainingTime(alliance.expiredAt, now())}</dd>
+    </dl>
+  </>;
 }

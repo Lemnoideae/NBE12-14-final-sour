@@ -431,16 +431,19 @@ test('세션 종료는 미전송 배치를 취소하고 다음 계정으로 재�
 });
 
 test('같은 프레임에 같은 계정으로 재로그인해도 이전 큐를 폐기하고 새 큐를 만든다', async () => {
-  const { client, sent } = mount();
+  const { client, queryClient, sent, tokens } = mount();
   await ready();
   click();
   await act(async () => {
     client.session.signOut();
     client.session.signIn('member-a-new-session');
   });
+  // The new session must load its own profile before it can accept input.
+  await waitFor(() => assert.equal(queryClient.getQueryData<MyInfo>(userKeys.me)?.id, ME.id));
   click();
   await waitFor(() => assert.equal(sent.length, 1), { timeout: 2500 });
   assert.equal(sent[0].clickCount, 1, '이전 세션의 미확정 클릭을 새 세션에 보내지 않는다');
+  assert.deepEqual(tokens, ['Bearer member-a-new-session']);
 });
 
 test('API 모드에서는 목업의 치명타 배율을 요청 데이터나 점수에 섞지 않는다', async () => {
