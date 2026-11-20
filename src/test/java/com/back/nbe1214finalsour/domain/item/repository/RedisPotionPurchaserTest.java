@@ -476,4 +476,27 @@ class RedisPotionPurchaserTest {
         assertThat(redis.opsForZSet().score(RANK_KEY, String.valueOf(USER_ID))).isEqualTo(700.0);
         assertThat(redis.hasKey(DEDUPE_KEY)).isFalse();
     }
+
+    @Test
+    @DisplayName("보상할 때 이전 효과의 만료 시각이 이미 지났으면 되살리지 않고 효과를 지운다")
+    void compensate_previousAlreadyExpired() {
+        // given
+        redis.opsForZSet().add(RANK_KEY, String.valueOf(USER_ID), 700);
+        givenEffect(ITEM_ID, "2.0", OffsetDateTime.now(ZoneOffset.UTC).plusHours(1).truncatedTo(ChronoUnit.MILLIS), KEY);
+        redis.opsForValue().set(DEDUPE_KEY, "1", Duration.ofMinutes(5));
+        String expired = JSON.writeValueAsString(Map.of(
+                "itemId", String.valueOf(TRIPLE_ITEM_ID),
+                "multiplier", "3.0",
+                "expiredAt", "1000",
+                "purchaseId", OTHER_KEY.toString()));
+
+        // when
+        Throwable thrown = catchThrowable(() -> purchaser.compensate(USER_ID, UNIVERSITY_ID, 300L, KEY, expired));
+
+        // then
+        assertThat(thrown).isNull();
+        assertThat(redis.hasKey(EFFECT_KEY)).isFalse();
+        assertThat(redis.opsForZSet().score(RANK_KEY, String.valueOf(USER_ID))).isEqualTo(1000.0);
+        assertThat(redis.hasKey(DEDUPE_KEY)).isFalse();
+    }
 }
