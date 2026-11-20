@@ -55,6 +55,8 @@ public class ItemControllerTest {
     // 토큰의 회원: userId 1, universityId 7, departmentId 34
     private static final AuthUser USER = new AuthUser(1L, 7L, 34L, Role.USER);
 
+    private static final String KEY = "123e4567-e89b-12d3-a456-426614174000";
+
     private static final Item POTION =
             new Item(2L, "4배 물약", "1시간 동안 클릭 점수 4배", ItemType.MULTIPLIER, PayType.CONTRIBUTION, 1000L, 3600, 4.0);
 
@@ -138,7 +140,8 @@ public class ItemControllerTest {
 
         // when & then
         mockMvc.perform(post("/api/v1/items/2/purchase")
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .header("Idempotency-Key", KEY))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.userItemId").value(5530))
@@ -159,7 +162,8 @@ public class ItemControllerTest {
                 .willThrow(new BusinessException(ErrorCode.ITEM_NOT_FOUND));
 
         mockMvc.perform(post("/api/v1/items/9999/purchase")
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .header("Idempotency-Key", KEY))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ITEM_NOT_FOUND"));
     }
@@ -171,7 +175,8 @@ public class ItemControllerTest {
                 .willThrow(new BusinessException(ErrorCode.ITEM_NOT_ENOUGH_SCORE));
 
         mockMvc.perform(post("/api/v1/items/2/purchase")
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .header("Idempotency-Key", KEY))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("ITEM_NOT_ENOUGH_SCORE"));
     }
@@ -186,7 +191,8 @@ public class ItemControllerTest {
 
         mockMvc.perform(multipart("/api/v1/items/3/purchase")
                         .file(logoImage())
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .header("Idempotency-Key", KEY))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.userItemId").value(7001))
@@ -211,7 +217,8 @@ public class ItemControllerTest {
 
         mockMvc.perform(multipart("/api/v1/items/3/purchase")
                         .file(logoImage())
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .header("Idempotency-Key", KEY))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("ITEM_LOGO_IMAGE_TOO_LARGE"));
     }
