@@ -167,6 +167,24 @@ class ContributionPurchaseServiceTest {
     }
 
     @Test
+    @DisplayName("같은 멱등 키로 이미 처리한 요청이면 ITEM_DUPLICATE_PURCHASE, 구매 이력을 저장하지 않는다")
+    void purchase_duplicateKey() {
+        // given
+        given(this.redisPotionPurchaser.purchase(USER_ID, UNIVERSITY_ID, 2L, 1000L, 4.0, EXPIRED_AT, KEY))
+                .willReturn(new PotionPurchaseOutcome(-2L, ""));
+
+        // when
+        Throwable thrown = catchThrowable(() -> this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY));
+
+        // then
+        assertThat(thrown)
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.ITEM_DUPLICATE_PURCHASE);
+        then(this.potionPurchaseRecorder).should(never()).record(any());
+    }
+
+    @Test
     @DisplayName("물약 구매 결과로 구매 이력 ID·아이템·가격·만료 시각·차감 후 기여도·현재 크레딧을 반환")
     void purchase_returnsResult() {
         // given
