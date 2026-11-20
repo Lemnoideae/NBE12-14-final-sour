@@ -36,7 +36,9 @@ class RedisPotionPurchaserTest {
     private static final long TRIPLE_ITEM_ID = 900_44L;
     private static final UUID KEY = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID OTHER_KEY = UUID.fromString("00000000-0000-0000-0000-000000000002");
-    private static final JsonMapper JSON = JsonMapper.builder().build();
+    private static final UUID P_KEY = UUID.fromString("00000000-0000-0000-0000-000000000003");
+    private static final UUID X_KEY = UUID.fromString("00000000-0000-0000-0000-000000000004");
+    private static final JsonMapper JSON =JsonMapper.builder().build();
     private static final RedisScript<Long> PEXPIRETIME_SCRIPT =
             RedisScript.of("return redis.call('PEXPIRETIME', KEYS[1])", Long.class);
 
@@ -362,5 +364,34 @@ class RedisPotionPurchaserTest {
         // then
         assertThat(redis.opsForHash().get(VOIDED_KEY, KEY.toString())).isEqualTo(triple);
         assertThat(redis.getExpire(VOIDED_KEY, TimeUnit.MILLISECONDS)).isBetween(1L, 300_000L);
+    }
+
+    @Test
+    @DisplayName("보상할 때 이전 효과가 이미 취소된 구매의 것이면 건너뛰고 그 앞의 효과를 복원한다")
+    void compensate_skipsVoidedPrevious() {
+        // given
+        redis.opsForZSet().add(RANK_KEY, String.valueOf(USER_ID), 400);
+        givenEffect(ITEM_ID, "2.0", OffsetDateTime.now(ZoneOffset.UTC).plusHours(1).truncatedTo(ChronoUnit.MILLIS), KEY);
+        redis.opsForValue().set(DEDUPE_KEY, "1", Duration.ofMinutes(5));
+        OffsetDateTime pExpiredAt = OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(20).truncatedTo(ChronoUnit.MILLIS);
+        Map<String, String> pEffect = Map.of(
+                "itemId", String.valueOf(OTHER_ITEM_ID),
+                "multiplier", "4.0",
+                "expiredAt", String.valueOf(pExpiredAt.toInstant().toEpochMilli()),
+                "purchaseId", P_KEY.toString());
+        redis.opsForHash().put(VOIDED_KEY, X_KEY.toString(), JSON.writeValueAsString(pEffect));
+        OffsetDateTime xExpiredAt = OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(40).truncatedTo(ChronoUnit.MILLIS);
+        String xEffect = JSON.writeValueAsString(Map.of(
+                "itemId", String.valueOf(TRIPLE_ITEM_ID),
+                "multiplier", "3.0",
+                "expiredAt", String.valueOf(xExpiredAt.toInstant().toEpochMilli()),
+                "purchaseId", X_KEY.toString()));
+
+        // when
+        purchaser.compensate(USER_ID, UNIVERSITY_ID, 300L, KEY, xEffect);
+
+        // then
+        assertThat(redis.<String, String>opsForHash().entries(EFFECT_KEY)).containsExactlyInAnyOrderEntriesOf(pEffect);
+        assertThat(pexpireTime(EFFECT_KEY)).isEqualTo(pExpiredAt.toInstant().toEpochMilli());
     }
 }
