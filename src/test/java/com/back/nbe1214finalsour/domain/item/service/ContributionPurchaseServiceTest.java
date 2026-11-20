@@ -5,7 +5,6 @@ import com.back.nbe1214finalsour.domain.credit.repository.CreditWallet;
 import com.back.nbe1214finalsour.domain.item.entity.Item;
 import com.back.nbe1214finalsour.domain.item.entity.ItemType;
 import com.back.nbe1214finalsour.domain.item.entity.PayType;
-import com.back.nbe1214finalsour.domain.item.event.PotionPurchasedEvent;
 import com.back.nbe1214finalsour.domain.item.repository.PotionPurchaseOutcome;
 import com.back.nbe1214finalsour.domain.item.repository.RedisPotionPurchaser;
 import com.back.nbe1214finalsour.domain.userItem.entity.UserItem;
@@ -19,7 +18,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.RedisSystemException;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -57,9 +55,6 @@ class ContributionPurchaseServiceTest {
     @Mock
     private PotionPurchaseRecorder potionPurchaseRecorder;
 
-    @Mock
-    private ApplicationEventPublisher eventPublisher;
-
     private static final Instant NOW = Instant.parse("2026-11-14T03:00:00Z");
 
     @Spy
@@ -95,7 +90,7 @@ class ContributionPurchaseServiceTest {
     }
 
     @Test
-    @DisplayName("잔여 기여도보다 비싼 물약을 사면 ITEM_NOT_ENOUGH_SCORE, 구매 이력과 이벤트가 없다")
+    @DisplayName("잔여 기여도보다 비싼 물약을 사면 ITEM_NOT_ENOUGH_SCORE, 구매 이력이 없다")
     void purchase_notEnoughScore() {
         // given
         given(this.redisPotionPurchaser.purchase(USER_ID, UNIVERSITY_ID, 1L, 500L, 2.0, EXPIRED_AT, KEY))
@@ -110,7 +105,6 @@ class ContributionPurchaseServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ITEM_NOT_ENOUGH_SCORE);
         then(this.potionPurchaseRecorder).should(never()).record(any());
-        then(this.eventPublisher).should(never()).publishEvent(any(PotionPurchasedEvent.class));
     }
 
     @Test
@@ -137,21 +131,6 @@ class ContributionPurchaseServiceTest {
     }
 
     @Test
-    @DisplayName("물약을 사도 효과는 구매 Lua가 이미 적용하므로 효과 적용 이벤트를 발행하지 않는다")
-    void purchase_doesNotPublishEvent() {
-        // given
-        given(this.redisPotionPurchaser.purchase(USER_ID, UNIVERSITY_ID, 2L, 1000L, 4.0, EXPIRED_AT, KEY))
-                .willReturn(new PotionPurchaseOutcome(1500L, ""));
-        given(this.potionPurchaseRecorder.record(any())).willAnswer(returnsFirstArg());
-
-        // when
-        this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY);
-
-        // then
-        then(this.eventPublisher).shouldHaveNoInteractions();
-    }
-
-    @Test
     @DisplayName("구매 이력 저장이 실패하면 보상 Lua로 기여도와 효과를 되돌리고 원래 예외를 다시 던진다")
     void purchase_compensatesWhenSaveFails() {
         // given
@@ -169,8 +148,6 @@ class ContributionPurchaseServiceTest {
         // Redis는 롤백되지 않으므로 보상 Lua로 기여도와 효과를 되돌림 (이전 효과는 Lua가 준 문자열 그대로)
         then(this.redisPotionPurchaser).should().compensate(USER_ID, UNIVERSITY_ID, 1000L, KEY, previousEffect);
         then(this.contributionWallet).shouldHaveNoInteractions();
-        // 구매가 성립하지 않았으니 효과 적용 이벤트도 없음
-        then(this.eventPublisher).should(never()).publishEvent(any(PotionPurchasedEvent.class));
     }
 
     @Test

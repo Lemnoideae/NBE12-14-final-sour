@@ -3,7 +3,6 @@ package com.back.nbe1214finalsour.domain.item.service;
 import com.back.nbe1214finalsour.domain.contribution.ContributionWallet;
 import com.back.nbe1214finalsour.domain.credit.repository.CreditWallet;
 import com.back.nbe1214finalsour.domain.item.entity.Item;
-import com.back.nbe1214finalsour.domain.item.event.PotionPurchasedEvent;
 import com.back.nbe1214finalsour.domain.item.repository.PotionPurchaseOutcome;
 import com.back.nbe1214finalsour.domain.item.repository.RedisPotionPurchaser;
 import com.back.nbe1214finalsour.domain.userItem.entity.UserItem;
@@ -11,7 +10,6 @@ import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -30,7 +28,6 @@ public class ContributionPurchaseService {
     private final CreditWallet creditWallet;
     private final RedisPotionPurchaser redisPotionPurchaser;
     private final PotionPurchaseRecorder potionPurchaseRecorder;
-    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     // 트랜잭션을 붙이지 말 것: 붙이면 record()가 합류해 커밋이 try 밖으로 밀리고 커밋 실패를 보상하지 못한다
