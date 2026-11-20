@@ -1,10 +1,7 @@
 package com.back.nbe1214finalsour.domain.click.service;
 
-import com.back.nbe1214finalsour.domain.alliance.entity.Alliance;
-import com.back.nbe1214finalsour.domain.alliance.entity.AllianceMatch;
-import com.back.nbe1214finalsour.domain.alliance.repository.AllianceMatchRepository;
-import com.back.nbe1214finalsour.domain.alliance.repository.AllianceRepository;
 import com.back.nbe1214finalsour.domain.alliance.service.AllianceAllyChecker;
+import com.back.nbe1214finalsour.domain.alliance.service.AllianceStandingResolver;
 import com.back.nbe1214finalsour.domain.click.dto.AssistRequest;
 import com.back.nbe1214finalsour.domain.click.dto.AssistResponse;
 import com.back.nbe1214finalsour.domain.university.repository.UniversityCache;
@@ -12,16 +9,15 @@ import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import com.back.nbe1214finalsour.global.redis.RedisHandler;
 import com.back.nbe1214finalsour.global.redis.RedisKey;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Duration;
-import java.time.OffsetDateTime;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.List;
 
 /**
  * 연합 학교 지원 (추가 명세 §3-3, 결정 7, SCRUM-187).
@@ -41,8 +37,7 @@ public class AssistService {
     private final RedisHandler redisHandler;
     private final UniversityCache universityCache;
     private final AllianceAllyChecker allianceAllyChecker;
-    private final AllianceRepository allianceRepository;
-    private final AllianceMatchRepository allianceMatchRepository;
+    private final AllianceStandingResolver allianceStandingResolver;
 
     public AssistResponse assist(Long userId, Long universityId, AssistRequest request) {
         int clickCount = request.clickCount();
@@ -65,61 +60,20 @@ public class AssistService {
         long contribScore = itemMultiplier.multiply(BigDecimal.valueOf(base))
                 .setScale(0, RoundingMode.FLOOR).longValueExact();
 
-        // 연합 점수
-        String stringAllianceId = stringRedisTemplate.opsForValue().get(RedisKey.UNIV_ALLIANCE.of(targetUniversityId));
-        Long allianceId = 0L;
-        if (stringAllianceId == null) {
-            Alliance alliance = allianceRepository.findCurrentByUniversityId(targetUniversityId, OffsetDateTime.now())
-                    .orElse(null);
-            if (alliance != null) {
-                stringRedisTemplate.opsForValue().set(RedisKey.UNIV_ALLIANCE.of(targetUniversityId),
-                        String.valueOf(alliance.getId()),
-                        Duration.between(OffsetDateTime.now(), alliance.getExpiredAt()));
-                allianceId = alliance.getId();
-            } else {
-                stringRedisTemplate.opsForValue()
-                        .set(RedisKey.UNIV_ALLIANCE.of(targetUniversityId), "none", Duration.ofSeconds(10));
-            }
-        } else if (!stringAllianceId.equals("none")) {
-            allianceId = Long.parseLong(stringAllianceId);
-        }
-
-        // 대결 점수
-        Long matchId = 0L;
-        String team = "";
-        if (allianceId != 0L) {
-            String matchResult = stringRedisTemplate.opsForValue().get(RedisKey.UNIV_MATCH.of(targetUniversityId));
-            if (matchResult == null) {
-                AllianceMatch match = allianceMatchRepository.findByAllianceId(allianceId, OffsetDateTime.now())
-                        .orElse(null);
-
-                if (match != null) {
-                    team = match.getAllianceAId().equals(allianceId) ? "A" : "B";
-                    stringRedisTemplate.opsForValue()
-                            .set(RedisKey.UNIV_MATCH.of(targetUniversityId), match.getId() + ":" + team, Duration.between(OffsetDateTime.now(), match.getEndedAt()));
-                    matchId = match.getId();
-                } else {
-                    stringRedisTemplate.opsForValue()
-                            .set(RedisKey.UNIV_MATCH.of(targetUniversityId), "none", Duration.ofSeconds(10));
-                }
-            } else if (!matchResult.equals("none")) {
-                String[] split = matchResult.split(":");
-                matchId = Long.parseLong(split[0]);
-                team = split[1];
-            }
-        }
+        // 연합·대결 확인
+        AllianceStandingResolver.AllianceStanding allianceStanding = allianceStandingResolver.resolve(targetUniversityId);
 
         List<String> r = stringRedisTemplate.execute(
                 APPLY_ASSIST,
                 List.of(RedisKey.RANK_UNIV.of(), RedisKey.RANK_USER.of(universityId),
                         RedisKey.DIRTY_UNIV.of(), RedisKey.DIRTY_USER.of(),
-                        RedisKey.ALLIANCE_SCORE.of(allianceId), RedisKey.MATCH_SCORE.of(matchId)),
+                        RedisKey.ALLIANCE_SCORE.of(allianceStanding.allianceId()), RedisKey.MATCH_SCORE.of(allianceStanding.matchId())),
                 String.valueOf(targetUniversityId),
                 String.valueOf(assistScore),
                 String.valueOf(userId),
                 String.valueOf(contribScore),
-                String.valueOf(allianceId),
-                team
+                String.valueOf(allianceStanding.allianceId()),
+                allianceStanding.team()
         );
         return new AssistResponse(
                 (long) clickCount,

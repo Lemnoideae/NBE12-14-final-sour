@@ -1,10 +1,7 @@
 package com.back.nbe1214finalsour.domain.click.service;
 
 import com.back.nbe1214finalsour.domain.abuse.service.AbuseVerificationService;
-import com.back.nbe1214finalsour.domain.alliance.entity.Alliance;
-import com.back.nbe1214finalsour.domain.alliance.entity.AllianceMatch;
-import com.back.nbe1214finalsour.domain.alliance.repository.AllianceMatchRepository;
-import com.back.nbe1214finalsour.domain.alliance.repository.AllianceRepository;
+import com.back.nbe1214finalsour.domain.alliance.service.AllianceStandingResolver;
 import com.back.nbe1214finalsour.domain.click.dto.ClickRequest;
 import com.back.nbe1214finalsour.domain.click.dto.ClickResponse;
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
@@ -31,7 +28,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.Duration;
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -40,8 +36,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.*;
 
 /**
  * 점수 계산과 호출 순서를 검증한다. Redis·DB는 모두 목이므로 Lua 자체는 여기서 검증하지 않는다.
@@ -96,13 +91,7 @@ class ClickServiceTest {
     @Mock
     private User user;
     @Mock
-    private AllianceMatchRepository allianceMatchRepository;
-    @Mock
-    private AllianceRepository allianceRepository;
-    @Mock
-    private Alliance alliance;
-    @Mock
-    private AllianceMatch match;
+    private AllianceStandingResolver allianceStandingResolver;
 
     private ClickService clickService;
 
@@ -113,7 +102,9 @@ class ClickServiceTest {
                 actionRateLimiter, clickCountLimiter, clickerService, abuseVerificationService,
                 userClickerLevelCache);
         clickService = new ClickService(stringRedisTemplate, userRepository, redisHandler, clickActionGuard,
-                libraryBonusChecker, allianceMatchRepository, allianceRepository);
+                libraryBonusChecker, allianceStandingResolver);
+        lenient().when(allianceStandingResolver.resolve(UNIVERSITY_ID))
+                .thenReturn(AllianceStandingResolver.AllianceStanding.NONE);
     }
 
     private ClickRequest request(int clickCount) {
@@ -534,33 +525,7 @@ class ClickServiceTest {
     }
 
     // --- 4.7단계: 연합·대결 점수 ---
-    // 학교의 연합은 univ:{u}:alliance, 진행 중 대결은 univ:{u}:match("{matchId}:{A|B}")에 캐시한다.
-    // 캐시가 없을 때만 DB를 보고, 없다는 결과도 "none"으로 10초 캐시한다. 연합이 없으면 대결은 보지 않는다.
-
-    private static final Long ALLIANCE_ID = 7L;
-    private static final Long OTHER_ALLIANCE_ID = 8L;
-    private static final Long MATCH_ID = 42L;
-    private static final String ALLIANCE_KEY = "univ:12:alliance";
-    private static final String MATCH_KEY = "univ:12:match";
-
-    private void givenCached(String key, String value) {
-        given(valueOperations.get(key)).willReturn(value);
-    }
-
-    private void givenCurrentAllianceInDb() {
-        given(allianceRepository.findCurrentByUniversityId(eq(UNIVERSITY_ID), any(OffsetDateTime.class)))
-                .willReturn(Optional.of(alliance));
-        given(alliance.getId()).willReturn(ALLIANCE_ID);
-        given(alliance.getExpiredAt()).willReturn(OffsetDateTime.now().plusHours(24));
-    }
-
-    private void givenMatchInDb(Long allianceAId) {
-        given(allianceMatchRepository.findByAllianceId(eq(ALLIANCE_ID), any(OffsetDateTime.class)))
-                .willReturn(Optional.of(match));
-        given(match.getId()).willReturn(MATCH_ID);
-        given(match.getAllianceAId()).willReturn(allianceAId);
-        given(match.getEndedAt()).willReturn(OffsetDateTime.now().plusHours(3));
-    }
+    // 연합·대결 조회와 캐시는 AllianceStandingResolverTest에서 본다. 여기서는 내 학교로 조회하고 결과를 스크립트에 넘기는지만 본다.
 
     /**
      * 스크립트에 넘긴 KEYS[9], KEYS[10]과 ARGV[6], ARGV[7]
@@ -577,157 +542,30 @@ class ClickServiceTest {
     }
 
     @Test
-    @DisplayName("캐시도 DB도 연합이 없으면 \"none\"을 10초 캐시하고, 대결은 조회하지 않고 연합·대결 점수를 건너뛴다")
-    void click_noAllianceCachesNoneAndSkipsScores() {
+    @DisplayName("내 학교 ID로 연합·대결을 찾고, 결과를 KEYS[9·10]과 ARGV[6·7]로 넘긴다")
+    void click_passesAllianceStandingToScript() {
         givenHappyPathBeforeScript();
         givenItemMultiplier(null);
         givenScriptResult();
+        given(allianceStandingResolver.resolve(UNIVERSITY_ID))
+                .willReturn(new AllianceStandingResolver.AllianceStanding(7L, 42L, "B"));
 
         clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
 
-        verify(valueOperations).set(ALLIANCE_KEY, "none", Duration.ofSeconds(10));
-        verify(allianceMatchRepository, never()).findByAllianceId(anyLong(), any());
-        verify(valueOperations, never()).get(MATCH_KEY);
-        assertThat(allianceKeysAndArgs()).containsExactly("alliance:0:score", "match:0:score", "0", "");
-    }
-
-    @Test
-    @DisplayName("연합 캐시가 \"none\"이면 DB를 조회하지 않는다")
-    void click_noneAllianceCacheSkipsDb() {
-        givenHappyPathBeforeScript();
-        givenItemMultiplier(null);
-        givenCached(ALLIANCE_KEY, "none");
-        givenScriptResult();
-
-        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
-
-        verify(allianceRepository, never()).findCurrentByUniversityId(anyLong(), any());
-        verify(allianceMatchRepository, never()).findByAllianceId(anyLong(), any());
-        assertThat(allianceKeysAndArgs()).containsExactly("alliance:0:score", "match:0:score", "0", "");
-    }
-
-    @Test
-    @DisplayName("연합 캐시가 없고 DB에 연합이 있으면 연합 만료 시각까지 캐시하고 연합 점수를 쌓는다")
-    void click_allianceFromDbIsCachedUntilExpiry() {
-        givenHappyPathBeforeScript();
-        givenItemMultiplier(null);
-        givenCached(ALLIANCE_KEY, null);
-        givenCurrentAllianceInDb();
-        givenCached(MATCH_KEY, "none");
-        givenScriptResult();
-
-        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
-
-        ArgumentCaptor<Duration> ttlCaptor = ArgumentCaptor.captor();
-        verify(valueOperations).set(eq(ALLIANCE_KEY), eq("7"), ttlCaptor.capture());
-        // 만료까지 24시간. 테스트가 도는 동안 몇 초 줄어들 수 있다
-        assertThat(ttlCaptor.getValue()).isBetween(Duration.ofHours(23), Duration.ofHours(24));
-        assertThat(allianceKeysAndArgs()).containsExactly("alliance:7:score", "match:0:score", "7", "");
-    }
-
-    @Test
-    @DisplayName("연합 캐시가 있으면 연합 DB를 조회하지 않는다")
-    void click_cachedAllianceSkipsDb() {
-        givenHappyPathBeforeScript();
-        givenItemMultiplier(null);
-        givenCached(ALLIANCE_KEY, "7");
-        givenCached(MATCH_KEY, "none");
-        givenScriptResult();
-
-        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
-
-        verify(allianceRepository, never()).findCurrentByUniversityId(anyLong(), any());
-        assertThat(allianceKeysAndArgs()).containsExactly("alliance:7:score", "match:0:score", "7", "");
-    }
-
-    @Test
-    @DisplayName("연합 캐시가 있어도 대결 캐시가 없으면 대결을 DB에서 찾는다 (연합보다 나중에 시작한 대결)")
-    void click_cachedAllianceStillLooksUpNewMatch() {
-        givenHappyPathBeforeScript();
-        givenItemMultiplier(null);
-        givenCached(ALLIANCE_KEY, "7");
-        givenMatchInDb(ALLIANCE_ID);
-        givenScriptResult();
-
-        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
-
-        assertThat(allianceKeysAndArgs()).containsExactly("alliance:7:score", "match:42:score", "7", "A");
-    }
-
-    @Test
-    @DisplayName("내 연합이 대결의 A면 \"{matchId}:A\"를 대결 종료 시각까지 캐시하고 A에 쌓는다")
-    void click_matchAsSideA() {
-        givenHappyPathBeforeScript();
-        givenItemMultiplier(null);
-        givenCached(ALLIANCE_KEY, "7");
-        givenMatchInDb(ALLIANCE_ID);
-        givenScriptResult();
-
-        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
-
-        ArgumentCaptor<Duration> ttlCaptor = ArgumentCaptor.captor();
-        verify(valueOperations).set(eq(MATCH_KEY), eq("42:A"), ttlCaptor.capture());
-        assertThat(ttlCaptor.getValue()).isBetween(Duration.ofHours(2), Duration.ofHours(3));
-        assertThat(allianceKeysAndArgs()).containsExactly("alliance:7:score", "match:42:score", "7", "A");
-    }
-
-    @Test
-    @DisplayName("내 연합이 대결의 B면 \"{matchId}:B\"로 캐시하고 B에 쌓는다")
-    void click_matchAsSideB() {
-        givenHappyPathBeforeScript();
-        givenItemMultiplier(null);
-        givenCached(ALLIANCE_KEY, "7");
-        givenMatchInDb(OTHER_ALLIANCE_ID);
-        givenScriptResult();
-
-        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
-
-        verify(valueOperations).set(eq(MATCH_KEY), eq("42:B"), any(Duration.class));
+        verify(allianceStandingResolver).resolve(UNIVERSITY_ID);
         assertThat(allianceKeysAndArgs()).containsExactly("alliance:7:score", "match:42:score", "7", "B");
     }
 
     @Test
-    @DisplayName("연합은 있지만 진행 중 대결이 없으면 대결 캐시에 \"none\"을 10초 캐시하고 연합 점수만 쌓는다")
-    void click_allianceWithoutMatchCachesNone() {
+    @DisplayName("연합이 없으면(NONE) 0 키와 \"0\", \"\"를 넘겨 스크립트가 연합·대결 점수를 건너뛰게 한다")
+    void click_noAlliancePassesZeroKeys() {
         givenHappyPathBeforeScript();
         givenItemMultiplier(null);
-        givenCached(ALLIANCE_KEY, "7");
         givenScriptResult();
 
         clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
 
-        verify(valueOperations).set(MATCH_KEY, "none", Duration.ofSeconds(10));
-        assertThat(allianceKeysAndArgs()).containsExactly("alliance:7:score", "match:0:score", "7", "");
-    }
-
-    @Test
-    @DisplayName("대결 캐시가 있으면 대결 DB를 조회하지 않고 캐시의 대결·편을 쓴다")
-    void click_cachedMatchSkipsDb() {
-        givenHappyPathBeforeScript();
-        givenItemMultiplier(null);
-        givenCached(ALLIANCE_KEY, "7");
-        givenCached(MATCH_KEY, "42:B");
-        givenScriptResult();
-
-        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
-
-        verify(allianceMatchRepository, never()).findByAllianceId(anyLong(), any());
-        assertThat(allianceKeysAndArgs()).containsExactly("alliance:7:score", "match:42:score", "7", "B");
-    }
-
-    @Test
-    @DisplayName("대결 캐시가 \"none\"이면 대결 DB를 조회하지 않는다")
-    void click_noneMatchCacheSkipsDb() {
-        givenHappyPathBeforeScript();
-        givenItemMultiplier(null);
-        givenCached(ALLIANCE_KEY, "7");
-        givenCached(MATCH_KEY, "none");
-        givenScriptResult();
-
-        clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
-
-        verify(allianceMatchRepository, never()).findByAllianceId(anyLong(), any());
-        assertThat(allianceKeysAndArgs()).containsExactly("alliance:7:score", "match:0:score", "7", "");
+        assertThat(allianceKeysAndArgs()).containsExactly("alliance:0:score", "match:0:score", "0", "");
     }
 
     // --- 5단계: 스크립트 호출과 응답 매핑 ---
