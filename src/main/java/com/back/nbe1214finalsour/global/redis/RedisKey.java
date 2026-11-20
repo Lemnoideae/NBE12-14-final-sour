@@ -36,7 +36,7 @@ public enum RedisKey {
     USER_STATUS("user:%s:status", Structure.STRING, ValueFormat.PLAIN),
     /** 회원 클리커 레벨. INCR로 올릴 수 있어야 한다 */
     USER_CLICKER("user:%s:clicker", Structure.STRING, ValueFormat.PLAIN),
-    /** 적용 중인 효과. field: itemId, multiplier, expiredAt */
+    /** 적용 중인 효과. field: itemId, multiplier, expiredAt, purchaseId (물약 구매 Lua가 쓴다) */
     USER_EFFECT("user:%s:effect", Structure.HASH, ValueFormat.JSON),
 
     // 아이템 (Item)
