@@ -2,6 +2,7 @@ package com.back.nbe1214finalsour.domain.item.repository;
 
 import com.back.nbe1214finalsour.global.redis.RedisKey;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -12,6 +13,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Repository
 @RequiredArgsConstructor
 public class RedisPotionPurchaser {
@@ -50,7 +52,7 @@ public class RedisPotionPurchaser {
     }
 
     public void compensate(Long userId, Long universityId, long price, UUID idempotencyKey, String previousEffect) {
-        redisTemplate.execute(
+        Long result = redisTemplate.execute(
                 COMPENSATE_SCRIPT,
                 List.of(
                         RedisKey.RANK_USER.of(universityId),
@@ -63,5 +65,9 @@ public class RedisPotionPurchaser {
                 idempotencyKey.toString(),
                 previousEffect,
                 String.valueOf(VOIDED_TTL_MILLIS));
+        if (result != null && result == -3L) {
+            log.error("물약 구매 보상: 취소 기록 연쇄가 10번을 넘어 효과를 지움. userId={}, idempotencyKey={}",
+                    userId, idempotencyKey);
+        }
     }
 }

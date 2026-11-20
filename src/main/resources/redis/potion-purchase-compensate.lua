@@ -2,17 +2,27 @@
 -- KEYS[3] user:{userId}:effect             KEYS[4] purchase:{userId}:{idempotencyKey}
 -- KEYS[5] user:{userId}:effect:voided (취소된 purchaseId → 그 구매가 꺼낸 이전 효과)
 -- ARGV[1] userId  ARGV[2] price  ARGV[3] purchaseId  ARGV[4] 이전 효과 JSON 또는 ""  ARGV[5] 취소 기록 TTL(ms)
--- 반환: 1
+-- 반환: 1 (정상), -3 (취소 기록 연쇄가 10번을 넘어 효과를 지움)
+local result = 1
 redis.call('ZINCRBY', KEYS[1], tonumber(ARGV[2]), ARGV[1])
 redis.call('SADD', KEYS[2], ARGV[1])
 -- 효과 주인(purchaseId)이 이 구매일 때만 효과를 되돌린다 (HGET이 nil이면 false라 "주인 아님")
 if redis.call('HGET', KEYS[3], 'purchaseId') == ARGV[3] then
     -- 복원 대상: 기본은 넘겨받은 이전 효과. 그 효과의 구매가 이미 취소됐으면(voided에 있으면)
     -- 취소된 구매가 꺼냈던 효과로 건너뛴다. 살아 있는 효과(또는 빈 값)를 만날 때까지 반복한다.
+    -- 10번을 넘으면 어떤 효과가 맞는지 알 수 없으므로 효과를 지우고(target = '') -3을 돌려준다.
+    -- 상한이 없으면 순환 기록에서 Lua가 끝나지 않아 Redis가 멈춘다.
     local target = ARGV[4]
+    local hops = 0
     while target ~= '' do
         local previousId = cjson.decode(target)['purchaseId']
         if previousId and redis.call('HEXISTS', KEYS[5], previousId) == 1 then
+            hops = hops + 1
+            if hops > 10 then
+                target = ''
+                result = -3
+                break
+            end
             target = redis.call('HGET', KEYS[5], previousId)
         else
             break
@@ -44,4 +54,4 @@ else
     redis.call('PEXPIRE', KEYS[5], ARGV[5])
 end
 redis.call('DEL', KEYS[4])
-return 1
+return result
