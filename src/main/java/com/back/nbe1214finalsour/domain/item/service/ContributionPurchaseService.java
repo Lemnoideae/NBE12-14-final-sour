@@ -13,7 +13,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -21,7 +20,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 // 기여도 아이템(물약) 구매
-// 트랜잭션이 있어야 PotionPurchasedEvent가 커밋 후(AFTER_COMMIT) 리스너로 전달된다
+// 구매와 효과 적용은 Redis Lua가 하고, DB 이력 저장은 PotionPurchaseRecorder가 자기 트랜잭션으로 한다
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -34,7 +33,7 @@ public class ContributionPurchaseService {
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
-    @Transactional
+    // 트랜잭션을 붙이지 말 것: 붙이면 record()가 합류해 커밋이 try 밖으로 밀리고 커밋 실패를 보상하지 못한다
     public ItemPurchaseResult purchase(Long userId, Long universityId, Item item, UUID idempotencyKey) {
         // 만료 시각은 한 번만 계산해 Lua와 구매 이력에 같은 값을 쓴다
         // Redis PEXPIREAT은 밀리초, DB timestamptz는 마이크로초라 밀리초로 잘라야 두 곳의 값이 같다
