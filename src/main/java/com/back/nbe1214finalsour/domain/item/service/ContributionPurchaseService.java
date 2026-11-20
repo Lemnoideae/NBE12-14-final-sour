@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 // 기여도 아이템(물약) 구매
 // 트랜잭션이 있어야 PotionPurchasedEvent가 커밋 후(AFTER_COMMIT) 리스너로 전달된다
@@ -29,7 +30,7 @@ public class ContributionPurchaseService {
     private final Clock clock;
 
     @Transactional
-    public ItemPurchaseResult purchase(Long userId, Long universityId, Item item) {
+    public ItemPurchaseResult purchase(Long userId, Long universityId, Item item, UUID idempotencyKey) {
         // Redis의 기여도 차감 시도
         long myContribScore = this.contributionWallet.tryDeduct(userId, universityId, item.getPrice())
                 .orElseThrow(() -> new BusinessException(ErrorCode.ITEM_NOT_ENOUGH_SCORE)); // 잔여 기여도가 부족하다면 차감없이 400

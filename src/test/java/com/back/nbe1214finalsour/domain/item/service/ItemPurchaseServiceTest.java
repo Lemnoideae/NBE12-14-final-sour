@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -55,6 +56,7 @@ public class ItemPurchaseServiceTest {
     private static final Long USER_ID = 1L;
     private static final Long UNIVERSITY_ID = 12L;
     private static final Long DEPARTMENT_ID = 34L;
+    private static final UUID KEY = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
     private static final String LOGO_URL = "https://cdn.devcproject.cloud/custom-logo/1/abc.png";
     // 검증기는 Mock이라 내용은 상관없음
     private static final MockMultipartFile LOGO_IMAGE = new MockMultipartFile("logoImage", "logo.png", "image/png", new byte[]{1, 2, 3});
@@ -98,11 +100,12 @@ public class ItemPurchaseServiceTest {
     void purchase_contributionItem_delegatesWithoutUpload() {
         given(this.itemService.getItems()).willReturn(ITEMS);
         ItemPurchaseResult expected = new ItemPurchaseResult(5530L, ITEMS.get(1), 1000L, null, 1500L, 1100L);
-        given(this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, ITEMS.get(1))).willReturn(expected);
+        given(this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, ITEMS.get(1), KEY)).willReturn(expected);
 
-        ItemPurchaseResult result = this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 2L, null, UUID.randomUUID());
+        ItemPurchaseResult result = this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 2L, null, KEY);
 
         assertThat(result).isSameAs(expected);
+        then(this.contributionPurchaseService).should().purchase(USER_ID, UNIVERSITY_ID, ITEMS.get(1), KEY);
         verifyNoInteractions(this.logoImageValidator, this.imageStorage, this.creditPurchaseService);
     }
 

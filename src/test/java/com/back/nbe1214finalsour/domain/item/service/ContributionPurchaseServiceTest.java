@@ -26,6 +26,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.OptionalLong;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -59,6 +60,7 @@ class ContributionPurchaseServiceTest {
 
     private static final Long USER_ID = 1L;
     private static final Long UNIVERSITY_ID = 12L;
+    private static final UUID KEY = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
 
     private static final Item POTION_X2 =
             new Item(1L, "2배 물약", "1시간 동안 클릭 점수 2배", ItemType.MULTIPLIER, PayType.CONTRIBUTION, 500L, 3600, 2.0);
@@ -71,7 +73,7 @@ class ContributionPurchaseServiceTest {
         given(this.contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 1000L))
                 .willReturn(OptionalLong.of(1500L));
 
-        this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4);
+        this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY);
 
         verify(this.contributionWallet).tryDeduct(USER_ID, UNIVERSITY_ID, 1000L);
     }
@@ -82,7 +84,7 @@ class ContributionPurchaseServiceTest {
         given(this.contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 500L))
                 .willReturn(OptionalLong.empty());
 
-        assertThatThrownBy(() -> this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X2))
+        assertThatThrownBy(() -> this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X2, KEY))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ITEM_NOT_ENOUGH_SCORE);
@@ -99,7 +101,7 @@ class ContributionPurchaseServiceTest {
         given(this.contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 1000L))
                 .willReturn(OptionalLong.of(1500L));
 
-        this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4);
+        this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY);
 
         ArgumentCaptor<UserItem> captor = ArgumentCaptor.forClass(UserItem.class);
         verify(this.userItemRepository).save(captor.capture());
@@ -118,7 +120,7 @@ class ContributionPurchaseServiceTest {
         given(this.contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 1000L))
                 .willReturn(OptionalLong.of(1500L));
 
-        this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4);
+        this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY);
 
         ArgumentCaptor<PotionPurchasedEvent> captor = ArgumentCaptor.forClass(PotionPurchasedEvent.class);
         verify(this.eventPublisher).publishEvent(captor.capture());
@@ -138,7 +140,7 @@ class ContributionPurchaseServiceTest {
         given(this.userItemRepository.save(any()))
                 .willThrow(new DataIntegrityViolationException("user_item 저장 실패"));
 
-        assertThatThrownBy(() -> this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4))
+        assertThatThrownBy(() -> this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY))
                 .isInstanceOf(DataIntegrityViolationException.class);
 
         // Redis는 롤백되지 않으므로 차감한 만큼 직접 되돌림
@@ -163,7 +165,7 @@ class ContributionPurchaseServiceTest {
         given(this.creditWallet.findBalance(USER_ID))
                 .willReturn(1100L);
 
-        ItemPurchaseResult result = this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4);
+        ItemPurchaseResult result = this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY);
 
         assertThat(result.userItemId()).isEqualTo(5530L);
         assertThat(result.item()).isSameAs(POTION_X4);
