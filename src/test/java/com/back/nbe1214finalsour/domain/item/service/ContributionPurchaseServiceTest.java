@@ -130,8 +130,8 @@ class ContributionPurchaseServiceTest {
     }
 
     @Test
-    @DisplayName("물약을 사면 배율과 만료 시각을 담은 효과 적용 이벤트를 발행한다")
-    void purchase_publishesPotionPurchasedEvent() {
+    @DisplayName("물약을 사도 효과는 구매 Lua가 이미 적용하므로 효과 적용 이벤트를 발행하지 않는다")
+    void purchase_doesNotPublishEvent() {
         // given
         given(this.redisPotionPurchaser.purchase(USER_ID, UNIVERSITY_ID, 2L, 1000L, 4.0, EXPIRED_AT, KEY))
                 .willReturn(new PotionPurchaseOutcome(1500L, ""));
@@ -140,14 +140,7 @@ class ContributionPurchaseServiceTest {
         this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY);
 
         // then
-        ArgumentCaptor<PotionPurchasedEvent> captor = ArgumentCaptor.forClass(PotionPurchasedEvent.class);
-        then(this.eventPublisher).should().publishEvent(captor.capture());
-
-        PotionPurchasedEvent event = captor.getValue();
-        assertThat(event.userId()).isEqualTo(USER_ID);
-        assertThat(event.itemId()).isEqualTo(2L);
-        assertThat(event.multiplier()).isEqualTo(4.0);
-        assertThat(event.expiredAt()).isAtSameInstantAs(NOW.plusSeconds(3600).atOffset(ZoneOffset.UTC));
+        then(this.eventPublisher).shouldHaveNoInteractions();
     }
 
     @Test
