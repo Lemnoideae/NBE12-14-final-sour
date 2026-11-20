@@ -151,20 +151,22 @@ class ContributionPurchaseServiceTest {
 
     @Test
     @DisplayName("구매 이력 저장이 실패하면 차감한 기여도를 되돌리고 예외를 다시 던진다")
-    void purchase_restoresContributionWhenSaveFails() {
+    void purchase_compensatesWhenSaveFails() {
         // given
+        String previousEffect = "{\"itemId\":\"1\"}";
         given(this.redisPotionPurchaser.purchase(USER_ID, UNIVERSITY_ID, 2L, 1000L, 4.0, EXPIRED_AT, KEY))
-                .willReturn(new PotionPurchaseOutcome(1500L, ""));
-        given(this.potionPurchaseRecorder.record(any()))
-                .willThrow(new DataIntegrityViolationException("user_item 저장 실패"));
+                .willReturn(new PotionPurchaseOutcome(1500L, previousEffect));
+        DataIntegrityViolationException failure = new DataIntegrityViolationException("user_item 저장 실패");
+        given(this.potionPurchaseRecorder.record(any())).willThrow(failure);
 
         // when
         Throwable thrown = catchThrowable(() -> this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY));
 
         // then
-        assertThat(thrown).isInstanceOf(DataIntegrityViolationException.class);
-        // Redis는 롤백되지 않으므로 차감한 만큼 직접 되돌림
-        then(this.contributionWallet).should().restore(USER_ID, UNIVERSITY_ID, 1000L);
+        assertThat(thrown).isSameAs(failure);
+        // Redis는 롤백되지 않으므로 보상 Lua로 기여도와 효과를 되돌림 (이전 효과는 Lua가 준 문자열 그대로)
+        then(this.redisPotionPurchaser).should().compensate(USER_ID, UNIVERSITY_ID, 1000L, KEY, previousEffect);
+        then(this.contributionWallet).shouldHaveNoInteractions();
         // 구매가 성립하지 않았으니 효과 적용 이벤트도 없음
         then(this.eventPublisher).should(never()).publishEvent(any(PotionPurchasedEvent.class));
     }
