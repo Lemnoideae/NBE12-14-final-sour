@@ -42,6 +42,9 @@ public class ContributionPurchaseService {
         if (outcome.code() == -1) {
             throw new BusinessException(ErrorCode.ITEM_NOT_ENOUGH_SCORE); // 잔여 기여도가 부족하다면 차감없이 400
         }
+        if (outcome.code() == -2) {
+            throw new BusinessException(ErrorCode.ITEM_DUPLICATE_PURCHASE); // 같은 멱등 키가 이미 있다면 409
+        }
         long myContribScore = outcome.code();
 
         // 구매 이력 저장
