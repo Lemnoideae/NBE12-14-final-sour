@@ -1,5 +1,5 @@
 // SCRUM-163: the visit screen reads the school's detail from the API (score, rank, members, top departments and
-// contributors); the guestbook stays on the mock (SCRUM-137).
+// contributors). SCRUM-181 removes fictional guestbook previews in the API detail; the full sheet reads GET/POST.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { after, afterEach, test } from 'node:test';
@@ -22,7 +22,7 @@ for (const [key, value] of Object.entries({ window: dom.window, document: dom.wi
   HTMLElement: dom.window.HTMLElement, Node: dom.window.Node, IS_REACT_ACT_ENVIRONMENT: true,
 })) Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
 
-const { render, screen, cleanup, waitFor, fireEvent, within } = await import('@testing-library/react');
+const { render, screen, act, cleanup, waitFor, fireEvent, within } = await import('@testing-library/react');
 const { ApiProvider } = await import('../src/api/ApiProvider');
 const { createApiClient } = await import('../src/api/client');
 const { createQueryClient } = await import('../src/api/queryClient');
@@ -46,6 +46,8 @@ const PUSAN: UniversityDetail = {
   topDepartments: [{ rank: 1, id: 31, name: '기계공학부', totalScore: 9000 }, { rank: 2, id: 32, name: '경영학과', totalScore: 3000 }],
   topContributors: [{ rank: 1, userId: 501, nickname: '부산1등', contribScore: 800 }, { rank: 1, userId: 502, nickname: '부산공동1등', contribScore: 800 }],
   isMyUniversity: false,
+  isMyAlly: false,
+  rankChange: 2,
 };
 const ok = (data: unknown) => new Response(JSON.stringify({ code: 'SUCCESS', message: '성공', data }), { status: 200 });
 const fail = (status: number, code: string, message: string) => new Response(JSON.stringify({ code, message, data: null }), { status });
@@ -87,20 +89,24 @@ function mount(schoolId: SchoolId | null, { signedIn = true, cachedMe = true, re
 }
 const info = () => screen.getByRole('region', { name: '학교 점수' });
 
-test('방문 화면은 서버의 점수·순위·회원 수·상위 학과·기여 랭커를 보이고, 순위 변동 배지는 없다', async () => {
+test('방문 화면은 서버의 점수·순위·순위 변동·회원 수·상위 학과·기여 랭커를 보인다', async () => {
   const f = mount(SCHOOL_ID.pusan);
   await waitFor(() => assert.equal(visit.status, 'ready'));
   assert.deepEqual(f.detailCalls(), [{ path: `/api/v1/universities/${SCHOOL_ID.pusan}`, auth: 'Bearer member-a' }]);
   assert.equal(screen.getByTestId('visit-score').textContent, '12,345점');
   assert.equal(screen.getByTestId('visit-rank').textContent, '2위');
-  assert.equal(screen.getByTestId('visit-info-rank').textContent, '🥈 2위', '시트에도 변동 표기가 없다');
+  assert.equal(screen.getByTestId('rank-change').textContent, '▲2', '상단 배지는 서버 rankChange (SCRUM-189)');
+  assert.equal(screen.getByTestId('rank-change').dataset.trend, 'up');
+  assert.equal(screen.getByTestId('visit-info-rank').textContent, '🥈 2위 (▲2)');
   assert.equal(within(info()).getByTestId('visit-info-members').textContent, '42명');
   const contributors = within(screen.getByRole('list', { name: '기여 랭커 목록' })).getAllByRole('listitem').map((li) => li.textContent);
   assert.deepEqual(contributors, ['🥇 1위 · 부산1등800점', '🥇 1위 · 부산공동1등800점'], '동점은 같은 순위');
   const departments = within(screen.getByRole('list', { name: '상위 학과 목록' })).getAllByRole('listitem').map((li) => li.textContent);
   assert.deepEqual(departments, ['🥇 1위 · 기계공학부9,000점', '🥈 2위 · 경영학과3,000점']);
   assertAbsent(screen.queryByText('기여 랭커 정보 없음 (목업)'));
-  assert.ok(screen.getAllByTestId('guestbook-preview-note').length > 0, '방명록 미리보기는 목업 유지 (SCRUM-137)');
+  assertAbsent(screen.queryByTestId('guestbook-preview-note'), 'API 방문 정보에 가짜 방명록을 표시하지 않는다');
+  screen.getByText('전체보기에서 실제 글을 확인하세요. 인기순은 준비 중입니다.');
+  screen.getByRole('button', { name: '방명록 전체보기' });
   assert.match(screen.getByTestId('spectator-bar').querySelector('p')!.getAttribute('title') ?? '', /내 학교\(한양대\)/);
   assert.equal(visit.isMyUniversity, false);
 });
@@ -119,12 +125,27 @@ test('로그인했으면 내 정보를 받은 뒤 한 번만 조회하고, 로�
   assert.match(screen.getByTestId('spectator-bar').querySelector('p')!.getAttribute('title') ?? '', /로그인하면/);
 });
 
+test('하락은 ▼n 분홍 배지, 오늘 기준 복사본이 없어 변동이 null이면 순위만 보인다 (SCRUM-189)', async () => {
+  let change: number | null = -3;
+  mount(SCHOOL_ID.pusan, { respond: (url) => (url.pathname.endsWith(`/universities/${SCHOOL_ID.pusan}`)
+    ? ok({ ...PUSAN, rankChange: change }) : undefined) });
+  await waitFor(() => assert.equal(screen.getByTestId('rank-change').textContent, '▼3'));
+  assert.equal(screen.getByTestId('rank-change').dataset.trend, 'down');
+  assert.equal(screen.getByTestId('visit-info-rank').textContent, '🥈 2위 (▼3)');
+  change = null;
+  await act(async () => { await clients[0].refetchQueries(); });
+  await waitFor(() => assertAbsent(screen.queryByTestId('rank-change')));
+  assert.equal(screen.getByTestId('visit-rank').textContent, '2위');
+  assert.equal(screen.getByTestId('visit-info-rank').textContent, '🥈 2위');
+});
+
 test('서버 순위가 없으면 "순위 없음", 학과·기여자가 없으면 빈 상태 문구를 보인다', async () => {
   mount(SCHOOL_ID.pusan, { respond: (url) => (url.pathname.endsWith(`/universities/${SCHOOL_ID.pusan}`)
-    ? ok({ ...PUSAN, totalScore: 0, rank: null, topDepartments: [], topContributors: [] }) : undefined) });
+    ? ok({ ...PUSAN, totalScore: 0, rank: null, rankChange: null, topDepartments: [], topContributors: [] }) : undefined) });
   await waitFor(() => assert.equal(visit.status, 'ready'));
   assert.equal(screen.getByTestId('visit-rank').textContent, '순위 없음');
   assert.equal(screen.getByTestId('visit-info-rank').textContent, '🏫 순위 없음');
+  assertAbsent(screen.queryByTestId('rank-change'), '순위가 없으면 변동 배지도 없다');
   assert.ok(screen.getByText('아직 기여한 학생이 없어요'));
   assert.ok(screen.getByText('아직 점수를 올린 학과가 없어요'));
 });
@@ -160,7 +181,7 @@ test('계약 센서: 학교 상세 DTO·경로가 백엔드와 같고, 방문 �
   const dto = readFileSync(new URL('dto/UniversityDetailResponse.java', root), 'utf8');
   const components = (body: string) => [...body.matchAll(/^\s+(?:Long|long|String|boolean|List<[\w.]+>)\s+(\w+)/gm)].map((match) => match[1]);
   const [outer, departments, contributors] = dto.split(/public record \w+\(/).slice(1).map((part) => components(part.split(')')[0]));
-  assert.deepEqual(outer, ['id', 'name', 'logoUrl', 'totalScore', 'rank', 'memberCount', 'topDepartments', 'topContributors', 'isMyUniversity']);
+  assert.deepEqual(outer, ['id', 'name', 'logoUrl', 'totalScore', 'rank', 'memberCount', 'topDepartments', 'topContributors', 'isMyUniversity', 'isMyAlly', 'rankChange']);
   assert.deepEqual(departments, ['rank', 'id', 'name', 'totalScore']);
   assert.deepEqual(contributors, ['rank', 'userId', 'nickname', 'contribScore']);
   const controller = readFileSync(new URL('controller/UniversityController.java', root), 'utf8');

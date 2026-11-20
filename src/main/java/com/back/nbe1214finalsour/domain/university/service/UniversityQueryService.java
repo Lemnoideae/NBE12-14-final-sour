@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.university.service;
 
+import com.back.nbe1214finalsour.domain.alliance.service.AllianceAllyChecker;
 import com.back.nbe1214finalsour.domain.university.dto.DepartmentResponse;
 import com.back.nbe1214finalsour.domain.university.dto.UniversityDetailResponse;
 import com.back.nbe1214finalsour.domain.university.dto.UniversitySearchResponse;
@@ -11,6 +12,7 @@ import com.back.nbe1214finalsour.domain.university.repository.UniversityReposito
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import com.back.nbe1214finalsour.global.redis.RedisHandler;
+import com.back.nbe1214finalsour.global.redis.RedisKey;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -31,6 +33,8 @@ public class UniversityQueryService {
     private final UniversityRankingService universityRankingService;
     private final UniversityContributorReader universityContributorReader;
     private final UniversityMemberService universityMemberService;
+    private final AllianceAllyChecker allianceAllyChecker;
+    private final RankSnapshotService rankSnapshotService;
 
     public List<UniversitySearchResponse> searchUniversities(
             String keyword,
@@ -296,7 +300,15 @@ public class UniversityQueryService {
         boolean myUniversity =
                 isMyUniversity(universityId, myUniversityId);
 
-        // 9. 모든 정보를 하나의 DTO로 반환
+        // 9. 같은 연합 학교면 방문 화면이 공격 대신 지원을 보인다 (SCRUM-187)
+        boolean myAlly = allianceAllyChecker.areAllies(myUniversityId, universityId);
+
+        // 10. 순위 화면과 같은 기준(00:00 KST 복사본)의 순위 변동 (SCRUM-189)
+        Long rankChange = rank == null ? null : RankSnapshotService.change(
+                rankSnapshotService.previousRanks(RedisKey.RANK_UNIV_SNAPSHOT.of(), List.of(universityId), List.of()),
+                universityId, rank);
+
+        // 11. 모든 정보를 하나의 DTO로 반환
         return new UniversityDetailResponse(
                 university.getId(),
                 university.getName(),
@@ -306,7 +318,9 @@ public class UniversityQueryService {
                 memberCount,
                 topDepartments,
                 topContributors,
-                myUniversity
+                myUniversity,
+                myAlly,
+                rankChange
         );
     }
 }

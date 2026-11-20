@@ -25,6 +25,8 @@ export type GameAction =
   | { type: 'tap'; isCrit: boolean; now: number }
   | { type: 'api-tap'; points: number }
   | { type: 'api-scores'; contribution: number; schoolScore: number; departmentScore: number }
+  /** The server's own-school total from the ranking API (SCRUM-188), already including unconfirmed clicks. */
+  | { type: 'api-school-score'; schoolScore: number }
   | { type: 'upgrade' }
   | { type: 'buy'; itemId: string; now: number }
   | { type: 'expire'; now: number }
@@ -75,6 +77,8 @@ export function gameReducer(state: MockGameState, action: GameAction, buffs: rea
       };
     case 'api-scores':
       return { ...state, contribution: action.contribution, schoolScore: action.schoolScore, departmentScore: action.departmentScore };
+    case 'api-school-score':
+      return state.schoolScore === action.schoolScore ? state : { ...state, schoolScore: action.schoolScore };
     case 'tap': {
       const points = getTapPoints(state, action.isCrit, action.now, buffs);
       const buff = getActiveBuff(state, action.now, buffs);

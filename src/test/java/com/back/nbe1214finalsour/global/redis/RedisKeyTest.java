@@ -139,6 +139,10 @@ class RedisKeyTest {
                 "RANK_USER|rank:univ:%s:user|ZSET|PLAIN",
                 "SCORE_USER_ATTACK|score:user:attack|HASH|PLAIN",
                 "RANK_USER_ABUSE|rank:user:abuse:%s|ZSET|PLAIN",
+                "RANK_UNIV_SNAPSHOT|rank:snapshot:univ|ZSET|PLAIN",
+                "RANK_DEPT_SNAPSHOT|rank:snapshot:univ:%s:dept|ZSET|PLAIN",
+                "RANK_USER_SNAPSHOT|rank:snapshot:univ:%s:user|ZSET|PLAIN",
+                "RANK_SNAPSHOT_DATE|rank:snapshot:date|STRING|PLAIN",
                 // 변경 추적 (Batch)
                 "DIRTY_UNIV|dirty:univ|SET|PLAIN",
                 "DIRTY_DEPT|dirty:dept|SET|PLAIN",
@@ -172,7 +176,8 @@ class RedisKeyTest {
                 "CHAT_UNIV_CHANNEL|chat:univ:%s|CHANNEL|JSON",
                 "CHAT_ALLIANCE_CHANNEL|chat:alliance:%s|CHANNEL|JSON",
                 // 락
-                "LOCK_SCORE_FLUSH|lock:score-flush|STRING|PLAIN"
+                "LOCK_SCORE_FLUSH|lock:score-flush|STRING|PLAIN",
+                "LOCK_RANK_SNAPSHOT|lock:rank-snapshot|STRING|PLAIN"
         );
     }
 }

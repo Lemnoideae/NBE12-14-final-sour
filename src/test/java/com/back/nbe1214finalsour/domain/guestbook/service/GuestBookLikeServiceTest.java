@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.back.nbe1214finalsour.domain.guestbook.dto.GuestBookLikeResponse;
 import com.back.nbe1214finalsour.domain.guestbook.entity.GuestBook;
+import com.back.nbe1214finalsour.domain.guestbook.entity.GuestBookLike;
 import com.back.nbe1214finalsour.domain.guestbook.entity.GuestBookLikeId;
 import com.back.nbe1214finalsour.domain.guestbook.repository.GuestBookLikeRepository;
 import com.back.nbe1214finalsour.domain.guestbook.repository.GuestBookRepository;
@@ -82,6 +83,55 @@ class GuestBookLikeServiceTest {
         given(userRepository.findById(7L)).willReturn(Optional.of(user));
         given(user.getStatus()).willReturn(UserStatus.SUSPENDED);
         assertError(ErrorCode.USER_SUSPENDED, () -> service.like(10L, 7L));
+        verifyNoInteractions(likeRepository, guestBookRepository);
+    }
+
+    @Test
+    void unlike_deletesOnlyOwnEntityAndReturnsNewCount() {
+        givenActiveUser();
+        given(guestBookRepository.findByIdForUpdate(10L)).willReturn(Optional.of(guestBook));
+        GuestBookLike like = GuestBookLike.create(10L, 7L);
+        given(likeRepository.findById(new GuestBookLikeId(10L, 7L))).willReturn(Optional.of(like));
+        given(guestBook.decreaseLikeCount()).willReturn(12);
+
+        GuestBookLikeResponse response = service.unlike(10L, 7L);
+
+        assertThat(response).isEqualTo(new GuestBookLikeResponse(10L, false, 12));
+        verify(likeRepository).delete(like);
+        verify(guestBook).decreaseLikeCount();
+    }
+
+    @Test
+    void missingLike_throws404WithoutDeletingOrDecrementing() {
+        givenActiveUser();
+        given(guestBookRepository.findByIdForUpdate(10L)).willReturn(Optional.of(guestBook));
+
+        assertError(ErrorCode.GUEST_LIKE_NOT_FOUND, () -> service.unlike(10L, 7L));
+        verify(likeRepository, never()).delete(org.mockito.ArgumentMatchers.any());
+        verify(guestBook, never()).decreaseLikeCount();
+    }
+
+    @Test
+    void unlike_missingGuestbookIsRejectedBeforeLikeLookup() {
+        givenActiveUser();
+        assertError(ErrorCode.GUEST_NOT_FOUND, () -> service.unlike(999L, 7L));
+        verifyNoInteractions(likeRepository);
+    }
+
+    @Test
+    void unlike_missingUserIsRejectedBeforeLock() {
+        assertError(ErrorCode.USER_NOT_FOUND, () -> service.unlike(10L, 7L));
+        verifyNoInteractions(likeRepository, guestBookRepository);
+    }
+
+    @Test
+    void unlike_allNonActiveStatusesAreRejectedBeforeLock() {
+        given(userRepository.findById(7L)).willReturn(Optional.of(user));
+        for (UserStatus status : UserStatus.values()) {
+            if (status == UserStatus.ACTIVE) continue;
+            given(user.getStatus()).willReturn(status);
+            assertError(ErrorCode.USER_SUSPENDED, () -> service.unlike(10L, 7L));
+        }
         verifyNoInteractions(likeRepository, guestBookRepository);
     }
 

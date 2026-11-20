@@ -64,7 +64,7 @@ class RankingControllerTest {
     void getUniversities_anonymous() throws Exception {
         var response = new UniversityRankingResponse(
                 List.of(new UniversityRankingResponse.Item(
-                        1L, 12L, "서울대학교", null, 5000L
+                        1L, 12L, "서울대학교", null, 5000L, 2L
                 )),
                 0, 20, 1L, false, null
         );
@@ -79,6 +79,7 @@ class RankingControllerTest {
                 .andExpect(jsonPath("$.data.items[0].universityId").value(12))
                 .andExpect(jsonPath("$.data.items[0].name").value("서울대학교"))
                 .andExpect(jsonPath("$.data.items[0].totalScore").value(5000))
+                .andExpect(jsonPath("$.data.items[0].rankChange").value(2))
                 .andExpect(jsonPath("$.data.page").value(0))
                 .andExpect(jsonPath("$.data.totalCount").value(1))
                 .andExpect(jsonPath("$.data.hasNext").value(false))
@@ -98,7 +99,7 @@ class RankingControllerTest {
                 List.of(),
                 0, 20, 1L, false,
                 new UniversityRankingResponse.MyUniversity(
-                        1L, 12L, 5000L
+                        1L, 12L, 5000L, -1L
                 )
         );
 
@@ -115,7 +116,8 @@ class RankingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.myUniversity.rank").value(1))
                 .andExpect(jsonPath("$.data.myUniversity.universityId").value(12))
-                .andExpect(jsonPath("$.data.myUniversity.totalScore").value(5000));
+                .andExpect(jsonPath("$.data.myUniversity.totalScore").value(5000))
+                .andExpect(jsonPath("$.data.myUniversity.rankChange").value(-1));
 
         verify(rankingQueryService).getUniversities(0, 20, 12L);
     }
@@ -150,10 +152,10 @@ class RankingControllerTest {
         var response = new DepartmentRankingResponse(
                 List.of(
                         new DepartmentRankingResponse.Item(
-                                1L, 301L, "컴퓨터공학부", null, 5000L
+                                1L, 301L, "컴퓨터공학부", null, 5000L, 0L
                         ),
                         new DepartmentRankingResponse.Item(
-                                2L, 302L, "경영학과", null, 3000L
+                                2L, 302L, "경영학과", null, 3000L, null
                         )
                 ),
                 0, 20, 2L, false, null
@@ -172,7 +174,10 @@ class RankingControllerTest {
                 .andExpect(jsonPath("$.data.items[0].departmentId").value(301))
                 .andExpect(jsonPath("$.data.items[0].name").value("컴퓨터공학부"))
                 .andExpect(jsonPath("$.data.items[0].totalScore").value(5000))
+                .andExpect(jsonPath("$.data.items[0].rankChange").value(0))
                 .andExpect(jsonPath("$.data.items[1].rank").value(2))
+                // 어제 순위가 없는 학과는 null로 내려간다 (키는 남는다)
+                .andExpect(jsonPath("$.data.items[1].rankChange").isEmpty())
                 .andExpect(jsonPath("$.data.totalCount").value(2))
                 .andExpect(jsonPath("$.data.myDepartment").isEmpty());
 
@@ -191,7 +196,7 @@ class RankingControllerTest {
                 List.of(),
                 0, 20, 1L, false,
                 new DepartmentRankingResponse.MyDepartment(
-                        1L, 301L, 5000L
+                        1L, 301L, 5000L, 3L
                 )
         );
 
@@ -209,7 +214,8 @@ class RankingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.myDepartment.rank").value(1))
                 .andExpect(jsonPath("$.data.myDepartment.departmentId").value(301))
-                .andExpect(jsonPath("$.data.myDepartment.totalScore").value(5000));
+                .andExpect(jsonPath("$.data.myDepartment.totalScore").value(5000))
+                .andExpect(jsonPath("$.data.myDepartment.rankChange").value(3));
 
         verify(departmentRankingQueryService)
                 .getDepartments(12L, 0, 20, 12L, 301L);
@@ -255,7 +261,8 @@ class RankingControllerTest {
                                 new UserRankingResponse.DepartmentInfo(
                                         301L, "컴퓨터공학과"
                                 ),
-                                9000L
+                                9000L,
+                                1L
                         )
                 ),
                 0, 20, 1L, false, null
@@ -278,6 +285,7 @@ class RankingControllerTest {
                 .andExpect(jsonPath("$.data.items[0].department.name")
                         .value("컴퓨터공학과"))
                 .andExpect(jsonPath("$.data.items[0].contribScore").value(9000))
+                .andExpect(jsonPath("$.data.items[0].rankChange").value(1))
                 .andExpect(jsonPath("$.data.totalCount").value(1))
                 .andExpect(jsonPath("$.data.hasNext").value(false))
                 .andExpect(jsonPath("$.data.me").isEmpty());
@@ -297,7 +305,7 @@ class RankingControllerTest {
                 List.of(),
                 0, 20, 1L, false,
                 new UserRankingResponse.Me(
-                        1L, 9000L
+                        1L, 9000L, null
                 )
         );
 
@@ -314,7 +322,8 @@ class RankingControllerTest {
                 )
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.me.rank").value(1))
-                .andExpect(jsonPath("$.data.me.contribScore").value(9000));
+                .andExpect(jsonPath("$.data.me.contribScore").value(9000))
+                .andExpect(jsonPath("$.data.me.rankChange").isEmpty());
 
         verify(userRankingQueryService)
                 .getUsers(12L, 0, 20, 12L, 101L);

@@ -34,6 +34,9 @@ class DepartmentRankingQueryServiceTest {
     @Mock
     private DepartmentRepository departmentRepository;
 
+    @Mock
+    private RankSnapshotService rankSnapshotService;
+
     @InjectMocks
     private DepartmentRankingQueryService queryService;
 

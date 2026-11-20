@@ -2,6 +2,8 @@ import type { SchoolId } from '../data/schoolIds.ts';
 import React from 'react';
 import { PhoneShell } from './PhoneShell';
 import { GuestbookBottomSheet } from './GuestbookBottomSheet';
+import { ApiGuestbookBottomSheet } from './ApiGuestbookBottomSheet';
+import { API_MODE } from '../api/mode';
 import { BottomSheetDialog } from './BottomSheetDialog';
 import { TopHUD, schoolHudProps } from './TopHUD';
 import { soundManager } from '../utils/sound';
@@ -15,6 +17,7 @@ interface VisitingScreen2PhoneProps {
   /** null: no school was chosen; the screen shows the not-found notice. */
   schoolId: SchoolId | null;
   onCloseGuestbook?: () => void;
+  onGoToLogin?: () => void;
   /** Actual service flow; the default remains an inline comparison phone. */
   modal?: boolean;
 }
@@ -22,6 +25,7 @@ interface VisitingScreen2PhoneProps {
 export const VisitingScreen2Phone: React.FC<VisitingScreen2PhoneProps> = ({
   schoolId,
   onCloseGuestbook = () => {},
+  onGoToLogin,
   modal = false,
 }) => {
   const { school, mySchool } = useVisitedSchool(schoolId);
@@ -30,7 +34,7 @@ export const VisitingScreen2Phone: React.FC<VisitingScreen2PhoneProps> = ({
 
   if (modal) return (
     <BottomSheetDialog label={`${school.name} 방명록`} onClose={onCloseGuestbook}>
-      <GuestbookBottomSheet
+      {API_MODE === 'api' ? <ApiGuestbookBottomSheet universityId={school.id} schoolName={school.name} onClose={onCloseGuestbook} onGoToLogin={onGoToLogin} /> : <GuestbookBottomSheet
         onClose={onCloseGuestbook}
         schoolId={school.id}
         schoolName={school.name}
@@ -41,7 +45,7 @@ export const VisitingScreen2Phone: React.FC<VisitingScreen2PhoneProps> = ({
         myNickname={game.player.nickname}
         mySchoolInitial={mySchool.firstSyllable}
         mySchoolBadgeColor={mySchool.badgeColor}
-      />
+      />}
     </BottomSheetDialog>
   );
 

@@ -29,4 +29,9 @@ public class ChatMessagePublisher {
         this.redisTemplate.convertAndSend(RedisKey.CHAT_UNIV_CHANNEL.of(universityId),
                 this.jsonMapper.writeValueAsString(message));
     }
+
+    public void publishToAlliance(long allianceId, ChatMessageResponse message) {
+        this.redisTemplate.convertAndSend(RedisKey.CHAT_ALLIANCE_CHANNEL.of(allianceId),
+                this.jsonMapper.writeValueAsString(message));
+    }
 }

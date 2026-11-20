@@ -1,6 +1,7 @@
 
 package com.back.nbe1214finalsour.domain.university.service;
 
+import com.back.nbe1214finalsour.domain.alliance.service.AllianceAllyChecker;
 import com.back.nbe1214finalsour.domain.university.repository.UniversityContributorReader;
 import com.back.nbe1214finalsour.domain.university.dto.DepartmentResponse;
 import com.back.nbe1214finalsour.domain.university.dto.UniversityDetailResponse;
@@ -12,6 +13,7 @@ import com.back.nbe1214finalsour.domain.university.repository.UniversityReposito
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import com.back.nbe1214finalsour.global.redis.RedisHandler;
+import com.back.nbe1214finalsour.global.redis.RedisKey;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,6 +53,12 @@ class UniversityQueryServiceTest {
 
     @Mock
     private UniversityMemberService universityMemberService;
+
+    @Mock
+    private AllianceAllyChecker allianceAllyChecker;
+
+    @Mock
+    private RankSnapshotService rankSnapshotService;
 
     @Test
     @DisplayName("학교 이름으로 검색하면 DTO 목록을 반환한다")
@@ -434,6 +442,11 @@ class UniversityQueryServiceTest {
         given(universityMemberService.getMemberCount(universityId))
                 .willReturn(498L);
 
+        // 순위 화면과 같은 기준: 00:00 KST 복사본에서 5위였다 (SCRUM-189)
+        given(rankSnapshotService.previousRanks(
+                RedisKey.RANK_UNIV_SNAPSHOT.of(), List.of(universityId), List.of()
+        )).willReturn(Map.of(universityId, 5L));
+
         UniversityDetailResponse result =
                 universityQueryService.getUniversityDetail(
                         universityId, myUniversityId
@@ -444,6 +457,7 @@ class UniversityQueryServiceTest {
 
         assertThat(result.totalScore()).isEqualTo(15000L);
         assertThat(result.rank()).isEqualTo(3L);
+        assertThat(result.rankChange()).isEqualTo(2L);
 
         assertThat(result.memberCount()).isEqualTo(498L);
         assertThat(result.isMyUniversity()).isTrue();
@@ -499,6 +513,8 @@ class UniversityQueryServiceTest {
         var result = universityQueryService.getUniversityDetail(universityId, null);
         assertThat(result.totalScore()).isZero();
         assertThat(result.rank()).isNull();
+        assertThat(result.rankChange()).isNull();
+        verify(rankSnapshotService, never()).previousRanks(any(), any(), any());
         assertThat(result.topDepartments()).hasSize(1);
         assertThat(result.topDepartments().getFirst().totalScore()).isEqualTo(300L);
         verify(universityRepository).findById(universityId);

@@ -3,6 +3,7 @@ package com.back.nbe1214finalsour.domain.guestbook.controller;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -52,6 +53,39 @@ class GuestBookLikeControllerTest {
                 .andExpect(jsonPath("$.data.liked").value(true))
                 .andExpect(jsonPath("$.data.likeCount").value(13));
         verify(service).like(3301L, 7L);
+    }
+
+    @Test
+    void loggedInUser_canUnlike() throws Exception {
+        var auth = UsernamePasswordAuthenticationToken.authenticated(new AuthUser(7L, 2L, 3L, Role.USER), null,
+                List.of(new SimpleGrantedAuthority("ROLE_USER")));
+
+        given(service.unlike(3301L, 7L)).willReturn(new GuestBookLikeResponse(3301L, false, 12));
+
+        mockMvc.perform(delete("/api/v1/guestbooks/3301/likes").with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.guestbookId").value(3301))
+                .andExpect(jsonPath("$.data.liked").value(false))
+                .andExpect(jsonPath("$.data.likeCount").value(12));
+        verify(service).unlike(3301L, 7L);
+    }
+
+    @Test
+    void anonymousUser_cannotUnlike() throws Exception {
+        mockMvc.perform(delete("/api/v1/guestbooks/3301/likes"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("COMMON_UNAUTHORIZED"));
+    }
+
+    @Test
+    void nonPositiveIds_cannotChangeLikes() throws Exception {
+        var auth = UsernamePasswordAuthenticationToken.authenticated(new AuthUser(7L, 2L, 3L, Role.USER), null,
+                List.of(new SimpleGrantedAuthority("ROLE_USER")));
+        mockMvc.perform(post("/api/v1/guestbooks/0/likes").with(authentication(auth)))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(delete("/api/v1/guestbooks/-1/likes").with(authentication(auth)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

@@ -30,7 +30,7 @@ export function rankMedal(rank: number | null): string {
   return (rank !== null && ['🥇', '🥈', '🥉'][rank - 1]) || '🏫';
 }
 
-/** "3위 (▲2)"; a school without a server rank reads "순위 없음", and the API has no rank change. */
+/** "3위 (▲2)"; a school without a server rank reads "순위 없음". Null hides the change (no copy of today yet). */
 export function formatVisitRank(rank: number | null, rankChange: string | null): string {
   const base = rank === null ? '순위 없음' : `${rank}위`;
   return rankChange === null ? base : `${base} (${rankChange})`;
@@ -140,9 +140,9 @@ export const VisitSchoolInfoSheet: React.FC<{ school: VisitSchoolView; extras?: 
           />
         </section>
       )}
-      <section aria-label="방명록 인기 쪽지" className="bg-[#8b5327] border-3 border-[#261608] shadow-[3px_3px_0px_#261608] p-2 flex flex-col gap-2">
-        <h3 className="font-pixel text-xs font-black text-[#fffbeb] drop-shadow-[1px_1px_0px_#261608]">방명록 인기 쪽지</h3>
-        <GuestbookPreviewNotes schoolId={school.id} />
+      <section aria-label={extras ? '학교 방명록' : '방명록 인기 쪽지'} className="bg-[#8b5327] border-3 border-[#261608] shadow-[3px_3px_0px_#261608] p-2 flex flex-col gap-2">
+        <h3 className="font-pixel text-xs font-black text-[#fffbeb] drop-shadow-[1px_1px_0px_#261608]">{extras ? '학교 방명록' : '방명록 인기 쪽지'}</h3>
+        {extras ? <p className="font-pixel text-xs text-[#fffbeb]">전체보기에서 실제 글을 확인하세요. 인기순은 준비 중입니다.</p> : <GuestbookPreviewNotes schoolId={school.id} />}
         <button
           type="button"
           onClick={(event) => {

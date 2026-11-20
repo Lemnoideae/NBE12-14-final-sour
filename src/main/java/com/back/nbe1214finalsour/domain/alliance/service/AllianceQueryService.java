@@ -11,7 +11,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +23,7 @@ public class AllianceQueryService {
 
     private final AllianceRepository allianceRepository;
     private final AllianceUniversityRepository allianceUniversityRepository;
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public Alliance getAlliance(Long allianceId) {
@@ -40,5 +45,14 @@ public class AllianceQueryService {
                         allianceId,
                         AllianceUniversityStatus.ACCEPTED
                 );
+    }
+
+    /** 내 학교의 현재 연합 (명세 {@code GET /api/v1/alliances/me}). 학교가 없거나 소속 연합이 없으면 비어 있다 */
+    @Transactional(readOnly = true)
+    public Optional<Alliance> findCurrentAlliance(@Nullable Long universityId) {
+        if (universityId == null) {
+            return Optional.empty();
+        }
+        return allianceRepository.findCurrentByUniversityId(universityId, OffsetDateTime.now(clock));
     }
 }
