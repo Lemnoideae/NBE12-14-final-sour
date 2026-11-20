@@ -32,6 +32,7 @@ export const ERROR_MESSAGE_OVERRIDES: Readonly<Record<string, string>> = {
   [CLIENT_ERROR_CODES.injected]: '[테스트 도구] 주입한 실패입니다. 다시 시도해 주세요.',
   // The server's text names the URL path ("요청한 경로"), which users do not see.
   COMMON_NOT_FOUND: '요청한 정보를 찾을 수 없습니다.',
+  ATTACK_ALLY_UNIVERSITY: '같은 연합의 학교는 공격할 수 없어요. 지원을 이용해 주세요.',
   // Only a client bug sends these; the server's text describes HTTP details.
   COMMON_METHOD_NOT_ALLOWED: '요청을 처리하지 못했습니다. 화면을 새로 고친 뒤 다시 시도해 주세요.',
   COMMON_UNSUPPORTED_MEDIA_TYPE: '요청을 처리하지 못했습니다. 화면을 새로 고친 뒤 다시 시도해 주세요.',

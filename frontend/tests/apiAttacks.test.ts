@@ -332,6 +332,56 @@ test('연합 학교는 지원 버튼으로 바뀌어 /assists로 보내고, 서�
   assert.equal(f.locked(), false);
 });
 
+test('동맹 공격 거절은 상세를 갱신하고 대기 공격을 취소하되, 지원은 사용자가 다시 눌러야 보낸다', async () => {
+  const allies: number[] = [];
+  let detailReads = 0;
+  const f = mount({ allies, beforeRead: (path) => {
+    if (path.endsWith(`/universities/${SCHOOL_ID.pusan}`)) detailReads += 1;
+    return undefined;
+  }, respond: () => {
+    if (f.assistCalls.length) return ok(ASSIST);
+    allies.push(SCHOOL_ID.pusan);
+    return fail(400, 'ATTACK_ALLY_UNIVERSITY');
+  } });
+  await waitFor(() => assert.ok(attackButton()));
+  for (let i = 0; i < 25; i++) fireEvent.click(attackButton());
+  await waitFor(() => assert.ok(assistButton()), { timeout: 2500 });
+  assert.ok(detailReads >= 2, '5초 주기 조회를 기다리지 않고 상세를 재조회한다');
+  assert.match(screen.getByRole('alert').textContent ?? '', /같은 연합.*공격할 수 없/);
+  assert.match(screen.getByRole('alert').textContent ?? '', /25회.*취소/);
+  assert.equal(attacks.pendingClicks, 0);
+  assert.equal(f.locked(), false);
+  assert.equal(f.calls.length, 1, '대기 중이던 다음 공격 묶음도 보내지 않는다');
+  assert.equal(f.assistCalls.length, 0, '거절된 공격을 지원으로 자동 전송하지 않는다');
+  assert.equal(screen.getByTestId('visit-score').textContent, '1,000점');
+  assert.equal(f.queryClient.getQueryData<MyInfo>(userKeys.me)?.totalAttackScore, 0);
+  fireEvent.click(assistButton());
+  await waitFor(() => assert.equal(f.assistCalls.length, 1), { timeout: 2500 });
+  assert.equal(f.assistCalls[0].body.clickCount, 1, '이전 25회가 아니라 새로 누른 지원만 보낸다');
+});
+
+test('응답 유실 뒤 동맹 거절은 상세만 갱신하고 이전 공격의 처리 여부가 불명확한 큐는 보존한다', async () => {
+  const allies: number[] = [];
+  const f = mount({ allies, respond: (_body, n) => {
+    if (n === 1) throw new TypeError('response lost');
+    allies.push(SCHOOL_ID.pusan);
+    return fail(400, 'ATTACK_ALLY_UNIVERSITY');
+  } });
+  await waitFor(() => assert.ok(attackButton()));
+  for (let i = 0; i < 25; i++) fireEvent.click(attackButton());
+  await waitFor(() => assert.equal(attacks.blocked, true), { timeout: 3500 });
+  await waitFor(() => assert.ok(assistButton()));
+  assert.equal((assistButton() as HTMLButtonElement).disabled, true);
+  assert.deepEqual(f.calls[0].body, f.calls[1].body, '같은 제출을 확인한 것이지 새 공격을 만든 것이 아니다');
+  assert.equal(f.calls.length, 2);
+  assert.equal(f.assistCalls.length, 0);
+  assert.equal(attacks.pendingClicks, 25);
+  assert.equal(f.locked(), true);
+  assert.equal(attacks.retryLimited, null);
+  assert.match(screen.getByRole('alert').textContent ?? '', /미확정 공격 25회.*보류/);
+  assert.doesNotMatch(screen.getByRole('alert').textContent ?? '', /취소했어요/);
+});
+
 test('연합이 아닌 학교는 그대로 공격하고, 지원 대기 중에는 다른 종류로 바꾸지 않는다', async () => {
   const f = mount({ allies: [SCHOOL_ID.pusan] });
   await waitFor(() => assert.ok(assistButton()));
