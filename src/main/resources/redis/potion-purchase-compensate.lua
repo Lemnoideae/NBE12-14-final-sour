@@ -26,6 +26,11 @@ if redis.call('HGET', KEYS[3], 'purchaseId') == ARGV[3] then
             redis.call('PEXPIREAT', KEYS[3], previous['expiredAt'])
         end
     end
+else
+    -- 주인이 아니면 효과는 건드리지 않고, 취소된 구매가 꺼낸 이전 효과를 기록한다 ("" 포함).
+    -- 지금 주인이 나중에 보상할 때 이 기록을 보고 취소된 효과를 건너뛴다.
+    redis.call('HSET', KEYS[5], ARGV[3], ARGV[4])
+    redis.call('PEXPIRE', KEYS[5], ARGV[5])
 end
 redis.call('DEL', KEYS[4])
 return 1
