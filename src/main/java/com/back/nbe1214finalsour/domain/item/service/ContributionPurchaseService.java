@@ -4,6 +4,8 @@ import com.back.nbe1214finalsour.domain.contribution.ContributionWallet;
 import com.back.nbe1214finalsour.domain.credit.repository.CreditWallet;
 import com.back.nbe1214finalsour.domain.item.entity.Item;
 import com.back.nbe1214finalsour.domain.item.event.PotionPurchasedEvent;
+import com.back.nbe1214finalsour.domain.item.repository.PotionPurchaseOutcome;
+import com.back.nbe1214finalsour.domain.item.repository.RedisPotionPurchaser;
 import com.back.nbe1214finalsour.domain.userItem.entity.UserItem;
 import com.back.nbe1214finalsour.domain.userItem.repository.UserItemRepository;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
@@ -25,19 +27,26 @@ public class ContributionPurchaseService {
 
     private final ContributionWallet contributionWallet;
     private final CreditWallet creditWallet;
+    private final RedisPotionPurchaser redisPotionPurchaser;
     private final UserItemRepository userItemRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     @Transactional
     public ItemPurchaseResult purchase(Long userId, Long universityId, Item item, UUID idempotencyKey) {
-        // Redis의 기여도 차감 시도
-        long myContribScore = this.contributionWallet.tryDeduct(userId, universityId, item.getPrice())
-                .orElseThrow(() -> new BusinessException(ErrorCode.ITEM_NOT_ENOUGH_SCORE)); // 잔여 기여도가 부족하다면 차감없이 400
+        // 만료 시각은 한 번만 계산해 Lua와 구매 이력에 같은 값을 쓴다
+        OffsetDateTime expiredAt = OffsetDateTime.now(this.clock).plusSeconds(item.getDuration());
+
+        // Redis 구매 Lua: 기여도 차감 + 효과 적용을 한 번에
+        PotionPurchaseOutcome outcome = this.redisPotionPurchaser.purchase(
+                userId, universityId, item.getId(), item.getPrice(), item.getMultiplier(), expiredAt, idempotencyKey);
+        if (outcome.code() == -1) {
+            throw new BusinessException(ErrorCode.ITEM_NOT_ENOUGH_SCORE); // 잔여 기여도가 부족하다면 차감없이 400
+        }
+        long myContribScore = outcome.code();
 
         // 구매 이력 저장
-        UserItem userItem = UserItem.ofPotion(
-                userId, item, OffsetDateTime.now(this.clock).plusSeconds(item.getDuration()));
+        UserItem userItem = UserItem.ofPotion(userId, item, expiredAt);
         try {
             this.userItemRepository.save(userItem);
         } catch (RuntimeException e) {
