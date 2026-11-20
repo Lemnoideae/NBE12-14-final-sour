@@ -29,11 +29,11 @@ import java.util.OptionalLong;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class ContributionPurchaseServiceTest {
@@ -70,41 +70,49 @@ class ContributionPurchaseServiceTest {
     @Test
     @DisplayName("물약을 사면 아이템 가격만큼 회원의 기여도를 차감한다")
     void purchase_deductsContribution() {
+        // given
         given(this.contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 1000L))
                 .willReturn(OptionalLong.of(1500L));
 
+        // when
         this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY);
 
-        verify(this.contributionWallet).tryDeduct(USER_ID, UNIVERSITY_ID, 1000L);
+        // then
+        then(this.contributionWallet).should().tryDeduct(USER_ID, UNIVERSITY_ID, 1000L);
     }
 
     @Test
     @DisplayName("잔여 기여도보다 비싼 물약을 사면 ITEM_NOT_ENOUGH_SCORE, 구매 이력과 이벤트가 없다")
     void purchase_notEnoughScore() {
+        // given
         given(this.contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 500L))
                 .willReturn(OptionalLong.empty());
 
-        assertThatThrownBy(() -> this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X2, KEY))
+        // when
+        Throwable thrown = catchThrowable(() -> this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X2, KEY));
+
+        // then
+        assertThat(thrown)
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ITEM_NOT_ENOUGH_SCORE);
-
-        verify(this.userItemRepository, never())
-                .save(any());
-        verify(this.eventPublisher, never())
-                .publishEvent(any(PotionPurchasedEvent.class));
+        then(this.userItemRepository).should(never()).save(any());
+        then(this.eventPublisher).should(never()).publishEvent(any(PotionPurchasedEvent.class));
     }
 
     @Test
     @DisplayName("물약을 사면 구매 이력을 저장한다")
     void purchase_saveUserItem() {
+        // given
         given(this.contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 1000L))
                 .willReturn(OptionalLong.of(1500L));
 
+        // when
         this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY);
 
+        // then
         ArgumentCaptor<UserItem> captor = ArgumentCaptor.forClass(UserItem.class);
-        verify(this.userItemRepository).save(captor.capture());
+        then(this.userItemRepository).should().save(captor.capture());
 
         UserItem saved = captor.getValue();
         assertThat(saved.getUserId()).isEqualTo(USER_ID);
@@ -117,13 +125,16 @@ class ContributionPurchaseServiceTest {
     @Test
     @DisplayName("물약을 사면 배율과 만료 시각을 담은 효과 적용 이벤트를 발행한다")
     void purchase_publishesPotionPurchasedEvent() {
+        // given
         given(this.contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 1000L))
                 .willReturn(OptionalLong.of(1500L));
 
+        // when
         this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY);
 
+        // then
         ArgumentCaptor<PotionPurchasedEvent> captor = ArgumentCaptor.forClass(PotionPurchasedEvent.class);
-        verify(this.eventPublisher).publishEvent(captor.capture());
+        then(this.eventPublisher).should().publishEvent(captor.capture());
 
         PotionPurchasedEvent event = captor.getValue();
         assertThat(event.userId()).isEqualTo(USER_ID);
@@ -135,24 +146,27 @@ class ContributionPurchaseServiceTest {
     @Test
     @DisplayName("구매 이력 저장이 실패하면 차감한 기여도를 되돌리고 예외를 다시 던진다")
     void purchase_restoresContributionWhenSaveFails() {
+        // given
         given(this.contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 1000L))
                 .willReturn(OptionalLong.of(1500L));
         given(this.userItemRepository.save(any()))
                 .willThrow(new DataIntegrityViolationException("user_item 저장 실패"));
 
-        assertThatThrownBy(() -> this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY))
-                .isInstanceOf(DataIntegrityViolationException.class);
+        // when
+        Throwable thrown = catchThrowable(() -> this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY));
 
+        // then
+        assertThat(thrown).isInstanceOf(DataIntegrityViolationException.class);
         // Redis는 롤백되지 않으므로 차감한 만큼 직접 되돌림
-        verify(this.contributionWallet).restore(USER_ID, UNIVERSITY_ID, 1000L);
+        then(this.contributionWallet).should().restore(USER_ID, UNIVERSITY_ID, 1000L);
         // 구매가 성립하지 않았으니 효과 적용 이벤트도 없음
-        verify(this.eventPublisher, never())
-                .publishEvent(any(PotionPurchasedEvent.class));
+        then(this.eventPublisher).should(never()).publishEvent(any(PotionPurchasedEvent.class));
     }
 
     @Test
     @DisplayName("물약 구매 결과로 구매 이력 ID·아이템·가격·만료 시각·차감 후 기여도·현재 크레딧을 반환")
     void purchase_returnsResult() {
+        // given
         given(this.contributionWallet.tryDeduct(USER_ID, UNIVERSITY_ID, 1000L))
                 .willReturn(OptionalLong.of(1500L));
         // IDENTITY 저장 시 DB가 같은 객체에 id를 채워 주는 것을 흉내
@@ -165,8 +179,10 @@ class ContributionPurchaseServiceTest {
         given(this.creditWallet.findBalance(USER_ID))
                 .willReturn(1100L);
 
+        // when
         ItemPurchaseResult result = this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY);
 
+        // then
         assertThat(result.userItemId()).isEqualTo(5530L);
         assertThat(result.item()).isSameAs(POTION_X4);
         assertThat(result.price()).isEqualTo(1000L);
