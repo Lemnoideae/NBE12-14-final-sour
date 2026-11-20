@@ -131,6 +131,15 @@ public class ItemControllerTest {
     }
 
     @Test
+    @DisplayName("[POST] /api/v1/items/{itemId}/purchase는 Idempotency-Key 헤더가 없으면 400 COMMON_INVALID_INPUT")
+    void purchase_missingIdempotencyKey() throws Exception {
+        mockMvc.perform(post("/api/v1/items/2/purchase")
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("COMMON_INVALID_INPUT"));
+    }
+
+    @Test
     @DisplayName("[POST] /api/v1/items/{itemId}/purchase는 토큰의 회원·학교로 구매하고 201과 구매 결과를 응답")
     void purchase() throws Exception {
         // given: 1시간 뒤 만료(UTC 04:00 = KST 13:00), 차감 후 기여도 1500, 크레딧 1100
