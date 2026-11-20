@@ -57,8 +57,9 @@ public class ContributionPurchaseService {
         try {
             saved = this.potionPurchaseRecorder.record(userItem);
         } catch (RuntimeException e) {
-            // Redis 차감은 DB 롤백으로 돌아오지 않으므로 직접 되돌린 뒤 원래 예외를 그대로 던진다
-            this.contributionWallet.restore(userId, universityId, item.getPrice());
+            // Redis 차감·효과는 DB 롤백으로 돌아오지 않으므로 보상 Lua로 되돌린 뒤 원래 예외를 그대로 던진다
+            this.redisPotionPurchaser.compensate(
+                    userId, universityId, item.getPrice(), idempotencyKey, outcome.previousEffect());
             throw e;
         }
 

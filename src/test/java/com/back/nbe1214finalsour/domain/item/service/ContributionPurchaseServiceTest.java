@@ -150,7 +150,7 @@ class ContributionPurchaseServiceTest {
     }
 
     @Test
-    @DisplayName("구매 이력 저장이 실패하면 차감한 기여도를 되돌리고 예외를 다시 던진다")
+    @DisplayName("구매 이력 저장이 실패하면 보상 Lua로 기여도와 효과를 되돌리고 원래 예외를 다시 던진다")
     void purchase_compensatesWhenSaveFails() {
         // given
         String previousEffect = "{\"itemId\":\"1\"}";
