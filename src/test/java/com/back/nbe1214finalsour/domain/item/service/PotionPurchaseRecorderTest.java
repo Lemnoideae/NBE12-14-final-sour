@@ -66,7 +66,7 @@ class PotionPurchaseRecorderTest {
     void record_commitsBeforeReturn() {
         // given
         Item potion = itemRepository.findById(ITEM_ID).orElseThrow();
-        UserItem userItem = UserItem.ofPotion(userId, potion, OffsetDateTime.now());
+        UserItem userItem = UserItem.ofPotion(userId, potion, OffsetDateTime.now().plusSeconds(potion.getDuration()));
 
         // when
         UserItem saved = recorder.record(userItem);
