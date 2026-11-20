@@ -32,9 +32,12 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.AdditionalAnswers.returnsFirstArg;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willReturn;
 import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
@@ -182,6 +185,26 @@ class ContributionPurchaseServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ITEM_DUPLICATE_PURCHASE);
         then(this.potionPurchaseRecorder).should(never()).record(any());
+    }
+
+    @Test
+    @DisplayName("만료 시각은 밀리초로 잘라 Lua와 구매 이력에 같은 값을 쓴다 (Redis는 ms, DB는 µs)")
+    void purchase_truncatesExpiredAtToMillis() {
+        // given
+        willReturn(Instant.parse("2026-11-14T03:00:00.123456789Z")).given(this.clock).instant();
+        OffsetDateTime expected = Instant.parse("2026-11-14T03:00:00.123Z").plusSeconds(3600).atOffset(ZoneOffset.UTC);
+        given(this.redisPotionPurchaser.purchase(any(), any(), any(), anyLong(), anyDouble(), any(), any()))
+                .willReturn(new PotionPurchaseOutcome(1500L, ""));
+        given(this.potionPurchaseRecorder.record(any())).willAnswer(returnsFirstArg());
+
+        // when
+        this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY);
+
+        // then
+        then(this.redisPotionPurchaser).should().purchase(USER_ID, UNIVERSITY_ID, 2L, 1000L, 4.0, expected, KEY);
+        ArgumentCaptor<UserItem> captor = ArgumentCaptor.forClass(UserItem.class);
+        then(this.potionPurchaseRecorder).should().record(captor.capture());
+        assertThat(captor.getValue().getExpiredAt()).isEqualTo(expected);
     }
 
     @Test
