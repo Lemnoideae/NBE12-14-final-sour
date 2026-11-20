@@ -1,5 +1,7 @@
 package com.back.nbe1214finalsour.domain.alliance.entity;
 
+import com.back.nbe1214finalsour.global.exception.BusinessException;
+import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import com.back.nbe1214finalsour.global.jpa.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -21,6 +23,18 @@ public class AllianceMatch extends BaseTimeEntity {
 
     @Column(name = "alliance_b_id", nullable = false)
     private Long allianceBId;
+
+    @Column(name = "a_university_1_id")
+    private Long aUniversity1Id;
+
+    @Column(name = "a_university_2_id")
+    private Long aUniversity2Id;
+
+    @Column(name = "b_university_1_id")
+    private Long bUniversity1Id;
+
+    @Column(name = "b_university_2_id")
+    private Long bUniversity2Id;
 
     @Column(name = "winner_alliance_id")
     private Long winnerAllianceId;
@@ -127,6 +141,23 @@ public class AllianceMatch extends BaseTimeEntity {
         this.startedAt = acceptedAt;
         this.endedAt = acceptedAt.plusHours(durationHours);
         this.status = AllianceMatchStatus.IN_PROGRESS;
+    }
+
+    /** 시작과 같은 트랜잭션에서 정산에 사용할 학교와 순서를 한 번만 고정한다. */
+    public void startWithRoster(OffsetDateTime now, long a1, long a2, long b1, long b2) {
+        if (a1 <= 0 || a2 <= 0 || b1 <= 0 || b2 <= 0
+                || a1 == a2 || a1 == b1 || a1 == b2 || a2 == b1 || a2 == b2 || b1 == b2) {
+            throw new BusinessException(ErrorCode.MATCH_MEMBERS_INCOMPLETE, "대결 참가 학교는 서로 다른 네 학교여야 합니다.");
+        }
+        if (status == AllianceMatchStatus.SCHEDULED) {
+            startScheduled(now);
+        } else {
+            accept(now);
+        }
+        aUniversity1Id = a1;
+        aUniversity2Id = a2;
+        bUniversity1Id = b1;
+        bUniversity2Id = b2;
     }
 
     // 신청자 취소, 상대 거절, 기한 만료 모두 같은 CANCELED 상태로 귀결됨.
