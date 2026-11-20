@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/items")
@@ -63,6 +64,7 @@ public class ItemController {
     public ApiResponse<ItemPurchaseResponse> purchase(
             @AuthenticationPrincipal AuthUser user,
             @PathVariable Long itemId,
+            @RequestHeader("Idempotency-Key") UUID idempotencyKey,
             // 로고 아이템만 multipart의 logoImage 파트로 이미지를 보낸다. 물약은 본문 없이 요청하므로 null
             @RequestPart(name = "logoImage", required = false) MultipartFile logoImage
     ) {
