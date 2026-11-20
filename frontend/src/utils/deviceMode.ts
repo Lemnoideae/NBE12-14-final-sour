@@ -16,3 +16,14 @@ export function resolveDeviceMode(search: string, mobileQueryMatches: boolean): 
   if (forced === 'full' || forced === 'framed') return forced;
   return mobileQueryMatches ? 'full' : 'framed';
 }
+
+export type GameLayout = 'wide' | 'compact' | 'legacy';
+// Keep ~240 CSS px per sidebar while leaving twice that for the click surface.
+export const GAME_WIDE_QUERY = '(min-width: 64rem) and (min-height: 30.0625rem) and (orientation: landscape)';
+
+export function resolveGameLayout(search: string, wide: boolean): GameLayout {
+  const forced = new URLSearchParams(search).get('device');
+  if (forced === 'framed') return 'legacy';
+  if (forced === 'full') return 'compact';
+  return wide ? 'wide' : 'compact';
+}

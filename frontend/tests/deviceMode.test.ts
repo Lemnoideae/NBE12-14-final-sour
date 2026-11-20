@@ -28,10 +28,10 @@ for (const [key, value] of Object.entries({
 dom.window.HTMLElement.prototype.scrollIntoView = function () {};
 installDialogStub(dom.window);
 
-const { render, screen, fireEvent, cleanup, within } = await import('@testing-library/react');
+const { act, render, screen, fireEvent, cleanup, within } = await import('@testing-library/react');
 const { default: App } = await import('../src/App');
 const { MockGameProvider } = await import('../src/hooks/useMockGame');
-const { MOBILE_DEVICE_QUERY, resolveDeviceMode } = await import('../src/utils/deviceMode');
+const { GAME_WIDE_QUERY, MOBILE_DEVICE_QUERY, resolveDeviceMode, resolveGameLayout } = await import('../src/utils/deviceMode');
 
 const win = dom.window as unknown as Window;
 const asPhone = () => stubMatchMedia(win, [MOBILE_DEVICE_QUERY]);
@@ -61,7 +61,8 @@ test('T2: index.html viewport에 viewport-fit=cover가 있다 (safe-area inset �
   assert.match(viewport, /(^|,\s*)viewport-fit=cover(\s*,|$)/);
 });
 
-test('T2: 데스크톱은 발표 헤더·메뉴·[시연] 도구와 390×844 프레임을 그대로 보인다', () => {
+test('T2: 명시적 시안 모드에서는 발표 헤더·메뉴·[시연] 도구와 390×844 프레임을 그대로 보인다', () => {
+  dom.reconfigure({ url: 'http://localhost/?device=framed' });
   asDesktop();
   mountApp();
   assert.ok(screen.getByRole('navigation', { name: '서비스 흐름' }));
@@ -71,6 +72,41 @@ test('T2: 데스크톱은 발표 헤더·메뉴·[시연] 도구와 390×844 프
   assert.equal(shell.dataset.phoneShell, 'framed');
   assert.match(shell.className, /h-\[844px\]/);
   assert.equal(shell.querySelectorAll('[data-phone-status-bar], [data-phone-home-bar]').length, 2);
+});
+
+test('SCRUM-206: 3열 미디어쿼리를 따르되 명시적 기기 프리뷰는 보존한다', () => {
+  assert.equal(resolveGameLayout('', true), 'wide');
+  assert.equal(resolveGameLayout('', false), 'compact');
+  assert.equal(resolveGameLayout('?device=full', true), 'compact');
+  assert.equal(resolveGameLayout('?device=framed', true), 'legacy');
+});
+
+test('SCRUM-206: 3열과 좁은 PC 1열을 오가도 같은 캠퍼스와 활성 상점이 유지된다', () => {
+  const wideQuery = Object.assign(new dom.window.EventTarget(), { matches: true });
+  const narrowQuery = Object.assign(new dom.window.EventTarget(), { matches: false });
+  Object.defineProperty(win, 'matchMedia', { configurable: true, value: (query: string) => query === GAME_WIDE_QUERY ? wideQuery : narrowQuery });
+  const resize = (wide: boolean) => act(() => {
+    wideQuery.matches = wide;
+    wideQuery.dispatchEvent(new dom.window.Event('change'));
+  });
+  mountApp();
+  assert.ok(screen.getByRole('complementary', { name: '학교 패널' }));
+  assert.ok(screen.getByRole('complementary', { name: '전국 경쟁 패널' }));
+  assertAbsent(screen.queryByText('UI Mockup'));
+  const campus = screen.getByRole('button', { name: '캠퍼스 클릭 영역' });
+  assert.equal(shells()[0].dataset.phoneShell, 'embedded');
+
+  resize(false);
+  assertAbsent(screen.queryByRole('complementary', { name: '학교 패널' }));
+  assert.ok(screen.getByRole('navigation', { name: '주요 메뉴' }));
+  assert.equal(shells()[0].dataset.phoneShell, 'full');
+  assertSameNode(screen.getByRole('button', { name: '캠퍼스 클릭 영역' }), campus);
+  fireEvent.click(screen.getByRole('button', { name: '상점' }));
+  const shop = screen.getByTestId('clicker-upgrade-preview');
+
+  resize(true);
+  assertSameNode(screen.getByTestId('clicker-upgrade-preview'), shop);
+  assert.equal(shells()[0].dataset.phoneShell, 'embedded');
 });
 
 test('T2: 폰에서는 서비스 화면이 전체 화면 셸이 되고, 메뉴·도구는 “목업” 시트로 들어간다 (Q5)', () => {

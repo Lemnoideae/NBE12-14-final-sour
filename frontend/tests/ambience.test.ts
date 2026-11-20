@@ -78,6 +78,8 @@ test('세 캠퍼스에 포인터 비차단 레이어, 클릭, 밤 창문과 redu
 
 test('시연 override 공유, 자동 복귀 및 적용 범위 제한', (t) => {
   t.mock.method(Date, 'now', () => kst(12));
+  dom.reconfigure({ url: 'http://localhost/?device=framed' });
+  t.after(() => dom.reconfigure({ url: 'http://localhost/' }));
   render(React.createElement(MockGameProvider, null, React.createElement(App)));
   const selector = screen.getByLabelText('[시연] 시간대');
   for (const name of ['3단 온보딩 화면', '🗺️ 단일 폰 지도', '🏪 상점 & 강화 (Single Phone)', '🏆 랭킹 화면 (Single Phone)']) {

@@ -18,15 +18,16 @@ interface GameScreenLayoutProps {
    * its height by the frame width (CampusStage fill).
    */
   fillMain?: boolean;
+  embedded?: boolean;
   /** Main's content. */
   children: React.ReactNode;
   /** Sheets and dialogs, outside the scrolling column. */
   overlays?: React.ReactNode;
 }
 
-export function GameScreenLayout({ kind, header, previewBar, nav, fillMain = false, children, overlays }: GameScreenLayoutProps) {
+export function GameScreenLayout({ kind, header, previewBar, nav, fillMain = false, embedded = false, children, overlays }: GameScreenLayoutProps) {
   return (
-    <PhoneShell>
+    <PhoneShell embedded={embedded}>
       {/* Game Screen: 고정 헤더 + 스크롤되는 main + 고정 푸터 */}
       <div data-game-layout={kind} className="flex-1 min-h-0 p-2 flex flex-col overflow-hidden bg-[#faecc7]/30">
         {/* Header: 학교 HUD (스크롤되지 않음) */}

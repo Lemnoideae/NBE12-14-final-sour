@@ -404,6 +404,81 @@
   padding: env(safe-area-inset-top) calc(8px + env(safe-area-inset-right)) 0 calc(8px + env(safe-area-inset-left));
 }
 
+/* SCRUM-206: shared service chrome and the campus workspace. Panels scroll independently. */
+.game-backdrop {
+  min-block-size: 100dvh;
+  padding: .75rem clamp(.75rem, 1.5%, 1.25rem);
+  background: radial-gradient(ellipse at 50% 0, #f8f0ce, transparent 70%),
+    repeating-linear-gradient(135deg, #dbe8d3 0 16px, #d5e3cd 16px 32px);
+}
+.game-width { inline-size: 100%; max-inline-size: 90rem; margin-inline: auto; }
+.game-top-bar {
+  position: relative;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  min-block-size: 3rem;
+  margin-block-end: .75rem;
+  padding-inline: .75rem;
+  border: 2px solid #49331d;
+  background: #fdf5df;
+  box-shadow: 3px 3px #49331d;
+}
+.game-brand { display: flex; align-items: center; gap: .5rem; cursor: pointer; min-block-size: 44px; }
+.game-wordmark { display: grid; place-items: center; inline-size: 1.75rem; aspect-ratio: 1; background: #facc15; border: 2px solid #49331d; font-weight: 900; }
+.game-profile { position: relative; font-size: .875rem; }
+.game-profile-name { display: inline-block; vertical-align: middle; max-inline-size: 12ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.game-profile-actions {
+  position: absolute;
+  inset-block-start: calc(100% + .25rem);
+  inset-inline-end: 0;
+  inline-size: 14rem;
+  padding: .25rem;
+  border: 2px solid #49331d;
+  background: #fffbeb;
+  box-shadow: 3px 3px #49331d;
+}
+.game-profile-actions button { display: block; inline-size: 100%; min-block-size: 44px; padding-inline: .5rem; text-align: start; cursor: pointer; }
+.game-profile-actions button:disabled { cursor: wait; }
+.game-profile-actions button:hover:not(:disabled) { background: #fde9aa; }
+.game-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: .75rem;
+  block-size: max(30rem, calc(100dvh - 5.25rem));
+}
+.game-workspace-side, .game-workspace-center {
+  min-inline-size: 0;
+  min-block-size: 0;
+  border: 2px solid #49331d;
+  background: #fdf5df;
+  box-shadow: 3px 3px #49331d;
+}
+.game-workspace-side {
+  display: flex;
+  align-items: stretch;
+  flex-direction: column;
+  gap: .5rem;
+  padding: .75rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.game-workspace-side h2 { padding-block-end: .5rem; border-block-end: 1px solid #bd9e65; font-weight: 800; }
+.game-workspace-action {
+  min-block-size: 44px;
+  padding: .25rem .625rem;
+  color: #49331d;
+  border: 1px solid #8b5327;
+  background: #faecc7;
+  font-size: .875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.game-workspace-action:hover, .game-workspace-action[aria-current='page'] { background: #fde9aa; }
+.game-center-nav { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; margin-block-start: .5rem; }
+
 /* M6: keep portrait mock frames scrollable on the page, but fit service modals to
    the actual viewport (including short landscape windows). No orientation lock. */
 .bottom-sheet-dialog {

@@ -112,6 +112,7 @@ test('방문 화면: 방문 HUD·관전 바·학교 정보 표지판, 내 캠퍼
 
 test('관전 클릭은 안내만 띄우고 건물을 흔들지 않는다 (Q5); 내 캠퍼스 클릭은 흔든다', () => {
   stubMatchMedia(dom.window as unknown as Window, []);
+  dom.reconfigure({ url: 'http://localhost/?device=framed' });
   const proto = dom.window.Element.prototype as unknown as { animate?: unknown };
   let animations = 0;
   proto.animate = () => { animations++; return { cancel() {} }; };
@@ -128,7 +129,10 @@ test('관전 클릭은 안내만 띄우고 건물을 흔들지 않는다 (Q5); �
     click('내 학교로 돌아가기');
     fireEvent.click(screen.getByRole('button', { name: '캠퍼스 클릭 영역' }));
     assert.ok(animations > 0, '같은 스텁으로 내 캠퍼스 클릭은 흔들린다(스텁이 동작함을 확인)');
-  } finally { delete proto.animate; }
+  } finally {
+    delete proto.animate;
+    dom.reconfigure({ url: 'http://localhost/' });
+  }
 });
 
 test('방문 화면 소스에 옛 작은 캠퍼스·하단 패널 크기 규칙이 남지 않는다 (V1)', async () => {

@@ -5,7 +5,10 @@ import { CampusView } from './components/CampusView';
 import { LibraryBonusControl } from './components/LibraryBonusControl';
 import { PhoneShellVariantContext } from './components/PhoneShell';
 import { GameScreenLayout } from './components/GameScreenLayout';
-import { useDeviceMode } from './hooks/useDeviceMode';
+import { useDeviceMode, useGameLayout } from './hooks/useDeviceMode';
+import { useAuthSession } from './api/ApiProvider';
+import { GameWorkspace, WorkspaceShortcut } from './components/GameWorkspace';
+import { GameProfileBar } from './components/GameProfileBar';
 import { AllianceNavProvider, BottomNav, NavTab, type AllianceNavValue } from './components/BottomNav';
 import { RankingsView } from './components/RankingsView';
 import { ShopView } from './components/ShopView';
@@ -75,6 +78,11 @@ const SignupScreen = selectByMode<React.FC<{ onGoToCampus: () => void; onGoToLog
 // Load STOMP only when a member opens the API chat sheet; design-comparison screens stay mock-only.
 const ApiChatBottomSheet = React.lazy(() => import('./components/ApiChatBottomSheet').then((module) => ({ default: module.ApiChatBottomSheet })));
 
+function useSignedIn() {
+  return useAuthSession().status === 'signed-in';
+}
+const useCanPlayWide = selectByMode({ api: useSignedIn, mock: () => true });
+
 function AppContent() {
   // Mode: 'ranking_screens' (2-phone ranking comparison with infinite scroll) | 'our_guestbook_screens' | 'visiting_screens' | etc.
   const [viewMode, setViewMode] = useState<'ranking_screens' | 'our_guestbook_screens' | 'visiting_screens' | 'chat_screens' | 'single_map' | 'visiting' | 'map_screens' | 'map_illustration' | 'shop' | 'ranking' | 'spritesheet' | 'onboarding' | 'signup' | 'login' | 'gameplay' | 'alliance_apply' | 'current_alliance' | 'battle_apply' | 'battle_status' | 'support_guest' | 'my_info' | 'purchase_history' | 'member_support' | 'admin'>('gameplay');
@@ -91,7 +99,14 @@ function AppContent() {
   const ambienceControl = useAmbienceControl();
   // T2 (plan §5): on a phone the service screens fill the viewport; demo comparisons keep their frames and scroll.
   const isPhone = useDeviceMode() === 'full';
-  const shellVariant = isPhone && SERVICE_VIEW_MODES.has(viewMode) ? 'full' : 'framed';
+  const gameLayout = useGameLayout();
+  const canPlayWide = useCanPlayWide();
+  const isServiceView = SERVICE_VIEW_MODES.has(viewMode);
+  const showMockSheet = isPhone || gameLayout === 'compact';
+  const showPresentation = !showMockSheet && (gameLayout === 'legacy' || !isServiceView);
+  const showGameBar = isServiceView && gameLayout === 'wide';
+  const wideCampus = showGameBar && canPlayWide && viewMode === 'gameplay';
+  const shellVariant = showMockSheet && isServiceView ? 'full' : 'framed';
   const viewWrap = shellVariant === 'full' ? 'w-full flex flex-col' : 'w-full flex flex-col items-center py-2 animate-fadeIn';
   const game = useMockGame();
   const campusClicks = useCampusClicks();
@@ -513,8 +528,23 @@ function AppContent() {
     <ItemShopProvider value={itemShop}>
     <OtherClicksFeedContext.Provider value={campusClicks.otherClicksFeed}>
     <AllianceNavProvider value={allianceNav}>
-      <div className={`w-full bg-[#f1f5f9] flex flex-col items-center justify-start select-none text-[#261608] ${isPhone ? 'device-full min-h-dvh' : 'min-h-screen p-2 sm:p-5'}`}>
+      <div className={`w-full flex flex-col items-center justify-start select-none text-[#261608] ${showMockSheet ? 'device-full min-h-dvh bg-[#f1f5f9]' : showGameBar ? 'game-backdrop' : 'min-h-screen p-2 sm:p-5 bg-[#f1f5f9]'}`}>
         {API_MODE === 'api' && <ApiSessionWatcher onEnded={() => setViewMode('login')} />}
+        {showGameBar && (
+          <GameProfileBar
+            mode={API_MODE === 'mock' ? 'mock' : canPlayWide ? 'member' : 'guest'}
+            nickname={playerInfo.nickname}
+            onCampus={goToMySchool}
+            onNavigate={setViewMode}
+            onLogout={() => {
+              setIsChatSheetOpen(false);
+              setIsOurGuestbookSheetOpen(false);
+              setIsStatsSheetOpen(false);
+              goToMySchool();
+              setViewMode('login');
+            }}
+          />
+        )}
         {API_MODE === 'api' && <ApiPlayerSync getPendingScore={campusClicks.getPendingScore} />}
         {API_MODE === 'api' && <ApiSchoolScoreSync getPendingScore={campusClicks.getPendingScore} isSending={campusClicks.isSending} />}
         {API_MODE === 'api' && <ApiTestToolsNotice schoolName={schoolNameTest} />}
@@ -532,7 +562,7 @@ function AppContent() {
         )}
         <AttackNotice attacks={campusAttacks} />
         {/* [목업] Phone: the presentation header, view menus and demo tools move into a sheet behind this bar (Q5). Not part of the real service. */}
-        {isPhone && (
+        {showMockSheet && (
           <div className="mock-menu-bar w-full shrink-0 flex items-center justify-end gap-2 bg-[#fffbeb] border-b-2 border-dashed border-[#8b5327]">
             <span className="font-pixel text-[10px] font-bold text-[#8b5327] truncate">[시연] 다른 목업 화면·도구</span>
             <button type="button" onClick={() => { setIsMockMenuOpen(true); soundManager.playTabSound(); }}
@@ -541,7 +571,7 @@ function AppContent() {
             </button>
           </div>
         )}
-        {isPhone && isMockMenuOpen && (
+        {showMockSheet && isMockMenuOpen && (
           <BottomSheetDialog label="목업 메뉴" onClose={() => setIsMockMenuOpen(false)}>
             {/* Choosing a screen closes the sheet; the demo tools (selects, checkbox) keep it open. */}
             <div className="p-3 flex flex-col gap-3" onClick={(e) => { if ((e.target as Element).closest('nav button')) setIsMockMenuOpen(false); }}>
@@ -551,7 +581,7 @@ function AppContent() {
           </BottomSheetDialog>
         )}
         {/* Top Presentation Bar: Clean Flat Presentation on Plain Light Background */}
-        {!isPhone && (
+        {showPresentation && (
         <div className="w-full max-w-7xl flex flex-col sm:flex-row items-center justify-between gap-3 mb-4 px-2">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 bg-[#facc15] border-3 border-[#261608] shadow-[2px_2px_0px_#261608] flex items-center justify-center font-press-start text-xs font-black text-[#261608]">
@@ -576,7 +606,7 @@ function AppContent() {
         </div>
         )}
 
-        {!isPhone && demoTools}
+        {showPresentation && demoTools}
 
         {/* Main Content Area based on viewMode. Service screens get 44px touch areas (src/index.css). */}
         <PhoneShellVariantContext.Provider value={shellVariant}>
@@ -816,9 +846,8 @@ function AppContent() {
         ) : viewMode === 'login' ? (
           <ApiLoginPhone onGoToSignup={() => setViewMode('signup')} onGoToCampus={goToMySchool} onOpenMyInfo={() => setViewMode('my_info')} />
         ) : (
-          /* Single Phone Gameplay View */
-          <div className={viewWrap}>
-            {!isPhone && <div className="mb-2 font-pixel text-xs text-[#8b5327] font-bold flex items-center gap-2">
+          <div className={wideCampus ? 'w-full' : viewWrap}>
+            {showPresentation && <div className="mb-2 font-pixel text-xs text-[#8b5327] font-bold flex items-center gap-2">
               <span>입학생: {playerInfo.nickname} ({playerInfo.department})</span>
               <button
                 data-no-touch44
@@ -830,9 +859,23 @@ function AppContent() {
             </div>}
 
 
-            {/* 9:19.5 Portrait Phone Frame; the layout is shared with the visit screen (V1). */}
+            <GameWorkspace wide={wideCampus}
+              left={<>
+                <h2>캠퍼스 생활</h2>
+                <WorkspaceShortcut onClick={() => setIsStatsSheetOpen(true)}>상세 스탯</WorkspaceShortcut>
+                <WorkspaceShortcut onClick={() => setIsChatSheetOpen(true)}>우리 학교 채팅</WorkspaceShortcut>
+                <WorkspaceShortcut onClick={() => setIsOurGuestbookSheetOpen(true)}>우리 학교 방명록</WorkspaceShortcut>
+              </>}
+              right={<>
+                <h2>전국 경쟁</h2>
+                <WorkspaceShortcut onClick={() => setActiveTab('map')}>지도</WorkspaceShortcut>
+                <WorkspaceShortcut onClick={() => setActiveTab('rankings')}>순위</WorkspaceShortcut>
+                <WorkspaceShortcut onClick={allianceNav.open}>연합 대결</WorkspaceShortcut>
+              </>}
+            >
             <GameScreenLayout
               kind="my-campus"
+              embedded={wideCampus}
               fillMain={activeTab === 'campus'}
               header={
                 <TopHUD
@@ -853,7 +896,7 @@ function AppContent() {
               }
               previewBar={<>
                 {activeTab === 'campus' && campusClicks.library && <LibraryBonusControl control={campusClicks.library} />}
-                <ChatPreviewBar
+                {!wideCampus && <ChatPreviewBar
                   latestSender={API_MODE === 'api' ? '교내 채팅' : '새벽코딩러'}
                   latestMessage={API_MODE === 'api' ? '열어서 대화하기' : '도서관 앞 클릭 모임 ㄱㄱ'}
                   unreadCount={API_MODE === 'api' ? 0 : 12}
@@ -861,16 +904,21 @@ function AppContent() {
                     setIsChatSheetOpen(true);
                     soundManager.playTabSound();
                   }}
-                />
+                />}
               </>}
-              nav={
+              nav={wideCampus ? (
+                <nav aria-label="캠퍼스 메뉴" className="game-center-nav">
+                  <WorkspaceShortcut onClick={() => setActiveTab('campus')}>내 캠퍼스</WorkspaceShortcut>
+                  <WorkspaceShortcut onClick={() => setActiveTab('shop')}>상점</WorkspaceShortcut>
+                </nav>
+              ) : (
                 <BottomNav
                   activeTab={activeTab}
                   onChangeTab={setActiveTab}
                   hasShopUpgrade={hasAffordableShopItem}
                   hasRankChange={rankDelta?.startsWith('▲') ?? false}
                 />
-              }
+              )}
               overlays={
                 <>
                   {/* Service sheets use the native top layer; short viewports must not clip controls. */}
@@ -976,6 +1024,7 @@ function AppContent() {
                 />
               )}
             </GameScreenLayout>
+            </GameWorkspace>
           </div>
         )}
         </div>

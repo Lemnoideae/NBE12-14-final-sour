@@ -141,7 +141,9 @@ test('렌더 상한·수명·입력·감속 모션과 게임 데이터 불변', 
   view.unmount();
 });
 
-test('방문·대결 화면에는 타 클릭 파티클 없음', () => {
+test('방문·대결 화면에는 타 클릭 파티클 없음', (t) => {
+  dom.reconfigure({ url: 'http://localhost/?device=framed' });
+  t.after(() => dom.reconfigure({ url: 'http://localhost/' }));
   render(React.createElement(MockGameProvider, null, React.createElement(App)));
   for (const name of ['📖 2-Phone 방문교 방명록', '⚔️ 대결 신청 (Battle Apply)', '📊 대결 현황 (Battle Status)']) {
     fireEvent.click(screen.getByRole('button', { name }));
