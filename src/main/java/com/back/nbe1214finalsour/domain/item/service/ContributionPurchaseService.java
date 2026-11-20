@@ -36,7 +36,8 @@ public class ContributionPurchaseService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.ITEM_NOT_ENOUGH_SCORE)); // 잔여 기여도가 부족하다면 차감없이 400
 
         // 구매 이력 저장
-        UserItem userItem = UserItem.ofPotion(userId, item, OffsetDateTime.now(this.clock));
+        UserItem userItem = UserItem.ofPotion(
+                userId, item, OffsetDateTime.now(this.clock).plusSeconds(item.getDuration()));
         try {
             this.userItemRepository.save(userItem);
         } catch (RuntimeException e) {

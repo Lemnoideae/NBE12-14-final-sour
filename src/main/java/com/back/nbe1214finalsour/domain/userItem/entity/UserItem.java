@@ -43,12 +43,12 @@ public class UserItem extends BaseTimeEntity {
     private OffsetDateTime expiredAt;
 
     // 기여도 아이템 구매 시 이력 생성
-    public static UserItem ofPotion(Long userId, Item potion, OffsetDateTime purchasedAt) {
+    public static UserItem ofPotion(Long userId, Item potion, OffsetDateTime expiredAt) {
         UserItem userItem = new UserItem();
         userItem.userId = userId;
         userItem.itemId = potion.getId();
         userItem.price = potion.getPrice();
-        userItem.expiredAt = purchasedAt.plusSeconds(potion.getDuration());
+        userItem.expiredAt = expiredAt;
         return userItem;
     }
 
