@@ -3,6 +3,7 @@ package com.back.nbe1214finalsour.domain.item.service;
 import com.back.nbe1214finalsour.IntegrationTest;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
+import com.back.nbe1214finalsour.global.redis.RedisKey;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -31,6 +32,7 @@ class ItemPurchaseConcurrencyTest {
     private static final int THREAD_COUNT = 10;
     private static final long POTION_2X_ID = 9201L;   // 기여도 300, 2배
     private static final long POTION_4X_ID = 9202L;   // 기여도 300, 4배
+    private static final UUID SAME_KEY = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
 
     @Autowired
     private ItemPurchaseService itemPurchaseService;
@@ -71,6 +73,7 @@ class ItemPurchaseConcurrencyTest {
     @AfterEach
     void tearDown() {
         redisTemplate.delete(effectKey());
+        redisTemplate.delete(RedisKey.PURCHASE_DEDUPE.of(userId, SAME_KEY));
         redisTemplate.delete(rankKey());
         redisTemplate.opsForSet().remove("dirty:user", userId.toString());
 
@@ -141,6 +144,52 @@ class ItemPurchaseConcurrencyTest {
         // 구매 이력도 성공한 만큼만
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM user_item WHERE user_id = ?", Long.class, userId)).isEqualTo(3L);
+    }
+
+    @Test
+    @DisplayName("같은 멱등 키로 동시에 구매하면 한 번만 처리하고 나머지는 ITEM_DUPLICATE_PURCHASE다")
+    void concurrentPurchase_sameKey_onlyOnce() throws InterruptedException {
+        // given: 기여도 1000, 물약 300 (잔액은 충분하므로 막는 것은 멱등 키뿐)
+        giveContribution(1000);
+
+        CountDownLatch startSignal = new CountDownLatch(1);
+        CountDownLatch finished = new CountDownLatch(THREAD_COUNT);
+        AtomicInteger successCount = new AtomicInteger();
+        AtomicInteger duplicateCount = new AtomicInteger();
+        List<Throwable> unexpectedErrors = Collections.synchronizedList(new ArrayList<>());
+
+        // when: 10개 스레드가 같은 키로 동시에 구매
+        try (ExecutorService executor = Executors.newFixedThreadPool(THREAD_COUNT)) {
+            for (int i = 0; i < THREAD_COUNT; i++) {
+                executor.submit(() -> {
+                    try {
+                        startSignal.await();
+                        itemPurchaseService.purchase(userId, universityId, null, POTION_2X_ID, null, SAME_KEY);
+                        successCount.incrementAndGet();
+                    } catch (BusinessException e) {
+                        if (e.getErrorCode() == ErrorCode.ITEM_DUPLICATE_PURCHASE) {
+                            duplicateCount.incrementAndGet();   // 정상적인 실패
+                        } else {
+                            unexpectedErrors.add(e);
+                        }
+                    } catch (Throwable e) {
+                        unexpectedErrors.add(e);
+                    } finally {
+                        finished.countDown();
+                    }
+                });
+            }
+            startSignal.countDown();
+            assertThat(finished.await(10, TimeUnit.SECONDS)).isTrue();
+        }
+
+        // then
+        assertThat(unexpectedErrors).isEmpty();
+        assertThat(successCount.get()).isEqualTo(1);
+        assertThat(duplicateCount.get()).isEqualTo(9);
+        assertThat(redisTemplate.opsForZSet().score(rankKey(), userId.toString())).isEqualTo(700.0);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM user_item WHERE user_id = ?", Long.class, userId)).isEqualTo(1L);
     }
 
     @Test
