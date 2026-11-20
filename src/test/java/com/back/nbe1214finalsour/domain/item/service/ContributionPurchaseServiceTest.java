@@ -193,6 +193,24 @@ class ContributionPurchaseServiceTest {
     }
 
     @Test
+    @DisplayName("구매 이력 저장이 끝난 뒤 크레딧 조회가 실패하면 그 예외를 그대로 던지고 커밋된 구매를 보상하지 않는다")
+    void purchase_balanceLookupFails_noCompensation() {
+        // given
+        given(this.redisPotionPurchaser.purchase(USER_ID, UNIVERSITY_ID, 2L, 1000L, 4.0, EXPIRED_AT, KEY))
+                .willReturn(new PotionPurchaseOutcome(1500L, "{\"itemId\":\"1\"}"));
+        given(this.potionPurchaseRecorder.record(any())).willAnswer(returnsFirstArg());
+        IllegalStateException lookupFailure = new IllegalStateException("크레딧 조회 실패");
+        given(this.creditWallet.findBalance(USER_ID)).willThrow(lookupFailure);
+
+        // when
+        Throwable thrown = catchThrowable(() -> this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, POTION_X4, KEY));
+
+        // then
+        assertThat(thrown).isSameAs(lookupFailure);
+        then(this.redisPotionPurchaser).should(never()).compensate(any(), any(), anyLong(), any(), any());
+    }
+
+    @Test
     @DisplayName("같은 멱등 키로 이미 처리한 요청이면 ITEM_DUPLICATE_PURCHASE, 구매 이력을 저장하지 않는다")
     void purchase_duplicateKey() {
         // given
