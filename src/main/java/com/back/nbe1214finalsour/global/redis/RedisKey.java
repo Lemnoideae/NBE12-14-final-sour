@@ -36,12 +36,20 @@ public enum RedisKey {
     USER_STATUS("user:%s:status", Structure.STRING, ValueFormat.PLAIN),
     /** 회원 클리커 레벨. INCR로 올릴 수 있어야 한다 */
     USER_CLICKER("user:%s:clicker", Structure.STRING, ValueFormat.PLAIN),
-    /** 적용 중인 효과. field: itemId, multiplier, expiredAt */
+    /** 적용 중인 효과. field: itemId, multiplier, expiredAt, purchaseId (물약 구매 Lua가 쓴다) */
     USER_EFFECT("user:%s:effect", Structure.HASH, ValueFormat.JSON),
 
     // 아이템 (Item)
     /** 아이템 효과 정의. field: multiplier */
     ITEM_EFFECT("item:%s", Structure.HASH, ValueFormat.JSON),
+    /**
+     * 물약 구매 멱등 키. of(userId, idempotencyKey). 값 "1", 구매 Lua가 잔액 검사 통과 후 SET PX 5분, 보상 Lua가 DEL
+     */
+    PURCHASE_DEDUPE("purchase:%s:%s", Structure.STRING, ValueFormat.PLAIN),
+    /**
+     * 물약 구매 취소 기록. of(userId). field: 취소된 purchaseId → 그 구매가 꺼낸 이전 효과(JSON 또는 ""). 보상 Lua만 쓰고 읽는다. TTL 5분(쓸 때마다 다시 설정)
+     */
+    USER_EFFECT_VOIDED("user:%s:effect:voided", Structure.HASH, ValueFormat.JSON),
 
     // 순위 (ZSet)
     /** 학교 점수·순위. member: universityId, score: 학교 점수 */

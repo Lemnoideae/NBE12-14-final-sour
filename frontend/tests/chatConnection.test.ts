@@ -9,9 +9,9 @@ import { flush, message, success } from './helpers/chat';
 const frame = (body: unknown) => Object.assign(new FrameImpl({ command: 'MESSAGE', body: JSON.stringify(body) }), {
   ack() {}, nack() {}, // Real MESSAGE callbacks include acknowledgement methods even with automatic acknowledgement.
 });
-function setup(fetch?: typeof globalThis.fetch, room: ChatRoom = universityRoom(1)) {
-  const api = createApiClient({ fetch });
-  api.session.signIn('old');
+function setup(fetch?: typeof globalThis.fetch, room: ChatRoom = universityRoom(1), sharedApi?: ReturnType<typeof createApiClient>) {
+  const api = sharedApi ?? createApiClient({ fetch });
+  if (!sharedApi) api.session.signIn('old');
   const statuses: ChatConnectionStatus[] = [], errors: unknown[] = [], messages: unknown[] = [], published: unknown[] = [];
   const subscriptions = new Map<string, messageCallbackType>();
   let ready = 0, activates = 0, deactivates = 0, online = true;
@@ -135,6 +135,27 @@ test('같은 토큰 반복 거부·치명적 인가 오류는 자동 연결 루�
   assert.equal(forbidden.statuses.at(-1), 'blocked');
   assert.equal(forbidden.counts().activates, 1);
   forbidden.connection.stop();
+});
+
+test('오류 큐의 방 권한 상실은 해당 소켓만 멈추고 일시적 오류는 연결을 유지한다', () => {
+  const alliance = setup(undefined, allianceRoom(7));
+  const school = setup(undefined, universityRoom(1), alliance.api);
+  for (const room of [alliance, school]) room.socket.onConnect(frame({}));
+  const errors = alliance.subscriptions.get(CHAT_ERROR_DESTINATION)!;
+  errors(frame({ code: 'COMMON_INTERNAL_ERROR', message: '일시적 오류' }));
+  assert.equal(alliance.statuses.at(-1), 'connected');
+  assert.equal(alliance.counts().deactivates, 0);
+
+  errors(frame({ code: 'CHAT_NOT_MEMBER', message: '채팅방 권한 없음' }));
+  alliance.socket.onWebSocketClose(new Event('close') as CloseEvent);
+  assert.equal(alliance.statuses.at(-1), 'blocked');
+  assert.equal(alliance.counts().deactivates, 1);
+  assert.equal(alliance.counts().activates, 1);
+  assert.equal(alliance.errors.length, 2);
+  assert.equal(alliance.connection.send('차단됨'), false);
+  assert.equal(alliance.api.session.getState().status, 'signed-in');
+  assert.equal(school.statuses.at(-1), 'connected');
+  assert.equal(school.connection.send('교내 채팅 정상'), true);
 });
 
 test('사용자 큐의 정지·ERROR 프레임의 세션 교체는 기존 로그인 세션을 종료한다', () => {

@@ -16,16 +16,21 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.stream.LongStream;
@@ -71,12 +76,15 @@ class AttackIntegrationTest {
     private RivalChecker rivalChecker;
     @Autowired
     private UniversityCache universityCache;
+    @MockitoSpyBean
+    private Clock clock;
 
     private long universityId;
     private long departmentId;
     private long targetUniversityId;
     private User user;
     private String token;
+    private Long allianceId;
 
     @BeforeEach
     void setUp() {
@@ -120,6 +128,11 @@ class AttackIntegrationTest {
                 .mapToObj(sec -> RedisKey.CLICKS_UNIV_SECOND.of(universityId, sec))
                 .toList());
 
+        if (allianceId != null) {
+            jdbcTemplate.update("DELETE FROM alliance_university WHERE alliance_id = ?", allianceId);
+            jdbcTemplate.update("DELETE FROM alliance WHERE id = ?", allianceId);
+        }
+        redis.delete(RedisKey.SUBMIT_DEDUPE.of(user.getId(), "ally-attack"));
         jdbcTemplate.update("DELETE FROM users WHERE university_id = ?", universityId);
         jdbcTemplate.update("DELETE FROM department WHERE university_id = ?", universityId);
         jdbcTemplate.update("DELETE FROM university WHERE id IN (?, ?)", universityId, targetUniversityId);
@@ -257,6 +270,89 @@ class AttackIntegrationTest {
     }
 
     @Test
+    @DisplayName("동맹 직접 공격은 점수·제출 ID·한도를 소비하지 않고, 같은 제출 ID로 지원할 수 있다")
+    void allyAttackIsRejectedWithoutSideEffects() throws Exception {
+        givenAlliance();
+        givenTargetScore(100);
+        redis.opsForHash().put(RedisKey.SCORE_USER_ATTACK.of(), String.valueOf(user.getId()), "7");
+        redis.opsForZSet().add(RedisKey.RANK_USER.of(universityId), String.valueOf(user.getId()), 11);
+
+        for (int i = 0; i < 13; i++) {
+            attack("ally-attack", targetUniversityId, 10)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("ATTACK_ALLY_UNIVERSITY"));
+        }
+        assertThat(targetScore()).isEqualTo(100.0);
+        assertThat(myAttackScore()).isEqualTo("7");
+        assertThat(redis.opsForZSet().score(RedisKey.RANK_USER.of(universityId), String.valueOf(user.getId())))
+                .isEqualTo(11.0);
+        assertThat(redis.opsForSet().isMember(RedisKey.DIRTY_UNIV.of(), String.valueOf(targetUniversityId))).isFalse();
+        for (String key : List.of(RedisKey.SUBMIT_DEDUPE.of(user.getId(), "ally-attack"),
+                RedisKey.RATELIMIT_ACTION.of(user.getId()), RedisKey.RATELIMIT_CLICK.of(user.getId()))) {
+            assertThat(redis.hasKey(key)).as(key).isFalse();
+        }
+        mockMvc.perform(post("/api/v1/assists")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"submissionId":"ally-attack","targetUniversityId":%d,"clickCount":10}"""
+                                .formatted(targetUniversityId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.targetUniversity.totalScore").value(103))
+                .andExpect(jsonPath("$.data.myContribScore").value(21));
+    }
+
+    @ParameterizedTest(name = "{0}: 동맹 공격 차단={1}")
+    @CsvSource({
+            "IN_MATCH,true", "EXPIRED,false", "expired-time,false", "deleted-alliance,false",
+            "mine-PENDING,false", "target-PENDING,false", "mine-REJECTED,false", "target-REJECTED,false",
+            "mine-LEFT,false", "target-LEFT,false", "mine-deleted,false", "target-deleted,false"
+    })
+    @DisplayName("공격 동맹 판정은 양 학교 승인·삭제·연합 상태·실제 만료 시각을 구분한다")
+    void allianceStateControlsAttack(String scenario, boolean blocked) throws Exception {
+        givenAlliance();
+        givenTargetScore(100);
+        switch (scenario) {
+            case "IN_MATCH", "EXPIRED" -> jdbcTemplate.update("UPDATE alliance SET status = ? WHERE id = ?", scenario, allianceId);
+            case "expired-time" -> jdbcTemplate.update("""
+                    UPDATE alliance SET created_at = now() - INTERVAL '2 days', expired_at = now() - INTERVAL '1 hour'
+                    WHERE id = ?""", allianceId);
+            case "deleted-alliance" -> jdbcTemplate.update("UPDATE alliance SET deleted_at = now() WHERE id = ?", allianceId);
+            default -> {
+                String[] parts = scenario.split("-");
+                long memberId = parts[0].equals("mine") ? universityId : targetUniversityId;
+                if (parts[1].equals("deleted")) {
+                    jdbcTemplate.update("UPDATE alliance_university SET deleted_at = now() WHERE alliance_id = ? AND university_id = ?",
+                            allianceId, memberId);
+                } else {
+                    jdbcTemplate.update("UPDATE alliance_university SET status = ? WHERE alliance_id = ? AND university_id = ?",
+                            parts[1], allianceId, memberId);
+                }
+            }
+        }
+        attack("ally-attack", targetUniversityId, 10)
+                .andExpect(status().is(blocked ? 400 : 200))
+                .andExpect(jsonPath("$.code").value(blocked ? "ATTACK_ALLY_UNIVERSITY" : "SUCCESS"));
+        assertThat(targetScore()).isEqualTo(blocked ? 100.0 : 97.0);
+    }
+
+    @Test
+    @DisplayName("expiredAt == now면 스케줄러 실행 없이 동맹 공격을 허용한다")
+    void exactlyExpiredAllianceIsNotAlly() throws Exception {
+        givenAlliance();
+        givenTargetScore(100);
+        Instant boundary = Instant.now().plusSeconds(60).truncatedTo(ChronoUnit.SECONDS);
+        doReturn(boundary).when(clock).instant();
+        jdbcTemplate.update("UPDATE alliance SET expired_at = ? WHERE id = ?",
+                OffsetDateTime.ofInstant(boundary, clock.getZone()), allianceId);
+
+        attack("ally-attack", targetUniversityId, 10)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.damage").value(3));
+        assertThat(targetScore()).isEqualTo(97.0);
+    }
+
+    @Test
     @DisplayName("없는 학교를 공격하면 404 UNIV_NOT_FOUND, 같은 submissionId로 다른 학교 공격은 된다")
     void attackOnUnknownUniversityIsRejected() throws Exception {
         givenTargetScore(100);
@@ -341,6 +437,17 @@ class AttackIntegrationTest {
                                 {"submissionId":"sub-3","clickCount":3}"""))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("COMMON_INVALID_INPUT"));
+    }
+
+    private void givenAlliance() {
+        allianceId = jdbcTemplate.queryForObject("""
+                INSERT INTO alliance (name, duration_hours, expired_at)
+                VALUES ('공격차단테스트연합', 24, now() + INTERVAL '24 hours') RETURNING id""", Long.class);
+        for (long memberId : List.of(universityId, targetUniversityId)) {
+            jdbcTemplate.update("""
+                    INSERT INTO alliance_university (alliance_id, university_id, applicant_user_id, approver_user_id, status)
+                    VALUES (?, ?, ?, ?, 'ACCEPTED')""", allianceId, memberId, user.getId(), user.getId());
+        }
     }
 
     private void givenTargetScore(double score) {

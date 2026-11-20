@@ -53,7 +53,13 @@ interface RoomProps { me: MyInfo; visible: boolean; connectionFactory?: ChatConn
 
 /** The room follows GET /alliances/me: no alliance, no socket. A changed alliance remounts a fresh room. */
 function AllianceChat({ me, visible, connectionFactory }: RoomProps) {
-  const alliance = useMyAlliance(me.id);
+  const alliance = useMyAlliance(me.id, { visible });
+  const { refetch } = alliance;
+  const wasVisible = useRef(visible);
+  useEffect(() => {
+    if (visible && !wasVisible.current) void refetch({ cancelRefetch: false });
+    wasVisible.current = visible;
+  }, [visible, refetch]);
   const recheck = <button type="button" className={BUTTON} disabled={alliance.isFetching} onClick={() => void alliance.refetch()}>연합 다시 확인</button>;
   if (alliance.isPending) return <p role="status" className="p-3 text-sm">우리 학교의 연합을 확인하는 중이에요.</p>;
   if (alliance.isError) return <div className="p-3 text-sm"><p role="alert">{errorMessage(alliance.error)}</p>{recheck}</div>;

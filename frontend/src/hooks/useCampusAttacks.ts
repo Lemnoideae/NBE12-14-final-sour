@@ -4,7 +4,7 @@ import { useApiClient, useAuthSession } from '../api/ApiProvider';
 import { submitAttack, type AttackResponse } from '../api/attacks';
 import { submitAssist, type AssistResponse } from '../api/assists';
 import { isClickLimitError, requiresClickVerification } from '../api/abuse';
-import { errorMessage } from '../api/errors';
+import { errorMessage, isApiError } from '../api/errors';
 import { selectByMode } from '../api/mode';
 import { universityKeys, type UniversityDetail } from '../api/universities';
 import { userKeys, useMyInfo, type MyInfo } from '../api/users';
@@ -32,6 +32,8 @@ export interface CampusAttacks {
 }
 const EMPTY: ClickBatchSnapshot = { pendingClicks: 0, pendingScore: 0, sending: false, error: null, recoverable: false, locked: false };
 type AttackBatcher = ReturnType<typeof createClickBatcher<CampusActionResult>>;
+const isAllyAttackRejection = (error: unknown) => isApiError(error) && error.kind === 'http'
+  && error.status === 400 && error.code === 'ATTACK_ALLY_UNIVERSITY';
 
 /**
  * App-root lifetime: navigation does not discard attacks or change a queued batch's target. No optimistic damage.
@@ -64,9 +66,22 @@ export function useApiCampusAttacks(beginAction: ClickUpgradeGate['beginUpgrade'
       send: async (body) => {
         if (target.current === null) throw new Error(`${CAMPUS_ACTION_LABEL[kind.current]} 대상이 없습니다.`);
         const request = { ...body, targetUniversityId: target.current };
-        return kind.current === 'assist'
-          ? { kind: 'assist', ...await submitAssist(client, request, abort.signal) }
-          : { kind: 'attack', ...await submitAttack(client, request, abort.signal) };
+        try {
+          return kind.current === 'assist'
+            ? { kind: 'assist', ...await submitAssist(client, request, abort.signal) }
+            : { kind: 'attack', ...await submitAttack(client, request, abort.signal) };
+        } catch (error) {
+          if (isAllyAttackRejection(error) && queue.current === controller) {
+            void queryClient.invalidateQueries({ queryKey: universityKeys.detail(request.targetUniversityId, userId), exact: true });
+          }
+          throw error;
+        }
+      },
+      onRejected(error, rejectedClicks) {
+        if (kind.current !== 'attack' || !isAllyAttackRejection(error)) return false;
+        setResult(null);
+        setNotice(`${errorMessage(error)} 거절된 공격 ${rejectedClicks}회는 취소했어요. 학교 정보를 다시 확인한 뒤 지원을 눌러 주세요.`);
+        return true;
       },
       onChange(next) {
         setSnapshot(next);

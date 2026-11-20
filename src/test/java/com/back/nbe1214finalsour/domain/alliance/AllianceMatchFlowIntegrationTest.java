@@ -15,6 +15,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
+import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -75,10 +77,55 @@ class AllianceMatchFlowIntegrationTest {
         AllianceMatch loaded = matchRepository.findById(id).orElseThrow();
         assertThat(loaded.getStatus()).isEqualTo(AllianceMatchStatus.IN_PROGRESS);
         assertThat(loaded.getEndedAt()).isEqualTo(loaded.getStartedAt().plusHours(6));
+        assertThat(loadRoster(id)).containsExactly(a1.universityId(), a2.universityId(),
+                b1.universityId(), b2.universityId());
         assertThat(allianceRepository.findById(pair[0].getId()).orElseThrow().getStatus())
                 .isEqualTo(AllianceStatus.IN_MATCH);
         assertThat(allianceRepository.findById(pair[1].getId()).orElseThrow().getStatus())
                 .isEqualTo(AllianceStatus.IN_MATCH);
+    }
+
+    @Test
+    void scheduledMatchFreezesRosterAtActualStartOnly() {
+        Alliance[] pair = makePairedAlliances();
+        OffsetDateTime scheduled = OffsetDateTime.now().plusHours(1);
+        Long id = matchService.requestMatch(a1.userId(), pair[0].getId(), pair[1].getId(), 6, scheduled).getId();
+        assertThat(matchService.acceptMatch(b1.userId(), id).getStatus()).isEqualTo(AllianceMatchStatus.SCHEDULED);
+        em.flush();
+        assertThat(loadRoster(id)).containsOnlyNulls();
+        matchService.startScheduledMatch(id);
+        assertThat(loadRoster(id)).containsOnlyNulls();
+
+        // 시계를 기다리지 않고 시작 워커에 마감이 지난 예약을 넘긴다.
+        OffsetDateTime due = OffsetDateTime.now().minusMinutes(1);
+        jdbc.update("UPDATE alliance_match SET scheduled_start_at = ? WHERE id = ?", due, id);
+        em.clear();
+        matchService.startScheduledMatch(id);
+        em.flush();
+        em.clear();
+
+        AllianceMatch started = matchService.getMatch(id);
+        OffsetDateTime actual = started.getStartedAt();
+        assertThat(started.getStatus()).isEqualTo(AllianceMatchStatus.IN_PROGRESS);
+        assertThat(actual).isAfter(due);
+        assertThat(started.getEndedAt()).isEqualTo(actual.plusHours(6));
+        assertThat(loadRoster(id)).containsExactly(a1.universityId(), a2.universityId(),
+                b1.universityId(), b2.universityId());
+
+        matchService.startScheduledMatch(id);
+        em.flush();
+        em.clear();
+        assertThat(matchService.getMatch(id).getStartedAt()).isEqualTo(actual);
+        assertThat(loadRoster(id)).containsExactly(a1.universityId(), a2.universityId(),
+                b1.universityId(), b2.universityId());
+    }
+
+    private List<Long> loadRoster(Long id) {
+        return jdbc.queryForObject("""
+                SELECT a_university_1_id, a_university_2_id, b_university_1_id, b_university_2_id
+                FROM alliance_match WHERE id = ?
+                """, (rs, _) -> Arrays.asList(rs.getObject(1, Long.class), rs.getObject(2, Long.class),
+                rs.getObject(3, Long.class), rs.getObject(4, Long.class)), id);
     }
 
     @Test

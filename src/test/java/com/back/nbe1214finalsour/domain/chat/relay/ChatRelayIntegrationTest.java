@@ -3,13 +3,16 @@ package com.back.nbe1214finalsour.domain.chat.relay;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.back.nbe1214finalsour.IntegrationTest;
+import com.back.nbe1214finalsour.domain.chat.ChatRecipientFixture;
 import com.back.nbe1214finalsour.domain.chat.dto.ChatMessageResponse;
 import com.back.nbe1214finalsour.domain.chat.entity.ChatRoomId;
 import com.back.nbe1214finalsour.domain.chat.websocket.ChatDestinations;
 import com.back.nbe1214finalsour.domain.chat.websocket.RawStompClient;
-import com.back.nbe1214finalsour.global.security.Role;
+import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
+import com.back.nbe1214finalsour.global.crypto.EmailHasher;
 import com.back.nbe1214finalsour.global.redis.RedisKey;
 import com.back.nbe1214finalsour.global.security.AuthUser;
+import com.back.nbe1214finalsour.global.security.Role;
 import com.back.nbe1214finalsour.global.security.jwt.JwtProvider;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -17,9 +20,9 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +32,8 @@ import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.broker.SimpleBrokerMessageHandler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import tools.jackson.databind.json.JsonMapper;
@@ -64,19 +69,30 @@ class ChatRelayIntegrationTest {
     @Autowired
     private SimpleBrokerMessageHandler simpleBroker;
 
+    @Autowired private JdbcTemplate jdbc;
+    @Autowired private UserRepository users;
+    @Autowired private EmailHasher emailHasher;
+    @Autowired private SimpMessagingTemplate messagingTemplate;
+
+    private ChatRecipientFixture recipient;
     private long universityId;
     private final AtomicInteger sequence = new AtomicInteger();
 
-    // 테스트끼리 같은 Redis를 쓰므로 학교 ID를 매번 새로 정한다
     @BeforeEach
     void setUp() {
-        this.universityId = ThreadLocalRandom.current().nextLong(1, 1_000_000);
+        this.recipient = ChatRecipientFixture.create(this.jdbc, this.users, this.emailHasher);
+        this.universityId = this.recipient.universityId();
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (this.recipient != null) this.recipient.remove(this.jdbc);
     }
 
     private RawStompClient subscribed(long universityId) throws Exception {
         RawStompClient client = RawStompClient.open(this.port, ALLOWED_ORIGIN);
-        long userId = ThreadLocalRandom.current().nextLong(1_000_000, Long.MAX_VALUE);
-        client.connect(this.jwtProvider.createAccessToken(new AuthUser(userId, universityId, 34L, Role.USER), null));
+        client.connect(this.jwtProvider.createAccessToken(new AuthUser(this.recipient.userId(), universityId,
+                this.recipient.departmentId(), Role.USER), null));
         assertThat(client.requireFrame()).startsWith("CONNECTED\n");
         client.subscribe("sub-0", ChatDestinations.university(universityId));
         return client;
@@ -191,6 +207,32 @@ class ChatRelayIntegrationTest {
 
             this.publisher.publishToUniversity(otherUniversityId, message(otherUniversityId, "다른 학교"));
 
+            assertThat(client.nextFrame(NO_MESSAGE_WAIT)).isNull();
+        }
+    }
+
+    @Test
+    @DisplayName("탈퇴한 회원의 기존 구독은 외부 Redis 발행의 본문도 받지 않는다")
+    void redisMessage_notDeliveredAfterWithdrawal() throws Exception {
+        try (RawStompClient client = subscribed(this.universityId)) {
+            awaitSubscribed(client, this.universityId);
+            client.subscribe("err", ChatDestinations.ERROR_QUEUE);
+            long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+            String ready = null;
+            while (ready == null && System.nanoTime() < deadline) {
+                this.messagingTemplate.convertAndSendToUser(String.valueOf(this.recipient.userId()), "/queue/errors", "ready");
+                ready = client.nextFrame(Duration.ofMillis(200));
+            }
+            assertThat(ready).isNotNull().contains("\nsubscription:err\n");
+            while (client.nextFrame(NO_MESSAGE_WAIT) != null) { /* 늦은 준비 프레임을 비운다. */ }
+            this.jdbc.update("UPDATE users SET status = 'WITHDRAWN', deleted_at = now() WHERE id = ?", this.recipient.userId());
+
+            publishRaw(RedisKey.CHAT_UNIV_CHANNEL.of(this.universityId),
+                    this.jsonMapper.writeValueAsString(message(this.universityId, "탈퇴 이후 본문")));
+
+            String frame = client.requireFrame();
+            assertThat(frame).startsWith("MESSAGE\n").contains("\nsubscription:err\n");
+            assertThat(this.jsonMapper.readTree(body(frame)).get("code").asString()).isEqualTo("CHAT_NOT_MEMBER");
             assertThat(client.nextFrame(NO_MESSAGE_WAIT)).isNull();
         }
     }

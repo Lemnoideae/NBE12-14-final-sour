@@ -239,10 +239,8 @@ test('같은 프레임 로그아웃·다른 계정 로그인 뒤 늦은 성공�
   let finish!: (response: Response) => void;
   const f = mount({ upgrade: () => new Promise((resolve) => { finish = resolve; }) }); await ready(); upgrade();
   await waitFor(() => assert.equal(f.upgrades().length, 1));
-  await act(async () => {
-    f.client.session.signOut(); f.client.session.signIn('member-b');
-    f.queryClient.setQueryData(userKeys.me, { ...ME, id: 11, totalContribScore: 500 });
-  });
+  f.setServerProfile({ ...ME, id: 11, totalContribScore: 500 });
+  await act(async () => { f.client.session.signOut(); f.client.session.signIn('member-b'); });
   assert.equal(f.upgrades()[0].signal?.aborted, true);
   await act(async () => { finish(ok({ level: 12, clickPower: 19, nextLevelRequiredScore: 150, myContribScore: 30 })); });
   await waitFor(() => assert.equal(game().contribution, 500));

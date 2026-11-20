@@ -155,6 +155,27 @@ test('연합 탭은 연합 방 소켓·이력을 따로 열고, 탭을 오가도
   assert.equal(f.counts().stopped, 2, '시트를 닫으면 두 방의 소켓을 모두 닫는다');
 });
 
+test('숨긴 연합 채팅은 폴링하지 않고, 다시 열면 바뀐 소속으로 방을 교체한다', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  let allianceId = 9;
+  const expiry = new Date(Date.now() + 3_600_000).toISOString();
+  const f = await mount({ alliance: () => success({ id: allianceId, name: `연합 ${allianceId}`, totalScore: 0,
+    status: 'ACTIVE', durationHours: 24, expiredAt: expiry }) });
+  const reads = () => f.calls.filter((path) => path === '/api/v1/alliances/me').length;
+  fireEvent.click(screen.getByRole('button', { name: '연합 채팅' }));
+  await waitFor(() => assert.equal(f.rooms.at(-1)?.id, 9));
+  fireEvent.click(screen.getByRole('button', { name: '교내 채팅' }));
+  allianceId = 10;
+  await act(async () => { t.mock.timers.tick(30_000); });
+  assert.equal(reads(), 1);
+  assert.equal(f.counts().stopped, 0);
+
+  fireEvent.click(screen.getByRole('button', { name: '연합 채팅' }));
+  await waitFor(() => assert.deepEqual(f.rooms, [{ kind: 'university', id: 1 }, { kind: 'alliance', id: 9 }, { kind: 'alliance', id: 10 }]));
+  assert.equal(reads(), 2);
+  assert.equal(f.counts().stopped, 1, '기존 연합 소켓만 닫는다');
+});
+
 test('공통 금칙어 목록의 로딩·오류·재시도·빈 목록과 복귀를 제공한다', async () => {
   let failure = true;
   const f = await mount({ words: () => failure ? new Response(JSON.stringify({ code: 'COMMON_INTERNAL_ERROR', message: '목록 실패' }), { status: 500 }) : success({ words: [] }) });

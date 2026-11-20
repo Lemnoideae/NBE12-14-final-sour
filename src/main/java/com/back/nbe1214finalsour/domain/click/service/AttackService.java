@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.click.service;
 
+import com.back.nbe1214finalsour.domain.alliance.service.AllianceAllyChecker;
 import com.back.nbe1214finalsour.domain.click.dto.AttackApplyResponse;
 import com.back.nbe1214finalsour.domain.click.dto.AttackRequest;
 import com.back.nbe1214finalsour.domain.click.dto.AttackResponse;
@@ -24,6 +25,7 @@ public class AttackService {
     private final StringRedisTemplate stringRedisTemplate;
     private final RivalChecker rivalChecker;
     private final UniversityCache universityCache;
+    private final AllianceAllyChecker allianceAllyChecker;
 
     private static final RedisScript<List> APPLY_ATTACK = RedisScript.of(new ClassPathResource("redis/apply-attack.lua"), List.class);
 
@@ -38,6 +40,10 @@ public class AttackService {
         }
 
         String targetName = universityCache.getName(targetUniversityId);
+        // 대상 검증 시점의 소속을 사용한다. 거절된 공격은 제출 ID·요청 한도를 소비하지 않는다.
+        if (allianceAllyChecker.areAllies(universityId, targetUniversityId)) {
+            throw new BusinessException(ErrorCode.ATTACK_ALLY_UNIVERSITY);
+        }
 
         // 점수 구하기
         long base = clickActionGuard.verifyAndGetBaseScore(userId, submissionId, clickCount);
