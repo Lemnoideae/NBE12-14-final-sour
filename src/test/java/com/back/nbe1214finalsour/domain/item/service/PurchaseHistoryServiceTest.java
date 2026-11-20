@@ -57,7 +57,7 @@ public class PurchaseHistoryServiceTest {
         // given
         given(itemService.getItems()).willReturn(List.of(POTION, UNIVERSITY_LOGO));
         UserItem logo = saved(UserItem.ofLogo(1L, UNIVERSITY_LOGO, LOGO_URL), 7001L, NOW.plusHours(1));
-        UserItem potion = saved(UserItem.ofPotion(1L, POTION, NOW), 5530L, NOW);
+        UserItem potion = saved(UserItem.ofPotion(1L, POTION, NOW.plusSeconds(3600)), 5530L, NOW);
         given(userItemRepository.findAllByUserIdOrderByCreatedAtDescIdDesc(1L, PageRequest.of(0, 20)))
                 .willReturn(new PageImpl<>(List.of(logo, potion), PageRequest.of(0, 20), 2));
 

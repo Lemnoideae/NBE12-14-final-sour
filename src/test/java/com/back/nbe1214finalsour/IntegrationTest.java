@@ -2,6 +2,7 @@ package com.back.nbe1214finalsour;
 
 import com.back.nbe1214finalsour.domain.auth.mail.VerificationMailSender;
 import com.back.nbe1214finalsour.domain.clicker.repository.UserClickerLevelStore;
+import com.back.nbe1214finalsour.domain.item.service.PotionPurchaseRecorder;
 import com.back.nbe1214finalsour.domain.support.mail.SupportAnswerMailSender;
 import com.back.nbe1214finalsour.domain.university.service.rival.RivalChecker;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
@@ -27,7 +28,7 @@ import java.lang.annotation.Target;
 @Tag("integration")
 @AutoConfigureMockMvc
 @MockitoBean(types = {VerificationMailSender.class, SupportAnswerMailSender.class, TurnstileVerifier.class})
-@MockitoSpyBean(types = {RivalChecker.class, UserRepository.class, UserClickerLevelStore.class})
+@MockitoSpyBean(types = {RivalChecker.class, UserRepository.class, UserClickerLevelStore.class, PotionPurchaseRecorder.class})
 public @interface IntegrationTest {
 
     /** 실제 서버가 필요한 테스트(예: 서블릿 오류 디스패치)는 {@code RANDOM_PORT}로 바꾼다. */

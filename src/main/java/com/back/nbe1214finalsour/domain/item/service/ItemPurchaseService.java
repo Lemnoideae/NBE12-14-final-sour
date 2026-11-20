@@ -31,7 +31,7 @@ public class ItemPurchaseService {
     private final ImageStorage imageStorage;
 
     // 아이템 구매
-    public ItemPurchaseResult purchase(Long userId, Long universityId, Long departmentId, Long itemId, MultipartFile logoImage) {
+    public ItemPurchaseResult purchase(Long userId, Long universityId, Long departmentId, Long itemId, MultipartFile logoImage, UUID idempotencyKey) {
 
         // 캐시에서 아이템 목록
         List<Item> items = this.itemService.getItems();
@@ -48,7 +48,7 @@ public class ItemPurchaseService {
         }
 
         // 기여도 아이템(물약)
-        return this.contributionPurchaseService.purchase(userId, universityId, item);
+        return this.contributionPurchaseService.purchase(userId, universityId, item, idempotencyKey);
     }
 
     // 검증 → 업로드 → 크레딧 구매(트랜잭션). 구매가 실패하면(커밋 실패 포함) 올린 이미지를 지운다

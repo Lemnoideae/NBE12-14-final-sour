@@ -17,6 +17,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -144,7 +145,7 @@ class ItemCreditPurchaseIntegrationTest {
         setCredit(price + 1100);
 
         // when
-        itemPurchaseService.purchase(userId, universityId, departmentId, universityLogoItemId, logoImage());
+        itemPurchaseService.purchase(userId, universityId, departmentId, universityLogoItemId, logoImage(), UUID.randomUUID());
 
         // then
         assertThat(credit()).isEqualTo(1100L);
@@ -167,7 +168,7 @@ class ItemCreditPurchaseIntegrationTest {
         long price = priceOf(profileLogoItemId);
         setCredit(price);
 
-        itemPurchaseService.purchase(userId, universityId, departmentId, profileLogoItemId, logoImage());
+        itemPurchaseService.purchase(userId, universityId, departmentId, profileLogoItemId, logoImage(), UUID.randomUUID());
 
         assertThat(credit()).isZero();
         assertThat(count("user_item")).isEqualTo(1L);
@@ -186,7 +187,7 @@ class ItemCreditPurchaseIntegrationTest {
         setCredit(price - 1);
 
         // when & then
-        assertThatThrownBy(() -> itemPurchaseService.purchase(userId, universityId, departmentId, universityLogoItemId, logoImage()))
+        assertThatThrownBy(() -> itemPurchaseService.purchase(userId, universityId, departmentId, universityLogoItemId, logoImage(), UUID.randomUUID()))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ITEM_NOT_ENOUGH_CREDIT);
@@ -206,7 +207,7 @@ class ItemCreditPurchaseIntegrationTest {
         setCredit(price + 1000);
 
         // when & then
-        assertThatThrownBy(() -> itemPurchaseService.purchase(userId, universityId, 999_999L, departmentLogoItemId, logoImage()))
+        assertThatThrownBy(() -> itemPurchaseService.purchase(userId, universityId, 999_999L, departmentLogoItemId, logoImage(), UUID.randomUUID()))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.UNIV_DEPARTMENT_NOT_FOUND);
@@ -238,7 +239,7 @@ class ItemCreditPurchaseIntegrationTest {
                 executor.submit(() -> {
                     try {
                         startSignal.await();
-                        itemPurchaseService.purchase(userId, universityId, departmentId, universityLogoItemId, logoImage());
+                        itemPurchaseService.purchase(userId, universityId, departmentId, universityLogoItemId, logoImage(), UUID.randomUUID());
                         successCount.incrementAndGet();
                     } catch (BusinessException e) {
                         if (e.getErrorCode() == ErrorCode.ITEM_NOT_ENOUGH_CREDIT) {
