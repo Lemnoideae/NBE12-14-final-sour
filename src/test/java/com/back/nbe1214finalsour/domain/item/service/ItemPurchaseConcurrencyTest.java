@@ -175,7 +175,7 @@ class ItemPurchaseConcurrencyTest {
         // then: 마지막으로 덮어쓴 물약 하나의 값만 온전히 남음
         assertThat(unexpectedErrors).isEmpty();
         Map<Object, Object> effect = redisTemplate.opsForHash().entries(effectKey());
-        assertThat(effect).hasSize(3);
+        assertThat(effect).containsKeys("itemId", "multiplier", "expiredAt");
         if (String.valueOf(POTION_2X_ID).equals(effect.get("itemId"))) {
             assertThat(effect.get("multiplier")).isEqualTo("2.0");
         } else {
