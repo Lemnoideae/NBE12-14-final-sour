@@ -58,7 +58,8 @@ public class ItemController {
     }
 
     // 아이템 구매. 회원·학교는 토큰에서 꺼낸다 (학교 ID는 기여도 ZSET 키에 필요)
-    // TODO: 동시에 오는 요청에 대해서 잔액을 넘어서는 결제는 막았으나 실수로 더블 클릭하는 경우는 안막음. 프론트에서 잠시 로딩화면 보여줘서 더블 클릭을 방지하거나 백에서 구매 요청에 쿨타임 걸 예정
+    // 물약은 Idempotency-Key 헤더로 중복 구매를 막는다 (같은 키는 409 ITEM_DUPLICATE_PURCHASE)
+    // TODO: 로고 변경권(크레딧)의 더블 클릭 중복 방지는 후속 작업. 지금은 잔액을 넘어서는 결제만 막는다
     @PostMapping("/{itemId}/purchase")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<ItemPurchaseResponse> purchase(
