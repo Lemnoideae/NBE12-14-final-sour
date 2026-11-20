@@ -10,6 +10,7 @@ import com.back.nbe1214finalsour.domain.userItem.entity.UserItem;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +22,7 @@ import java.util.UUID;
 
 // 기여도 아이템(물약) 구매
 // 트랜잭션이 있어야 PotionPurchasedEvent가 커밋 후(AFTER_COMMIT) 리스너로 전달된다
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ContributionPurchaseService {
@@ -58,8 +60,14 @@ public class ContributionPurchaseService {
             saved = this.potionPurchaseRecorder.record(userItem);
         } catch (RuntimeException e) {
             // Redis 차감·효과는 DB 롤백으로 돌아오지 않으므로 보상 Lua로 되돌린 뒤 원래 예외를 그대로 던진다
-            this.redisPotionPurchaser.compensate(
-                    userId, universityId, item.getPrice(), idempotencyKey, outcome.previousEffect());
+            // 보상까지 실패해도 원래 저장 실패 원인을 덮지 않는다. 이때 멱등 키가 남아 같은 키 재시도는 409
+            try {
+                this.redisPotionPurchaser.compensate(
+                        userId, universityId, item.getPrice(), idempotencyKey, outcome.previousEffect());
+            } catch (RuntimeException compensateFailure) {
+                e.addSuppressed(compensateFailure);
+                log.error("물약 구매 보상 실패: userId={}, idempotencyKey={}", userId, idempotencyKey, compensateFailure);
+            }
             throw e;
         }
 
