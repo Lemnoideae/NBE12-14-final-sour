@@ -69,7 +69,7 @@ public class ItemController {
             @RequestPart(name = "logoImage", required = false) MultipartFile logoImage
     ) {
 
-        ItemPurchaseResult result = this.itemPurchaseService.purchase(user.userId(), user.universityId(), user.departmentId(), itemId, logoImage, null);
+        ItemPurchaseResult result = this.itemPurchaseService.purchase(user.userId(), user.universityId(), user.departmentId(), itemId, logoImage, idempotencyKey);
 
         return ApiResponse.ok(ItemPurchaseResponse.from(result));
     }
