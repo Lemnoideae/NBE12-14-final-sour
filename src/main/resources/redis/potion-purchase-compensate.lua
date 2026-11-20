@@ -7,10 +7,19 @@ redis.call('ZINCRBY', KEYS[1], tonumber(ARGV[2]), ARGV[1])
 redis.call('SADD', KEYS[2], ARGV[1])
 -- 효과 주인(purchaseId)이 이 구매일 때만 효과를 되돌린다 (HGET이 nil이면 false라 "주인 아님")
 if redis.call('HGET', KEYS[3], 'purchaseId') == ARGV[3] then
-    if ARGV[4] == '' then
+    -- 복원 대상: 기본은 넘겨받은 이전 효과. 그 효과의 구매가 이미 취소됐으면(voided에 있으면)
+    -- 취소된 구매가 꺼냈던 효과로 한 번 건너뛴다.
+    local target = ARGV[4]
+    if target ~= '' then
+        local previousId = cjson.decode(target)['purchaseId']
+        if previousId and redis.call('HEXISTS', KEYS[5], previousId) == 1 then
+            target = redis.call('HGET', KEYS[5], previousId)
+        end
+    end
+    if target == '' then
         redis.call('DEL', KEYS[3])
     else
-        local previous = cjson.decode(ARGV[4])
+        local previous = cjson.decode(target)
         local args = {}
         for field, value in pairs(previous) do
             args[#args + 1] = field
