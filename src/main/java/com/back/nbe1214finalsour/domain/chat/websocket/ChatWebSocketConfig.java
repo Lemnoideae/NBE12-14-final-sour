@@ -1,12 +1,16 @@
 package com.back.nbe1214finalsour.domain.chat.websocket;
 
 import com.back.nbe1214finalsour.global.security.CorsConfig.CorsProperties;
+import java.util.List;
+import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
+import org.springframework.messaging.support.ExecutorSubscribableChannel;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
@@ -38,6 +42,7 @@ public class ChatWebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final CorsProperties corsProperties;
     private final ChatWebSocketProperties properties;
     private final ChatStompInterceptor chatStompInterceptor;
+    private final ChatOutboundInterceptor chatOutboundInterceptor;
     private final StompErrorFrameHandler stompErrorFrameHandler;
     private final TaskScheduler messageBrokerTaskScheduler;
 
@@ -45,11 +50,13 @@ public class ChatWebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public ChatWebSocketConfig(CorsProperties corsProperties,
                                ChatWebSocketProperties properties,
                                ChatStompInterceptor chatStompInterceptor,
+                               ChatOutboundInterceptor chatOutboundInterceptor,
                                StompErrorFrameHandler stompErrorFrameHandler,
                                @Lazy @Qualifier("messageBrokerTaskScheduler") TaskScheduler messageBrokerTaskScheduler) {
         this.corsProperties = corsProperties;
         this.properties = properties;
         this.chatStompInterceptor = chatStompInterceptor;
+        this.chatOutboundInterceptor = chatOutboundInterceptor;
         this.stompErrorFrameHandler = stompErrorFrameHandler;
         this.messageBrokerTaskScheduler = messageBrokerTaskScheduler;
     }
@@ -75,6 +82,20 @@ public class ChatWebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
         registration.interceptors(this.chatStompInterceptor);
+    }
+
+    @Override
+    public void configureClientOutboundChannel(ChannelRegistration registration) {
+        registration.interceptors(this.chatOutboundInterceptor);
+    }
+
+    @Bean
+    SmartInitializingSingleton alignOutboundInterceptorOrder(
+            @Qualifier("clientOutboundChannel") ExecutorSubscribableChannel outbound) {
+        // Spring 7.0.10 inserts the broker's ordering callback at index 0 but appends it to
+        // the executor chain. Rebuild that chain after broker initialization, before traffic,
+        // so its afterMessageHandled still runs when the authorization interceptor drops a frame.
+        return () -> outbound.setInterceptors(List.copyOf(outbound.getInterceptors()));
     }
 
     @Override

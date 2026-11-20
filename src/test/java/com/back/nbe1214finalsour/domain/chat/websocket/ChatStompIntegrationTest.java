@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.back.nbe1214finalsour.IntegrationTest;
+import com.back.nbe1214finalsour.domain.chat.ChatRecipientFixture;
+import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
+import com.back.nbe1214finalsour.global.crypto.EmailHasher;
 import com.back.nbe1214finalsour.global.security.AuthUser;
 import com.back.nbe1214finalsour.global.security.LoginSessionStore;
 import com.back.nbe1214finalsour.global.security.Role;
@@ -24,12 +27,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 /**
  * STOMP 연결 인증과 구독 권한 (SCRUM-128, 계획 D1·D14·D23·§3-1). 실제 서버에 WebSocket으로 붙어 프레임을 주고받는다.
  *
- * <p>학교·회원 행은 만들지 않는다. CONNECT와 SUBSCRIBE는 DB를 읽지 않고 토큰의 회원 ID·학교 ID만 쓴다.
+ * <p>학교 본문을 실제로 받는 테스트만 회원·학교 행을 만든다. 연결과 학교 구독의 토큰 판정은 별도로 검증한다.
  */
 @IntegrationTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 class ChatStompIntegrationTest {
@@ -52,6 +56,10 @@ class ChatStompIntegrationTest {
 
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
+
+    @Autowired private JdbcTemplate jdbc;
+    @Autowired private UserRepository users;
+    @Autowired private EmailHasher emailHasher;
 
     private long userId;
     private long universityId;
@@ -178,6 +186,9 @@ class ChatStompIntegrationTest {
     @Test
     @DisplayName("본인 학교 방을 구독하면 그 방에 발행된 메시지를 받는다")
     void subscribe_ownUniversity_receivesMessages() throws Exception {
+        ChatRecipientFixture recipient = ChatRecipientFixture.create(this.jdbc, this.users, this.emailHasher);
+        this.userId = recipient.userId();
+        this.universityId = recipient.universityId();
         try (RawStompClient client = connected()) {
             client.subscribe("sub-0", universityTopic(this.universityId));
 
@@ -193,6 +204,8 @@ class ChatStompIntegrationTest {
             assertThat(command(frame)).isEqualTo("MESSAGE");
             assertThat(frame).contains("\ndestination:" + universityTopic(this.universityId) + "\n");
             assertThat(frame).contains("\"content\":\"안녕\"");
+        } finally {
+            recipient.remove(this.jdbc);
         }
     }
 
