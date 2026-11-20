@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 // 기여도 아이템(물약) 구매
@@ -34,7 +35,10 @@ public class ContributionPurchaseService {
     @Transactional
     public ItemPurchaseResult purchase(Long userId, Long universityId, Item item, UUID idempotencyKey) {
         // 만료 시각은 한 번만 계산해 Lua와 구매 이력에 같은 값을 쓴다
-        OffsetDateTime expiredAt = OffsetDateTime.now(this.clock).plusSeconds(item.getDuration());
+        // Redis PEXPIREAT은 밀리초, DB timestamptz는 마이크로초라 밀리초로 잘라야 두 곳의 값이 같다
+        OffsetDateTime expiredAt = OffsetDateTime.now(this.clock)
+                .plusSeconds(item.getDuration())
+                .truncatedTo(ChronoUnit.MILLIS);
 
         // Redis 구매 Lua: 기여도 차감 + 효과 적용을 한 번에
         PotionPurchaseOutcome outcome = this.redisPotionPurchaser.purchase(
