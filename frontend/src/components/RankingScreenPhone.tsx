@@ -84,16 +84,13 @@ export const RankingScreenPhone: React.FC<RankingScreenPhoneProps> = ({
   const renderChange = (change: string | null) => {
     // Null: nothing to compare against 00:00 KST (new member, or no copy for today), so no badge.
     if (change === null) return null;
-    const up = change.startsWith('↑') || change.startsWith('▲');
-    const down = change.startsWith('↓') || change.startsWith('▼');
+    const trend = rankTrend(change);
     return (
       <span
-        className={`text-[8px] font-mono px-1 py-0.2 border border-[#261608] flex items-center gap-0.5 font-bold ${
-          up ? 'text-white bg-[#22c55e]' : down ? 'text-white bg-[#fb7185]' : 'text-[#261608] bg-[#faecc7]'
-        }`}
+        className={`text-[8px] font-mono px-1 py-0.2 border border-[#261608] flex items-center gap-0.5 font-bold ${RANK_TREND_TONE[trend]}`}
       >
-        {up ? <ArrowUp className="w-2.5 h-2.5" /> : down ? <ArrowDown className="w-2.5 h-2.5" /> : <Minus className="w-2.5 h-2.5" />}
-        {change.replace(/[↑↓▲▼]/g, '') || '-'}
+        {trend === 'up' ? <ArrowUp className="w-2.5 h-2.5" /> : trend === 'down' ? <ArrowDown className="w-2.5 h-2.5" /> : <Minus className="w-2.5 h-2.5" />}
+        {change.replace(/[▲▼]/g, '') || '-'}
       </span>
     );
   };

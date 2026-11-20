@@ -30,8 +30,13 @@ const { RANKING_PAGE_SIZE, formatRankChange } = await import('../src/api/ranking
 const { useApiMySchoolRank } = await import('../src/hooks/useMySchoolRank');
 const { MockGameProvider } = await import('../src/hooks/useMockGame');
 const { useApiRankingBoard, toApiRows, toApiMine } = await import('../src/hooks/useRankingBoard');
-const { RankingStatusNotice, SIGNED_OUT_RANKING_NOTICE, rankingCaption } = await import('../src/components/RankingParts');
+const { RANK_TREND_TONE, RankingStatusNotice, SIGNED_OUT_RANKING_NOTICE, rankTrend, rankingCaption } = await import('../src/components/RankingParts');
 const { RankingScreenPhone } = await import('../src/components/RankingScreenPhone');
+const { RankingScreen1Phone } = await import('../src/components/RankingScreen1Phone');
+const { RankingScreen2Phone } = await import('../src/components/RankingScreen2Phone');
+const { INITIAL_GAME_STATE } = await import('../src/utils/gameModel');
+const { DEFAULT_PLAYER } = await import('../src/data/gameRules');
+const { getSchoolRankings } = await import('../src/data/mockRankings');
 const { TopHUD } = await import('../src/components/TopHUD');
 const clients: Array<ReturnType<typeof createQueryClient>> = [];
 afterEach(() => { cleanup(); for (const client of clients.splice(0)) client.clear(); });
@@ -277,12 +282,42 @@ test('메인 상단 변동 배지는 하락을 상승과 다른 색으로 보인
 });
 
 test('색 센서: 순위 변동 배지는 고정 초록 대신 rankTrend 색을 쓴다 (▼가 상승처럼 보이지 않게)', () => {
-  for (const file of ['TopHUD.tsx', 'RankingsView.tsx', 'RankingScreenPhone.tsx']) {
+  const MOCK_SCREENS = ['RankingScreen1Phone.tsx', 'RankingScreen2Phone.tsx'];
+  for (const file of ['TopHUD.tsx', 'RankingsView.tsx', 'RankingScreenPhone.tsx', ...MOCK_SCREENS]) {
     const source = readFileSync(new URL(`../src/components/${file}`, import.meta.url), 'utf8');
     // Every element that prints a change value must pick its tone from the trend.
-    for (const [, block] of source.matchAll(/<span([^>]*)>\s*\{(?:rankDelta|myRow\.change|myItem\.change)\}/g)) {
+    for (const [, block] of source.matchAll(/<span([^>]*)>\s*\{(?:rankDelta|myRow\.change|myItem\.change|mySchool\.change)\}/g)) {
       assert.doesNotMatch(block, /bg-\[#22c55e\]/, `${file}: 변동 배지에 RANK_TREND_TONE[rankTrend(...)]을 쓰세요`);
       assert.match(block, /RANK_TREND_TONE\[rankTrend\(/, `${file}: 변동 배지에 RANK_TREND_TONE[rankTrend(...)]을 쓰세요`);
     }
+    // SCRUM-190: the comparison mocks once hard-coded a green own-row badge and a "▼1" pink cut-off row, and list rows
+    // repeated the colors in ternaries. The trend colors live only in RANK_TREND_TONE.
+    assert.doesNotMatch(source, /bg-\[#(?:22c55e|fb7185)\]/, `${file}: 변동 배지 색을 직접 쓰지 말고 RANK_TREND_TONE[rankTrend(...)]을 쓰세요`);
+  }
+});
+
+test('목업 비교 순위 화면의 변동 배지는 실제 변동 방향 색을 쓴다 (SCRUM-190)', () => {
+  const schoolId = DEFAULT_PLAYER.schoolId;
+  const badgeOf = (element: HTMLElement) => element.lastElementChild!.lastElementChild as HTMLElement;
+  const renderMock = (Screen: React.FC, schoolScore: number) =>
+    render(React.createElement(MockGameProvider, { initialState: { ...INITIAL_GAME_STATE, schoolScore }, children: React.createElement(Screen) }));
+
+  // Screen 2 pins the player's school: ▼ when its score falls, ▲ when it rises.
+  for (const [score, trend] of [[0, 'down'], [Number.MAX_SAFE_INTEGER, 'up']] as const) {
+    const change = getSchoolRankings(score, schoolId).find((row) => row.isMySchool)!.change;
+    assert.equal(rankTrend(change), trend, `점수 ${score}에서 내 학교 변동이 ${trend}여야 한다`);
+    renderMock(RankingScreen2Phone, score);
+    assert.equal(screen.getByText(change).className.includes(RANK_TREND_TONE[trend]), true, `${change} 배지 색`);
+    cleanup();
+  }
+
+  // Screen 1's cut-off 8th row follows its own change instead of a fixed "▼1".
+  for (const score of [INITIAL_GAME_STATE.schoolScore, 0]) {
+    const change = getSchoolRankings(score, schoolId)[7].change;
+    renderMock(RankingScreen1Phone, score);
+    const badge = badgeOf(screen.getByTitle('아래로 스크롤하여 더 많은 순위 보기'));
+    assert.equal(badge.textContent, change.replace(/[▲▼]/g, '') || '-');
+    assert.equal(badge.className.includes(RANK_TREND_TONE[rankTrend(change)]), true, `8위 ${change} 배지 색`);
+    cleanup();
   }
 });

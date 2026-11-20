@@ -5,6 +5,8 @@ import { test } from 'node:test';
 // A failing assert.equal/deepEqual that holds a React-rendered DOM node grew past 2GB in 12s and systemd-oomd
 // killed the whole terminal, other agents included (2026-11-10). Node checks go through tests/helpers/domAssert.ts,
 // which passes booleans to assert. This sensor finds node-valued arguments to value asserts.
+// `npm test` runs it first (pretest): test files run in parallel, so a node-holding failure elsewhere could take the
+// terminal down before this file reports it (again on 2026-11-19, SCRUM-189).
 
 const VALUE_ASSERT = /\bassert\.(?:equal|notEqual|strictEqual|notStrictEqual|deepEqual|notDeepEqual|deepStrictEqual|notDeepStrictEqual)\(/g;
 /** Members whose value is a DOM node or a list of nodes: Testing Library queries and DOM lookups. */
@@ -95,4 +97,9 @@ test('테스트 파일은 DOM 노드를 assert.equal 등에 직접 넘기지 않
   const offenders = readdirSync(dir).filter((name) => name.endsWith('.test.ts') && name !== 'testHygiene.test.ts')
     .flatMap((name) => nodeValuedAsserts(readFileSync(new URL(name, dir), 'utf8')).map((hit) => `tests/${name}:${hit}`));
   assert.deepEqual(offenders, [], 'assertAbsent(node) 또는 assertSameNode(a, b)로 바꾸세요. 실패 시 노드를 출력하며 메모리가 폭주합니다.');
+});
+
+test('npm test는 이 센서를 먼저 따로 실행한다 (병렬 실행 중 다른 파일이 메모리를 터뜨리기 전에 멈춘다)', () => {
+  const { scripts } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { scripts: Record<string, string> };
+  assert.equal(scripts.pretest, 'node --import tsx --test tests/testHygiene.test.ts');
 });

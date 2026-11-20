@@ -162,7 +162,8 @@ class UniversityControllerTest {
                         List.of(),
                         List.of(),
                         false,
-                        false
+                        false,
+                        2L
                 ));
 
         mockMvc.perform(get("/api/v1/universities/12"))
@@ -175,7 +176,8 @@ class UniversityControllerTest {
                 .andExpect(jsonPath("$.data.memberCount").value(498))
                 .andExpect(jsonPath("$.data.topDepartments").isArray())
                 .andExpect(jsonPath("$.data.topContributors").isArray())
-                .andExpect(jsonPath("$.data.isMyUniversity").value(false));
+                .andExpect(jsonPath("$.data.isMyUniversity").value(false))
+                .andExpect(jsonPath("$.data.rankChange").value(2));
 
         verify(universityQueryService)
                 .getUniversityDetail(12L, null);
@@ -222,7 +224,8 @@ class UniversityControllerTest {
                                 )
                         ),
                         false,
-                        false
+                        false,
+                        null
                 ));
 
         mockMvc.perform(get("/api/v1/universities/12"))
@@ -265,7 +268,8 @@ class UniversityControllerTest {
                         List.of(),
                         List.of(),
                         true,
-                        false
+                        false,
+                        null
                 ));
 
         mockMvc.perform(
@@ -306,7 +310,8 @@ class UniversityControllerTest {
                         List.of(),
                         List.of(),
                         false,
-                        false
+                        false,
+                        null
                 ));
 
         // when & then

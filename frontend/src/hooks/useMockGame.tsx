@@ -189,10 +189,11 @@ function useGameController(
   const applyApiScores = useCallback((scores: Pick<MockGameState, 'contribution' | 'schoolScore' | 'departmentScore'>) => {
     commit({ type: 'api-scores', ...scores });
   }, [commit]);
+  const applyApiSchoolScore = useCallback((schoolScore: number) => commit({ type: 'api-school-score', schoolScore }), [commit]);
   const activeBuff = getActiveBuff(state, now, engineBuffs);
 
   return {
-    state, player, setPlayer, enroll, applyAccount, applyApiTap, applyApiScores, tap, buy, upgrade, previewCampus, shopConfig, storeItems,
+    state, player, setPlayer, enroll, applyAccount, applyApiTap, applyApiScores, applyApiSchoolScore, tap, buy, upgrade, previewCampus, shopConfig, storeItems,
     clickRejectDemo, setClickRejectDemo, clickNotice,
     abuseFlagged, setAbuseFlagged, botCheckOpen, closeBotCheck, completeBotCheck,
     imageStore,

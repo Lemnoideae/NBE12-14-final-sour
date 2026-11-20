@@ -7,6 +7,7 @@ import { getSchoolRankings, type RankingRow } from '../data/mockRankings';
 import type { SchoolId } from '../data/schoolIds';
 import { useMockGame } from '../hooks/useMockGame';
 import { SharedImage } from './SharedImage.tsx';
+import { RANK_TREND_TONE, rankTrend } from './RankingParts';
 
 interface RankingScreen1PhoneProps {
   onNavigateTab?: (tab: NavTab) => void;
@@ -260,13 +261,7 @@ export const RankingScreen1Phone: React.FC<RankingScreen1PhoneProps> = ({
                       {row.score.toLocaleString('ko-KR')}
                     </span>
                     <span
-                      className={`text-[8px] font-mono px-1 py-0.2 border border-[#261608] flex items-center gap-0.5 font-bold ${
-                        row.change.startsWith('▲')
-                          ? 'text-white bg-[#22c55e]'
-                          : row.change.startsWith('▼')
-                          ? 'text-white bg-[#fb7185]'
-                          : 'text-[#261608] bg-[#faecc7]'
-                      }`}
+                      className={`text-[8px] font-mono px-1 py-0.2 border border-[#261608] flex items-center gap-0.5 font-bold ${RANK_TREND_TONE[rankTrend(row.change)]}`}
                     >
                       {row.change.startsWith('▲') ? (
                         <ArrowUp className="w-2.5 h-2.5" />
@@ -310,9 +305,15 @@ export const RankingScreen1Phone: React.FC<RankingScreen1PhoneProps> = ({
                 <span className="font-press-start text-[9px] text-[#261608] font-bold">
                   {row8CutOff.score.toLocaleString('ko-KR')}
                 </span>
-                <span className="text-[8px] font-mono px-1 py-0.2 border border-[#261608] flex items-center gap-0.5 font-bold text-white bg-[#fb7185]">
-                  <ArrowDown className="w-2.5 h-2.5" />
-                  1
+                <span className={`text-[8px] font-mono px-1 py-0.2 border border-[#261608] flex items-center gap-0.5 font-bold ${RANK_TREND_TONE[rankTrend(row8CutOff.change)]}`}>
+                  {row8CutOff.change.startsWith('▲') ? (
+                    <ArrowUp className="w-2.5 h-2.5" />
+                  ) : row8CutOff.change.startsWith('▼') ? (
+                    <ArrowDown className="w-2.5 h-2.5" />
+                  ) : (
+                    <Minus className="w-2.5 h-2.5" />
+                  )}
+                  {row8CutOff.change.replace(/[▲▼]/g, '') || '-'}
                 </span>
               </div>
             </div>

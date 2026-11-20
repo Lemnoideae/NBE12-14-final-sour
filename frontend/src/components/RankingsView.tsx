@@ -231,13 +231,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               {/* Null: nothing to compare against 00:00 KST (new member, or no copy for today), so no badge. */}
               {row.change !== null && (
                 <span
-                  className={`text-[8px] font-mono px-0.5 py-0.2 border border-[#261608] font-bold ${
-                    row.change.startsWith('▲')
-                      ? 'text-[#ffffff] bg-[#22c55e]'
-                      : row.change.startsWith('▼')
-                      ? 'text-[#ffffff] bg-[#fb7185]'
-                      : 'text-[#261608] bg-[#faecc7]'
-                  }`}
+                  className={`text-[8px] font-mono px-0.5 py-0.2 border border-[#261608] font-bold ${RANK_TREND_TONE[rankTrend(row.change)]}`}
                 >
                   {row.change}
                 </span>
