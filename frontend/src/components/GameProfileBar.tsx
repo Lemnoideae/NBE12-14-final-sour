@@ -4,21 +4,20 @@ import { useApiClient } from '../api/ApiProvider';
 import { logout } from '../api/auth';
 import { errorMessage } from '../api/errors';
 
-type ProfileAction = 'my_info' | 'member_support' | 'login' | 'signup' | 'support_guest';
+type ProfileAction = 'my_info' | 'member_support';
 
 interface GameProfileBarProps {
-  mode: 'member' | 'guest' | 'mock';
+  mode: 'api' | 'mock';
   nickname: string;
   onNavigate: (action: ProfileAction) => void;
-  onLogout: () => void;
   onCampus: () => void;
 }
 
-function MemberProfile({ nickname, onNavigate, onLogout }: Pick<GameProfileBarProps, 'nickname' | 'onNavigate' | 'onLogout'>) {
+function MemberProfile({ nickname, onNavigate }: Pick<GameProfileBarProps, 'nickname' | 'onNavigate'>) {
   const details = useRef<HTMLDetailsElement>(null);
   const summary = useRef<HTMLElement>(null);
   const client = useApiClient();
-  const signOut = useMutation({ mutationFn: () => logout(client), onSuccess: onLogout });
+  const signOut = useMutation({ mutationFn: () => logout(client) });
   const close = () => {
     if (details.current) details.current.open = false;
   };
@@ -52,21 +51,14 @@ function MemberProfile({ nickname, onNavigate, onLogout }: Pick<GameProfileBarPr
   );
 }
 
-export function GameProfileBar({ mode, nickname, onNavigate, onLogout, onCampus }: GameProfileBarProps) {
+export function GameProfileBar({ mode, nickname, onNavigate, onCampus }: GameProfileBarProps) {
   return (
     <header className="game-top-bar game-width">
       <button type="button" onClick={onCampus} className="game-brand" aria-label="대대대 내 캠퍼스">
         <span className="game-wordmark" aria-hidden="true">대</span>
         <span className="font-black">대대대 <span className="text-xs text-[#775430]">캠퍼스 대항전</span></span>
       </button>
-      <div className="ms-auto min-w-0">
-        {mode === 'member' && <MemberProfile nickname={nickname} onNavigate={onNavigate} onLogout={onLogout} />}
-        {mode === 'guest' && <nav aria-label="비회원 메뉴" className="flex flex-wrap gap-2">
-          <button type="button" className="game-workspace-action" onClick={() => onNavigate('login')}>로그인</button>
-          <button type="button" className="game-workspace-action" onClick={() => onNavigate('signup')}>가입</button>
-          <button type="button" className="game-workspace-action" onClick={() => onNavigate('support_guest')}>비회원 문의</button>
-        </nav>}
-      </div>
+      {mode === 'api' && <div className="ms-auto min-w-0"><MemberProfile nickname={nickname} onNavigate={onNavigate} /></div>}
     </header>
   );
 }

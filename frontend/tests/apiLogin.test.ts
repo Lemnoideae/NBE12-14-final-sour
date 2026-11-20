@@ -3,7 +3,7 @@ import { after, afterEach, test } from 'node:test';
 import { registerHooks } from 'node:module';
 import React from 'react';
 import { JSDOM } from 'jsdom';
-import { assertAbsent } from './helpers/domAssert';
+import { assertAbsent, assertSameNode } from './helpers/domAssert';
 
 // Login screen, logout and the session restore in API mode (SCRUM-152) against a fake backend. jsdom checks the flow;
 // the cookie round trip across a reload is the browser check against the real backend.
@@ -31,6 +31,7 @@ const { createApiClient } = await import('../src/api/client');
 const { createApiFaults } = await import('../src/api/faults');
 const { createQueryClient } = await import('../src/api/queryClient');
 const { ApiLoginPhone, ApiSessionWatcher, ApiAccountNavLabel } = await import('../src/components/onboarding/ApiLoginPhone');
+const { ApiEntry } = await import('../src/components/ApiEntry');
 
 const queryClients: Array<ReturnType<typeof createQueryClient>> = [];
 afterEach(() => {
@@ -61,7 +62,7 @@ const PROFILE = {
 type Handler = (body: Record<string, unknown>) => Response | Promise<Response>;
 
 /** Renders the account screen, the root watcher and the nav label in StrictMode, the way the app mounts them. */
-function mount({ restore = true, overrides = {} }: { restore?: boolean; overrides?: Record<string, Handler> } = {}) {
+function mount({ restore = true, overrides = {}, entry = false }: { restore?: boolean; overrides?: Record<string, Handler>; entry?: boolean } = {}) {
   let token = 0;
   const routes: Record<string, Handler> = {
     'POST /api/v1/auth/reissue': () => (restore
@@ -90,7 +91,7 @@ function mount({ restore = true, overrides = {} }: { restore?: boolean; override
   render(React.createElement(React.StrictMode, null, React.createElement(ApiProvider, {
     client,
     queryClient,
-    children: [
+    children: entry ? React.createElement(ApiEntry, { children: React.createElement('h1', null, '내 캠퍼스') }) : [
       React.createElement(ApiSessionWatcher, { key: 'watcher', onEnded: () => { events.ended += 1; } }),
       React.createElement('nav', { key: 'nav' }, React.createElement(ApiAccountNavLabel)),
       React.createElement(ApiLoginPhone, {
@@ -213,4 +214,38 @@ test('로그아웃 요청이 세션 교체로 실패하면 로그인 화면에 �
   assert.equal((await screen.findByRole('status')).textContent, REPLACED_MESSAGE);
   assertAbsent(screen.queryByRole('alert'), '로그아웃 실패 문구를 함께 띄우지 않는다');
   assert.equal(events.ended, 1);
+});
+
+test('SCRUM-210: 복원 도중에는 게스트 진입점도 캠퍼스도 표시하지 않는다', async () => {
+  const { routes } = mount({ entry: true });
+  assert.equal(screen.getByRole('status').textContent, '로그인 상태를 확인하는 중…');
+  assertAbsent(screen.queryByRole('button', { name: '로그인' }));
+  assertAbsent(screen.queryByRole('heading', { name: '내 캠퍼스' }));
+  await screen.findByRole('heading', { name: '내 캠퍼스' });
+  assertAbsent(screen.queryByRole('heading', { name: '대대대' }));
+  assert.deepEqual(routes(), ['POST /api/v1/auth/reissue']);
+});
+
+test('SCRUM-210: 첫 화면에서 로그인 후 내 캠퍼스로, 세션 종료 후 안내와 함께 첫 화면으로 돌아간다', async () => {
+  const { client, routes } = mount({ entry: true, restore: false });
+  await screen.findByRole('heading', { level: 1, name: '대대대' });
+  assertAbsent(screen.queryByRole('heading', { name: '내 캠퍼스' }));
+  assert.ok(screen.getByRole('button', { name: '회원가입' }));
+  assert.ok(screen.getByRole('button', { name: '비회원 문의' }));
+  fireEvent.click(screen.getByRole('button', { name: '로그인' }));
+  assertSameNode(document.activeElement, screen.getByRole('main', { name: '비로그인 서비스' }));
+  fireEvent.click(screen.getByRole('button', { name: '첫 화면으로' }));
+  assertSameNode(document.activeElement, screen.getByRole('heading', { name: '대대대' }));
+  fireEvent.click(screen.getByRole('button', { name: '로그인' }));
+  await logIn();
+  await screen.findByRole('heading', { name: '내 캠퍼스' });
+  assert.deepEqual(routes(), ['POST /api/v1/auth/reissue', 'POST /api/v1/auth/login']);
+
+  await act(async () => {
+    client.faults.setClickRefusal(true);
+    client.session.close('password-changed');
+  });
+  assert.equal(client.faults.getClickRefusal(), false);
+  assertAbsent(screen.queryByRole('heading', { name: '내 캠퍼스' }));
+  assert.match(screen.getByRole('status').textContent ?? '', /새 비밀번호로 다시 로그인/);
 });
