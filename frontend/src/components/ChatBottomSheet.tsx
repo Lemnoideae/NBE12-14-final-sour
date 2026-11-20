@@ -11,6 +11,7 @@ export type { ChatMessage } from '../data/mockChat.ts';
 
 interface ChatBottomSheetProps {
   onClose?: () => void;
+  schoolOnly?: boolean;
   mySchoolInitial: string;
   myNickname: string;
   myDepartment: string;
@@ -18,6 +19,7 @@ interface ChatBottomSheetProps {
 
 export const ChatBottomSheet: React.FC<ChatBottomSheetProps> = ({
   onClose,
+  schoolOnly = false,
   mySchoolInitial,
   myNickname,
   myDepartment,
@@ -33,7 +35,7 @@ export const ChatBottomSheet: React.FC<ChatBottomSheetProps> = ({
   const { currentAlliance } = useAlliance();
   const sampleInput = { schools, mySchoolId: player.schoolId, myNickname, myDepartment };
   const [schoolMessages, setSchoolMessages] = useState<ChatMessage[]>(() => getSchoolChatSamples(sampleInput));
-  const [unionMessages, setUnionMessages] = useState<ChatMessage[] | null>(() => getUnionChatSamples(sampleInput, currentAlliance?.schoolIds ?? null));
+  const [unionMessages, setUnionMessages] = useState<ChatMessage[] | null>(() => schoolOnly ? null : getUnionChatSamples(sampleInput, currentAlliance?.schoolIds ?? null));
   const noAlliance = activeTab === 'union' && unionMessages === null;
 
   const currentMessages = activeTab === 'school' ? schoolMessages : unionMessages ?? [];
@@ -89,11 +91,11 @@ export const ChatBottomSheet: React.FC<ChatBottomSheetProps> = ({
         <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
           <div className="flex items-center gap-1 shrink-0">
             <MessageSquare className="w-4 h-4 text-[#8b5327]" />
-            <span className="font-pixel text-sm font-black text-[#261608]">채팅</span>
+            <span className="font-pixel text-sm font-black text-[#261608]">{schoolOnly ? '우리 학교 채팅' : '채팅'}</span>
           </div>
 
           {/* Tab Switcher: "교내 채팅" (active) and "연합 채팅" */}
-          <div className="flex items-center gap-1 bg-[#ecd9b2] p-0.5 border border-[#261608]">
+          {!schoolOnly && <div className="flex items-center gap-1 bg-[#ecd9b2] p-0.5 border border-[#261608]">
             <button
               onClick={() => {
                 setActiveTab('school');
@@ -116,17 +118,17 @@ export const ChatBottomSheet: React.FC<ChatBottomSheetProps> = ({
             >
               연합 채팅
             </button>
-          </div>
+          </div>}
         </div>
 
         {/* Right: Close "▼" button */}
-        <button
+        {!schoolOnly && <button
           onClick={onClose}
           title="채팅창 닫기"
           className="pixel-plaque plaque-parchment p-1 border-2 border-[#261608] flex items-center justify-center cursor-pointer hover:bg-stone-100 active:scale-95 ml-auto shrink-0"
         >
           <ChevronDown className="w-4 h-4 text-[#261608]" />
-        </button>
+        </button>}
       </div>
 
       {/* Pinned Notice in Retro Dialog Box */}

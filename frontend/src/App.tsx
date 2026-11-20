@@ -8,6 +8,7 @@ import { GameScreenLayout } from './components/GameScreenLayout';
 import { useDeviceMode, useGameLayout } from './hooks/useDeviceMode';
 import { useAuthSession } from './api/ApiProvider';
 import { GameWorkspace, WorkspaceShortcut } from './components/GameWorkspace';
+import { GameSchoolPanel, LazyApiChat, type SchoolPanelTab } from './components/GameSchoolPanel';
 import { GameProfileBar } from './components/GameProfileBar';
 import { AllianceNavProvider, BottomNav, NavTab, type AllianceNavValue } from './components/BottomNav';
 import { RankingsView } from './components/RankingsView';
@@ -20,7 +21,8 @@ import { ShopScreenPhone } from './components/ShopScreenPhone';
 import { TwoPhoneMapComparison } from './components/TwoPhoneMapComparison';
 import { MapIllustrationViewer } from './components/MapIllustrationViewer';
 import { MapScreenPhone, INITIAL_MAP_CONTEXT, type MapContext } from './components/MapScreenPhone';
-import { VisitingScreen1Phone } from './components/VisitingScreen1Phone';
+import { VisitCampusScreen } from './components/VisitingScreen1Phone';
+import { useVisitSchool } from './hooks/useVisitSchool';
 import { VisitingScreen2Phone } from './components/VisitingScreen2Phone';
 import { OnboardingPhone } from './components/onboarding/OnboardingPhone';
 import { ApiSignupPhone } from './components/onboarding/ApiSignupPhone';
@@ -75,9 +77,6 @@ import { Smartphone, Gamepad2, Layers, Trophy, ShoppingBag, MapPin, Image as Ima
 const SERVICE_VIEW_MODES = new Set<string>(['gameplay', 'signup', 'login', 'single_map', 'visiting', 'ranking', 'shop', 'alliance_apply', 'current_alliance', 'battle_apply', 'battle_status', 'support_guest', 'my_info', 'purchase_history', 'member_support', 'admin']);
 /** Sign-up: the backend in API mode (SCRUM-151), the mock onboarding otherwise. */
 const SignupScreen = selectByMode<React.FC<{ onGoToCampus: () => void; onGoToLogin?: () => void }>>({ api: ApiSignupPhone, mock: OnboardingPhone });
-// Load STOMP only when a member opens the API chat sheet; design-comparison screens stay mock-only.
-const ApiChatBottomSheet = React.lazy(() => import('./components/ApiChatBottomSheet').then((module) => ({ default: module.ApiChatBottomSheet })));
-
 function useSignedIn() {
   return useAuthSession().status === 'signed-in';
 }
@@ -89,6 +88,7 @@ function AppContent() {
   const [isChatSheetOpen, setIsChatSheetOpen] = useState<boolean>(false);
   const [isOurGuestbookSheetOpen, setIsOurGuestbookSheetOpen] = useState<boolean>(false);
   const [isStatsSheetOpen, setIsStatsSheetOpen] = useState<boolean>(false);
+  const [schoolPanelTab, setSchoolPanelTab] = useState<SchoolPanelTab>('detail');
   const [isMockMenuOpen, setIsMockMenuOpen] = useState<boolean>(false);
   // Map → visit → return (M2, docs/261108-2000-m2_map_visit_return_plan.md 4-1). Only the ID is kept;
   // the visit screen reads the school's values from the shared rows.
@@ -105,7 +105,8 @@ function AppContent() {
   const showMockSheet = isPhone || gameLayout === 'compact';
   const showPresentation = !showMockSheet && (gameLayout === 'legacy' || !isServiceView);
   const showGameBar = isServiceView && gameLayout === 'wide';
-  const wideCampus = showGameBar && canPlayWide && viewMode === 'gameplay';
+  const wideCampus = showGameBar && canPlayWide && (viewMode === 'gameplay' || viewMode === 'visiting');
+  const visit = useVisitSchool(viewMode === 'visiting' ? visitSchoolId : null);
   const shellVariant = showMockSheet && isServiceView ? 'full' : 'framed';
   const viewWrap = shellVariant === 'full' ? 'w-full flex flex-col' : 'w-full flex flex-col items-center py-2 animate-fadeIn';
   const game = useMockGame();
@@ -119,11 +120,21 @@ function AppContent() {
   const mySchool = useMySchool();
   // API mode: the server's rank and change against 00:00 KST (SCRUM-184). The score above follows the server's total
   // through ApiSchoolScoreSync and click answers (SCRUM-188).
-  const { rank, change: rankDelta } = useMySchoolRank(schoolScore, playerInfo.schoolId);
+  const schoolRanking = useMySchoolRank(schoolScore, playerInfo.schoolId);
+  const { rank, change: rankDelta } = schoolRanking;
   const campusLevel = game.campus.level;
   const myContribution = game.state.contribution;
   const [activeStudents, setActiveStudents] = useState<number>(37);
   const [activeTab, setActiveTab] = useState<NavTab>('campus');
+
+  // A mobile dialog and a wide panel never mount the same chat or guestbook together.
+  useEffect(() => {
+    if (!wideCampus) return;
+    setIsChatSheetOpen(false);
+    setIsOurGuestbookSheetOpen(false);
+    setIsStatsSheetOpen(false);
+    setIsVisitGuestbookOpen(false);
+  }, [wideCampus]);
 
   const goToMySchool = () => {
     setIsVisitGuestbookOpen(false);
@@ -529,7 +540,10 @@ function AppContent() {
     <OtherClicksFeedContext.Provider value={campusClicks.otherClicksFeed}>
     <AllianceNavProvider value={allianceNav}>
       <div className={`w-full flex flex-col items-center justify-start select-none text-[#261608] ${showMockSheet ? 'device-full min-h-dvh bg-[#f1f5f9]' : showGameBar ? 'game-backdrop' : 'min-h-screen p-2 sm:p-5 bg-[#f1f5f9]'}`}>
-        {API_MODE === 'api' && <ApiSessionWatcher onEnded={() => setViewMode('login')} />}
+        {API_MODE === 'api' && <ApiSessionWatcher onEnded={() => {
+          setSchoolPanelTab('detail');
+          setViewMode('login');
+        }} />}
         {showGameBar && (
           <GameProfileBar
             mode={API_MODE === 'mock' ? 'mock' : canPlayWide ? 'member' : 'guest'}
@@ -537,6 +551,7 @@ function AppContent() {
             onCampus={goToMySchool}
             onNavigate={setViewMode}
             onLogout={() => {
+              setSchoolPanelTab('detail');
               setIsChatSheetOpen(false);
               setIsOurGuestbookSheetOpen(false);
               setIsStatsSheetOpen(false);
@@ -611,6 +626,16 @@ function AppContent() {
         {/* Main Content Area based on viewMode. Service screens get 44px touch areas (src/index.css). */}
         <PhoneShellVariantContext.Provider value={shellVariant}>
         <div className="contents" data-touch-area={SERVICE_VIEW_MODES.has(viewMode) ? '44' : undefined}>
+        <GameWorkspace wide={wideCampus}
+          left={<GameSchoolPanel tab={schoolPanelTab} onTabChange={setSchoolPanelTab} mySchool={mySchool} ranking={schoolRanking}
+            visit={viewMode === 'visiting' ? visit : null} onGoToMap={goToMap} onGoToShop={() => setActiveTab('shop')} />}
+          right={<>
+            <h2>전국 경쟁</h2>
+            <WorkspaceShortcut onClick={() => viewMode === 'visiting' ? goToMap() : setActiveTab('map')}>지도</WorkspaceShortcut>
+            <WorkspaceShortcut onClick={() => viewMode === 'visiting' ? navigateTab('rankings') : setActiveTab('rankings')}>순위</WorkspaceShortcut>
+            <WorkspaceShortcut onClick={allianceNav.open}>연합 대결</WorkspaceShortcut>
+          </>}
+        >
         {viewMode === 'ranking_screens' ? (
           <TwoPhoneRankingComparison
             schoolScore={schoolScore}
@@ -675,19 +700,22 @@ function AppContent() {
             }}
           />
         ) : viewMode === 'visiting' ? (
-          <div className={viewWrap}>
-            {isVisitGuestbookOpen && (
+          <div className={wideCampus ? 'h-full' : viewWrap}>
+            {!wideCampus && isVisitGuestbookOpen && (
               <VisitingScreen2Phone modal schoolId={visitSchoolId} onCloseGuestbook={() => setIsVisitGuestbookOpen(false)}
                 onGoToLogin={() => { setIsVisitGuestbookOpen(false); setViewMode('login'); }} />
             )}
-            <MockLoadGate key={`visit:${visitSchoolId ?? ''}`} name="방문 학교" onBack={goToMap} backLabel="지도로 돌아가기">
-              <VisitingScreen1Phone
+            <MockLoadGate key={`visit:${visitSchoolId ?? ''}`} name="방문 학교" variant={wideCampus ? 'panel' : 'phone'} onBack={goToMap} backLabel="지도로 돌아가기">
+              <VisitCampusScreen
                 schoolId={visitSchoolId}
+                visit={visit}
+                embedded={wideCampus}
                 attacks={campusAttacks}
                 onBackToMap={goToMap}
                 onBackToMySchool={goToMySchool}
                 onNavigateTab={navigateTab}
-                onOpenGuestbook={() => setIsVisitGuestbookOpen(true)}
+                onOpenDetails={wideCampus ? () => setSchoolPanelTab('detail') : undefined}
+                onOpenGuestbook={() => wideCampus ? setSchoolPanelTab('guestbook') : setIsVisitGuestbookOpen(true)}
                 soundEnabled={soundEnabled}
                 onToggleSound={handleToggleSound}
               />
@@ -846,7 +874,7 @@ function AppContent() {
         ) : viewMode === 'login' ? (
           <ApiLoginPhone onGoToSignup={() => setViewMode('signup')} onGoToCampus={goToMySchool} onOpenMyInfo={() => setViewMode('my_info')} />
         ) : (
-          <div className={wideCampus ? 'w-full' : viewWrap}>
+          <div className={wideCampus ? 'h-full' : viewWrap}>
             {showPresentation && <div className="mb-2 font-pixel text-xs text-[#8b5327] font-bold flex items-center gap-2">
               <span>입학생: {playerInfo.nickname} ({playerInfo.department})</span>
               <button
@@ -858,21 +886,6 @@ function AppContent() {
               </button>
             </div>}
 
-
-            <GameWorkspace wide={wideCampus}
-              left={<>
-                <h2>캠퍼스 생활</h2>
-                <WorkspaceShortcut onClick={() => setIsStatsSheetOpen(true)}>상세 스탯</WorkspaceShortcut>
-                <WorkspaceShortcut onClick={() => setIsChatSheetOpen(true)}>우리 학교 채팅</WorkspaceShortcut>
-                <WorkspaceShortcut onClick={() => setIsOurGuestbookSheetOpen(true)}>우리 학교 방명록</WorkspaceShortcut>
-              </>}
-              right={<>
-                <h2>전국 경쟁</h2>
-                <WorkspaceShortcut onClick={() => setActiveTab('map')}>지도</WorkspaceShortcut>
-                <WorkspaceShortcut onClick={() => setActiveTab('rankings')}>순위</WorkspaceShortcut>
-                <WorkspaceShortcut onClick={allianceNav.open}>연합 대결</WorkspaceShortcut>
-              </>}
-            >
             <GameScreenLayout
               kind="my-campus"
               embedded={wideCampus}
@@ -920,7 +933,7 @@ function AppContent() {
                 />
               )}
               overlays={
-                <>
+                !wideCampus && <>
                   {/* Service sheets use the native top layer; short viewports must not clip controls. */}
                   {isChatSheetOpen && (
                     <BottomSheetDialog label="채팅" onClose={() => {
@@ -928,7 +941,7 @@ function AppContent() {
                       soundManager.playTabSound();
                     }}>
                       {API_MODE === 'api' ? <React.Suspense fallback={<p role="status" className="p-3 font-pixel text-sm">채팅 화면을 여는 중이에요.</p>}>
-                        <ApiChatBottomSheet
+                        <LazyApiChat
                           onClose={() => { setIsChatSheetOpen(false); soundManager.playTabSound(); }}
                           onGoToLogin={() => { setIsChatSheetOpen(false); setViewMode('login'); }} />
                       </React.Suspense> : <ChatBottomSheet
@@ -988,11 +1001,12 @@ function AppContent() {
                     basePower={basePower}
                     activeStudents={activeStudents}
                     onOpenGuestbook={() => {
-                      setIsOurGuestbookSheetOpen(true);
+                      if (wideCampus) setSchoolPanelTab('guestbook');
+                      else setIsOurGuestbookSheetOpen(true);
                       soundManager.playTabSound();
                     }}
                     showGuestbookBoard={true}
-                    onOpenStats={() => setIsStatsSheetOpen(true)}
+                    onOpenStats={() => wideCampus ? setSchoolPanelTab('detail') : setIsStatsSheetOpen(true)}
                     fill
                   />
 
@@ -1024,9 +1038,9 @@ function AppContent() {
                 />
               )}
             </GameScreenLayout>
-            </GameWorkspace>
           </div>
         )}
+        </GameWorkspace>
         </div>
         </PhoneShellVariantContext.Provider>
         {/* SCRUM-121: one bot check for every screen that sends my campus clicks. */}

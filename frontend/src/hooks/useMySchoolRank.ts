@@ -14,12 +14,16 @@ export interface MySchoolRank {
   rank: number | null;
   /** Badge text (▲n, ▼n, -); null hides it. */
   change: string | null;
+  /** Snapshot paired with the rank; null when there is no own-school row. */
+  score: number | null;
+  scoreStatus: 'ready' | 'loading' | 'failed' | 'unranked';
+  retry?: () => void;
 }
 
 function useMockMySchoolRank(schoolScore: number, schoolId: SchoolId): MySchoolRank {
   return useMemo(() => {
     const mine = getSchoolRankings(schoolScore, schoolId).find((school) => school.isMySchool)!;
-    return { rank: mine.rank, change: mine.change };
+    return { rank: mine.rank, change: mine.change, score: schoolScore, scoreStatus: 'ready' };
   }, [schoolScore, schoolId]);
 }
 
@@ -27,8 +31,21 @@ function useMockMySchoolRank(schoolScore: number, schoolId: SchoolId): MySchoolR
 export function useApiMySchoolRank(_schoolScore: number, _schoolId: SchoolId): MySchoolRank {
   const signedIn = useAuthSession().status === 'signed-in';
   const viewerId = useMyInfo().data?.id ?? null;
-  const mine = useMySchoolRanking(signedIn ? viewerId : null).data ?? null;
-  return { rank: mine?.rank ?? null, change: formatRankChange(mine?.rankChange) };
+  const ranking = useMySchoolRanking(signedIn ? viewerId : null);
+  const mine = ranking.data;
+  return {
+    rank: mine?.rank ?? null,
+    change: formatRankChange(mine?.rankChange),
+    score: mine?.totalScore ?? null,
+    scoreStatus: schoolScoreStatus(mine, ranking.isError),
+    retry: () => { void ranking.refetch(); },
+  };
+}
+
+function schoolScoreStatus(mine: unknown, isError: boolean): MySchoolRank['scoreStatus'] {
+  if (mine) return 'ready';
+  if (mine === null) return 'unranked';
+  return isError ? 'failed' : 'loading';
 }
 
 export const useMySchoolRank = selectByMode({ api: useApiMySchoolRank, mock: useMockMySchoolRank });

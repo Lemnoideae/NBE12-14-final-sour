@@ -10,9 +10,9 @@ interface GameWorkspaceProps {
 /** The center stays in the same React slot as the viewport changes. Only the side panels come and go. */
 export function GameWorkspace({ wide, left, right, children }: GameWorkspaceProps) {
   return (
-    <div className={wide ? 'game-workspace game-width' : 'w-full'} data-game-workspace={wide ? 'wide' : 'single'}>
+    <div className={wide ? 'game-workspace game-width' : 'contents'} data-game-workspace={wide ? 'wide' : 'single'}>
       {wide && <aside className="game-workspace-side" aria-label="학교 패널">{left}</aside>}
-      <div className={wide ? 'game-workspace-center' : 'flex justify-center'}>{children}</div>
+      <div className={wide ? 'game-workspace-center' : 'contents'}>{children}</div>
       {wide && <aside className="game-workspace-side" aria-label="전국 경쟁 패널">{right}</aside>}
     </div>
   );

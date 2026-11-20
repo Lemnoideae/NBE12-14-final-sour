@@ -109,6 +109,53 @@ test('SCRUM-206: 3열과 좁은 PC 1열을 오가도 같은 캠퍼스와 활성 
   assert.equal(shells()[0].dataset.phoneShell, 'embedded');
 });
 
+test('SCRUM-207: 방문 학교 요약·상세·방명록을 바꾸고 채팅 탭 선택은 리사이즈 후 복원한다', () => {
+  const wideQuery = Object.assign(new dom.window.EventTarget(), { matches: true });
+  const narrowQuery = Object.assign(new dom.window.EventTarget(), { matches: false });
+  Object.defineProperty(win, 'matchMedia', { configurable: true, value: (query: string) => query === GAME_WIDE_QUERY ? wideQuery : narrowQuery });
+  const resize = (wide: boolean) => act(() => {
+    wideQuery.matches = wide;
+    wideQuery.dispatchEvent(new dom.window.Event('change'));
+  });
+  mountApp();
+  const panel = () => within(screen.getByRole('complementary', { name: '학교 패널' }));
+  assert.match(panel().getByRole('region', { name: '학교 요약' }).textContent ?? '', /한양대학교.*학교 점수.*전국 순위/);
+  const detail = panel().getByRole('tab', { name: '상세' });
+  const chat = panel().getByRole('tab', { name: '우리 학교 채팅' });
+  detail.focus();
+  fireEvent.keyDown(detail, { key: 'ArrowRight' });
+  assertSameNode(document.activeElement, chat);
+  assert.equal(detail.getAttribute('aria-selected'), 'true', '방향키는 포커스만 이동한다');
+  fireEvent.click(chat);
+  const message = panel().getByRole('textbox', { name: '채팅 메시지' });
+  fireEvent.change(message, { target: { value: '동시 플레이 메시지' } });
+  fireEvent.click(panel().getByRole('button', { name: '전송' }));
+  fireEvent.click(screen.getByRole('button', { name: '캠퍼스 클릭 영역' }));
+  assert.equal(panel().getAllByText('동시 플레이 메시지').length, 1);
+  assertAbsent(screen.queryByRole('dialog'));
+
+  fireEvent.click(within(screen.getByRole('complementary', { name: '전국 경쟁 패널' })).getByRole('button', { name: '지도' }));
+  fireEvent.click(screen.getByRole('button', { name: '전국 지도' }));
+  fireEvent.click(screen.getByRole('button', { name: 'KAIST 방문' }));
+  assert.match(panel().getByRole('region', { name: '학교 요약' }).textContent ?? '', /방문 학교KAIST/);
+  assert.equal(panel().getByRole('tab', { name: '우리 학교 채팅' }).getAttribute('aria-selected'), 'true');
+  const visitCampus = screen.getByRole('button', { name: 'KAIST 캠퍼스 (관전 모드)' });
+  resize(false);
+  assertAbsent(screen.queryByRole('complementary', { name: '학교 패널' }));
+  assertSameNode(screen.getByRole('button', { name: 'KAIST 캠퍼스 (관전 모드)' }), visitCampus);
+  resize(true);
+  panel().getByRole('tabpanel', { name: '우리 학교 채팅' });
+  fireEvent.click(screen.getByTestId('visit-info-button'));
+  panel().getByRole('heading', { name: 'KAIST 학교 정보' });
+  fireEvent.click(panel().getByRole('button', { name: '방명록 전체보기' }));
+  assertSameNode(document.activeElement, panel().getByRole('tab', { name: '방명록' }));
+  panel().getByRole('heading', { name: 'KAIST 방명록' });
+  assertAbsent(screen.queryByRole('dialog'));
+  fireEvent.click(screen.getByRole('button', { name: '내 학교로 돌아가기' }));
+  panel().getByRole('heading', { name: '한양대학교 방명록' });
+  assertAbsent(panel().queryByRole('textbox'));
+});
+
 test('T2: 폰에서는 서비스 화면이 전체 화면 셸이 되고, 메뉴·도구는 “목업” 시트로 들어간다 (Q5)', () => {
   asPhone();
   mountApp();
