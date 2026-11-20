@@ -205,6 +205,48 @@ test('SCRUM-208: 지도 선택은 미리보기만 갱신하고 방문 버튼만 
   assertAbsent(screen.queryByRole('button', { name: '캠퍼스 클릭 영역' }));
 });
 
+test('SCRUM-209: 방문 학교·양쪽 탭·구매 확인을 리사이즈 후 복원하고 상점을 닫으면 직전 캠퍼스로 돌아간다', () => {
+  const wideQuery = Object.assign(new dom.window.EventTarget(), { matches: true });
+  const otherQuery = Object.assign(new dom.window.EventTarget(), { matches: false });
+  Object.defineProperty(win, 'matchMedia', { configurable: true, value: (query: string) => query === GAME_WIDE_QUERY ? wideQuery : otherQuery });
+  const resize = (wide: boolean) => act(() => {
+    wideQuery.matches = wide;
+    wideQuery.dispatchEvent(new dom.window.Event('change'));
+  });
+  mountApp();
+  const left = () => within(screen.getByRole('complementary', { name: '학교 패널' }));
+  const right = () => within(screen.getByRole('complementary', { name: '전국 경쟁 패널' }));
+  fireEvent.click(right().getByRole('button', { name: /^KAIST 전국/ }));
+  fireEvent.click(right().getByRole('button', { name: 'KAIST 방문' }));
+  fireEvent.click(left().getByRole('tab', { name: '방명록' }));
+  fireEvent.click(right().getByRole('tab', { name: '순위' }));
+  fireEvent.click(screen.getByRole('button', { name: '상점' }));
+  const shop = screen.getByRole('main');
+  assertSameNode(document.activeElement, shop);
+  left().getByRole('heading', { name: 'KAIST 방명록' });
+  fireEvent.click(screen.getByRole('button', { name: '커피 한 잔 구매 선택' }));
+  const dialog = screen.getByRole('dialog', { name: '아이템 구매 확인' });
+  resize(false);
+  assertSameNode(screen.getByRole('main'), shop);
+  assertSameNode(screen.getByRole('dialog', { name: '아이템 구매 확인' }), dialog);
+  resize(true);
+  left().getByRole('tabpanel', { name: '방명록' });
+  right().getByRole('tabpanel', { name: '순위' });
+  assertSameNode(screen.getByRole('dialog', { name: '아이템 구매 확인' }), dialog);
+  fireEvent.click(within(dialog).getByRole('button', { name: '아니오' }));
+  resize(false);
+  fireEvent.click(within(screen.getByRole('navigation', { name: '주요 메뉴' })).getByRole('button', { name: '캠퍼스' }));
+  screen.getByRole('button', { name: 'KAIST 캠퍼스 (관전 모드)' });
+  resize(true);
+  left().getByRole('heading', { name: 'KAIST 방명록' });
+  right().getByRole('tabpanel', { name: '순위' });
+  fireEvent.click(screen.getByRole('button', { name: '내 학교로 돌아가기' }));
+  screen.getByRole('button', { name: '캠퍼스 클릭 영역' });
+  fireEvent.click(screen.getByRole('button', { name: '상점' }));
+  fireEvent.click(screen.getByRole('button', { name: '캠퍼스로 돌아가기' }));
+  screen.getByRole('button', { name: '캠퍼스 클릭 영역' });
+});
+
 test('T2: 폰에서는 서비스 화면이 전체 화면 셸이 되고, 메뉴·도구는 “목업” 시트로 들어간다 (Q5)', () => {
   asPhone();
   mountApp();

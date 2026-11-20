@@ -154,7 +154,8 @@ test('A. 크로스 화면 통합 시나리오 (Gameplay -> Shop -> Alliance -> B
     fireEvent.click(applySuccessBtn);
   });
 
-  // 결제 완료 후 HUD 및 캠퍼스의 학교 로고 이미지가 새 커스텀 SVG로 즉시 갱신됨 확인
+  // 상점을 닫고 직전 캠퍼스에 돌아오면 HUD의 학교 로고에도 새 커스텀 SVG가 적용된다.
+  fireEvent.click(screen.getByRole('button', { name: '캠퍼스로 돌아가기' }));
   const hudSchoolImg = screen.getByRole('img', { name: '한양대학교 이미지' });
   assert.ok(hudSchoolImg.getAttribute('src')?.includes('mock_identity_sample.svg'));
 
@@ -293,7 +294,8 @@ test('A. 크로스 화면 통합 시나리오 (Gameplay -> Shop -> Alliance -> B
   });
   assert.ok(screen.getByText(/커피 한 잔 · \d+초 남음/));
 
-  // 학교 로고가 커스텀 SVG로 지속 유지됨 확인
+  // 돌아온 캠퍼스에서 학교 로고가 커스텀 SVG로 계속 표시되는지 확인
+  fireEvent.click(screen.getByRole('button', { name: '캠퍼스로 돌아가기' }));
   const finalHudImg = screen.getByRole('img', { name: '한양대학교 이미지' });
   assert.ok(finalHudImg.getAttribute('src')?.includes('mock_identity_sample.svg'));
 

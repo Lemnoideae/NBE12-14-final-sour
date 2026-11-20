@@ -25,6 +25,7 @@ interface VisitingScreen1PhoneProps {
   /** In the wide workspace the campus signs open the side panel instead of a dialog. */
   onOpenDetails?: () => void;
   embedded?: boolean;
+  mainRef?: React.Ref<HTMLElement>;
   /** The game's sound setting (App). Without it, as on the comparison mockup, the screen keeps its own. */
   soundEnabled?: boolean;
   onToggleSound?: () => void;
@@ -54,6 +55,7 @@ export function VisitCampusScreen({
   onOpenGuestbook = () => {},
   onOpenDetails,
   embedded = false,
+  mainRef,
   soundEnabled,
   onToggleSound,
   attacks = null,
@@ -107,6 +109,7 @@ export function VisitCampusScreen({
     <GameScreenLayout
       kind="visit"
       embedded={embedded}
+      mainRef={mainRef}
       fillMain
       header={
         <TopHUD
@@ -125,7 +128,11 @@ export function VisitCampusScreen({
       previewBar={attackMode && attacks
         ? <VisitAttackBar attacks={attacks} schoolId={school.id} onBackToMySchool={onBackToMySchool} kind={actionKind} />
         : <SpectatorBar mySchoolShortName={visit.mySchoolShortName} onBackToMySchool={onBackToMySchool} />}
-      nav={
+      nav={embedded ? (
+        <nav aria-label="캠퍼스 메뉴" className="game-center-nav">
+          <button type="button" className="game-workspace-action" onClick={() => onNavigateTab('shop')}>상점</button>
+        </nav>
+      ) : (
         <BottomNav
           activeTab="map"
           onChangeTab={(tab) => {
@@ -135,7 +142,7 @@ export function VisitCampusScreen({
           hasShopUpgrade={false}
           hasRankChange={false}
         />
-      }
+      )}
       overlays={
         !embedded && isInfoOpen && (
           <BottomSheetDialog label={`${school.name} 학교 정보`} onClose={closeInfo}>

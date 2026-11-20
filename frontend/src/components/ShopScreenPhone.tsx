@@ -1,5 +1,5 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
-import { Sparkles, AlertTriangle, ArrowRight, Check, X, ShieldAlert } from 'lucide-react';
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { AlertTriangle, Check, X } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { BottomNav, NavTab } from './BottomNav';
 import { type MockStoreItem } from '../data/gameRules';
@@ -13,7 +13,7 @@ import { PhoneShell } from './PhoneShell';
 
 interface ShopScreenPhoneProps {
   embedded?: boolean;
-  onPurchaseStateChange?: (state: 'idle' | 'confirming' | 'buying') => void;
+  onConfirmationChange?: (confirming: boolean) => void;
   onNavigateTab: (tab: NavTab) => void;
 }
 
@@ -29,7 +29,7 @@ function ShopFrame({ embedded, children }: { embedded: boolean; children: React.
 
 export const ShopScreenPhone: React.FC<ShopScreenPhoneProps> = ({
   embedded = false,
-  onPurchaseStateChange,
+  onConfirmationChange,
   onNavigateTab,
 }) => {
   const game = useMockGame();
@@ -54,20 +54,20 @@ export const ShopScreenPhone: React.FC<ShopScreenPhoneProps> = ({
   const [requestError, setRequestError] = useState<{ key: 'shop-buy' | 'shop-upgrade'; message: string } | null>(null);
 
   const storeItems = game.storeItems;
+  const selectedItem = storeItems.find((item) => item.id === selectedItemId) || storeItems[0];
+  const confirmedItemId = showConfirmDialog ? selectedItem?.id : undefined;
   const confirmRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (showConfirmDialog) confirmRef.current?.scrollIntoView({ block: 'nearest' });
-  }, [showConfirmDialog, selectedItemId]);
+    if (confirmedItemId) confirmRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [confirmedItemId]);
 
-  const selectedItem = storeItems.find((item) => item.id === selectedItemId) || storeItems[0];
-  const confirming = showConfirmDialog && !!selectedItem && !selectedItem.previewOnly;
-  useEffect(() => { onPurchaseStateChange?.('idle'); return () => onPurchaseStateChange?.('idle'); }, [onPurchaseStateChange]);
-  useEffect(() => {
-    let state: 'idle' | 'confirming' | 'buying' = 'idle';
-    if (buying) state = 'buying';
-    else if (confirming) state = 'confirming';
-    onPurchaseStateChange?.(state);
-  }, [buying, confirming, onPurchaseStateChange]);
+  const [imageConfirming, setImageConfirming] = useState(false);
+  const confirming = !api && (imageConfirming || (showConfirmDialog && !!selectedItem && !selectedItem.previewOnly));
+  useLayoutEffect(() => {
+    if (!confirming) return;
+    onConfirmationChange?.(true);
+    return () => onConfirmationChange?.(false);
+  }, [confirming, onConfirmationChange]);
 
   const showToast = (msg: string) => setToastMessage(msg);
   useEffect(() => {
@@ -450,7 +450,7 @@ export const ShopScreenPhone: React.FC<ShopScreenPhoneProps> = ({
 
           {/* ========================================================= */}
           {/* WOODEN SHELVES SECTION HEADER                             */}
-          {api ? itemShop && <ApiItemShop shop={itemShop} /> : <>
+          {api ? itemShop && <ApiItemShop shop={itemShop} onConfirmationChange={onConfirmationChange} /> : <>
           {/* ========================================================= */}
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-1.5">
@@ -520,7 +520,7 @@ export const ShopScreenPhone: React.FC<ShopScreenPhoneProps> = ({
             </div>
           </div>
 
-          <ImageChangeShop />
+          <ImageChangeShop onConfirmationChange={setImageConfirming} />
 
           {/* ========================================================= */}
           {/* CONFIRMATION DIALOG BOX FOR SELECTED CARD                 */}

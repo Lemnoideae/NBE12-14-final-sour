@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useMockGame } from '../hooks/useMockGame.tsx';
 import { useMySchool } from '../hooks/useSchoolViews.ts';
 import { useImageStore } from '../hooks/useSharedImages.tsx';
@@ -13,7 +13,7 @@ type ImageChoice = ImageTarget & {
 
 let nextMockSessionCounter = 0;
 
-export function ImageChangeShop() {
+export function ImageChangeShop({ onConfirmationChange }: { onConfirmationChange?: (confirming: boolean) => void } = {}) {
   const store = useImageStore();
   const { shopConfig, player } = useMockGame();
   const mySchool = useMySchool();
@@ -30,6 +30,12 @@ export function ImageChangeShop() {
   const busy = useRef(false);
   const [pending, setPending] = useState(false);
   const sessionRequestIdRef = useRef<string | null>(null);
+  const confirming = selected !== null;
+  useLayoutEffect(() => {
+    if (!confirming) return;
+    onConfirmationChange?.(true);
+    return () => onConfirmationChange?.(false);
+  }, [confirming, onConfirmationChange]);
 
   const handleSelectChoice = (choice: ImageChoice) => {
     setSelected(choice);

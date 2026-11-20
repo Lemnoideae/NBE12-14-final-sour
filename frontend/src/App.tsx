@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { SchoolId } from './data/schoolIds';
 import { TopHUD } from './components/TopHUD';
 import { CampusView } from './components/CampusView';
@@ -19,7 +19,6 @@ import { CampusMapView } from './components/CampusMapView';
 import { OnboardingFlow } from './components/OnboardingFlow';
 import { SpriteSheetViewer } from './components/SpriteSheetViewer';
 import { RankingScreenPhone } from './components/RankingScreenPhone';
-import { ShopScreenPhone } from './components/ShopScreenPhone';
 import { TwoPhoneMapComparison } from './components/TwoPhoneMapComparison';
 import { MapIllustrationViewer } from './components/MapIllustrationViewer';
 import { MapScreenPhone, INITIAL_MAP_CONTEXT, type MapContext } from './components/MapScreenPhone';
@@ -79,19 +78,24 @@ function useSignedIn() {
 }
 const useCanPlayWide = selectByMode({ api: useSignedIn, mock: () => true });
 
+type OtherView = AllianceScreen | 'ranking_screens' | 'our_guestbook_screens' | 'visiting_screens' | 'chat_screens' | 'single_map'
+  | 'map_screens' | 'map_illustration' | 'ranking' | 'spritesheet' | 'onboarding' | 'signup' | 'login' | 'gameplay'
+  | 'support_guest' | 'my_info' | 'purchase_history' | 'member_support' | 'admin';
+type GameView = ({ mode: 'visiting'; schoolId: SchoolId }
+  | { mode: 'shop'; schoolId: SchoolId | null } // Retain the campus under the shop, irrespective of viewport.
+  | { mode: OtherView; schoolId: null }) & { focusCenter?: boolean };
+
 function AppContent() {
-  // Mode: 'ranking_screens' (2-phone ranking comparison with infinite scroll) | 'our_guestbook_screens' | 'visiting_screens' | etc.
-  const [viewMode, setViewMode] = useState<AllianceScreen | 'ranking_screens' | 'our_guestbook_screens' | 'visiting_screens' | 'chat_screens' | 'single_map' | 'visiting' | 'map_screens' | 'map_illustration' | 'shop' | 'ranking' | 'spritesheet' | 'onboarding' | 'signup' | 'login' | 'gameplay' | 'support_guest' | 'my_info' | 'purchase_history' | 'member_support' | 'admin'>('gameplay');
+  const [view, setView] = useState<GameView>({ mode: 'gameplay', schoolId: null });
+  const { mode: viewMode, schoolId: visitSchoolId } = view;
+  const setViewMode = useCallback((mode: OtherView) => setView({ mode, schoolId: null }), []);
   const [isChatSheetOpen, setIsChatSheetOpen] = useState<boolean>(false);
   const [isOurGuestbookSheetOpen, setIsOurGuestbookSheetOpen] = useState<boolean>(false);
   const [isStatsSheetOpen, setIsStatsSheetOpen] = useState<boolean>(false);
   const [schoolPanelTab, setSchoolPanelTab] = useState<SchoolPanelTab>('detail');
   const [competitionTab, setCompetitionTab] = useState<CompetitionTab>('map');
-  const [shopPurchaseState, setShopPurchaseState] = useState<'idle' | 'confirming' | 'buying'>('idle');
+  const [purchaseConfirming, setPurchaseConfirming] = useState(false);
   const [isMockMenuOpen, setIsMockMenuOpen] = useState<boolean>(false);
-  // Map → visit → return (M2, docs/261108-2000-m2_map_visit_return_plan.md 4-1). Only the ID is kept;
-  // the visit screen reads the school's values from the shared rows.
-  const [visitSchoolId, setVisitSchoolId] = useState<SchoolId | null>(null);
   const [mapContext, setMapContext] = useState<MapContext>(INITIAL_MAP_CONTEXT);
   const [isVisitGuestbookOpen, setIsVisitGuestbookOpen] = useState<boolean>(false);
 
@@ -104,8 +108,8 @@ function AppContent() {
   const showMockSheet = isPhone || gameLayout === 'compact';
   const showPresentation = !showMockSheet && (gameLayout === 'legacy' || !isServiceView);
   const showGameBar = isServiceView && gameLayout === 'wide';
-  const wideCampus = showGameBar && canPlayWide && (viewMode === 'gameplay' || viewMode === 'visiting');
-  const visit = useVisitSchool(viewMode === 'visiting' ? visitSchoolId : null);
+  const wideCampus = showGameBar && canPlayWide && (viewMode === 'gameplay' || viewMode === 'visiting' || viewMode === 'shop');
+  const visit = useVisitSchool(visitSchoolId);
   const shellVariant = showMockSheet && isServiceView ? 'full' : 'framed';
   const viewWrap = shellVariant === 'full' ? 'w-full flex flex-col' : 'w-full flex flex-col items-center py-2 animate-fadeIn';
   const game = useMockGame();
@@ -124,14 +128,17 @@ function AppContent() {
   const campusLevel = game.campus.level;
   const myContribution = game.state.contribution;
   const [activeStudents, setActiveStudents] = useState<number>(37);
-  const [activeTab, setActiveTab] = useState<NavTab>('campus');
-  // Mobile-only center screens never replace the campus when the competition panel is available.
-  const centerTab = wideCampus && activeTab !== 'shop' ? 'campus' : activeTab;
+  const [activeTab, setActiveTab] = useState<Exclude<NavTab, 'shop'>>('campus');
+  const centerTab = wideCampus ? 'campus' : activeTab;
+  const buying = itemShop?.pending || request.isPending('shop-buy');
   let visitBlocked: string | undefined;
-  if (viewMode === 'gameplay' && centerTab === 'shop') {
-    if (shopPurchaseState === 'buying' || itemShop?.pending) visitBlocked = '아이템 구매 처리가 끝난 뒤 방문할 수 있습니다.';
-    else if (shopPurchaseState === 'confirming') visitBlocked = '아이템 구매 확인을 닫은 뒤 방문할 수 있습니다.';
-  }
+  if (buying) visitBlocked = '아이템 구매 처리가 끝난 뒤 방문할 수 있습니다.';
+  else if (viewMode === 'shop' && purchaseConfirming) visitBlocked = '아이템 구매 확인을 닫은 뒤 방문할 수 있습니다.';
+
+  const centerMain = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (view.focusCenter) centerMain.current?.focus();
+  }, [view]);
 
   // A mobile dialog and a wide panel never mount the same chat or guestbook together.
   useEffect(() => {
@@ -145,31 +152,38 @@ function AppContent() {
   const goToMySchool = () => {
     setIsVisitGuestbookOpen(false);
     setActiveTab('campus');
-    setViewMode('gameplay');
+    setView({ mode: 'gameplay', schoolId: null, focusCenter: true });
   };
   const goToMap = () => {
     if (wideCampus) { setCompetitionTab('map'); return; }
     setIsVisitGuestbookOpen(false);
     setViewMode('single_map');
   };
+  const openShop = () => {
+    if (viewMode === 'shop') return;
+    setIsVisitGuestbookOpen(false);
+    setActiveTab('campus');
+    setView({ mode: 'shop', schoolId: visitSchoolId, focusCenter: true });
+  };
+  const closeShop = () => {
+    if (visitSchoolId === null) goToMySchool();
+    else setView({ mode: 'visiting', schoolId: visitSchoolId, focusCenter: true });
+  };
   const openGameTab = (tab: NavTab) => {
-    if (wideCampus && (tab === 'map' || tab === 'rankings')) setCompetitionTab(tab);
+    if (tab === 'shop') openShop();
+    else if (wideCampus && tab !== 'campus') setCompetitionTab(tab);
     else setActiveTab(tab);
   };
-  // My school opens my own campus; any other ID opens its visit screen (unknown IDs show a notice there).
+  // Visit events are never queued. The purchase controllers already own the in-flight mutation.
   const openSchool = (schoolId: SchoolId) => {
+    if (visitBlocked) return;
     if (schoolId === playerInfo.schoolId) {
       goToMySchool();
       return;
     }
-    setVisitSchoolId(schoolId);
-    setIsVisitGuestbookOpen(false);
-    setViewMode('visiting');
-  };
-  const visitFromPanel = (schoolId: SchoolId) => {
-    if (visitBlocked) return;
     setActiveTab('campus');
-    openSchool(schoolId);
+    setIsVisitGuestbookOpen(false);
+    setView({ mode: 'visiting', schoolId, focusCenter: true });
   };
   // Bottom-nav tabs from service screens outside the main game (visit, alliance·battle — T4, plan §7).
   const navigateTab = (tab: NavTab) => {
@@ -179,7 +193,22 @@ function AppContent() {
       if (wideCampus) setCompetitionTab('rankings');
       else setViewMode('ranking');
     }
-    else if (tab === 'shop') setViewMode('shop');
+    else if (tab === 'shop') openShop();
+  };
+  const navigateShopTab = (tab: NavTab) => {
+    if (tab === 'campus') closeShop();
+    else if (tab !== 'shop') navigateTab(tab);
+  };
+  const endGameSession = () => {
+    setSchoolPanelTab('detail');
+    setCompetitionTab('map');
+    setMapContext(INITIAL_MAP_CONTEXT);
+    setIsChatSheetOpen(false);
+    setIsOurGuestbookSheetOpen(false);
+    setIsStatsSheetOpen(false);
+    setIsVisitGuestbookOpen(false);
+    setActiveTab('campus');
+    setViewMode('login');
   };
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   // [시연] header school name length check. In API mode the admin test tool sets it (SCRUM-175).
@@ -258,7 +287,7 @@ function AppContent() {
       if (wideCampus) setCompetitionTab('alliance');
       else setViewMode('current_alliance');
     }, hasAlert: hasAllianceAlert }),
-    [wideCampus, hasAllianceAlert],
+    [wideCampus, hasAllianceAlert, setViewMode],
   );
 
   const hasAffordableShopItem = (itemShop
@@ -341,7 +370,7 @@ function AppContent() {
 
         <button
           onClick={() => {
-            setViewMode('shop');
+            openShop();
             soundManager.playTabSound();
           }}
           className={`pixel-plaque px-2.5 py-1.5 text-xs font-pixel font-bold flex items-center gap-1.5 cursor-pointer ${
@@ -562,24 +591,14 @@ function AppContent() {
     <OtherClicksFeedContext.Provider value={campusClicks.otherClicksFeed}>
     <AllianceNavProvider value={allianceNav}>
       <div className={`w-full flex flex-col items-center justify-start select-none text-[#261608] ${showMockSheet ? 'device-full min-h-dvh bg-[#f1f5f9]' : showGameBar ? 'game-backdrop' : 'min-h-screen p-2 sm:p-5 bg-[#f1f5f9]'}`}>
-        {API_MODE === 'api' && <ApiSessionWatcher onEnded={() => {
-          setSchoolPanelTab('detail');
-          setViewMode('login');
-        }} />}
+        {API_MODE === 'api' && <ApiSessionWatcher onEnded={endGameSession} />}
         {showGameBar && (
           <GameProfileBar
             mode={API_MODE === 'mock' ? 'mock' : canPlayWide ? 'member' : 'guest'}
             nickname={playerInfo.nickname}
             onCampus={goToMySchool}
             onNavigate={setViewMode}
-            onLogout={() => {
-              setSchoolPanelTab('detail');
-              setIsChatSheetOpen(false);
-              setIsOurGuestbookSheetOpen(false);
-              setIsStatsSheetOpen(false);
-              goToMySchool();
-              setViewMode('login');
-            }}
+            onLogout={endGameSession}
           />
         )}
         {API_MODE === 'api' && <ApiPlayerSync getPendingScore={campusClicks.getPendingScore} />}
@@ -650,10 +669,10 @@ function AppContent() {
         <div className="contents" data-touch-area={SERVICE_VIEW_MODES.has(viewMode) ? '44' : undefined}>
         <GameWorkspace wide={wideCampus}
           left={<GameSchoolPanel tab={schoolPanelTab} onTabChange={setSchoolPanelTab} mySchool={mySchool} ranking={schoolRanking}
-            visit={viewMode === 'visiting' ? visit : null} onGoToMap={goToMap} onGoToShop={() => setActiveTab('shop')} />}
+            visit={visitSchoolId === null ? null : visit} onGoToMap={goToMap} onGoToShop={openShop} />}
           right={<GameCompetitionPanel tab={competitionTab} onTabChange={setCompetitionTab}
             mapContext={mapContext} onMapContextChange={setMapContext} schoolScore={schoolScore} visitBlocked={visitBlocked}
-            onVisit={visitFromPanel} onGoToLogin={() => setViewMode('login')} />}
+            onVisit={openSchool} onGoToLogin={() => setViewMode('login')} />}
         >
         {viewMode === 'ranking_screens' ? (
           <TwoPhoneRankingComparison
@@ -664,7 +683,7 @@ function AppContent() {
               } else if (tab === 'map') {
                 setViewMode('map_screens');
               } else if (tab === 'shop') {
-                setViewMode('shop');
+                openShop();
               }
             }}
           />
@@ -686,7 +705,7 @@ function AppContent() {
               } else if (tab === 'rankings') {
                 setViewMode('ranking');
               } else if (tab === 'shop') {
-                setViewMode('shop');
+                openShop();
               }
             }}
             onGoToMap={() => setViewMode('map_screens')}
@@ -714,7 +733,7 @@ function AppContent() {
               } else if (tab === 'rankings') {
                 setViewMode('ranking');
               } else if (tab === 'shop') {
-                setViewMode('shop');
+                openShop();
               }
             }}
           />
@@ -729,6 +748,7 @@ function AppContent() {
                 schoolId={visitSchoolId}
                 visit={visit}
                 embedded={wideCampus}
+                mainRef={centerMain}
                 attacks={campusAttacks}
                 onBackToMap={goToMap}
                 onBackToMySchool={goToMySchool}
@@ -742,6 +762,7 @@ function AppContent() {
           </div>
         ) : viewMode === 'single_map' ? (
           <div className={viewWrap}>
+            {visitBlocked && <p role="status" className="rpg-box px-3 py-2 text-sm font-pixel">{visitBlocked}</p>}
             <MockLoadGate key="map" name="학교 지도" onBack={goToMySchool}>
               <MapScreenPhone
                 context={mapContext}
@@ -754,7 +775,7 @@ function AppContent() {
                   } else if (tab === 'rankings') {
                     setViewMode('ranking');
                   } else if (tab === 'shop') {
-                    setViewMode('shop');
+                    openShop();
                   }
                 }}
               />
@@ -774,7 +795,7 @@ function AppContent() {
               } else if (tab === 'rankings') {
                 setViewMode('ranking');
               } else if (tab === 'shop') {
-                setViewMode('shop');
+                openShop();
               }
             }}
             onGoToMySchool={() => {
@@ -783,19 +804,9 @@ function AppContent() {
             }}
           />
         ) : viewMode === 'shop' ? (
-          <div className={viewWrap}>
-            <ShopScreenPhone
-              onNavigateTab={(tab) => {
-                if (tab === 'campus') {
-                  setActiveTab('campus');
-                  setViewMode('gameplay');
-                } else if (tab === 'rankings') {
-                  setViewMode('ranking');
-                } else if (tab === 'map') {
-                  setViewMode('map_screens');
-                }
-              }}
-            />
+          <div className={wideCampus ? 'h-full' : viewWrap}>
+            <ShopView embedded={wideCampus} mainRef={centerMain} onBackToCampus={closeShop}
+              onNavigateTab={navigateShopTab} onConfirmationChange={setPurchaseConfirming} />
           </div>
         ) : viewMode === 'ranking' ? (
           <div className={viewWrap}>
@@ -807,7 +818,7 @@ function AppContent() {
                     setActiveTab('campus');
                     setViewMode('gameplay');
                   } else if (tab === 'shop') {
-                    setViewMode('shop');
+                    openShop();
                   } else if (tab === 'map') {
                     setViewMode('map_screens');
                   }
@@ -872,6 +883,7 @@ function AppContent() {
             <GameScreenLayout
               kind="my-campus"
               embedded={wideCampus}
+              mainRef={centerMain}
               fillMain={centerTab === 'campus'}
               header={
                 <TopHUD
@@ -905,12 +917,12 @@ function AppContent() {
               nav={wideCampus ? (
                 <nav aria-label="캠퍼스 메뉴" className="game-center-nav">
                   <WorkspaceShortcut onClick={() => setActiveTab('campus')}>내 캠퍼스</WorkspaceShortcut>
-                  <WorkspaceShortcut onClick={() => setActiveTab('shop')}>상점</WorkspaceShortcut>
+                  <WorkspaceShortcut onClick={openShop}>상점</WorkspaceShortcut>
                 </nav>
               ) : (
                 <BottomNav
                   activeTab={activeTab}
-                  onChangeTab={setActiveTab}
+                  onChangeTab={openGameTab}
                   hasShopUpgrade={hasAffordableShopItem}
                   hasRankChange={rankDelta?.startsWith('▲') ?? false}
                 />
@@ -946,7 +958,7 @@ function AppContent() {
                     }}>
                       <CampusStatsSheet onGoToShop={() => {
                         setIsStatsSheetOpen(false);
-                        setActiveTab('shop');
+                        openShop();
                         soundManager.playTabSound();
                       }} />
                     </BottomSheetDialog>
@@ -1003,10 +1015,6 @@ function AppContent() {
                     onBackToCampus={() => setActiveTab('campus')}
                   />
                 </MockLoadGate>
-              )}
-
-              {centerTab === 'shop' && (
-                <ShopView onBackToCampus={() => setActiveTab('campus')} onPurchaseStateChange={setShopPurchaseState} />
               )}
 
               {centerTab === 'map' && (
