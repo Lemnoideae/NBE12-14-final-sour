@@ -44,6 +44,7 @@ class RedisPotionPurchaserTest {
     private static final String DIRTY_KEY = RedisKey.DIRTY_USER.of();
     private static final String EFFECT_KEY = RedisKey.USER_EFFECT.of(USER_ID);
     private static final String DEDUPE_KEY = RedisKey.PURCHASE_DEDUPE.of(USER_ID, KEY);
+    private static final String VOIDED_KEY = RedisKey.USER_EFFECT_VOIDED.of(USER_ID);
 
     @Autowired
     private RedisPotionPurchaser purchaser;
@@ -63,6 +64,7 @@ class RedisPotionPurchaserTest {
         redis.opsForSet().remove(DIRTY_KEY, String.valueOf(USER_ID));
         redis.delete(EFFECT_KEY);
         redis.delete(DEDUPE_KEY);
+        redis.delete(VOIDED_KEY);
     }
 
     /**
@@ -339,5 +341,26 @@ class RedisPotionPurchaserTest {
         assertThat(pexpireTime(EFFECT_KEY)).isEqualTo(otherExpiredAt.toInstant().toEpochMilli());
         assertThat(redis.opsForZSet().score(RANK_KEY, String.valueOf(USER_ID))).isEqualTo(700.0);
         assertThat(redis.hasKey(DEDUPE_KEY)).isFalse();
+    }
+
+    @Test
+    @DisplayName("보상할 때 효과 주인이 다른 구매면 취소된 구매의 이전 효과를 voided에 기록한다")
+    void compensate_notOwner_recordsVoided() {
+        // given
+        redis.opsForZSet().add(RANK_KEY, String.valueOf(USER_ID), 400);
+        givenEffect(OTHER_ITEM_ID, "4.0", OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(45).truncatedTo(ChronoUnit.MILLIS), OTHER_KEY);
+        redis.opsForValue().set(DEDUPE_KEY, "1", Duration.ofMinutes(5));
+        OffsetDateTime tripleExpiredAt = OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(30).truncatedTo(ChronoUnit.MILLIS);
+        String triple = JSON.writeValueAsString(Map.of(
+                "itemId", String.valueOf(TRIPLE_ITEM_ID),
+                "multiplier", "3.0",
+                "expiredAt", String.valueOf(tripleExpiredAt.toInstant().toEpochMilli())));
+
+        // when
+        purchaser.compensate(USER_ID, UNIVERSITY_ID, 300L, KEY, triple);
+
+        // then
+        assertThat(redis.opsForHash().get(VOIDED_KEY, KEY.toString())).isEqualTo(triple);
+        assertThat(redis.getExpire(VOIDED_KEY, TimeUnit.MILLISECONDS)).isBetween(1L, 300_000L);
     }
 }
