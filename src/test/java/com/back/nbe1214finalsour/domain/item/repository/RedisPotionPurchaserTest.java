@@ -77,12 +77,16 @@ class RedisPotionPurchaserTest {
         return redis.execute(PEXPIRETIME_SCRIPT, List.of(key));
     }
 
-    private Map<String, String> givenEffect(long itemId, String multiplier, OffsetDateTime expiredAt, UUID purchaseId) {
-        Map<String, String> fields = Map.of(
+    private static Map<String, String> effectFields(long itemId, String multiplier, OffsetDateTime expiredAt, UUID purchaseId) {
+        return Map.of(
                 "itemId", String.valueOf(itemId),
                 "multiplier", multiplier,
                 "expiredAt", String.valueOf(expiredAt.toInstant().toEpochMilli()),
                 "purchaseId", purchaseId.toString());
+    }
+
+    private Map<String, String> givenEffect(long itemId, String multiplier, OffsetDateTime expiredAt, UUID purchaseId) {
+        Map<String, String> fields = effectFields(itemId, multiplier, expiredAt, purchaseId);
         redis.opsForHash().putAll(EFFECT_KEY, fields);
         redis.expireAt(EFFECT_KEY, expiredAt.toInstant());
         return fields;
@@ -393,5 +397,31 @@ class RedisPotionPurchaserTest {
         // then
         assertThat(redis.<String, String>opsForHash().entries(EFFECT_KEY)).containsExactlyInAnyOrderEntriesOf(pEffect);
         assertThat(pexpireTime(EFFECT_KEY)).isEqualTo(pExpiredAt.toInstant().toEpochMilli());
+    }
+
+    @Test
+    @DisplayName("보상할 때 이전 효과가 연쇄로 여러 번 취소됐으면 살아 있는 효과까지 거슬러 올라가 복원한다")
+    void compensate_skipsVoidedChain() {
+        // given
+        redis.opsForZSet().add(RANK_KEY, String.valueOf(USER_ID), 400);
+        givenEffect(ITEM_ID, "2.0", OffsetDateTime.now(ZoneOffset.UTC).plusHours(1).truncatedTo(ChronoUnit.MILLIS), KEY);
+        redis.opsForValue().set(DEDUPE_KEY, "1", Duration.ofMinutes(5));
+        UUID k1 = UUID.randomUUID();
+        UUID k2 = UUID.randomUUID();
+        UUID k3 = UUID.randomUUID();
+        OffsetDateTime rExpiredAt = OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(20).truncatedTo(ChronoUnit.MILLIS);
+        Map<String, String> rEffect = effectFields(OTHER_ITEM_ID, "4.0", rExpiredAt, P_KEY);
+        OffsetDateTime laterExpiredAt = OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(40).truncatedTo(ChronoUnit.MILLIS);
+        redis.opsForHash().put(VOIDED_KEY, k3.toString(), JSON.writeValueAsString(rEffect));
+        redis.opsForHash().put(VOIDED_KEY, k2.toString(), JSON.writeValueAsString(effectFields(TRIPLE_ITEM_ID, "3.0", laterExpiredAt, k3)));
+        redis.opsForHash().put(VOIDED_KEY, k1.toString(), JSON.writeValueAsString(effectFields(TRIPLE_ITEM_ID, "3.0", laterExpiredAt, k2)));
+        String k1Effect = JSON.writeValueAsString(effectFields(TRIPLE_ITEM_ID, "3.0", laterExpiredAt, k1));
+
+        // when
+        purchaser.compensate(USER_ID, UNIVERSITY_ID, 300L, KEY, k1Effect);
+
+        // then
+        assertThat(redis.<String, String>opsForHash().entries(EFFECT_KEY)).containsExactlyInAnyOrderEntriesOf(rEffect);
+        assertThat(pexpireTime(EFFECT_KEY)).isEqualTo(rExpiredAt.toInstant().toEpochMilli());
     }
 }
