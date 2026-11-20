@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -112,7 +113,7 @@ class ItemPurchaseConcurrencyTest {
                 executor.submit(() -> {
                     try {
                         startSignal.await();
-                        itemPurchaseService.purchase(userId, universityId, null, POTION_2X_ID, null);
+                        itemPurchaseService.purchase(userId, universityId, null, POTION_2X_ID, null, UUID.randomUUID());
                         successCount.incrementAndGet();
                     } catch (BusinessException e) {
                         if (e.getErrorCode() == ErrorCode.ITEM_NOT_ENOUGH_SCORE) {
@@ -159,7 +160,7 @@ class ItemPurchaseConcurrencyTest {
                 executor.submit(() -> {
                     try {
                         startSignal.await();
-                        itemPurchaseService.purchase(userId, universityId, null, itemId, null);
+                        itemPurchaseService.purchase(userId, universityId, null, itemId, null, UUID.randomUUID());
                     } catch (Throwable e) {
                         unexpectedErrors.add(e);
                     } finally {

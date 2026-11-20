@@ -31,7 +31,7 @@ public class ItemPurchaseService {
     private final ImageStorage imageStorage;
 
     // 아이템 구매
-    public ItemPurchaseResult purchase(Long userId, Long universityId, Long departmentId, Long itemId, MultipartFile logoImage) {
+    public ItemPurchaseResult purchase(Long userId, Long universityId, Long departmentId, Long itemId, MultipartFile logoImage, UUID idempotencyKey) {
 
         // 캐시에서 아이템 목록
         List<Item> items = this.itemService.getItems();

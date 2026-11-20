@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -84,7 +85,7 @@ public class ItemPurchaseServiceTest {
     void purchase_itemNotFound() {
         given(this.itemService.getItems()).willReturn(ITEMS);
 
-        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 3980L, LOGO_IMAGE))
+        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 3980L, LOGO_IMAGE, UUID.randomUUID()))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ITEM_NOT_FOUND);
@@ -99,7 +100,7 @@ public class ItemPurchaseServiceTest {
         ItemPurchaseResult expected = new ItemPurchaseResult(5530L, ITEMS.get(1), 1000L, null, 1500L, 1100L);
         given(this.contributionPurchaseService.purchase(USER_ID, UNIVERSITY_ID, ITEMS.get(1))).willReturn(expected);
 
-        ItemPurchaseResult result = this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 2L, null);
+        ItemPurchaseResult result = this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, 2L, null, UUID.randomUUID());
 
         assertThat(result).isSameAs(expected);
         verifyNoInteractions(this.logoImageValidator, this.imageStorage, this.creditPurchaseService);
@@ -113,7 +114,7 @@ public class ItemPurchaseServiceTest {
         ItemPurchaseResult expected = new ItemPurchaseResult(7001L, ITEMS.get(2), 3900L, null, 12888L, 1100L);
         given(this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, ITEMS.get(2), LOGO_URL)).willReturn(expected);
 
-        ItemPurchaseResult result = this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_IMAGE);
+        ItemPurchaseResult result = this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_IMAGE, UUID.randomUUID());
 
         assertThat(result).isSameAs(expected);
         assertThat(uploadedKey()).matches("custom-logo/1/[0-9a-f-]{36}\\.png");
@@ -128,7 +129,7 @@ public class ItemPurchaseServiceTest {
         given(this.logoImageValidator.validate(LOGO_IMAGE))
                 .willThrow(new BusinessException(ErrorCode.ITEM_LOGO_IMAGE_INVALID_TYPE));
 
-        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_IMAGE))
+        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_IMAGE, UUID.randomUUID()))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ITEM_LOGO_IMAGE_INVALID_TYPE);
@@ -144,7 +145,7 @@ public class ItemPurchaseServiceTest {
         RuntimeException s3Failure = new RuntimeException("S3 장애");
         given(this.imageStorage.upload(anyString(), eq(LOGO_IMAGE), eq(ImageType.PNG))).willThrow(s3Failure);
 
-        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_IMAGE))
+        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_IMAGE, UUID.randomUUID()))
                 .isSameAs(s3Failure);
 
         verifyNoInteractions(this.creditPurchaseService);
@@ -159,7 +160,7 @@ public class ItemPurchaseServiceTest {
         given(this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, ITEMS.get(2), LOGO_URL))
                 .willThrow(new BusinessException(ErrorCode.ITEM_NOT_ENOUGH_CREDIT));
 
-        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_IMAGE))
+        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_IMAGE, UUID.randomUUID()))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ITEM_NOT_ENOUGH_CREDIT);
@@ -178,7 +179,7 @@ public class ItemPurchaseServiceTest {
                 .willThrow(new BusinessException(ErrorCode.ITEM_NOT_ENOUGH_CREDIT));
         willThrow(new RuntimeException("S3 삭제 실패")).given(this.imageStorage).delete(anyString());
 
-        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_IMAGE))
+        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_IMAGE, UUID.randomUUID()))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> {
                     assertThat(((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.ITEM_NOT_ENOUGH_CREDIT);

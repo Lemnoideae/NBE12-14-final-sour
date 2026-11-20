@@ -9,6 +9,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 @IntegrationTest
@@ -84,7 +86,7 @@ public class ItemPurchaseIntegrationTest {
     @DisplayName("물약 구매가 커밋되면 기여도 차감, 구매 이력 저장 후 리스너가 Redis에 효과를 적용")
     void purchase_appliesEffectAfterCommit() {
         // when
-        itemPurchaseService.purchase(userId, universityId, null, ITEM_ID, null);
+        itemPurchaseService.purchase(userId, universityId, null, ITEM_ID, null, UUID.randomUUID());
 
         // then: 기여도 1000 → 500
         assertThat(redisTemplate.opsForZSet().score(rankKey(), String.valueOf(userId))).isEqualTo(500.0);
