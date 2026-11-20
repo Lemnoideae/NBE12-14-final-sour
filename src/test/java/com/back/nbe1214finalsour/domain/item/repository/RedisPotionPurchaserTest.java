@@ -424,4 +424,24 @@ class RedisPotionPurchaserTest {
         assertThat(redis.<String, String>opsForHash().entries(EFFECT_KEY)).containsExactlyInAnyOrderEntriesOf(rEffect);
         assertThat(pexpireTime(EFFECT_KEY)).isEqualTo(rExpiredAt.toInstant().toEpochMilli());
     }
+
+    @Test
+    @DisplayName("보상할 때 취소 기록의 이전 효과가 빈 값이면 건너뛴 끝에 효과 없음으로 끝난다")
+    void compensate_chainEndsWithoutPrevious() {
+        // given
+        redis.opsForZSet().add(RANK_KEY, String.valueOf(USER_ID), 400);
+        givenEffect(ITEM_ID, "2.0", OffsetDateTime.now(ZoneOffset.UTC).plusHours(1).truncatedTo(ChronoUnit.MILLIS), KEY);
+        redis.opsForValue().set(DEDUPE_KEY, "1", Duration.ofMinutes(5));
+        redis.opsForHash().put(VOIDED_KEY, X_KEY.toString(), "");
+        String xEffect = JSON.writeValueAsString(effectFields(
+                TRIPLE_ITEM_ID, "3.0", OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(40).truncatedTo(ChronoUnit.MILLIS), X_KEY));
+
+        // when
+        purchaser.compensate(USER_ID, UNIVERSITY_ID, 300L, KEY, xEffect);
+
+        // then
+        assertThat(redis.hasKey(EFFECT_KEY)).isFalse();
+        assertThat(redis.opsForZSet().score(RANK_KEY, String.valueOf(USER_ID))).isEqualTo(700.0);
+        assertThat(redis.hasKey(DEDUPE_KEY)).isFalse();
+    }
 }
