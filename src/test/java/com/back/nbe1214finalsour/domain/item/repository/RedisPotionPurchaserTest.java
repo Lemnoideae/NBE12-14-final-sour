@@ -223,7 +223,7 @@ class RedisPotionPurchaserTest {
                 "purchaseId", KEY.toString());
         redis.opsForHash().putAll(EFFECT_KEY, firstEffect);
         redis.expireAt(EFFECT_KEY, firstExpiredAt.toInstant());
-        redis.opsForValue().set(DEDUPE_KEY, "1", 60_000L, TimeUnit.MILLISECONDS);
+        redis.opsForValue().set(DEDUPE_KEY, "1", Duration.ofMillis(60_000L));
         OffsetDateTime expiredAt = OffsetDateTime.now(ZoneOffset.UTC).plusHours(1).truncatedTo(ChronoUnit.MILLIS);
 
         // when
