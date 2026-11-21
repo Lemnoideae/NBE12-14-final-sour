@@ -4,7 +4,7 @@ import { soundManager } from '../utils/sound';
 import { MapArt } from './MapArt.tsx';
 import { WorkspaceMapPins } from './WorkspaceMapPins';
 import { mapFramePercent } from '../utils/workspaceMapPins';
-import { MAP_AREA_HEIGHT, MapLayer, MapFrame, MapSearchHeader, SchoolListSheet, SchoolMarker, SchoolBadge, RankRibbon, type MapControlsProps } from './MapParts.tsx';
+import { MAP_AREA_HEIGHT, MapLayer, MapFrame, MapSearchHeader, SchoolListSheet, SchoolMarker, SchoolBadge, RankRibbon, formatWorkspaceSearchStatus, type MapControlsProps } from './MapParts.tsx';
 import { countByRegion, filterSchools, getTopSchools } from '../data/schoolDirectory.ts';
 import {
   MAP_CLUSTERS,
@@ -44,6 +44,7 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
   const viewport = isNational ? undefined : regionViewport(region as SchoolFilterRegion);
   const topSchools = isNational ? getTopSchools(schools.filter((school) => school.isTop3), 3) : [];
   const workspace = preview !== undefined;
+  const searchStatus = formatWorkspaceSearchStatus(workspace, query, listed.length);
   const pins = workspace ? (viewport ? regionSchools : topSchools).flatMap(school => {
     const ribbonPoint = viewport ? undefined : nationalRibbonPoint(school.id);
     const point = viewport ? regionMarkerPx(school.id, viewport) : ribbonPoint && mapFramePercent(ribbonPoint);
@@ -62,6 +63,7 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
         placeholder={isNational ? '학교 검색 (예: 서울대, KAIST, 부산대)' : `${region} 대학 검색`}
         onRegionChange={onRegionChange}
         onQueryChange={onQueryChange}
+        searchStatus={searchStatus}
         badge={
           <div className="bg-[#facc15] border-2 border-[#261608] px-2 py-1 flex items-center gap-1 shadow-[1px_1px_0px_#261608] shrink-0">
             {isNational ? <span className="w-2 h-2 bg-[#e11d48] border border-[#261608]" /> : <ZoomIn className="w-3 h-3 text-[#261608]" />}

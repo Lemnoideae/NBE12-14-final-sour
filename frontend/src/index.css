@@ -534,6 +534,7 @@
 .game-map-preview button { min-block-size: 2.75rem; }
 .game-map-preview button[aria-disabled='true'] { color: #5c4631; cursor: not-allowed; }
 .game-map-visit-notice { grid-column: 1 / -1; color: #672b14; }
+.game-map-preview-search-notice { grid-column: 1 / -1; min-block-size: 1.45em; color: #8b5327; line-height: 1.45; }
 .game-map-list { padding: .5rem; background: #fdf5df; }
 .game-map-row { display: flex; align-items: center; gap: .5rem; width: 100%; min-height: 2.75rem; }
 .game-map-row[aria-pressed='true'] { background: #fde9aa; border-color: #8b5327; }
@@ -574,6 +575,7 @@
   line-height: 1.45;
 }
 [data-desktop-game] [data-testid='map-search-box']:focus-within { outline: 2px solid #49331d; outline-offset: 2px; }
+[data-desktop-game] .game-map-search-status { font-size: var(--desktop-text-small); line-height: 1.2; }
 
 /* SCRUM-224: PC my-campus corner scaling — proportional to frame width with height-aware caps;
    interactive buttons stand out clearly above the calmer top info labels. Visited/mobile/demo stay unchanged. */

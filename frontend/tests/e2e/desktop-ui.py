@@ -242,6 +242,8 @@ def map_search_flow(panel, path):
     chungcheong = chip_metrics(regions)
     search.fill('없는학교-SCRUM218')
     expect(schools.get_by_role('status')).to_contain_text('맞는 학교가 없습니다')
+    expect(panel.get_by_test_id('map-search-status')).to_have_text('검색 결과 없음')
+    expect(schools.get_by_role('heading', level=3)).to_have_text('검색 학교 목록 - 0개교')
     empty = map_background(panel)
     snapshot(panel.page, path)
     panel.get_by_role('button', name='검색어 지우기').click()
@@ -249,7 +251,7 @@ def map_search_flow(panel, path):
     expect(schools.get_by_role('button', name='KAIST')).to_be_visible()
     restored = map_background(panel)
     passed = (chungcheong['allVisible'] and gangwon['matchesPanel'] and gangwon['height'] > TOLERANCE
-              and empty['matchesPanel'] and empty['height'] > TOLERANCE and empty['listBeforeMap']
+              and empty['matchesPanel'] and empty['height'] > TOLERANCE and not empty['listBeforeMap']
               and restored['matchesPanel'] and not restored['listBeforeMap'])
     return {'gangwon': gangwon, 'chungcheongFits': chungcheong['allVisible'], 'empty': empty, 'restored': restored, 'passed': passed}
 

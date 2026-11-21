@@ -205,6 +205,59 @@ test('SCRUM-208: 지도 선택은 미리보기만 갱신하고 방문 버튼만 
   assertAbsent(screen.queryByRole('button', { name: '캠퍼스 클릭 영역' }));
 });
 
+test('SCRUM-225: PC 지도 검색 시 목록은 지도 아래에 고정되고 기존 방문 선택과 제외 안내를 유지한다', () => {
+  const wideQuery = Object.assign(new dom.window.EventTarget(), { matches: true });
+  const otherQuery = Object.assign(new dom.window.EventTarget(), { matches: false });
+  Object.defineProperty(win, 'matchMedia', { configurable: true, value: (query: string) => query === GAME_WIDE_QUERY ? wideQuery : otherQuery });
+  mountApp();
+  const panel = () => within(screen.getByRole('complementary', { name: '전국 경쟁 패널' }));
+  const mapArea = () => panel().getByTestId('map-area');
+  const listSection = () => panel().getByRole('region', { name: '학교 목록' });
+  const preview = () => within(panel().getByRole('region', { name: '학교 미리보기' }));
+  const search = () => panel().getByRole('textbox', { name: '학교 검색' });
+
+  // 서울대학교 선택
+  fireEvent.click(within(listSection()).getByRole('button', { name: '서울대학교' }));
+  assert.ok(preview().getByRole('button', { name: '서울대학교 방문' }));
+  assert.equal(preview().getByTestId('map-preview-search-notice').textContent, '');
+
+  // KAIST 검색: 목록은 지도 아래에 유지, 제목·옆 건수 갱신, 방문 대상은 서울대학교 유지 + 제외 안내 표시
+  fireEvent.change(search(), { target: { value: 'KAIST' } });
+  assert.ok(
+    Boolean(mapArea().compareDocumentPosition(listSection()) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING),
+    '검색 중에도 학교 목록이 지도 아래에 유지된다',
+  );
+  assert.equal(within(listSection()).getByRole('heading', { level: 3 }).textContent, '검색 학교 목록 - 1개교');
+  assert.equal(panel().getByTestId('map-search-status').textContent, '1개교');
+  assert.ok(preview().getByRole('button', { name: '서울대학교 방문' }), '검색 결과에 없어도 기존 방문 대상을 유지한다');
+  assert.equal(preview().getByTestId('map-preview-search-notice').textContent, '현재 검색 결과에 없음');
+
+  // 검색어만 지우면 서울대학교 선택은 유지하고 안내만 제거
+  fireEvent.change(search(), { target: { value: '' } });
+  assert.ok(preview().getByRole('button', { name: '서울대학교 방문' }));
+  assert.equal(preview().getByTestId('map-preview-search-notice').textContent, '');
+  assertAbsent(panel().queryByTestId('map-search-status'));
+  assert.match(within(listSection()).getByRole('heading', { level: 3 }).textContent ?? '', /^학교 목록 · \d+개교$/);
+
+  // 다시 KAIST 검색 후 KAIST 행 선택 시 방문 대상이 KAIST로 바뀌고 안내가 사라짐
+  fireEvent.change(search(), { target: { value: 'KAIST' } });
+  assert.equal(preview().getByTestId('map-preview-search-notice').textContent, '현재 검색 결과에 없음');
+  fireEvent.click(within(listSection()).getByRole('button', { name: 'KAIST' }));
+  assert.ok(preview().getByRole('button', { name: 'KAIST 방문' }));
+  assert.equal(preview().getByTestId('map-preview-search-notice').textContent, '');
+
+  // 0건 검색(충청 권역 포함): 검색 결과 없음 + 0개교 제목 + 목록 지도 아래 유지
+  fireEvent.click(panel().getByRole('button', { name: '충청' }));
+  fireEvent.change(search(), { target: { value: '없는학교-SCRUM225' } });
+  assert.equal(panel().getByTestId('map-search-status').textContent, '검색 결과 없음');
+  assert.equal(within(listSection()).getByRole('heading', { level: 3 }).textContent, '검색 학교 목록 - 0개교');
+  assert.equal(preview().getByTestId('map-preview-search-notice').textContent, '현재 검색 결과에 없음');
+  assert.ok(
+    Boolean(mapArea().compareDocumentPosition(listSection()) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING),
+    '충청 0건 검색에서도 목록이 지도 아래에 유지된다',
+  );
+});
+
 test('SCRUM-209: 방문 학교·양쪽 탭·구매 확인을 리사이즈 후 복원하고 상점을 닫으면 직전 캠퍼스로 돌아간다', () => {
   const wideQuery = Object.assign(new dom.window.EventTarget(), { matches: true });
   const otherQuery = Object.assign(new dom.window.EventTarget(), { matches: false });

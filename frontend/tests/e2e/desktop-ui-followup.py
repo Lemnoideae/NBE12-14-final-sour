@@ -158,7 +158,7 @@ def map_search_metrics(panel, search_shot):
             const area = panel.querySelector('[data-testid="map-area"]');
             const list = panel.querySelector('.game-map-list');
             const heading = list?.querySelector('h3');
-            const searchBox = panel.querySelector('[data-testid="map-search-box"]');
+            const status = panel.querySelector('[data-testid="map-search-status"]');
             const ar = area.getBoundingClientRect();
             const lr = list.getBoundingClientRect();
             return {
@@ -167,7 +167,7 @@ def map_search_metrics(panel, search_shot):
                 listTop: Number(lr.top.toFixed(2)),
                 listBelowMap: lr.top >= ar.bottom - 2,
                 listHeading: heading ? heading.textContent.trim() : null,
-                searchBoxText: searchBox ? searchBox.textContent.trim() : '',
+                searchStatus: status ? status.textContent.trim() : null,
             };
         }''')
 

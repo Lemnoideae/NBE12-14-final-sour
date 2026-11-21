@@ -6,7 +6,7 @@ import type { NavTab } from './BottomNav';
 import { useMapSchools } from '../hooks/useMapSchools.ts';
 import { LoadNotice } from './LoadNotice';
 import type { MapRegion } from '../data/schoolMapLayout.ts';
-import type { SchoolView } from '../data/schoolDirectory';
+import { filterSchools, type SchoolView } from '../data/schoolDirectory';
 import { WorkspaceMapPreview, WorkspaceMapSchoolList } from './WorkspaceMapContents';
 
 /** What the map shows. Kept outside the map in the app so a visit can return to it (M2 A2). */
@@ -57,6 +57,12 @@ export const MapScreenPhone: React.FC<MapScreenPhoneProps> = ({
     update({ selectedSchoolId: schoolId });
     if (!panel) onSelectSchool?.(schoolId);
   };
+  const selectedSchool = schools.find((school) => school.id === current.selectedSchoolId);
+  const isSearching = current.query.trim().length > 0;
+  const listed = isSearching ? filterSchools(schools, current.region, current.query) : schools;
+  const selectedExcludedFromSearch = Boolean(
+    selectedSchool && isSearching && !listed.some((school) => school.id === selectedSchool.id),
+  );
   const controls = {
     schools,
     query: current.query,
@@ -65,9 +71,9 @@ export const MapScreenPhone: React.FC<MapScreenPhoneProps> = ({
     onQueryChange: (query: string) => update({ query }),
     onSelectSchool: select,
     onNavigateTab,
-    preview: panel && <WorkspaceMapPreview school={schools.find((school) => school.id === current.selectedSchoolId)}
-      onVisit={panel.onVisit} blocked={panel.visitBlocked} />,
-    renderPanelList: panel && ((listed: readonly SchoolView[]) => <WorkspaceMapSchoolList schools={listed}
+    preview: panel && <WorkspaceMapPreview school={selectedSchool}
+      onVisit={panel.onVisit} blocked={panel.visitBlocked} excludedFromSearch={selectedExcludedFromSearch} />,
+    renderPanelList: panel && ((panelSchools: readonly SchoolView[]) => <WorkspaceMapSchoolList schools={panelSchools}
       selectedSchoolId={current.selectedSchoolId} query={current.query} onSelect={select} />),
   };
 
