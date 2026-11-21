@@ -7,6 +7,7 @@ Requires Python Playwright and Chromium; not part of npm test.
 
 import argparse
 import json
+from itertools import pairwise
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -174,15 +175,35 @@ def chip_metrics(regions):
         const right = box.left + group.clientWidth;
         const buttons = [...group.querySelectorAll('button')].map(button => {
             const r = button.getBoundingClientRect();
-            return {label: button.textContent.trim(), x: r.left, y: r.top,
+            const style = getComputedStyle(button);
+            const label = document.createRange();
+            label.selectNodeContents(button);
+            const text = label.getBoundingClientRect();
+            return {label: button.textContent.trim(), x: r.left, y: r.top, right: r.right, bottom: r.bottom, width: r.width,
+                textFits: text.left >= r.left + parseFloat(style.borderLeftWidth) - .5
+                    && text.right <= r.right - parseFloat(style.borderRightWidth) + .5,
                 clearance: Math.min(r.left - box.left, right - r.right, r.top - box.top, box.bottom - r.bottom)};
         });
         return {width: group.clientWidth, scrollWidth: group.scrollWidth, scrollLeft: group.scrollLeft,
-            rows: new Set(buttons.map(b => b.y)).size, buttons};
+            display: getComputedStyle(group).display, rows: new Set(buttons.map(b => b.y)).size, buttons};
     }''')
     assert [chip['label'] for chip in metrics['buttons']] == REGIONS
     metrics['allVisible'] = metrics['width'] == metrics['scrollWidth'] and metrics['scrollLeft'] == 0 \
-        and all(chip['clearance'] >= 4 - 0.1 for chip in metrics['buttons'])
+        and all(chip['textFits'] and chip['clearance'] >= 4 - 0.1 for chip in metrics['buttons'])
+    first, *rest = metrics['buttons']
+    upper, lower = rest[:3], rest[3:]
+    metrics['gridFits'] = (
+        metrics['display'] == 'grid' and metrics['rows'] == 2 and metrics['allVisible']
+        and all(abs(chip['y'] - first['y']) <= TOLERANCE for chip in upper)
+        and all(abs(chip['bottom'] - first['bottom']) <= TOLERANCE for chip in lower)
+        # Keep at least 7px between the 3px shadow and its neighbor's 4px focus outline.
+        and upper[0]['x'] - first['right'] >= 7 - 0.1
+        and all(b['x'] - a['right'] >= 7 - 0.1 for a, b in pairwise(upper))
+        and all(abs(chip['width'] - upper[0]['width']) <= TOLERANCE for chip in upper)
+        and all(b['y'] - a['bottom'] >= 7 - 0.1
+                and abs(a['x'] - b['x']) <= TOLERANCE and abs(a['width'] - b['width']) <= TOLERANCE
+                for a, b in zip(upper, lower, strict=True))
+    )
     return metrics
 
 
@@ -224,7 +245,7 @@ def map_region_flow(page, panel):
     expect(area).to_have_attribute('data-region', '제주')
     expect(schools.get_by_role('button')).to_have_count(2)
     # Fractional browser zoom can round an authored 2px outline to the nearest device pixel.
-    return {'focusRing': ring, 'focusFits': focused_chips['allVisible'],
+    return {'focusRing': ring, 'focusFits': focused_chips['gridFits'],
             'focusVisible': ring['style'] == 'solid' and ring['width'] >= 1.5, 'jeju': map_background(panel)}
 
 
@@ -250,10 +271,10 @@ def map_search_flow(panel, path):
     expect(search).to_have_value('')
     expect(schools.get_by_role('button', name='KAIST')).to_be_visible()
     restored = map_background(panel)
-    passed = (chungcheong['allVisible'] and gangwon['matchesPanel'] and gangwon['height'] > TOLERANCE
+    passed = (chungcheong['gridFits'] and gangwon['matchesPanel'] and gangwon['height'] > TOLERANCE
               and empty['matchesPanel'] and empty['height'] > TOLERANCE and not empty['listBeforeMap']
               and restored['matchesPanel'] and not restored['listBeforeMap'])
-    return {'gangwon': gangwon, 'chungcheongFits': chungcheong['allVisible'], 'empty': empty, 'restored': restored, 'passed': passed}
+    return {'gangwon': gangwon, 'chungcheongFits': chungcheong['gridFits'], 'empty': empty, 'restored': restored, 'passed': passed}
 
 
 def pin_metrics(area):
@@ -402,6 +423,7 @@ def mock_case(browser, args, width, height, dpr):
         menus = menu_metrics(page.locator('.game-panel-tabs button, .game-center-nav button'))
         assert len(menus) == 8
         chips = chip_metrics(regions)
+        assert chips['gridFits'], chips
         area = panel.get_by_test_id('map-area')
         expect(area.locator('[data-top-rank]')).to_have_count(3)
         marker = pin_metrics(area)
@@ -463,7 +485,7 @@ def compact_scope(browser, url):
             expect(regions.get_by_role('button')).to_have_count(7)
             assert regions.evaluate('''group => {
                 const style = getComputedStyle(group);
-                return style.flexWrap === 'nowrap' && style.overflowX === 'auto';
+                return style.display === 'flex' && style.flexWrap === 'nowrap' && style.overflowX === 'auto';
             }''')
             assert area.evaluate("e => getComputedStyle(e.closest('[data-phone-shell]')).backgroundColor") == SEA
             expect(area.locator('[data-map-layer] [data-top-rank]')).to_have_count(3)

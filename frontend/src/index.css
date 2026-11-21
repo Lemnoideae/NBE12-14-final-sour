@@ -709,14 +709,27 @@
 /* The map itself keeps its sea background; only the workspace shell behind short lists changes. */
 [data-desktop-game] .game-map-frame[data-phone-shell='embedded'] { background: #fdf5df; }
 [data-desktop-game] .game-map-regions {
-  flex-wrap: wrap;
-  flex-wrap: balance;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(1.75rem, auto));
+  align-items: stretch;
   overflow: visible;
   margin-block-start: 0;
   /* Keep the plaque's 3px shadow and the 4px focus ring inside the scroll body. */
   padding: .375rem;
 }
-[data-desktop-game] .game-map-regions button:focus-visible { outline: 2px solid #49331d; outline-offset: 2px; }
+/* From the existing DOM order: 전체 spans both rows; the next six flow left to right. */
+[data-desktop-game] .game-map-regions > button:first-child { grid-area: 1 / 1 / span 2 / span 1; }
+[data-desktop-game] .game-map-regions > button {
+  min-inline-size: 0;
+  padding-inline: .125rem;
+  font-size: .6875rem;
+}
+[data-desktop-game] .game-map-regions > button:focus-visible {
+  z-index: 1;
+  outline: 2px solid #49331d;
+  outline-offset: 2px;
+}
 
 /* PC-only overlay: marker controls stay in CSS pixels, separate from the scaled map art. */
 .game-map-pins {
