@@ -131,7 +131,6 @@ def map_hover_metrics(page, panel):
     pin.hover()
     metrics = panel.evaluate('''panel => {
         const area = panel.querySelector('[data-testid="map-area"]');
-        const ar = area.getBoundingClientRect();
         const caption = area.querySelector('.game-map-pin-caption');
         const captionVisible = Boolean(caption && getComputedStyle(caption).visibility !== 'hidden'
             && parseFloat(getComputedStyle(caption).opacity) > 0 && caption.getBoundingClientRect().width > 0);
@@ -303,7 +302,8 @@ def main():
             failures.append(f"{n}: region buttons are not arranged in 2-row grid with 전체 spanning 2 rows")
         if not (case['mapSearch']['mapStable'] and case['mapSearch']['after']['listBelowMap']):
             failures.append(f"{n}: map shifted during search (delta={case['mapSearch']['mapTopDelta']}px) or list moved above map")
-        if case['mapHover']['bottomBoxCount'] != 1 or (case['mapHover']['captionVisible'] and case['mapHover']['hintVisible']):
+        hover = case['mapHover']
+        if hover['bottomBoxCount'] != 1 or not hover['captionVisible'] or hover['captionText'] != 'KAIST':
             failures.append(f"{n}: map bottom hint and hovered school name are not unified into one box")
         if case['rankings']['listMaxHeight'] == '160px' or case['rankings']['myBadgeText'] != '내 학교':
             failures.append(f"{n}: ranking list still capped at 160px or bottom badge is {case['rankings']['myBadgeText']!r}")

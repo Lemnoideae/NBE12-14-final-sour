@@ -278,6 +278,67 @@ def pin_metrics(area):
     }''')
 
 
+def map_caption_flow(page, panel, out):
+    regions = panel.get_by_role('group', name='권역 선택')
+    area = panel.get_by_test_id('map-area')
+    caption = area.locator('.game-map-pin-caption')
+    preview = panel.get_by_role('region', name='학교 미리보기')
+    panel.get_by_role('region', name='학교 목록').get_by_role('button', name='서울대학교', exact=True).click()
+    visit = preview.get_by_role('button', name='서울대학교 방문')
+    search = panel.get_by_role('textbox', name='학교 검색')
+    widths = {}
+    for region, name in (('전체', 'KAIST'), ('수도권', '서울대학교'), ('충청', '한국기술교육대학교'), ('제주', '제주대학교')):
+        regions.get_by_role('button', name=region, exact=True).click()
+        hint = '지역을 눌러 대학을 확인하세요' if region == '전체' else '학교를 눌러 선택하세요'
+        expect(caption).to_have_count(1)
+        expect(caption).to_have_text(hint)
+        assert caption.evaluate('el => getComputedStyle(el).animationName') == 'none'
+        expect(area.get_by_text(hint, exact=True)).to_have_count(1)
+        pin = area.get_by_role('button', name=f'{name} 전국', exact=False)
+        before = pin.bounding_box()
+        pressed = pin.get_attribute('aria-pressed')
+        pin.hover()
+        expect(caption).to_have_text(name)
+        expect(caption).to_have_attribute('aria-hidden', 'true')
+        expect(area.get_by_text(hint, exact=True)).to_have_count(0)
+        expect(visit).to_be_visible()
+        expect(pin).to_have_attribute('aria-pressed', pressed)
+        assert pin.bounding_box() == before
+        assert caption.evaluate('''el => {
+            const style = getComputedStyle(el);
+            return style.opacity === '1' && style.animationName === 'none' && style.backgroundColor === 'rgb(253, 245, 223)';
+        }''')
+        single_line = caption.bounding_box()
+        widths[region] = single_line['width']
+        snapshot(page, out / f'caption-{region}.png')
+        if region == '충청':
+            # Stress the actual caption's width cap with a name longer than the fixture directory contains.
+            caption.locator('span').evaluate('(el, text) => { el.textContent = text.repeat(3); }', name)
+            wrapped = caption.bounding_box()
+            frame = area.bounding_box()
+            assert wrapped['height'] > single_line['height'] and wrapped['width'] < frame['width']
+            assert pin.bounding_box() == before
+            snapshot(page, out / 'caption-long-wrap.png')
+        page.keyboard.press('Escape')
+        expect(caption).to_have_text(hint)
+        search.hover()
+        pin.hover()
+        expect(caption).to_have_text(name)
+        search.hover()
+        expect(caption).to_have_text(hint)
+    assert widths['충청'] > widths['전체']
+    regions.get_by_role('button', name='전체', exact=True).click()
+    expect(visit).to_be_visible()
+    page.emulate_media(reduced_motion='no-preference')
+    assert caption.evaluate('el => getComputedStyle(el).animationName') == 'map-hint-pulse'
+    area.get_by_role('button', name='KAIST 전국 1위').hover()
+    expect(caption).to_have_text('KAIST')
+    assert caption.evaluate('el => getComputedStyle(el).opacity') == '1'
+    page.emulate_media(reduced_motion='reduce')
+    search.hover()
+    return widths
+
+
 def reveal_folded_pin(page, panel, path):
     panel.get_by_role('button', name='수도권', exact=True).click()
     area = panel.get_by_test_id('map-area')
@@ -290,14 +351,20 @@ def reveal_folded_pin(page, panel, path):
     expect(caption).to_be_visible()
     expect(caption).to_have_text(name)
     panel.get_by_role('textbox', name='학교 검색').hover()
-    expect(caption).to_be_hidden()
+    expect(caption).to_have_text('학교를 눌러 선택하세요')
     page.keyboard.press('Tab')
     pin.focus()
     expect(caption).to_be_visible()
     expect(caption).to_have_text(name)
     snapshot(page, path)
     page.keyboard.press('Escape')
-    expect(caption).to_be_hidden()
+    expect(caption).to_have_text('학교를 눌러 선택하세요')
+    expect(pin).to_be_focused()
+    page.keyboard.press('Tab')
+    expect(pin).not_to_be_focused()
+    page.keyboard.press('Shift+Tab')
+    expect(pin).to_be_focused()
+    expect(caption).to_have_text(name)
     page.keyboard.press('Enter')
     expect(pin).to_have_attribute('aria-pressed', 'true')
     expect(pin.locator('.game-map-pin-name')).to_be_visible()
@@ -339,6 +406,9 @@ def mock_case(browser, args, width, height, dpr):
         expect(area.locator('[data-top-rank]')).to_have_count(3)
         marker = pin_metrics(area)
         assert marker['ranked'] == 3
+        caption = area.locator('.game-map-pin-caption').bounding_box()
+        jeju_cluster = area.locator('[data-cluster-region="제주"]').bounding_box()
+        assert caption['x'] >= jeju_cluster['x'] + jeju_cluster['width'], 'National hint covers Jeju region control'
         snapshot(page, args.out / f'{name}-national.png')
         region_flow = map_region_flow(page, panel)
         snapshot(page, args.out / f'{name}-jeju.png')
@@ -349,7 +419,10 @@ def mock_case(browser, args, width, height, dpr):
             expect(area).to_have_attribute('data-region', region)
             pins[region] = pin_metrics(area)
             assert pins[region]['total'] == school_count
+        caption_widths = None
         if (width, height, dpr) == (1440, 900, 1):
+            regions.get_by_role('button', name='전체', exact=True).click()
+            caption_widths = map_caption_flow(page, panel, args.out)
             reveal_folded_pin(page, panel, args.out / f'{name}-metro.png')
         regions.get_by_role('button', name='제주', exact=True).click()
         search_flow = map_search_flow(panel, args.out / f'{name}-empty-search.png') if (width, height) == (2560, 1440) else None
@@ -360,7 +433,8 @@ def mock_case(browser, args, width, height, dpr):
             regions.get_by_role('button', name='전체', exact=True).click()
             menus += mock_menu_flow(page, panel, args.out / f'{name}-visit-shop.png')
         return {'name': name, 'viewport': viewport, 'dpr': dpr, 'fonts': fonts, 'chips': chips,
-                'top3': marker, 'regionalPins': pins, 'regionFlow': region_flow, 'searchFlow': search_flow, 'mockShop': shop, 'menus': menus}
+                'top3': marker, 'regionalPins': pins, 'regionFlow': region_flow, 'searchFlow': search_flow,
+                'captionWidths': caption_widths, 'mockShop': shop, 'menus': menus}
     finally:
         page.close()
 

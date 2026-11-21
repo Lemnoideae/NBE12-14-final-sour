@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Hand } from 'lucide-react';
 import type { SchoolId } from '../data/schoolIds';
 import type { SchoolView } from '../data/schoolDirectory';
 import { MAP_DESIGN_FRAME_PX, type Point } from '../data/schoolMapLayout';
@@ -23,8 +24,9 @@ const pinCenter = (point: Point) => ({
 });
 
 /** Fit visible controls in CSS pixels without changing the image transform or the underlying school points. */
-export function WorkspaceMapPins({ pins, selectedId, onSelect }: {
+export function WorkspaceMapPins({ pins, hint, selectedId, onSelect }: {
   pins: readonly WorkspacePin[];
+  hint: string;
   selectedId?: SchoolId;
   onSelect: (id: SchoolId) => void;
 }) {
@@ -42,7 +44,6 @@ export function WorkspaceMapPins({ pins, selectedId, onSelect }: {
     const labels = [...layer.querySelectorAll<HTMLElement>('.game-map-pin-name')];
     const ranks = [...layer.querySelectorAll<HTMLElement>('.game-map-pin-rank')];
     const obstacles = [...area.querySelectorAll<HTMLElement>('[data-cluster-region], .game-map-own-tag')];
-    const caption = layer.querySelector<HTMLElement>('.game-map-pin-caption');
     const byId = (nodes: HTMLElement[]) => new Map(nodes.map(node => [Number(node.dataset.pinId), node]));
     const labelsById = byId(labels);
     const ranksById = byId(ranks);
@@ -66,18 +67,29 @@ export function WorkspaceMapPins({ pins, selectedId, onSelect }: {
         return [{ id: school.id, anchor: mapPinAnchor(point, size), logo: sizeOf(controls[i]),
           label: sizeOf(label), rank: rank && sizeOf(rank), ownSchool: school.isMySchool, selected: school.id === selectedId }];
       });
-      setPlaced(placeWorkspaceMapPins(size, geometries, avoid, (caption?.offsetHeight ?? 24) + 8));
+      // The reserve is independent of the visible caption's width and line count.
+      const bottomInset = parseFloat(getComputedStyle(layer).paddingBlockEnd);
+      setPlaced(placeWorkspaceMapPins(size, geometries, avoid, bottomInset));
     };
     fit();
     if (typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(fit);
     [layer, ...controls, ...labels, ...ranks, ...obstacles].forEach(node => observer.observe(node));
-    if (caption) observer.observe(caption);
     return () => observer.disconnect();
   }, [pins, selectedId]);
 
   const activeId = focused ?? hovered;
-  const revealed = pins.find(({ school }) => school.id === activeId)?.school;
+  const revealed = dismissed ? undefined : pins.find(({ school }) => school.id === activeId)?.school;
+  const showingName = revealed !== undefined;
+  useEffect(() => {
+    if (!showingName) return;
+    const dismiss = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setDismissed(true);
+    };
+    // Hover alone need not move keyboard focus to a marker for Escape to work.
+    document.addEventListener('keydown', dismiss);
+    return () => document.removeEventListener('keydown', dismiss);
+  }, [showingName]);
   return <div ref={ref} className="game-map-pins" data-map-pins>
     {pins.map(({ school, point }) => {
       const layout = placed?.get(school.id);
@@ -90,7 +102,6 @@ export function WorkspaceMapPins({ pins, selectedId, onSelect }: {
           onBlur={() => setFocused(undefined)}
           onPointerEnter={(event) => { if (event.pointerType === 'mouse') { setHovered(school.id); setDismissed(false); } }}
           onPointerLeave={() => setHovered(undefined)}
-          onKeyDown={(event) => { if (event.key === 'Escape') setDismissed(true); }}
           onClick={() => { soundManager.playTabSound(); onSelect(school.id); }}>
           <SchoolBadge school={school} className="game-map-pin-logo" />
           {school.isTop3 && <span className="game-map-pin-medal" aria-hidden="true">{school.rank}</span>}
@@ -109,7 +120,7 @@ export function WorkspaceMapPins({ pins, selectedId, onSelect }: {
         const logo = boxCenter(layout.logo);
         const endpoints = [layout.label, layout.rank].flatMap(box => box ? [boxCenter(box)] : []);
         const { anchor } = layout;
-        const showAnchor = (school.id === activeId || school.id === selectedId)
+        const showAnchor = school.id === selectedId
           && Math.hypot(anchor.x - logo.x, anchor.y - logo.y) > layout.logo.width / 2;
         return <g key={school.id}>
           {endpoints.map((end) => <line key={`${end.x},${end.y}`} x1={logo.x} y1={logo.y} x2={end.x} y2={end.y} />)}
@@ -120,6 +131,10 @@ export function WorkspaceMapPins({ pins, selectedId, onSelect }: {
         </g>;
       })}
     </svg>
-    <div className="game-map-pin-caption" data-revealed={!!revealed && !dismissed} aria-hidden="true">{revealed?.name}</div>
+    {/* The button already announces its full school name. Only the default hint is exposed here. */}
+    <div className="game-map-pin-caption" data-revealed={showingName} aria-hidden={showingName || undefined}>
+      {!showingName && <Hand size={14} aria-hidden="true" />}
+      <span>{revealed?.name ?? hint}</span>
+    </div>
   </div>;
 }

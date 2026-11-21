@@ -37,6 +37,7 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
   renderPanelList,
 }) => {
   const isNational = region === '전체';
+  const hint = isNational ? '지역을 눌러 대학을 확인하세요' : '학교를 눌러 선택하세요';
   const regionSchools = filterSchools(schools, region, '');
   const listed = filterSchools(schools, region, query);
   const counts = countByRegion(schools);
@@ -183,16 +184,16 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
             })}
         </div>
         </MapLayer>
-        {workspace && <WorkspaceMapPins pins={pins} selectedId={selectedSchoolId} onSelect={onSelectSchool} />}
-
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-25 pointer-events-none">
-          <div className="rpg-box px-2.5 py-1 bg-[#fdf5df]/95 border-2 border-[#261608] shadow-[2px_2px_0px_#261608] flex items-center gap-1.5 whitespace-nowrap animate-pulse">
-            <Hand className="w-3 h-3 text-[#b45309]" />
-            <span className="font-pixel text-[10px] font-black text-[#261608]">
-              {isNational ? '지역을 눌러 대학을 확인하세요' : '학교를 눌러 선택하세요'}
-            </span>
+        {workspace ? (
+          <WorkspaceMapPins key={region} pins={pins} hint={hint} selectedId={selectedSchoolId} onSelect={onSelectSchool} />
+        ) : (
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-25 pointer-events-none">
+            <div className="rpg-box px-2.5 py-1 bg-[#fdf5df]/95 border-2 border-[#261608] shadow-[2px_2px_0px_#261608] flex items-center gap-1.5 whitespace-nowrap animate-pulse">
+              <Hand className="w-3 h-3 text-[#b45309]" />
+              <span className="font-pixel text-[10px] font-black text-[#261608]">{hint}</span>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
     </MapFrame>

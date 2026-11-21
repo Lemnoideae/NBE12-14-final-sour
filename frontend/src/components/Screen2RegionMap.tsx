@@ -99,7 +99,7 @@ export const Screen2RegionMap: React.FC<MapControlsProps> = ({
           })}
         </div>
         </MapLayer>
-        {workspace && <WorkspaceMapPins pins={pins} selectedId={selectedSchoolId} onSelect={onSelectSchool} />}
+        {workspace && <WorkspaceMapPins pins={pins} hint="학교를 눌러 선택하세요" selectedId={selectedSchoolId} onSelect={onSelectSchool} />}
       </div>
 
     </MapFrame>
