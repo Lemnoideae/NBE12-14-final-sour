@@ -268,14 +268,33 @@ def ranking_layout(container):
 def soon_metrics(page, chat_shot, guestbook_shot):
     left = page.get_by_role('complementary', name='학교 패널')
     left.get_by_role('tab', name='우리 학교 채팅').click()
-    expect(left.get_by_text('우리 학교 채팅', exact=True).last).to_be_visible()
-    chat_soon = left.get_by_text('SOON', exact=True).count()
+    chat = left.get_by_role('tabpanel', name='우리 학교 채팅')
+    expect(chat.get_by_text('필터링된 메시지입니다').first).to_be_visible()
+    chat_soon = chat.get_by_text('SOON', exact=True).count()
     snapshot(page, chat_shot)
+    composer = chat.get_by_role('textbox', name='채팅 메시지')
+    composer.fill('PC 채팅 전송 확인')
+    chat.get_by_role('button', name='전송').click()
+    expect(chat.get_by_text('PC 채팅 전송 확인', exact=True)).to_be_in_viewport()
+    expect(composer).to_have_value('')
 
     left.get_by_role('tab', name='방명록').click()
-    expect(left.get_by_text('방명록').last).to_be_visible()
-    guestbook_soon = left.get_by_text('SOON', exact=True).count()
+    guestbook = left.get_by_role('tabpanel', name='방명록')
+    entries = guestbook.get_by_test_id('our-guestbook-entry')
+    expect(entries.first).to_be_visible()
+    guestbook_soon = guestbook.get_by_text('SOON', exact=True).count()
     snapshot(page, guestbook_shot)
+    guestbook.get_by_role('button', name='인기순').click()
+    counts = [int(text.strip()) for text in entries.get_by_role('button').all_text_contents()]
+    assert counts == sorted(counts, reverse=True), counts
+    like = entries.first.get_by_role('button')
+    before = int(like.inner_text())
+    like.click()
+    expect(like).to_have_text(str(before + 1))
+    like.click()
+    expect(like).to_have_text(str(before))
+    guestbook.get_by_role('button', name='지도에서 학교 찾기 >').click()
+    expect(page.get_by_role('tab', name='지도', exact=True)).to_have_attribute('aria-selected', 'true')
 
     left.get_by_role('tab', name='상세').click()
     return {'chatSoonCount': chat_soon, 'guestbookSoonCount': guestbook_soon}

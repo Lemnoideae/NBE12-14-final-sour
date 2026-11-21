@@ -86,6 +86,12 @@ def mock_menu_flow(page, panel, path):
     menus = menu_metrics(visit)
     visit.click()
     expect(page.get_by_test_id('visit-tag')).to_be_visible()
+    guestbook.click()
+    visited_book = left.get_by_role('tabpanel', name='방명록')
+    expect(visited_book.get_by_role('heading', name='KAIST 방명록')).to_be_visible()
+    expect(visited_book.get_by_text('SOON', exact=True)).to_be_visible()
+    expect(visited_book.get_by_placeholder('한마디 남기기 (최대 50자)')).to_be_visible()
+    detail.click()
     page.get_by_role('button', name='상점', exact=True).click()
     back = page.get_by_role('button', name='캠퍼스로 돌아가기')
     menus += menu_metrics(back)
@@ -461,6 +467,20 @@ def mock_case(browser, args, width, height, dpr):
         page.close()
 
 
+def compact_ribbons(page):
+    page.get_by_title('채팅창 열기').click()
+    chat = page.get_by_role('dialog', name='채팅')
+    expect(chat.get_by_text('SOON', exact=True)).to_be_visible()
+    chat.get_by_title('채팅창 닫기').click()
+    expect(chat).to_have_count(0)
+
+    page.get_by_role('button', name='우리 학교 방명록 보기').click()
+    guestbook = page.get_by_role('dialog', name='우리 학교 방명록')
+    expect(guestbook.get_by_text('SOON', exact=True)).to_be_visible()
+    guestbook.get_by_title('방명록 닫기').click()
+    expect(guestbook).to_have_count(0)
+
+
 def compact_scope(browser, url):
     for width, height, query, variant in ((390, 844, '?device=full', 'full'), (1440, 900, '?device=framed', 'framed'),
                                           (1023, 720, '', 'full')):
@@ -471,6 +491,7 @@ def compact_scope(browser, url):
             expect(nav).to_be_visible()
             expect(page.locator('[data-desktop-game]')).to_have_count(0)
             expect(page.locator(f'[data-phone-shell="{variant}"]').first).to_be_visible()
+            compact_ribbons(page)
             shop = nav.get_by_role('button', name='상점', exact=True)
             assert shop.evaluate('''e => {
                 const icon = e.querySelector('svg').getBoundingClientRect();
@@ -528,8 +549,13 @@ def api_manual_tabs(page, panel, calls, sockets):
         chat.press('Enter')
     expect(chat).to_have_attribute('aria-selected', 'true')
     expect(school.get_by_role('log')).to_be_visible()
+    expect(school.get_by_text('SOON', exact=True)).to_have_count(0)
     page.clock.run_for(100)
     assert sockets, 'Activating chat should open its WebSocket'
+    with page.expect_request(lambda req: '/universities/8/guestbooks?' in req.url):
+        school.get_by_role('tab', name='방명록').click()
+    expect(school.get_by_text('아직 남겨진 방명록이 없습니다.')).to_be_visible()
+    expect(school.get_by_text('SOON', exact=True)).to_have_count(0)
     detail.click()
     panel.get_by_role('tab', name='지도').click()
 
@@ -590,7 +616,8 @@ def api_shelf(browser, args):
     calls, sockets = [], []
     data = {'/rankings/universities': {'items': [rank], 'myUniversity': rank, 'hasNext': False,
                                       'page': 0, 'size': 20, 'totalCount': 1},
-            '/chat/universities/8/messages': {'items': [], 'hasNext': False, 'nextCursor': None}, '/alliances/me': None,
+            '/chat/universities/8/messages': {'items': [], 'hasNext': False, 'nextCursor': None},
+            '/universities/8/guestbooks': {'items': [], 'hasNext': False, 'nextCursor': None}, '/alliances/me': None,
             '/auth/reissue': {'accessToken': 'layout-fixture', 'expiresInSeconds': 3600}, '/users/me': profile,
             '/items': [item, long_item], '/items/me/active': None,
             '/map/universities': [], '/clickers': []}
