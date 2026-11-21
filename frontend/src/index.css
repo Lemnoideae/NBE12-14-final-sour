@@ -645,6 +645,49 @@
 .game-map-pin-caption[data-revealed='true'] { visibility: visible; }
 .game-map-pins:has(.game-map-pin-caption[data-revealed='true']) { z-index: 26; }
 
+/* Keep shelf cards on the same outer edges as the altar, including while selected. */
+[data-desktop-game] .game-shelf-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-inline-size: 0;
+}
+[data-desktop-game] .game-shelf-card[data-selected] {
+  scale: none;
+  border-color: #261608;
+  box-shadow: inset 0 0 0 2px #facc15, 2px 2px #261608;
+}
+[data-desktop-game] .game-shelf-selected { right: auto; inset-inline-end: .375rem; }
+[data-desktop-game] .game-shelf-card-body { display: flex; align-items: flex-start; gap: .5rem; }
+[data-desktop-game] .game-shelf-card-copy { display: block; flex: 1; min-inline-size: 0; }
+[data-desktop-game] :is(.game-shelf-card-name, .game-shelf-card-description) {
+  display: block;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+  white-space: normal;
+  line-height: 1.3;
+}
+[data-desktop-game] .game-shelf-card-name { font-size: .875rem; }
+[data-desktop-game] .game-shelf-card-description { margin: .125rem 0 0; font-size: .75rem; }
+[data-desktop-game] .game-shelf-api-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border: 2px solid #261608;
+  background: #fef08a;
+  box-shadow: 2px 2px #261608;
+}
+[data-desktop-game] .game-shelf-api-details {
+  display: block;
+  margin-block-start: .5rem;
+  padding-block-start: .375rem;
+  border-block-start: 1px solid #eeddb6;
+  overflow-wrap: anywhere;
+}
+
 /* Match the mobile plaques' depth without changing compact buttons or general-purpose form actions. */
 .game-nav-icon { display: none; }
 [data-desktop-game] .game-nav-control {

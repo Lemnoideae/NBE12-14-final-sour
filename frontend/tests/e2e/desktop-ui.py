@@ -94,11 +94,12 @@ def mock_menu_flow(page, panel, path):
     return menus
 
 
-def shop_metrics(page, path):
-    page.get_by_role('button', name='상점', exact=True).click()
+def shop_metrics(page, path, *, open_shop=True):
+    if open_shop:
+        page.get_by_role('button', name='상점', exact=True).click()
     shop = page.locator('[data-game-layout="shop"]')
     expect(shop.get_by_text('원목 선반 진열대', exact=True)).to_be_visible()
-    cards = shop.get_by_role('button', name='구매 선택', exact=False)
+    cards = shop.locator('.game-shelf-card')
     expect(cards.first).to_be_visible()
     cards.first.scroll_into_view_if_needed()
     altar = shop.get_by_text('내 클리커 강화 제단', exact=True).evaluate('''e => {
@@ -108,18 +109,58 @@ def shop_metrics(page, path):
     edges = cards.evaluate_all('''cards => {
         const rects = cards.map(card => card.getBoundingClientRect());
         const firstRow = rects.filter(rect => rect.top < rects[0].bottom && rect.bottom > rects[0].top);
+        const grid = cards[0].parentElement;
         return {
             count: cards.length, firstLeft: rects[0].left,
-            rightmost: firstRow.length > 1 ? Math.max(...firstRow.map(rect => rect.right)) : null,
+            rightmost: firstRow.length > 1 ? firstRow[1].right : grid.getBoundingClientRect().right,
             firstLayoutLeft: cards[0].offsetParent.getBoundingClientRect().left + cards[0].offsetLeft,
+            columns: getComputedStyle(grid).gridTemplateColumns.split(' ').length,
             firstScale: getComputedStyle(cards[0]).scale,
+            inner: cards.map(card => {
+                const bounds = card.getBoundingClientRect();
+                const icon = card.querySelector('.game-shelf-card-body').firstElementChild.getBoundingClientRect();
+                const copy = card.querySelector('.game-shelf-card-copy').getBoundingClientRect();
+                const paddingX = parseFloat(getComputedStyle(card).paddingLeft) + card.clientLeft;
+                const paddingY = parseFloat(getComputedStyle(card).paddingTop) + card.clientTop;
+                return Math.abs(icon.top - bounds.top - paddingY) <= 1
+                    && Math.abs(icon.left - bounds.left - paddingX) <= 1
+                    && Math.abs(copy.top - icon.top) <= 1 && copy.left > icon.right;
+            }).every(Boolean),
         };
     }''')
     snapshot(page, path)
     left_delta = edges['firstLeft'] - altar['left']
-    right_delta = None if edges['rightmost'] is None else edges['rightmost'] - altar['right']
+    right_delta = edges['rightmost'] - altar['right']
     return {**edges, 'altar': altar, 'leftDelta': left_delta, 'rightDelta': right_delta,
-            'aligned': abs(left_delta) <= TOLERANCE and (right_delta is None or abs(right_delta) <= TOLERANCE)}
+            'aligned': edges['columns'] == 2 and edges['inner']
+                       and max(abs(left_delta), abs(right_delta)) <= TOLERANCE}
+
+
+def wrapping_text(locator):
+    return locator.evaluate('''node => {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const lines = [...range.getClientRects()];
+        const box = node.getBoundingClientRect();
+        const card = node.closest('button').getBoundingClientRect();
+        return { lines: lines.length, fits: lines.every(line => line.left >= box.left - 1 && line.right <= box.right + 1
+            && line.top >= box.top - 1 && line.bottom <= box.bottom + 1 && line.right <= card.right && line.bottom <= card.bottom) };
+    }''')
+
+
+def mock_purchase(page):
+    card = page.get_by_role('button', name='커피 한 잔 구매 선택')
+    dialog = page.get_by_role('dialog', name='아이템 구매 확인')
+    card.click()
+    expect(dialog.get_by_text('구매 후 기여도 18,440점.', exact=False)).to_be_visible()
+    dialog.get_by_role('button', name='아니오').click()
+    expect(dialog).to_have_count(0)
+    card.click()
+    expect(dialog.get_by_text('구매 후 기여도 18,440점.', exact=False)).to_be_visible()
+    dialog.get_by_role('button', name='구매 및 사용').click()
+    expect(dialog).to_have_count(0)
+    shop = page.locator('[data-game-layout="shop"]')
+    expect(shop.get_by_text('커피 한 잔 ·', exact=False)).to_contain_text('현재 클릭당 60점')
 
 
 REGIONS = ['전체', '수도권', '강원', '충청', '영남', '호남', '제주']
@@ -309,9 +350,9 @@ def mock_case(browser, args, width, height, dpr):
             reveal_folded_pin(page, panel, args.out / f'{name}-metro.png')
         regions.get_by_role('button', name='제주', exact=True).click()
         search_flow = map_search_flow(panel, args.out / f'{name}-empty-search.png') if (width, height) == (2560, 1440) else None
-        shop = None
+        shop = shop_metrics(page, args.out / f'{name}-shop-mock.png')
         if (width, height, dpr) == (1440, 900, 1):
-            shop = shop_metrics(page, args.out / f'{name}-shop-mock.png')
+            mock_purchase(page)
             page.get_by_role('button', name='캠퍼스로 돌아가기').click()
             regions.get_by_role('button', name='전체', exact=True).click()
             menus += mock_menu_flow(page, panel, args.out / f'{name}-visit-shop.png')
@@ -352,6 +393,11 @@ def compact_scope(browser, url):
             expect(area.locator('[data-map-pins]')).to_have_count(0)
             regions.get_by_role('button', name='제주', exact=True).click()
             expect(area).to_have_attribute('data-region', '제주')
+            shop.click()
+            card = page.get_by_role('button', name='커피 한 잔 구매 선택')
+            expect(card).to_be_visible()
+            assert card.evaluate("e => parseFloat(getComputedStyle(e).scale) > 1")
+            assert card.get_by_text('커피 한 잔', exact=True).evaluate("e => getComputedStyle(e).textOverflow") == 'ellipsis'
         finally:
             page.close()
 
@@ -394,12 +440,15 @@ def api_shelf(browser, args):
                'totalContribScore': 1000, 'totalAttackScore': 0}
     item = {'id': 3, 'name': '테스트 커피', 'content': '검증용 아이템', 'type': 'MULTIPLIER', 'payType': 'CONTRIBUTION',
             'price': 120, 'durationSeconds': 30}
+    long_item = {**item, 'id': 4,
+                 'name': '캠퍼스 기념 특별 메뉴 오늘의 야간 자율 학습 한정 간식 세트',
+                 'content': '응원 이벤트 동안 사용할 수 있는 특별한 아이템입니다. 효과를 적용하면 기존 아이템 효과를 교체하며, 사용 가능 시간은 구매 확인창에서도 볼 수 있습니다. 식별 코드: ' + 'CAMPUS2026' * 5}
     rank = {'rank': 7, 'universityId': 8, 'name': '한양대학교', 'logoUrl': None, 'totalScore': 1234, 'rankChange': -1}
     calls, sockets = [], []
     data = {'/rankings/universities': {'items': [rank], 'myUniversity': rank, 'hasNext': False, 'page': 0},
             '/chat/universities/8/messages': {'items': [], 'hasNext': False, 'nextCursor': None}, '/alliances/me': None,
             '/auth/reissue': {'accessToken': 'layout-fixture', 'expiresInSeconds': 3600}, '/users/me': profile,
-            '/items': [item, {**item, 'id': 4, 'name': '테스트 간식'}], '/items/me/active': None,
+            '/items': [item, long_item], '/items/me/active': None,
             '/map/universities': [], '/clickers': []}
 
     def fixture(route):
@@ -425,7 +474,15 @@ def api_shelf(browser, args):
         panel = ready(page, args.api_url)
         api_manual_tabs(page, panel, calls, sockets)
         print('PASS API tab focus/activation: no ranking request, guestbook request, or chat connection on focus alone')
-        return shop_metrics(page, args.out / '1440x900-dpr1-shop-api.png')
+        results = {}
+        for width, height in ((1440, 900), (1024, 720)):
+            page.set_viewport_size({'width': width, 'height': height})
+            expect(page.locator('[data-desktop-game]')).to_have_count(1)
+            name = f'{width}x{height}-dpr1'
+            results[name] = shop_metrics(page, args.out / f'{name}-shop-api.png', open_shop=not results)
+            card = page.get_by_role('button', name=f"{long_item['name']} 구매 선택")
+            results[name]['copy'] = [wrapping_text(card.get_by_text(long_item[key], exact=True)) for key in ('name', 'content')]
+        return results
     finally:
         page.close()
 
@@ -443,7 +500,7 @@ def main():
         browser = playwright.chromium.launch(executable_path=args.chromium)
         cases = [mock_case(browser, args, *spec) for spec in VIEWPORTS]
         compact_scope(browser, args.mock_url)
-        print('PASS 1-column and framed modes retain bottom menu and single-row scrolling map chips')
+        print('PASS 1-column and framed modes retain bottom menu, scrolling map chips and existing mock shelf styling')
         api = api_shelf(browser, args) if args.api_url else None
         version = browser.version
         browser.close()
@@ -467,9 +524,12 @@ def main():
         if search and not search['passed']:
             failures.append(f"{case['name']}: short/empty map lists and search order")
         if case['mockShop'] and not case['mockShop']['aligned']:
-            failures.append(f"{case['name']}: mock shelf outer edges aligned")
-    if api and not api['aligned']:
-        failures.append('1440x900-dpr1: API shelf outer edges aligned')
+            failures.append(f"{case['name']}: mock shelf card alignment and spacing")
+    for name, shop in (api or {}).items():
+        if not shop['aligned']:
+            failures.append(f'{name}: API shelf card alignment and spacing')
+        if not all(copy['fits'] and copy['lines'] >= 2 for copy in shop['copy']):
+            failures.append(f'{name}: long API shelf name and description wrap without clipping')
     report = {'chromium': version, 'cases': cases, 'apiShop': api, 'failures': failures}
     (args.out / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     for failure in failures:

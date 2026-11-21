@@ -71,13 +71,19 @@ export function ApiItemShop({ shop, onConfirmationChange }: { shop: ItemShopView
           const unavailable = item.payType !== 'CONTRIBUTION' || item.type !== 'MULTIPLIER';
           return <button key={item.id} type="button" disabled={unavailable} onClick={() => setSelectedId(item.id)}
             aria-label={`${item.name} ${unavailable ? '구매 준비 중' : '구매 선택'}`}
-            className="text-left bg-[#fdf5df] border-3 border-[#261608] shadow-[2px_2px_0px_#261608] p-2 font-pixel cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed min-h-24">
-            <span aria-hidden="true" className="text-xl">{unavailable ? '🔒' : '☕'}</span>
-            <span className="block text-xs font-black break-words">{item.name}</span>
-            <span className="block text-[10px] text-[#8b5327] my-1 break-words">{item.content}</span>
-            <span className="block text-[10px] font-bold">{item.price.toLocaleString('ko-KR')}{item.payType === 'CREDIT' ? ' 크레딧' : '점'}</span>
-            {item.durationSeconds !== null && <span className="block text-[10px]">지속 {item.durationSeconds}초</span>}
-            {unavailable && <span className="block text-[10px]">{item.payType === 'CREDIT' ? '결제 준비 중' : '지원 준비 중'}</span>}
+            className="game-shelf-card text-left bg-[#fdf5df] border-3 border-[#261608] shadow-[2px_2px_0px_#261608] p-2 font-pixel cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed min-h-24">
+            <span className="contents game-shelf-card-body">
+              <span aria-hidden="true" className="game-shelf-api-icon text-xl">{unavailable ? '🔒' : '☕'}</span>
+              <span className="contents game-shelf-card-copy">
+                <span className="game-shelf-card-name block text-xs font-black break-words">{item.name}</span>
+                <span className="game-shelf-card-description block text-[10px] text-[#8b5327] my-1 break-words">{item.content}</span>
+              </span>
+            </span>
+            <span className="contents game-shelf-api-details">
+              <span className="block text-[10px] font-bold">{item.price.toLocaleString('ko-KR')}{item.payType === 'CREDIT' ? ' 크레딧' : '점'}</span>
+              {item.durationSeconds !== null && <span className="block text-[10px]">지속 {item.durationSeconds}초</span>}
+              {unavailable && <span className="block text-[10px]">{item.payType === 'CREDIT' ? '결제 준비 중' : '지원 준비 중'}</span>}
+            </span>
           </button>;
         })}
       </div>
