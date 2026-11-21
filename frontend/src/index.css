@@ -390,7 +390,7 @@
 
 /* T2 (docs/261110-1005-mockup_remaining_tasks_plan.md §5): on a phone, service screens fill the visible
    viewport. 100dvh follows the browser toolbars, so the bottom nav stays above them; 100vh is the fallback.
-   --shell-offset is the mock menu bar above the shell (App). The safe-area insets need viewport-fit=cover
+   --shell-offset accounts for the bars above the shell (App). The safe-area insets need viewport-fit=cover
    (index.html). Landscape keeps a minimum height and scrolls the page (M6 approval). */
 .phone-shell-full {
   height: calc(100vh - var(--shell-offset, 0px));
@@ -398,10 +398,25 @@
   min-height: 480px;
   padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
-.device-full { --shell-offset: calc(28px + env(safe-area-inset-top)); }
+.device-full {
+  --mock-menu-inset: env(safe-area-inset-top);
+  --mock-menu-height: calc(28px + var(--mock-menu-inset));
+  --shell-offset: var(--mock-menu-height);
+}
+.device-full-with-profile {
+  --mock-menu-inset: 0px;
+  --profile-height: calc(3rem + env(safe-area-inset-top));
+  --shell-offset: calc(var(--mock-menu-height) + var(--profile-height));
+}
+.device-full-with-profile > .game-top-bar {
+  min-block-size: var(--profile-height);
+  margin-block-end: 0;
+  padding-block-start: env(safe-area-inset-top);
+  padding-inline: max(.5rem, env(safe-area-inset-left)) max(.5rem, env(safe-area-inset-right));
+}
 .mock-menu-bar {
-  height: var(--shell-offset);
-  padding: env(safe-area-inset-top) calc(8px + env(safe-area-inset-right)) 0 calc(8px + env(safe-area-inset-left));
+  height: var(--mock-menu-height);
+  padding: var(--mock-menu-inset) calc(8px + env(safe-area-inset-right)) 0 calc(8px + env(safe-area-inset-left));
 }
 
 /* SCRUM-206: shared service chrome and the campus workspace. Panels scroll independently. */
@@ -410,6 +425,55 @@
   padding: .75rem clamp(.75rem, 1.5%, 1.25rem);
   background: radial-gradient(ellipse at 50% 0, #f8f0ce, transparent 70%),
     repeating-linear-gradient(135deg, #dbe8d3 0 16px, #d5e3cd 16px 32px);
+}
+.guest-entry {
+  font-family: var(--font-pixel);
+  color: #261608;
+  padding-block: max(.75rem, env(safe-area-inset-top)) max(.75rem, env(safe-area-inset-bottom));
+  padding-inline: max(.75rem, env(safe-area-inset-left)) max(.75rem, env(safe-area-inset-right));
+}
+.guest-landing {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 1rem;
+  inline-size: 100%;
+  max-inline-size: 74rem;
+  margin-inline: auto;
+}
+.guest-hero { min-inline-size: 0; background: #fffbeb; }
+.guest-hero-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: .875rem;
+  padding: clamp(1rem, 5%, 2rem);
+}
+.guest-hero-art { display: block; inline-size: 100%; block-size: auto; aspect-ratio: 16 / 9; object-fit: cover; }
+.guest-actions { display: flex; flex-wrap: wrap; gap: .75rem; inline-size: 100%; }
+.guest-actions button { flex: 1 1 8rem; min-block-size: 3rem; padding: .5rem 1rem; font-weight: 900; cursor: pointer; }
+.guest-actions .plaque-green { background-color: #166534; }
+.guest-support { min-block-size: 44px; text-decoration: underline; text-underline-offset: .2em; cursor: pointer; }
+.guest-entry :focus-visible { outline: 2px solid #49331d; outline-offset: 3px; }
+.guest-step { display: grid; gap: .5rem; max-inline-size: 28rem; margin-inline: auto; --shell-offset: 5rem; }
+.guest-step > button { justify-self: start; }
+.guest-step > .phone-shell-full { border: 2px solid #49331d; }
+.guest-restore { display: grid; place-items: center; }
+.guest-rankings { min-inline-size: 0; padding: clamp(.75rem, 3%, 1.25rem); background: #fffbeb; }
+.guest-rankings h2 { font-size: 1.25rem; font-weight: 900; }
+.guest-rankings-caption { margin-block-start: .25rem; color: #65431f; font-size: .875rem; }
+.guest-rankings-status:not(:empty), .guest-rankings-error { margin-block-start: .625rem; }
+.guest-rankings-error { color: #792e17; }
+.guest-rankings-error button { margin-block-start: .5rem; }
+.guest-rankings table { inline-size: 100%; margin-block-start: .75rem; font-size: .875rem; }
+.guest-rankings :is(th, td) { overflow-wrap: anywhere; padding: .5rem .25rem; border-block-end: 1px solid #d5bd8d; text-align: start; }
+.guest-rankings thead { background: #f7e9be; }
+.guest-rankings tbody th { font-weight: 700; }
+.guest-rankings tr > :is(:first-child, :last-child) { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.guest-rankings tr > :last-child { text-align: end; }
+@media (min-width: 64rem) {
+  .guest-landing { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+  .guest-hero-art { aspect-ratio: 2 / 1; }
 }
 .game-width { inline-size: 100%; max-inline-size: 90rem; margin-inline: auto; }
 .game-top-bar {

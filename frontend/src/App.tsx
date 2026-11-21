@@ -6,7 +6,7 @@ import { LibraryBonusControl } from './components/LibraryBonusControl';
 import { PhoneShellVariantContext } from './components/PhoneShell';
 import { GameScreenLayout } from './components/GameScreenLayout';
 import { useDeviceMode, useGameLayout } from './hooks/useDeviceMode';
-import { useAuthSession } from './api/ApiProvider';
+import { ApiEntry } from './components/ApiEntry';
 import { GameWorkspace, WorkspaceShortcut } from './components/GameWorkspace';
 import { GameSchoolPanel, LazyApiChat, type SchoolPanelTab } from './components/GameSchoolPanel';
 import { GameCompetitionPanel, type CompetitionTab } from './components/GameCompetitionPanel';
@@ -27,7 +27,7 @@ import { useVisitSchool } from './hooks/useVisitSchool';
 import { VisitingScreen2Phone } from './components/VisitingScreen2Phone';
 import { OnboardingPhone } from './components/onboarding/OnboardingPhone';
 import { ApiSignupPhone } from './components/onboarding/ApiSignupPhone';
-import { ApiAccountNavLabel, ApiLoginPhone, ApiSessionWatcher } from './components/onboarding/ApiLoginPhone';
+import { ApiAccountNavLabel, ApiLoginPhone } from './components/onboarding/ApiLoginPhone';
 import { ApiPlayerSync } from './components/ApiPlayerSync';
 import { ApiSchoolScoreSync } from './components/ApiSchoolScoreSync';
 import { API_MODE, selectByMode } from './api/mode';
@@ -52,7 +52,7 @@ import { DEMO_SCHOOL_NAMES, type DemoSchoolNameId } from './data/demoSchoolNames
 import { PurchaseHistoryScreenPhone } from './components/PurchaseHistoryScreenPhone';
 import { CampusStatsSheet } from './components/CampusStatsSheet';
 import { useMySchoolRank } from './hooks/useMySchoolRank';
-import { useMockGame } from './hooks/useMockGame';
+import { MockGameProvider, useMockGame } from './hooks/useMockGame';
 import { useCampusClicks } from './hooks/useCampusClicks';
 import { useCampusAttacks } from './hooks/useCampusAttacks';
 import { AttackNotice } from './components/VisitAttackBar';
@@ -73,11 +73,6 @@ import { Smartphone, Gamepad2, Layers, Trophy, ShoppingBag, MapPin, Image as Ima
 const SERVICE_VIEW_MODES = new Set<string>(['gameplay', 'signup', 'login', 'single_map', 'visiting', 'ranking', 'shop', 'alliance_apply', 'current_alliance', 'battle_apply', 'battle_status', 'support_guest', 'my_info', 'purchase_history', 'member_support', 'admin']);
 /** Sign-up: the backend in API mode (SCRUM-151), the mock onboarding otherwise. */
 const SignupScreen = selectByMode<React.FC<{ onGoToCampus: () => void; onGoToLogin?: () => void }>>({ api: ApiSignupPhone, mock: OnboardingPhone });
-function useSignedIn() {
-  return useAuthSession().status === 'signed-in';
-}
-const useCanPlayWide = selectByMode({ api: useSignedIn, mock: () => true });
-
 type OtherView = AllianceScreen | 'ranking_screens' | 'our_guestbook_screens' | 'visiting_screens' | 'chat_screens' | 'single_map'
   | 'map_screens' | 'map_illustration' | 'ranking' | 'spritesheet' | 'onboarding' | 'signup' | 'login' | 'gameplay'
   | 'support_guest' | 'my_info' | 'purchase_history' | 'member_support' | 'admin';
@@ -86,7 +81,7 @@ type GameView = ({ mode: 'visiting'; schoolId: SchoolId }
   | { mode: OtherView; schoolId: null }) & { focusCenter?: boolean };
 
 function AppContent() {
-  const [view, setView] = useState<GameView>({ mode: 'gameplay', schoolId: null });
+  const [view, setView] = useState<GameView>({ mode: 'gameplay', schoolId: null, focusCenter: API_MODE === 'api' });
   const { mode: viewMode, schoolId: visitSchoolId } = view;
   const setViewMode = useCallback((mode: OtherView) => setView({ mode, schoolId: null }), []);
   const [isChatSheetOpen, setIsChatSheetOpen] = useState<boolean>(false);
@@ -103,12 +98,14 @@ function AppContent() {
   // T2 (plan §5): on a phone the service screens fill the viewport; demo comparisons keep their frames and scroll.
   const isPhone = useDeviceMode() === 'full';
   const gameLayout = useGameLayout();
-  const canPlayWide = useCanPlayWide();
   const isServiceView = SERVICE_VIEW_MODES.has(viewMode);
   const showMockSheet = isPhone || gameLayout === 'compact';
   const showPresentation = !showMockSheet && (gameLayout === 'legacy' || !isServiceView);
-  const showGameBar = isServiceView && gameLayout === 'wide';
-  const wideCampus = showGameBar && canPlayWide && (viewMode === 'gameplay' || viewMode === 'visiting' || viewMode === 'shop');
+  const showGameBar = isServiceView && (gameLayout === 'wide' || API_MODE === 'api');
+  const wideCampus = gameLayout === 'wide' && (viewMode === 'gameplay' || viewMode === 'visiting' || viewMode === 'shop');
+  let backdrop = 'min-h-screen p-2 sm:p-5 bg-[#f1f5f9]';
+  if (showMockSheet) backdrop = showGameBar ? 'device-full device-full-with-profile min-h-dvh bg-[#f1f5f9]' : 'device-full min-h-dvh bg-[#f1f5f9]';
+  else if (showGameBar) backdrop = 'game-backdrop';
   const visit = useVisitSchool(visitSchoolId);
   const shellVariant = showMockSheet && isServiceView ? 'full' : 'framed';
   const viewWrap = shellVariant === 'full' ? 'w-full flex flex-col' : 'w-full flex flex-col items-center py-2 animate-fadeIn';
@@ -199,18 +196,7 @@ function AppContent() {
     if (tab === 'campus') closeShop();
     else if (tab !== 'shop') navigateTab(tab);
   };
-  const endGameSession = () => {
-    setSchoolPanelTab('detail');
-    setCompetitionTab('map');
-    setMapContext(INITIAL_MAP_CONTEXT);
-    setIsChatSheetOpen(false);
-    setIsOurGuestbookSheetOpen(false);
-    setIsStatsSheetOpen(false);
-    setIsVisitGuestbookOpen(false);
-    setActiveTab('campus');
-    setViewMode('login');
-  };
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const [soundEnabled, setSoundEnabled] = useState(() => soundManager.enabled);
   // [시연] header school name length check. In API mode the admin test tool sets it (SCRUM-175).
   const [demoSchoolNameId, setDemoSchoolNameId] = useState<DemoSchoolNameId>('default');
   const schoolNameTest = { value: demoSchoolNameId, onChange: setDemoSchoolNameId };
@@ -590,17 +576,8 @@ function AppContent() {
     <ItemShopProvider value={itemShop}>
     <OtherClicksFeedContext.Provider value={campusClicks.otherClicksFeed}>
     <AllianceNavProvider value={allianceNav}>
-      <div className={`w-full flex flex-col items-center justify-start select-none text-[#261608] ${showMockSheet ? 'device-full min-h-dvh bg-[#f1f5f9]' : showGameBar ? 'game-backdrop' : 'min-h-screen p-2 sm:p-5 bg-[#f1f5f9]'}`}>
-        {API_MODE === 'api' && <ApiSessionWatcher onEnded={endGameSession} />}
-        {showGameBar && (
-          <GameProfileBar
-            mode={API_MODE === 'mock' ? 'mock' : canPlayWide ? 'member' : 'guest'}
-            nickname={playerInfo.nickname}
-            onCampus={goToMySchool}
-            onNavigate={setViewMode}
-            onLogout={endGameSession}
-          />
-        )}
+      <div className={`w-full flex flex-col items-center justify-start select-none text-[#261608] ${backdrop}`}>
+        {showGameBar && <GameProfileBar mode={API_MODE} nickname={playerInfo.nickname} onCampus={goToMySchool} onNavigate={setViewMode} />}
         {API_MODE === 'api' && <ApiPlayerSync getPendingScore={campusClicks.getPendingScore} />}
         {API_MODE === 'api' && <ApiSchoolScoreSync getPendingScore={campusClicks.getPendingScore} isSending={campusClicks.isSending} />}
         {API_MODE === 'api' && <ApiTestToolsNotice schoolName={schoolNameTest} />}
@@ -1044,7 +1021,7 @@ function AppContent() {
   );
 }
 
-export default function App() {
+function CampusGame() {
   return (
     <CampusAmbienceProvider>
       <AllianceProvider>
@@ -1054,4 +1031,12 @@ export default function App() {
       </AllianceProvider>
     </CampusAmbienceProvider>
   );
+}
+
+function ApiApp() {
+  return <ApiEntry><MockGameProvider><CampusGame /></MockGameProvider></ApiEntry>;
+}
+
+export default function App() {
+  return API_MODE === 'api' ? <ApiApp /> : <CampusGame />;
 }

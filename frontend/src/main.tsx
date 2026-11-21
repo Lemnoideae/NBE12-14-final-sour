@@ -2,6 +2,7 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { ApiProvider } from './api/ApiProvider';
+import { API_MODE } from './api/mode';
 import { MockGameProvider } from './hooks/useMockGame';
 
 const root = createRoot(document.getElementById('root')!);
@@ -14,5 +15,6 @@ if (shotLevel) {
 } else if (devParams?.has('apiCheck')) {
   void import('./components/ApiCheckScreen').then(({ ApiCheckScreen }) => root.render(<ApiProvider><ApiCheckScreen /></ApiProvider>));
 } else {
-  root.render(<ApiProvider><MockGameProvider><App /></MockGameProvider></ApiProvider>);
+  const app = API_MODE === 'api' ? <App /> : <MockGameProvider><App /></MockGameProvider>;
+  root.render(<ApiProvider>{app}</ApiProvider>);
 }

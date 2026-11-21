@@ -107,9 +107,8 @@ export const ApiLoginPhone: React.FC<ApiLoginPhoneProps> = ({ onGoToSignup, onGo
 };
 
 /**
- * Mounted once at the app root in API mode: restores the session when the app starts, and calls `onEnded` when a
- * signed-in session ends by itself (another device logged in, suspension, refresh expired), so the app can show
- * the login screen with the reason. A logout by choice does not call it. Signing out also drops the cached profile.
+ * Mounted once at the app root in API mode. Restores the session and reports involuntary endings to the app.
+ * All sign-outs clear private queries and the admin-only client overrides, even when the game is unmounted.
  */
 export const ApiSessionWatcher: React.FC<{ onEnded: () => void }> = ({ onEnded }) => {
   useSessionRestore();
@@ -123,6 +122,7 @@ export const ApiSessionWatcher: React.FC<{ onEnded: () => void }> = ({ onEnded }
     const syncPrivateQueries = () => {
       if (client.session.getState().status === 'signed-out') {
         wasSignedOut = true;
+        client.faults.reset();
         for (const queryKey of [userKeys.me, allianceKeys.all, itemKeys.histories, supportKeys.all, adminKeys.all]) {
           for (const query of queryClient.getQueryCache().findAll({ queryKey })) query.reset();
         }
