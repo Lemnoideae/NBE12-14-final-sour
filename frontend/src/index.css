@@ -519,25 +519,22 @@
   overflow: auto;
   overscroll-behavior: contain;
 }
-.game-workspace-side > h2 { padding-block-end: .5rem; border-block-end: 1px solid #bd9e65; font-weight: 800; }
-.game-school-summary { font-family: var(--font-pixel); font-size: .875rem; overflow-wrap: anywhere; }
+.game-workspace-side > h2 { padding-block-end: .5rem; border-block-end: 1px solid #bd9e65; font-weight: 900; }
+.game-school-summary { overflow-wrap: anywhere; }
 .game-school-summary > p { color: #65401f; }
-.game-school-summary h2 { font-size: 1.125rem; font-weight: 900; }
+.game-school-summary h2 { font-weight: 900; }
 .game-school-summary dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .125rem .5rem; margin-block-start: .25rem; }
 .game-school-summary dd { text-align: end; font-weight: 700; }
-.game-panel-tabs { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .25rem; }
-.game-panel-tabs .game-workspace-action { position: relative; font-family: var(--font-pixel); font-size: .8125rem; padding-inline: .375rem; }
-.game-panel-tabs [aria-selected='true'] { background: #fde9aa; }
-.game-panel-tabs [aria-selected='true']::before { content: ''; position: absolute; inset: auto 0 0; border-block-end: 3px solid #8b5327; }
-.game-panel-tabs :focus-visible, .game-panel-content:focus-visible { outline: 2px solid #49331d; outline-offset: 2px; }
+.game-panel-tabs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1.2fr); gap: .375rem; padding: .25rem; }
+.game-panel-content:focus-visible { outline: 2px solid #49331d; outline-offset: 2px; }
 .game-panel-content { flex: 1; min-block-size: 16rem; min-inline-size: 0; overflow: auto; overscroll-behavior: contain; border: 1px solid #bd9e65; }
 .game-panel-content [data-phone-shell='embedded'] { overflow: hidden; }
 .game-panel-ranking { padding: .375rem; }
-.game-map-preview { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .375rem; padding: .5rem; background: #fff4d1; border-block-end: 1px solid #bd9e65; font-family: var(--font-pixel); }
+.game-map-preview { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .375rem; padding: .5rem; background: #fff4d1; border-block-end: 1px solid #bd9e65; }
 .game-map-preview button { min-block-size: 2.75rem; }
 .game-map-preview button[aria-disabled='true'] { color: #5c4631; cursor: not-allowed; }
 .game-map-visit-notice { grid-column: 1 / -1; color: #672b14; }
-.game-map-list { padding: .5rem; background: #fdf5df; font-family: var(--font-pixel); font-size: .8125rem; }
+.game-map-list { padding: .5rem; background: #fdf5df; }
 .game-map-row { display: flex; align-items: center; gap: .5rem; width: 100%; min-height: 2.75rem; }
 .game-map-row[aria-pressed='true'] { background: #fde9aa; border-color: #8b5327; }
 .game-workspace-action {
@@ -552,6 +549,82 @@
 }
 .game-workspace-action:hover, .game-workspace-action[aria-current='page'] { background: #fde9aa; }
 .game-center-nav { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; margin-block-start: .5rem; }
+
+/* Use the resolved 3-column mode, not the viewport alone: the compact and demo views can be forced on PC. */
+[data-desktop-game] {
+  --desktop-text-small: .8125rem;
+  --desktop-text: .9375rem;
+  --desktop-title: 1.125rem;
+  font-family: var(--pixel-font);
+  font-size: var(--desktop-text);
+}
+@supports (font-size: 1cqi) {
+  [data-desktop-game] {
+    --desktop-text-small: clamp(.8125rem, .6875rem + .9cqi, .9375rem);
+    --desktop-text: clamp(.9375rem, .8125rem + .9cqi, 1.0625rem);
+    --desktop-title: clamp(1.125rem, .875rem + 1.8cqi, 1.375rem);
+  }
+  [data-desktop-game] :is(.game-top-bar, .game-workspace-side, .game-workspace-center) { container-type: inline-size; }
+}
+[data-desktop-game] :is(.font-press-start, .font-mono) { font-family: var(--pixel-font); font-variant-numeric: tabular-nums; }
+[data-desktop-game] :is(.game-workspace-side > h2, .game-school-summary h2, .game-campus-hud h1) { font-size: var(--desktop-title); line-height: 1.25; }
+[data-desktop-game] :is(.game-workspace-action, .game-school-summary, .game-map-list, .game-map-preview, .game-profile-actions, .game-brand, .game-campus-score) { font-size: var(--desktop-text); }
+[data-desktop-game] :is(.game-map-preview p, .game-brand-caption, .game-school-summary > p, .game-map-list small, [data-testid='map-search-box'] input, .game-campus-score-label) {
+  font-size: var(--desktop-text-small);
+  line-height: 1.45;
+}
+[data-desktop-game] [data-testid='map-search-box']:focus-within { outline: 2px solid #49331d; outline-offset: 2px; }
+
+/* Match the mobile plaques' depth without changing compact buttons or general-purpose form actions. */
+.game-nav-icon { display: none; }
+[data-desktop-game] .game-nav-control {
+  --nav-face: #824921;
+  --nav-text: #fff4cf;
+  --nav-light: #ba7944;
+  --nav-edge: #562d13;
+  --nav-depth: 3px;
+  --nav-ink: #261608;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .25em;
+  min-inline-size: 0;
+  min-block-size: max(44px, 2.75rem);
+  padding: .375rem .4375rem;
+  border: 2px solid var(--nav-ink);
+  background: var(--nav-face);
+  color: var(--nav-text);
+  box-shadow: inset 0 0 0 1px var(--nav-light), inset 0 0 0 3px var(--nav-edge), var(--nav-depth) var(--nav-depth) var(--nav-ink);
+  line-height: 1.25;
+}
+[data-desktop-game] .game-panel-tabs .game-nav-control {
+  gap: .1875em;
+  padding-inline: .1875rem;
+  font-size: var(--desktop-text-small);
+}
+[data-desktop-game] .game-nav-icon { display: block; flex: none; inline-size: 1em; block-size: 1em; }
+[data-desktop-game] .game-nav-label { min-inline-size: 0; word-break: keep-all; overflow-wrap: anywhere; }
+[data-desktop-game] .game-nav-control:is([aria-current='page'], [aria-selected='true']) {
+  --nav-face: #facc15;
+  --nav-text: #261608;
+  --nav-light: #fff1a8;
+  --nav-edge: #9d6309;
+}
+[data-desktop-game] .game-nav-control:where(:not(:disabled, [aria-disabled='true'])):hover { filter: brightness(1.1); }
+[data-desktop-game] .game-nav-control:where(:not(:disabled, [aria-disabled='true'])):active { --nav-depth: 1px; }
+[data-desktop-game] .game-nav-control:focus-visible { outline: 2px solid #49331d; outline-offset: 2px; z-index: 1; }
+[data-desktop-game] .game-nav-control:is(:disabled, [aria-disabled='true']) {
+  --nav-face: #f0dfb9;
+  --nav-text: #5c4631;
+  --nav-light: #fff4d1;
+  --nav-edge: #d1b37c;
+  --nav-depth: 1px;
+  color: var(--nav-text);
+  cursor: not-allowed;
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-desktop-game] .game-nav-control:where(:not(:disabled, [aria-disabled='true'])):active { transform: translate(2px, 2px); }
+}
 
 /* M6: keep portrait mock frames scrollable on the page, but fit service modals to
    the actual viewport (including short landscape windows). No orientation lock. */

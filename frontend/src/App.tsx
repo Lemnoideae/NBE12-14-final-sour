@@ -574,7 +574,7 @@ function AppContent() {
     <ItemShopProvider value={itemShop}>
     <OtherClicksFeedContext.Provider value={campusClicks.otherClicksFeed}>
     <AllianceNavProvider value={allianceNav}>
-      <div className={`w-full flex flex-col items-center justify-start select-none text-[#261608] ${backdrop}`}>
+      <div data-desktop-game={wideCampus ? '' : undefined} className={`w-full flex flex-col items-center justify-start select-none text-[#261608] ${backdrop}`}>
         <GameProfileBar mode={API_MODE} nickname={playerInfo.nickname} onCampus={goToMySchool} onNavigate={setViewMode}
           tools={MOCK_TOOLS && <button type="button" aria-haspopup="dialog" className="game-workspace-action shrink-0"
             onClick={(event) => { event.currentTarget.focus(); setIsMockMenuOpen(true); soundManager.playTabSound(); }}>테스트 도구</button>} />
@@ -845,8 +845,8 @@ function AppContent() {
               </>}
               nav={wideCampus ? (
                 <nav aria-label="캠퍼스 메뉴" className="game-center-nav">
-                  <WorkspaceShortcut onClick={() => setActiveTab('campus')}>내 캠퍼스</WorkspaceShortcut>
-                  <WorkspaceShortcut onClick={openShop}>상점</WorkspaceShortcut>
+                  <WorkspaceShortcut icon="campus" current onClick={() => setActiveTab('campus')}>내 캠퍼스</WorkspaceShortcut>
+                  <WorkspaceShortcut icon="shop" onClick={openShop}>상점</WorkspaceShortcut>
                 </nav>
               ) : (
                 <BottomNav

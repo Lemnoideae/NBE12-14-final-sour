@@ -7,9 +7,9 @@ import { MockLoadGate } from './MockLoadGate';
 import { RankingsView } from './RankingsView';
 
 const tabs = [
-  { id: 'map', label: '지도' },
-  { id: 'rankings', label: '순위' },
-  { id: 'alliance', label: '연합 대결' },
+  { id: 'map', label: '지도', icon: 'map' },
+  { id: 'rankings', label: '순위', icon: 'rankings' },
+  { id: 'alliance', label: '연합 대결', icon: 'alliance' },
 ] as const;
 export type CompetitionTab = (typeof tabs)[number]['id'];
 

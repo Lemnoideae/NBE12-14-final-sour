@@ -18,9 +18,9 @@ import { VisitSchoolInfoSheet, formatScore, formatVisitRank } from './VisitingPa
 export const LazyApiChat = lazy(() => import('./ApiChatBottomSheet').then((module) => ({ default: module.ApiChatBottomSheet })));
 
 const tabs = [
-  { id: 'detail', label: '상세' },
-  { id: 'chat', label: '우리 학교 채팅' },
-  { id: 'guestbook', label: '방명록' },
+  { id: 'detail', label: '상세', icon: 'detail' },
+  { id: 'chat', label: '우리 학교 채팅', icon: 'chat' },
+  { id: 'guestbook', label: '방명록', icon: 'guestbook' },
 ] as const;
 export type SchoolPanelTab = (typeof tabs)[number]['id'];
 

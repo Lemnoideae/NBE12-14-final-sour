@@ -57,7 +57,7 @@ export function GameProfileBar({ mode, nickname, onNavigate, onCampus, tools }: 
     <header className="game-top-bar game-width">
       <button type="button" onClick={onCampus} className="game-brand" aria-label="대대대 내 캠퍼스">
         <span className="game-wordmark" aria-hidden="true">대</span>
-        <span className="font-black">대대대 <span className="hidden sm:inline text-xs text-[#775430]">캠퍼스 대항전</span></span>
+        <span className="font-black">대대대 <span className="game-brand-caption hidden sm:inline text-xs text-[#775430]">캠퍼스 대항전</span></span>
       </button>
       {(tools || mode === 'api') && <div className="ms-auto flex min-w-0 items-center gap-1 sm:gap-2">
         {tools}
