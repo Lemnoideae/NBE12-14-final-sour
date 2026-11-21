@@ -575,6 +575,18 @@
 }
 [data-desktop-game] [data-testid='map-search-box']:focus-within { outline: 2px solid #49331d; outline-offset: 2px; }
 
+/* The map itself keeps its sea background; only the workspace shell behind short lists changes. */
+[data-desktop-game] .game-map-frame[data-phone-shell='embedded'] { background: #fdf5df; }
+[data-desktop-game] .game-map-regions {
+  flex-wrap: wrap;
+  flex-wrap: balance;
+  overflow: visible;
+  margin-block-start: 0;
+  /* Keep the plaque's 3px shadow and the 4px focus ring inside the scroll body. */
+  padding: .375rem;
+}
+[data-desktop-game] .game-map-regions button:focus-visible { outline: 2px solid #49331d; outline-offset: 2px; }
+
 /* Match the mobile plaques' depth without changing compact buttons or general-purpose form actions. */
 .game-nav-icon { display: none; }
 [data-desktop-game] .game-nav-control {

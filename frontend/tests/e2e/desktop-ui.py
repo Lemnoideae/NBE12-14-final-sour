@@ -122,6 +122,96 @@ def shop_metrics(page, path):
             'aligned': abs(left_delta) <= TOLERANCE and (right_delta is None or abs(right_delta) <= TOLERANCE)}
 
 
+REGIONS = ['전체', '수도권', '강원', '충청', '영남', '호남', '제주']
+SEA = 'rgb(56, 189, 248)'
+
+
+def chip_metrics(regions):
+    metrics = regions.evaluate('''group => {
+        const box = group.getBoundingClientRect();
+        const right = box.left + group.clientWidth;
+        const buttons = [...group.querySelectorAll('button')].map(button => {
+            const r = button.getBoundingClientRect();
+            return {label: button.textContent.trim(), x: r.left, y: r.top,
+                clearance: Math.min(r.left - box.left, right - r.right, r.top - box.top, box.bottom - r.bottom)};
+        });
+        return {width: group.clientWidth, scrollWidth: group.scrollWidth, scrollLeft: group.scrollLeft,
+            rows: new Set(buttons.map(b => b.y)).size, buttons};
+    }''')
+    assert [chip['label'] for chip in metrics['buttons']] == REGIONS
+    metrics['allVisible'] = metrics['width'] == metrics['scrollWidth'] and metrics['scrollLeft'] == 0 \
+        and all(chip['clearance'] >= 4 - 0.1 for chip in metrics['buttons'])
+    return metrics
+
+
+def map_background(panel):
+    metrics = panel.get_by_role('region', name='학교 목록').evaluate('''list => {
+        const body = list.closest('[data-testid="map-scroll-body"]');
+        const area = body.querySelector('[data-testid="map-area"]');
+        const bodyRect = body.getBoundingClientRect();
+        const end = Math.max(list.getBoundingClientRect().bottom, area.getBoundingClientRect().bottom);
+        const gap = Math.max(0, Math.min(bodyRect.bottom, innerHeight) - end);
+        const visibleBacking = nodes => nodes.map(node => getComputedStyle(node).backgroundColor)
+            .find(color => color !== 'rgba(0, 0, 0, 0)') ?? null;
+        return {height: gap, listBeforeMap: Boolean(list.compareDocumentPosition(area) & Node.DOCUMENT_POSITION_FOLLOWING),
+            backing: visibleBacking([body, body.closest('[data-phone-shell]')]),
+            sea: getComputedStyle(area).backgroundColor,
+            color: gap > 1 ? visibleBacking(document.elementsFromPoint(bodyRect.left + 8, end + Math.min(8, gap / 2))) : null};
+    }''')
+    metrics['matchesPanel'] = metrics['backing'] == CREAM and metrics['sea'] == SEA \
+        and (metrics['height'] <= TOLERANCE or metrics['color'] == CREAM)
+    return metrics
+
+
+def map_region_flow(page, panel):
+    regions = panel.get_by_role('group', name='권역 선택')
+    area = panel.get_by_test_id('map-area')
+    schools = panel.get_by_role('region', name='학교 목록')
+    regions.get_by_role('button', name='전체', exact=True).focus()
+    for label in REGIONS[1:]:
+        page.keyboard.press('Tab')
+        expect(regions.get_by_role('button', name=label, exact=True)).to_be_focused()
+    jeju = regions.get_by_role('button', name='제주', exact=True)
+    ring = jeju.evaluate('''button => {
+        const style = getComputedStyle(button);
+        return {style: style.outlineStyle, width: parseFloat(style.outlineWidth), offset: parseFloat(style.outlineOffset)};
+    }''')
+    focused_chips = chip_metrics(regions)
+    page.keyboard.press('Enter')
+    expect(jeju).to_have_attribute('aria-pressed', 'true')
+    expect(area).to_have_attribute('data-region', '제주')
+    expect(schools.get_by_role('button')).to_have_count(2)
+    # Fractional browser zoom can round an authored 2px outline to the nearest device pixel.
+    return {'focusRing': ring, 'focusFits': focused_chips['allVisible'],
+            'focusVisible': ring['style'] == 'solid' and ring['width'] >= 1.5, 'jeju': map_background(panel)}
+
+
+def map_search_flow(panel, path):
+    regions = panel.get_by_role('group', name='권역 선택')
+    area = panel.get_by_test_id('map-area')
+    schools = panel.get_by_role('region', name='학교 목록')
+    search = panel.get_by_role('textbox', name='학교 검색')
+    regions.get_by_role('button', name='강원', exact=True).click()
+    expect(area).to_have_attribute('data-region', '강원')
+    gangwon = map_background(panel)
+    regions.get_by_role('button', name='충청', exact=True).click()
+    expect(area).to_have_attribute('data-region', '충청')
+    expect(regions.get_by_role('button', name='충청', exact=True)).to_have_attribute('aria-pressed', 'true')
+    chungcheong = chip_metrics(regions)
+    search.fill('없는학교-SCRUM218')
+    expect(schools.get_by_role('status')).to_contain_text('맞는 학교가 없습니다')
+    empty = map_background(panel)
+    snapshot(panel.page, path)
+    panel.get_by_role('button', name='검색어 지우기').click()
+    expect(search).to_have_value('')
+    expect(schools.get_by_role('button', name='KAIST')).to_be_visible()
+    restored = map_background(panel)
+    passed = (chungcheong['allVisible'] and gangwon['matchesPanel'] and gangwon['height'] > TOLERANCE
+              and empty['matchesPanel'] and empty['height'] > TOLERANCE and empty['listBeforeMap']
+              and restored['matchesPanel'] and not restored['listBeforeMap'])
+    return {'gangwon': gangwon, 'chungcheongFits': chungcheong['allVisible'], 'empty': empty, 'restored': restored, 'passed': passed}
+
+
 def mock_case(browser, args, width, height, dpr):
     viewport = {'width': width, 'height': height}
     name = f'{width}x{height}-dpr{dpr}'
@@ -148,16 +238,7 @@ def mock_case(browser, args, width, height, dpr):
             and any(face['status'] == 'loaded' for face in fonts['faces'])
         menus = menu_metrics(page.locator('.game-panel-tabs button, .game-center-nav button'))
         assert len(menus) == 8
-        chips = regions.evaluate('''e => {
-            const left = e.getBoundingClientRect().left + e.clientLeft;
-            const right = left + e.clientWidth;
-            const clipped = [...e.querySelectorAll('button')].map(button => {
-                const r = button.getBoundingClientRect();
-                return {label: button.textContent.trim(), left: Math.max(0, left - r.left), right: Math.max(0, r.right - right)};
-            });
-            return {width: e.clientWidth, scrollWidth: e.scrollWidth, scrollLeft: e.scrollLeft, clipped};
-        }''')
-        chips['allVisible'] = all(max(chip['left'], chip['right']) <= TOLERANCE for chip in chips['clipped'])
+        chips = chip_metrics(regions)
         area = panel.get_by_test_id('map-area')
         top3 = area.locator('[data-top-rank]').first
         expect(top3).to_be_visible()
@@ -171,29 +252,9 @@ def mock_case(browser, args, width, height, dpr):
                 scoreSize: parseFloat(getComputedStyle(rank).fontSize) * scale};
         }''')
         snapshot(page, args.out / f'{name}-national.png')
-        jeju = regions.get_by_role('button', name='제주', exact=True)
-        jeju.click()
-        expect(jeju).to_have_attribute('aria-pressed', 'true')
-        expect(area).to_have_attribute('data-region', '제주')
-        schools = panel.get_by_role('region', name='학교 목록')
-        expect(schools.get_by_role('button')).to_have_count(2)
-        schools.scroll_into_view_if_needed()
-        gap = schools.evaluate('''e => {
-            const rect = e.getBoundingClientRect();
-            const body = e.closest('[data-testid="map-scroll-body"]');
-            const bottom = Math.min(body.getBoundingClientRect().bottom, innerHeight);
-            const height = Math.max(0, bottom - rect.bottom);
-            let color = null;
-            if (height > 1) {
-                const x = rect.left + 8;
-                const y = rect.bottom + Math.min(8, height / 2);
-                color = document.elementsFromPoint(x, y).map(node => getComputedStyle(node).backgroundColor)
-                    .find(color => color !== 'rgba(0, 0, 0, 0)') ?? null;
-            }
-            return {height, color};
-        }''')
-        gap['matchesPanel'] = gap['height'] <= TOLERANCE or gap['color'] == CREAM
+        region_flow = map_region_flow(page, panel)
         snapshot(page, args.out / f'{name}-jeju.png')
+        search_flow = map_search_flow(panel, args.out / f'{name}-empty-search.png') if (width, height) == (2560, 1440) else None
         shop = None
         if (width, height, dpr) == (1440, 900, 1):
             shop = shop_metrics(page, args.out / f'{name}-shop-mock.png')
@@ -201,7 +262,7 @@ def mock_case(browser, args, width, height, dpr):
             regions.get_by_role('button', name='전체', exact=True).click()
             menus += mock_menu_flow(page, panel, args.out / f'{name}-visit-shop.png')
         return {'name': name, 'viewport': viewport, 'dpr': dpr, 'fonts': fonts, 'chips': chips,
-                'top3': marker, 'jejuGap': gap, 'mockShop': shop, 'menus': menus}
+                'top3': marker, 'regionFlow': region_flow, 'searchFlow': search_flow, 'mockShop': shop, 'menus': menus}
     finally:
         page.close()
 
@@ -223,6 +284,18 @@ def compact_scope(browser, url):
                 label.selectNode(e.lastElementChild);
                 return icon.height > 0 && icon.bottom <= label.getBoundingClientRect().top + 1;
             }''')
+            nav.get_by_role('button', name='지도', exact=True).click()
+            page.get_by_role('button', name='전국 지도', exact=True).click()
+            area = page.get_by_test_id('map-area')
+            regions = page.get_by_role('group', name='권역 선택')
+            expect(regions.get_by_role('button')).to_have_count(7)
+            assert regions.evaluate('''group => {
+                const style = getComputedStyle(group);
+                return style.flexWrap === 'nowrap' && style.overflowX === 'auto';
+            }''')
+            assert area.evaluate("e => getComputedStyle(e.closest('[data-phone-shell]')).backgroundColor") == SEA
+            regions.get_by_role('button', name='제주', exact=True).click()
+            expect(area).to_have_attribute('data-region', '제주')
         finally:
             page.close()
 
@@ -314,7 +387,7 @@ def main():
         browser = playwright.chromium.launch(executable_path=args.chromium)
         cases = [mock_case(browser, args, *spec) for spec in VIEWPORTS]
         compact_scope(browser, args.mock_url)
-        print('PASS 1-column and framed modes retain bottom menu with icon above label')
+        print('PASS 1-column and framed modes retain bottom menu and single-row scrolling map chips')
         api = api_shelf(browser, args) if args.api_url else None
         version = browser.version
         browser.close()
@@ -326,14 +399,18 @@ def main():
             ('raised menus fit in at most two lines with icon on left',
              all(m['fits'] and m['iconLeft'] and m['raised'] and m['height'] >= 44 and 13 <= m['fontSize'] <= 17
                  for m in case['menus'])),
-            ('all seven region chips fully visible', case['chips']['allVisible']),
+            ('all seven region chips and focus ring fit without horizontal scroll',
+             case['chips']['allVisible'] and case['regionFlow']['focusVisible'] and case['regionFlow']['focusFits']),
             ('TOP 3 logo ≥32 CSS px and name/score ≥12 CSS px after scale',
              case['top3']['logoWidth'] >= 32 - TOLERANCE
              and min(case['top3']['nameSize'], case['top3']['scoreSize']) >= 12 - TOLERANCE),
-            ('Jeju list blank area cream or absent', case['jejuGap']['matchesPanel']),
+            ('Jeju panel backing cream and map area sea blue', case['regionFlow']['jeju']['matchesPanel']),
         ):
             if not passed:
                 failures.append(f"{case['name']}: {key}")
+        search = case['searchFlow']
+        if search and not search['passed']:
+            failures.append(f"{case['name']}: short/empty map lists and search order")
         if case['mockShop'] and not case['mockShop']['aligned']:
             failures.append(f"{case['name']}: mock shelf outer edges aligned")
     if api and not api['aligned']:
