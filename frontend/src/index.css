@@ -575,6 +575,135 @@
 }
 [data-desktop-game] [data-testid='map-search-box']:focus-within { outline: 2px solid #49331d; outline-offset: 2px; }
 
+/* SCRUM-224: PC my-campus corner scaling — proportional to frame width with height-aware caps;
+   interactive buttons stand out clearly above the calmer top info labels. Visited/mobile/demo stay unchanged. */
+[data-desktop-game] [data-campus-stage][data-my-campus] {
+  --campus-label-size: .75rem;
+  --campus-btn-title: .9375rem;
+  --campus-btn-meta: .75rem;
+  --campus-board-w: 4rem;
+  --campus-board-h: 2.75rem;
+}
+@supports (font-size: 1cqb) {
+  [data-desktop-game] [data-campus-stage][data-my-campus] {
+    container-type: size;
+    --campus-label-size: clamp(.6875rem, min(.5rem + .7cqi, 2.8cqb), .875rem);
+    --campus-btn-title: clamp(.875rem, min(.625rem + 1.1cqi, 3.8cqb), 1.125rem);
+    --campus-btn-meta: clamp(.75rem, min(.5625rem + .85cqi, 3.2cqb), .9375rem);
+    --campus-board-w: clamp(3.75rem, min(10.5cqi, 15cqb), 5.25rem);
+    --campus-board-h: clamp(2.625rem, min(7.3cqi, 10.5cqb), 3.625rem);
+  }
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-label {
+  top: .75rem;
+  font-size: var(--campus-label-size);
+  line-height: 1.25;
+  padding: .25rem .5rem;
+  gap: .375rem;
+  max-inline-size: calc(50% - 1.25rem);
+  box-shadow: 2px 2px 0 #261608;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-label-level { left: .75rem; }
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-label-feature { right: .75rem; }
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-label-dot { width: .5rem; height: .5rem; }
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-label-text {
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-sign-btn {
+  bottom: .75rem;
+  right: .75rem;
+  min-inline-size: clamp(6.25rem, 18cqi, 9rem);
+  min-block-size: clamp(3.5rem, min(11cqi, 16cqb), 4.75rem);
+  padding: clamp(.375rem, 1.2cqb, .625rem) clamp(.625rem, 1.5cqi, .9375rem);
+  gap: .25rem;
+  box-shadow: 3px 3px 0 #261608;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-sign-btn:focus-visible,
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-guestbook-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-sign-title {
+  font-size: var(--campus-btn-title);
+  gap: .3125rem;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-sign-title svg {
+  width: 1.05em;
+  height: 1.05em;
+  flex: none;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-sign-value-wrap {
+  padding: .125rem .375rem;
+  gap: .3125rem;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-sign-dot { width: .4375rem; height: .4375rem; }
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-sign-value {
+  font-size: var(--campus-btn-meta);
+  font-weight: 700;
+  padding-block: .0625rem;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-guestbook-btn {
+  bottom: .75rem;
+  left: .75rem;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-guestbook-tags {
+  gap: .25rem;
+  margin-bottom: .25rem;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-guestbook-tag {
+  font-size: var(--campus-btn-title);
+  line-height: 1.15;
+  padding: .125rem .4375rem;
+  border-width: 2px;
+  box-shadow: 2px 2px 0 #261608;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-guestbook-badge {
+  font-size: var(--campus-btn-meta);
+  line-height: 1.15;
+  padding: .125rem .375rem;
+  border-width: 2px;
+  box-shadow: 2px 2px 0 #261608;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-guestbook-sparkle {
+  width: clamp(1rem, 2.2cqi, 1.375rem);
+  height: clamp(1rem, 2.2cqi, 1.375rem);
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-guestbook-board {
+  width: var(--campus-board-w);
+  height: var(--campus-board-h);
+  padding: .1875rem;
+  box-shadow: 3px 3px 0 #261608;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-guestbook-note {
+  width: 30%;
+  height: 58%;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-guestbook-legs { padding-inline: 18%; }
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-guestbook-leg {
+  width: .375rem;
+  height: clamp(.625rem, 1.8cqb, .875rem);
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-hand-label {
+  font-size: clamp(.75rem, .625rem + .6cqi, .875rem);
+  padding: .125rem .4375rem;
+  bottom: -1.375rem;
+}
+
+/* Detailed stats clicker breakdown: compact single line on mobile/demo, one item per line with bold numbers on PC. */
+.game-clicker-details { display: flex; flex-wrap: wrap; align-items: baseline; }
+.game-clicker-stat-num { font-weight: inherit; }
+[data-desktop-game] .game-clicker-details {
+  flex-direction: column;
+  gap: .1875rem;
+  font-size: var(--desktop-text-small);
+  line-height: 1.4;
+}
+[data-desktop-game] .game-clicker-sep { display: none; }
+[data-desktop-game] .game-clicker-stat { color: #261608; }
+[data-desktop-game] .game-clicker-stat-num { font-weight: 900; font-variant-numeric: tabular-nums; }
+[data-desktop-game] .game-clicker-note { color: #65401f; }
+
 /* The map itself keeps its sea background; only the workspace shell behind short lists changes. */
 [data-desktop-game] .game-map-frame[data-phone-shell='embedded'] { background: #fdf5df; }
 [data-desktop-game] .game-map-regions {

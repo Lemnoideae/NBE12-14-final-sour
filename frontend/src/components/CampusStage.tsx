@@ -76,13 +76,13 @@ export function CampusStage({
         <CampusAmbience level={level} />
 
         {/* Chunky RPG Building Labels */}
-        <div data-testid="campus-level-label" className="absolute z-20 top-2.5 left-2.5 bg-[#fdf5df] text-[#261608] border-2 border-[#261608] text-[9px] font-pixel font-bold px-1.5 py-0.5 shadow-[1px_1px_0px_#261608] pointer-events-none flex items-center gap-1">
-          <span className="w-1.5 h-1.5 bg-[#facc15] border border-[#261608] inline-block" />
-          Lv.{stage.level} · {stage.name}
+        <div data-testid="campus-level-label" className="game-campus-label game-campus-label-level absolute z-20 top-2.5 left-2.5 bg-[#fdf5df] text-[#261608] border-2 border-[#261608] text-[9px] font-pixel font-bold px-1.5 py-0.5 shadow-[1px_1px_0px_#261608] pointer-events-none flex items-center gap-1">
+          <span className="game-campus-label-dot w-1.5 h-1.5 bg-[#facc15] border border-[#261608] inline-block shrink-0" />
+          <span className="game-campus-label-text">Lv.{stage.level} · {stage.name}</span>
         </div>
-        <div className="absolute z-20 top-2.5 right-2.5 bg-[#fdf5df] text-[#261608] border-2 border-[#261608] text-[9px] font-pixel font-bold px-1.5 py-0.5 shadow-[1px_1px_0px_#261608] pointer-events-none flex items-center gap-1">
-          <span className="w-1.5 h-1.5 bg-[#4ade80] border border-[#261608] inline-block" />
-          {stage.features[0]}
+        <div className="game-campus-label game-campus-label-feature absolute z-20 top-2.5 right-2.5 bg-[#fdf5df] text-[#261608] border-2 border-[#261608] text-[9px] font-pixel font-bold px-1.5 py-0.5 shadow-[1px_1px_0px_#261608] pointer-events-none flex items-center gap-1">
+          <span className="game-campus-label-dot w-1.5 h-1.5 bg-[#4ade80] border border-[#261608] inline-block shrink-0" />
+          <span className="game-campus-label-text">{stage.features[0]}</span>
         </div>
 
         {children}
@@ -119,17 +119,17 @@ export function CampusSignButton({ icon, title, value, valueTestId, ariaLabel, t
       type="button"
       onClick={(e) => frameButtonClick(e, onOpen)}
       data-testid={testId}
-      className="absolute bottom-2 right-2.5 z-25 min-w-11 min-h-11 cursor-pointer select-none bg-[#8b5327] text-[#fdf5df] border-2 border-[#261608] shadow-[2px_2px_0px_#261608] px-1.5 py-1 flex flex-col items-center justify-center gap-0.5 hover:brightness-110"
+      className="game-campus-sign-btn absolute bottom-2 right-2.5 z-25 min-w-11 min-h-11 cursor-pointer select-none bg-[#8b5327] text-[#fdf5df] border-2 border-[#261608] shadow-[2px_2px_0px_#261608] px-1.5 py-1 flex flex-col items-center justify-center gap-0.5 hover:brightness-110"
       title={tooltip}
       aria-label={ariaLabel}
     >
-      <span className="flex items-center gap-1 font-pixel text-[10px] font-bold leading-none whitespace-nowrap">
+      <span className="game-campus-sign-title flex items-center gap-1 font-pixel text-[10px] font-bold leading-none whitespace-nowrap">
         {icon}
         {title}
       </span>
-      <span className="flex items-center gap-1 bg-[#fdf5df] text-[#261608] border border-[#261608] px-1 leading-none">
-        <span className="w-1.5 h-1.5 bg-[#facc15] border border-[#261608] inline-block" aria-hidden="true" />
-        <span data-testid={valueTestId} className="font-press-start text-[8px] py-0.5 whitespace-nowrap">{value}</span>
+      <span className="game-campus-sign-value-wrap flex items-center gap-1 bg-[#fdf5df] text-[#261608] border border-[#261608] px-1 leading-none">
+        <span className="game-campus-sign-dot w-1.5 h-1.5 bg-[#facc15] border border-[#261608] inline-block shrink-0" aria-hidden="true" />
+        <span data-testid={valueTestId} className="game-campus-sign-value font-press-start text-[8px] py-0.5 whitespace-nowrap">{value}</span>
       </span>
     </button>
   );
@@ -148,17 +148,17 @@ export function GuestbookBoardButton({ ariaLabel, badge, onOpen }: GuestbookBoar
     <button
       type="button"
       onClick={(e) => frameButtonClick(e, onOpen)}
-      className="absolute bottom-2 left-2.5 z-25 cursor-pointer group flex flex-col items-center select-none"
+      className="game-campus-guestbook-btn absolute bottom-2 left-2.5 z-25 cursor-pointer group flex flex-col items-center select-none"
       title={ariaLabel}
       aria-label={ariaLabel}
     >
       {/* Above it: Label tag "방명록" and red badge */}
-      <div className="flex items-center gap-1 mb-0.5 animate-bounce" style={{ animationDuration: '2.5s' }}>
-        <div className="bg-[#fdf5df] text-[#261608] border border-[#261608] text-[8px] font-pixel font-black px-1 py-0.2 shadow-[1px_1px_0px_#261608] flex items-center gap-0.5">
+      <div className="game-campus-guestbook-tags flex items-center gap-1 mb-0.5 animate-bounce" style={{ animationDuration: '2.5s' }}>
+        <div className="game-campus-guestbook-tag bg-[#fdf5df] text-[#261608] border border-[#261608] text-[8px] font-pixel font-black px-1 py-0.2 shadow-[1px_1px_0px_#261608] flex items-center gap-0.5 whitespace-nowrap">
           <span>방명록</span>
         </div>
         {badge && (
-          <div className="bg-[#e11d48] text-white border border-[#261608] text-[7px] font-press-start font-black px-1 py-0.2 shadow-[1px_1px_0px_#261608]">
+          <div className="game-campus-guestbook-badge bg-[#e11d48] text-white border border-[#261608] text-[7px] font-press-start font-black px-1 py-0.2 shadow-[1px_1px_0px_#261608] whitespace-nowrap">
             {badge}
           </div>
         )}
@@ -167,20 +167,20 @@ export function GuestbookBoardButton({ ariaLabel, badge, onOpen }: GuestbookBoar
       {/* Wooden Board Object with pinned notes and subtle sparkle */}
       <div className="relative">
         <div className="absolute -top-1.5 -right-1.5 z-10 pointer-events-none animate-pulse">
-          <Sparkles className="w-3 h-3 text-[#facc15]" />
+          <Sparkles className="game-campus-guestbook-sparkle w-3 h-3 text-[#facc15]" />
         </div>
 
         {/* Wooden frame & cork board */}
-        <div className="w-10 h-7 bg-[#8b5327] border-2 border-[#261608] shadow-[2px_2px_0px_#261608] p-0.5 flex flex-col justify-between group-hover:brightness-110 transition-all">
+        <div className="game-campus-guestbook-board w-10 h-7 bg-[#8b5327] border-2 border-[#261608] shadow-[2px_2px_0px_#261608] p-0.5 flex flex-col justify-between group-hover:brightness-110 transition-all">
           <div className="w-full h-full bg-[#d79b5c] border border-[#5a3012] p-0.5 relative flex items-center justify-around">
             {/* Pinned note 1 */}
-            <div className="w-3 h-3.5 bg-[#fffdf5] border border-[#261608] shadow-[1px_1px_0px_#261608] -rotate-6 relative">
+            <div className="game-campus-guestbook-note w-3 h-3.5 bg-[#fffdf5] border border-[#261608] shadow-[1px_1px_0px_#261608] -rotate-6 relative">
               <span className="w-1 h-1 bg-[#e11d48] rounded-full absolute -top-0.5 left-1/2 -translate-x-1/2" />
               <div className="w-1.5 h-0.5 bg-[#8b5327] mt-1 mx-auto" />
               <div className="w-1.5 h-0.5 bg-[#8b5327] mt-0.5 mx-auto" />
             </div>
             {/* Pinned note 2 */}
-            <div className="w-3 h-3.5 bg-[#fef08a] border border-[#261608] shadow-[1px_1px_0px_#261608] rotate-3 relative">
+            <div className="game-campus-guestbook-note w-3 h-3.5 bg-[#fef08a] border border-[#261608] shadow-[1px_1px_0px_#261608] rotate-3 relative">
               <span className="w-1 h-1 bg-[#0284c7] rounded-full absolute -top-0.5 left-1/2 -translate-x-1/2" />
               <div className="w-1.5 h-0.5 bg-[#8b5327] mt-1 mx-auto" />
               <div className="w-1.5 h-0.5 bg-[#8b5327] mt-0.5 mx-auto" />
@@ -189,9 +189,9 @@ export function GuestbookBoardButton({ ariaLabel, badge, onOpen }: GuestbookBoar
         </div>
 
         {/* Wooden stilts / legs standing in the campus ground */}
-        <div className="flex justify-between px-1.5 w-full">
-          <div className="w-1 h-2 bg-[#613615] border-x border-b border-[#261608]" />
-          <div className="w-1 h-2 bg-[#613615] border-x border-b border-[#261608]" />
+        <div className="game-campus-guestbook-legs flex justify-between px-1.5 w-full">
+          <div className="game-campus-guestbook-leg w-1 h-2 bg-[#613615] border-x border-b border-[#261608]" />
+          <div className="game-campus-guestbook-leg w-1 h-2 bg-[#613615] border-x border-b border-[#261608]" />
         </div>
       </div>
     </button>
