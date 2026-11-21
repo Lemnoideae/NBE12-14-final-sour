@@ -177,11 +177,12 @@ const VisitTopList: React.FC<{ label: string; empty: string; rows: Array<{ key: 
 interface VisitNotFoundPhoneProps {
   schoolId: SchoolId | null;
   onBackToMap: () => void;
+  embedded?: boolean;
 }
 
 /** A5: an unknown school ID ends in a notice and a way back to the map. */
-export const VisitNotFoundPhone: React.FC<VisitNotFoundPhoneProps> = ({ schoolId, onBackToMap }) => (
-  <PhoneShell chrome={false} className="items-center justify-center gap-3 p-6">
+export const VisitNotFoundPhone: React.FC<VisitNotFoundPhoneProps> = ({ schoolId, onBackToMap, embedded }) => (
+  <PhoneShell chrome={false} embedded={embedded} className="items-center justify-center gap-3 p-6">
     <div role="alert" className="rpg-box p-3 bg-[#fffbeb] border-3 border-[#261608] shadow-[3px_3px_0px_#261608] flex flex-col items-center gap-1 text-center">
       <p className="font-pixel text-sm font-black text-[#261608]">학교를 찾을 수 없습니다</p>
       <p className="font-pixel text-[10px] text-[#8b5327]">요청한 학교 ID: {schoolId ?? '(없음)'}</p>

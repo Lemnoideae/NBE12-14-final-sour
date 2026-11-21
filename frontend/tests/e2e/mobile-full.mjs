@@ -232,10 +232,10 @@ try {
   };
   await send('Page.enable'); await send('Runtime.enable');
 
-  // Detection: touch phone -> full; same width without touch (narrow desktop window) or desktop -> framed; override wins.
+  // Narrow windows use the real single-column flow regardless of pointer type. A wide game has no phone chrome.
   for (const [label, width, height, phone, query, shell] of [
-    ['touch phone', 390, 844, true, '', 'full'], ['narrow mouse window', 390, 844, false, '', 'framed'],
-    ['desktop', 1280, 1000, false, '', 'framed'], ['phone ?device=framed', 390, 844, true, '?device=framed', 'framed'],
+    ['touch phone', 390, 844, true, '', 'full'], ['narrow mouse window', 390, 844, false, '', 'full'],
+    ['desktop', 1280, 1000, false, '', 'embedded'], ['phone ?device=framed', 390, 844, true, '?device=framed', 'framed'],
     ['desktop ?device=full', 1280, 1000, false, '?device=full', 'full']]) {
     await open(width, height, { phone, query });
     const r = await fits();

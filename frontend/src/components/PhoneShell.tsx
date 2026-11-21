@@ -50,6 +50,8 @@ interface PhoneShellProps {
    * Loading and not-found frames leave it out.
    */
   chrome?: boolean;
+  /** Let the game workspace size the shell instead of drawing a phone frame. */
+  embedded?: boolean;
   /** Screen background behind the content (Tailwind class): parchment by default, wood for the shop, sea for the map. */
   background?: string;
   /** Layout of the frame's column; defaults to the screens' `justify-between`. */
@@ -58,13 +60,15 @@ interface PhoneShellProps {
   label?: string;
 }
 
-export function PhoneShell({ children, chrome = true, background = 'bg-[#fdf5df]', className = 'justify-between', label }: PhoneShellProps) {
-  const variant = useContext(PhoneShellVariantContext);
+export function PhoneShell({ children, chrome = true, embedded = false, background = 'bg-[#fdf5df]', className = 'justify-between', label }: PhoneShellProps) {
+  const phoneVariant = useContext(PhoneShellVariantContext);
+  const variant = embedded ? 'embedded' : phoneVariant;
+  const sizeClass = embedded ? 'w-full h-full min-h-0 min-w-0 relative flex flex-col' : variant === 'full' ? FULL_CLASS : FRAME_CLASS;
   // A real phone has its own status bar and home indicator, so the full shell leaves out the mock ones.
   const showChrome = chrome && variant === 'framed';
   return (
     <div data-phone-shell={variant} aria-label={label} role={label ? 'region' : undefined}
-      className={`${variant === 'full' ? FULL_CLASS : FRAME_CLASS} ${background} ${className}`}>
+      className={`${sizeClass} ${background} ${className}`}>
       {showChrome && <PhoneStatusBar />}
       {children}
       {showChrome && <PhoneHomeBar />}

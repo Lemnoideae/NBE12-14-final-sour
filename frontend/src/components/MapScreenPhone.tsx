@@ -6,6 +6,8 @@ import type { NavTab } from './BottomNav';
 import { useMapSchools } from '../hooks/useMapSchools.ts';
 import { LoadNotice } from './LoadNotice';
 import type { MapRegion } from '../data/schoolMapLayout.ts';
+import type { SchoolView } from '../data/schoolDirectory';
+import { WorkspaceMapPreview, WorkspaceMapSchoolList } from './WorkspaceMapContents';
 
 /** What the map shows. Kept outside the map in the app so a visit can return to it (M2 A2). */
 export interface MapContext {
@@ -17,8 +19,10 @@ export interface MapContext {
 export const INITIAL_MAP_CONTEXT: MapContext = { region: '전체', query: '' };
 
 interface MapScreenPhoneProps {
-  /** Receives the selected school ID; the app opens that school's visit screen. */
+  /** Legacy full map: selecting a marker, row or visit button enters the school immediately. */
   onSelectSchool?: (schoolId: SchoolId) => void;
+  /** Workspace map: selections only update the preview; onVisit runs from its explicit button. */
+  panel?: { onVisit: (schoolId: SchoolId) => void; visitBlocked?: string };
   onNavigateTab?: (tab: NavTab) => void;
   /** Controlled context. Without it the phone keeps its own state (comparison demos). */
   context?: MapContext;
@@ -32,6 +36,7 @@ interface MapScreenPhoneProps {
  */
 export const MapScreenPhone: React.FC<MapScreenPhoneProps> = ({
   onSelectSchool,
+  panel,
   onNavigateTab = () => {},
   context,
   onContextChange,
@@ -48,17 +53,22 @@ export const MapScreenPhone: React.FC<MapScreenPhoneProps> = ({
     else setLocalContext(next);
   };
 
+  const select = (schoolId: SchoolId) => {
+    update({ selectedSchoolId: schoolId });
+    if (!panel) onSelectSchool?.(schoolId);
+  };
   const controls = {
     schools,
     query: current.query,
     selectedSchoolId: current.selectedSchoolId,
     onRegionChange: (region: MapRegion) => update({ region }),
     onQueryChange: (query: string) => update({ query }),
-    onSelectSchool: (schoolId: SchoolId) => {
-      update({ selectedSchoolId: schoolId });
-      onSelectSchool?.(schoolId);
-    },
+    onSelectSchool: select,
     onNavigateTab,
+    preview: panel && <WorkspaceMapPreview school={schools.find((school) => school.id === current.selectedSchoolId)}
+      onVisit={panel.onVisit} blocked={panel.visitBlocked} />,
+    renderPanelList: panel && ((listed: readonly SchoolView[]) => <WorkspaceMapSchoolList schools={listed}
+      selectedSchoolId={current.selectedSchoolId} query={current.query} onSelect={select} />),
   };
 
   if (map.status !== 'ready') {
@@ -68,7 +78,8 @@ export const MapScreenPhone: React.FC<MapScreenPhoneProps> = ({
         name="학교 지도"
         failureDetail={map.failureDetail}
         onRetry={map.retry}
-        onBack={() => onNavigateTab('campus')}
+        variant={panel ? 'panel' : 'phone'}
+        onBack={panel ? undefined : () => onNavigateTab('campus')}
       />
     );
   }

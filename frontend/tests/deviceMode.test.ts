@@ -28,10 +28,10 @@ for (const [key, value] of Object.entries({
 dom.window.HTMLElement.prototype.scrollIntoView = function () {};
 installDialogStub(dom.window);
 
-const { render, screen, fireEvent, cleanup, within } = await import('@testing-library/react');
+const { act, render, screen, fireEvent, cleanup, within } = await import('@testing-library/react');
 const { default: App } = await import('../src/App');
 const { MockGameProvider } = await import('../src/hooks/useMockGame');
-const { MOBILE_DEVICE_QUERY, resolveDeviceMode } = await import('../src/utils/deviceMode');
+const { GAME_WIDE_QUERY, MOBILE_DEVICE_QUERY, resolveDeviceMode, resolveGameLayout } = await import('../src/utils/deviceMode');
 
 const win = dom.window as unknown as Window;
 const asPhone = () => stubMatchMedia(win, [MOBILE_DEVICE_QUERY]);
@@ -61,7 +61,8 @@ test('T2: index.html viewport에 viewport-fit=cover가 있다 (safe-area inset �
   assert.match(viewport, /(^|,\s*)viewport-fit=cover(\s*,|$)/);
 });
 
-test('T2: 데스크톱은 발표 헤더·메뉴·[시연] 도구와 390×844 프레임을 그대로 보인다', () => {
+test('T2: 명시적 시안 모드에서는 발표 헤더·메뉴·[시연] 도구와 390×844 프레임을 그대로 보인다', () => {
+  dom.reconfigure({ url: 'http://localhost/?device=framed' });
   asDesktop();
   mountApp();
   assert.ok(screen.getByRole('navigation', { name: '서비스 흐름' }));
@@ -71,6 +72,179 @@ test('T2: 데스크톱은 발표 헤더·메뉴·[시연] 도구와 390×844 프
   assert.equal(shell.dataset.phoneShell, 'framed');
   assert.match(shell.className, /h-\[844px\]/);
   assert.equal(shell.querySelectorAll('[data-phone-status-bar], [data-phone-home-bar]').length, 2);
+});
+
+test('SCRUM-206: 3열 미디어쿼리를 따르되 명시적 기기 프리뷰는 보존한다', () => {
+  assert.equal(resolveGameLayout('', true), 'wide');
+  assert.equal(resolveGameLayout('', false), 'compact');
+  assert.equal(resolveGameLayout('?device=full', true), 'compact');
+  assert.equal(resolveGameLayout('?device=framed', true), 'legacy');
+});
+
+test('SCRUM-206: 3열과 좁은 PC 1열을 오가도 같은 캠퍼스와 활성 상점이 유지된다', () => {
+  const wideQuery = Object.assign(new dom.window.EventTarget(), { matches: true });
+  const narrowQuery = Object.assign(new dom.window.EventTarget(), { matches: false });
+  Object.defineProperty(win, 'matchMedia', { configurable: true, value: (query: string) => query === GAME_WIDE_QUERY ? wideQuery : narrowQuery });
+  const resize = (wide: boolean) => act(() => {
+    wideQuery.matches = wide;
+    wideQuery.dispatchEvent(new dom.window.Event('change'));
+  });
+  mountApp();
+  assert.ok(screen.getByRole('complementary', { name: '학교 패널' }));
+  assert.ok(screen.getByRole('complementary', { name: '전국 경쟁 패널' }));
+  assertAbsent(screen.queryByText('UI Mockup'));
+  const campus = screen.getByRole('button', { name: '캠퍼스 클릭 영역' });
+  assert.equal(shells()[0].dataset.phoneShell, 'embedded');
+
+  resize(false);
+  assertAbsent(screen.queryByRole('complementary', { name: '학교 패널' }));
+  assert.ok(screen.getByRole('navigation', { name: '주요 메뉴' }));
+  assert.equal(shells()[0].dataset.phoneShell, 'full');
+  assertSameNode(screen.getByRole('button', { name: '캠퍼스 클릭 영역' }), campus);
+  fireEvent.click(screen.getByRole('button', { name: '상점' }));
+  const shop = screen.getByTestId('clicker-upgrade-preview');
+
+  resize(true);
+  assertSameNode(screen.getByTestId('clicker-upgrade-preview'), shop);
+  assert.equal(shells()[0].dataset.phoneShell, 'embedded');
+});
+
+test('SCRUM-207: 방문 학교 요약·상세·방명록을 바꾸고 채팅 탭 선택은 리사이즈 후 복원한다', () => {
+  const wideQuery = Object.assign(new dom.window.EventTarget(), { matches: true });
+  const narrowQuery = Object.assign(new dom.window.EventTarget(), { matches: false });
+  Object.defineProperty(win, 'matchMedia', { configurable: true, value: (query: string) => query === GAME_WIDE_QUERY ? wideQuery : narrowQuery });
+  const resize = (wide: boolean) => act(() => {
+    wideQuery.matches = wide;
+    wideQuery.dispatchEvent(new dom.window.Event('change'));
+  });
+  mountApp();
+  const panel = () => within(screen.getByRole('complementary', { name: '학교 패널' }));
+  assert.match(panel().getByRole('region', { name: '학교 요약' }).textContent ?? '', /한양대학교.*학교 점수.*전국 순위/);
+  const detail = panel().getByRole('tab', { name: '상세' });
+  const chat = panel().getByRole('tab', { name: '우리 학교 채팅' });
+  detail.focus();
+  fireEvent.keyDown(detail, { key: 'ArrowRight' });
+  assertSameNode(document.activeElement, chat);
+  assert.equal(detail.getAttribute('aria-selected'), 'true', '방향키는 포커스만 이동한다');
+  fireEvent.click(chat);
+  const message = panel().getByRole('textbox', { name: '채팅 메시지' });
+  fireEvent.change(message, { target: { value: '동시 플레이 메시지' } });
+  fireEvent.click(panel().getByRole('button', { name: '전송' }));
+  fireEvent.click(screen.getByRole('button', { name: '캠퍼스 클릭 영역' }));
+  assert.equal(panel().getAllByText('동시 플레이 메시지').length, 1);
+  assertAbsent(screen.queryByRole('dialog'));
+
+  const competition = within(screen.getByRole('complementary', { name: '전국 경쟁 패널' }));
+  fireEvent.click(competition.getByRole('button', { name: /^KAIST 전국/ }));
+  fireEvent.click(competition.getByRole('button', { name: 'KAIST 방문' }));
+  assert.match(panel().getByRole('region', { name: '학교 요약' }).textContent ?? '', /방문 학교KAIST/);
+  assert.equal(panel().getByRole('tab', { name: '우리 학교 채팅' }).getAttribute('aria-selected'), 'true');
+  const visitCampus = screen.getByRole('button', { name: 'KAIST 캠퍼스 (관전 모드)' });
+  resize(false);
+  assertAbsent(screen.queryByRole('complementary', { name: '학교 패널' }));
+  assertSameNode(screen.getByRole('button', { name: 'KAIST 캠퍼스 (관전 모드)' }), visitCampus);
+  resize(true);
+  panel().getByRole('tabpanel', { name: '우리 학교 채팅' });
+  fireEvent.click(screen.getByTestId('visit-info-button'));
+  panel().getByRole('heading', { name: 'KAIST 학교 정보' });
+  fireEvent.click(panel().getByRole('button', { name: '방명록 전체보기' }));
+  assertSameNode(document.activeElement, panel().getByRole('tab', { name: '방명록' }));
+  panel().getByRole('heading', { name: 'KAIST 방명록' });
+  assertAbsent(screen.queryByRole('dialog'));
+  fireEvent.click(screen.getByRole('button', { name: '내 학교로 돌아가기' }));
+  panel().getByRole('heading', { name: '한양대학교 방명록' });
+  assertAbsent(panel().queryByRole('textbox'));
+});
+
+test('SCRUM-208: 지도 선택은 미리보기만 갱신하고 방문 버튼만 캠퍼스를 바꾼다', () => {
+  const wideQuery = Object.assign(new dom.window.EventTarget(), { matches: true });
+  const otherQuery = Object.assign(new dom.window.EventTarget(), { matches: false });
+  Object.defineProperty(win, 'matchMedia', { configurable: true, value: (query: string) => query === GAME_WIDE_QUERY ? wideQuery : otherQuery });
+  const resize = (wide: boolean) => act(() => {
+    wideQuery.matches = wide;
+    wideQuery.dispatchEvent(new dom.window.Event('change'));
+  });
+  mountApp();
+  const panel = () => within(screen.getByRole('complementary', { name: '전국 경쟁 패널' }));
+  const campus = screen.getByRole('button', { name: '캠퍼스 클릭 영역' });
+  const map = panel().getByRole('tab', { name: '지도' });
+  assert.equal(map.getAttribute('aria-selected'), 'true');
+  map.focus();
+  fireEvent.keyDown(map, { key: 'End' });
+  const alliance = panel().getByRole('tab', { name: '연합 대결' });
+  assertSameNode(document.activeElement, alliance);
+  assert.equal(map.getAttribute('aria-selected'), 'true');
+  fireEvent.click(alliance);
+  panel().getByRole('tabpanel', { name: '연합 대결' });
+  fireEvent.click(panel().getByRole('tab', { name: '순위' }));
+  panel().getByRole('button', { name: '학교 순위' });
+  assertSameNode(screen.getByRole('button', { name: '캠퍼스 클릭 영역' }), campus);
+  resize(false);
+  assertAbsent(screen.queryByRole('complementary', { name: '전국 경쟁 패널' }));
+  resize(true);
+  panel().getByRole('tabpanel', { name: '순위' });
+  fireEvent.click(panel().getByRole('tab', { name: '지도' }));
+  fireEvent.click(panel().getByRole('button', { name: /^KAIST 전국/ }));
+  assert.match(panel().getByRole('region', { name: '학교 미리보기' }).textContent ?? '', /KAIST/);
+  assertSameNode(screen.getByRole('button', { name: '캠퍼스 클릭 영역' }), campus);
+  const list = within(panel().getByRole('region', { name: '학교 목록' }));
+  fireEvent.click(list.getByRole('button', { name: '서울대학교' }));
+  assertSameNode(screen.getByRole('button', { name: '캠퍼스 클릭 영역' }), campus);
+  assertAbsent(panel().queryByRole('button', { name: 'KAIST 방문' }));
+  const visit = panel().getByRole('button', { name: '서울대학교 방문' });
+  fireEvent.click(screen.getByRole('button', { name: '상점' }));
+  fireEvent.click(screen.getByRole('button', { name: '커피 한 잔 구매 선택' }));
+  assert.equal(visit.getAttribute('aria-disabled'), 'true');
+  fireEvent.click(visit);
+  const confirmation = within(screen.getByRole('dialog', { name: '아이템 구매 확인' }));
+  fireEvent.click(confirmation.getByRole('button', { name: '아니오' }));
+  assert.equal(visit.getAttribute('aria-disabled'), 'false');
+  assertAbsent(screen.queryByRole('button', { name: '서울대학교 캠퍼스 (관전 모드)' }), '차단한 방문을 나중에 자동 실행하지 않는다');
+  fireEvent.click(visit);
+  screen.getByRole('button', { name: '서울대학교 캠퍼스 (관전 모드)' });
+  assertAbsent(screen.queryByRole('button', { name: '캠퍼스 클릭 영역' }));
+});
+
+test('SCRUM-209: 방문 학교·양쪽 탭·구매 확인을 리사이즈 후 복원하고 상점을 닫으면 직전 캠퍼스로 돌아간다', () => {
+  const wideQuery = Object.assign(new dom.window.EventTarget(), { matches: true });
+  const otherQuery = Object.assign(new dom.window.EventTarget(), { matches: false });
+  Object.defineProperty(win, 'matchMedia', { configurable: true, value: (query: string) => query === GAME_WIDE_QUERY ? wideQuery : otherQuery });
+  const resize = (wide: boolean) => act(() => {
+    wideQuery.matches = wide;
+    wideQuery.dispatchEvent(new dom.window.Event('change'));
+  });
+  mountApp();
+  const left = () => within(screen.getByRole('complementary', { name: '학교 패널' }));
+  const right = () => within(screen.getByRole('complementary', { name: '전국 경쟁 패널' }));
+  fireEvent.click(right().getByRole('button', { name: /^KAIST 전국/ }));
+  fireEvent.click(right().getByRole('button', { name: 'KAIST 방문' }));
+  fireEvent.click(left().getByRole('tab', { name: '방명록' }));
+  fireEvent.click(right().getByRole('tab', { name: '순위' }));
+  fireEvent.click(screen.getByRole('button', { name: '상점' }));
+  const shop = screen.getByRole('main');
+  assertSameNode(document.activeElement, shop);
+  left().getByRole('heading', { name: 'KAIST 방명록' });
+  fireEvent.click(screen.getByRole('button', { name: '커피 한 잔 구매 선택' }));
+  const dialog = screen.getByRole('dialog', { name: '아이템 구매 확인' });
+  resize(false);
+  assertSameNode(screen.getByRole('main'), shop);
+  assertSameNode(screen.getByRole('dialog', { name: '아이템 구매 확인' }), dialog);
+  resize(true);
+  left().getByRole('tabpanel', { name: '방명록' });
+  right().getByRole('tabpanel', { name: '순위' });
+  assertSameNode(screen.getByRole('dialog', { name: '아이템 구매 확인' }), dialog);
+  fireEvent.click(within(dialog).getByRole('button', { name: '아니오' }));
+  resize(false);
+  fireEvent.click(within(screen.getByRole('navigation', { name: '주요 메뉴' })).getByRole('button', { name: '캠퍼스' }));
+  screen.getByRole('button', { name: 'KAIST 캠퍼스 (관전 모드)' });
+  resize(true);
+  left().getByRole('heading', { name: 'KAIST 방명록' });
+  right().getByRole('tabpanel', { name: '순위' });
+  fireEvent.click(screen.getByRole('button', { name: '내 학교로 돌아가기' }));
+  screen.getByRole('button', { name: '캠퍼스 클릭 영역' });
+  fireEvent.click(screen.getByRole('button', { name: '상점' }));
+  fireEvent.click(screen.getByRole('button', { name: '캠퍼스로 돌아가기' }));
+  screen.getByRole('button', { name: '캠퍼스 클릭 영역' });
 });
 
 test('T2: 폰에서는 서비스 화면이 전체 화면 셸이 되고, 메뉴·도구는 “목업” 시트로 들어간다 (Q5)', () => {

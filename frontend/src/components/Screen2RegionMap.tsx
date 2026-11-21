@@ -1,8 +1,7 @@
 import React from 'react';
 import { ZoomIn } from 'lucide-react';
 import { MapArt } from './MapArt.tsx';
-import { MAP_AREA_HEIGHT, MapLayer, MapScrollBody, MapSearchHeader, SchoolListSheet, SchoolMarker, type MapControlsProps } from './MapParts.tsx';
-import { PhoneShell } from './PhoneShell';
+import { MAP_AREA_HEIGHT, MapLayer, MapFrame, MapSearchHeader, SchoolListSheet, SchoolMarker, type MapControlsProps } from './MapParts.tsx';
 import { filterSchools } from '../data/schoolDirectory.ts';
 import { CHUNGCHEONG_PLACEMENTS } from '../data/schoolMapLayout.ts';
 
@@ -26,14 +25,18 @@ export const Screen2RegionMap: React.FC<MapControlsProps> = ({
   onQueryChange,
   onSelectSchool,
   onNavigateTab,
+  preview,
+  renderPanelList,
 }) => {
   const regionSchools = filterSchools(schools, '충청', '');
   const listed = filterSchools(schools, '충청', query);
 
   return (
-    <PhoneShell background="bg-[#38bdf8]">
-
-      <MapScrollBody>
+    <MapFrame preview={preview} searching={query.trim().length > 0} list={renderPanelList?.(listed) ?? <SchoolListSheet
+      title={`충청 대학 ${regionSchools.length}개`}
+      schools={listed} query={query} selectedSchoolId={selectedSchoolId}
+      onQueryChange={onQueryChange} onSelectSchool={onSelectSchool} onNavigateTab={onNavigateTab}
+    />} search={
       <MapSearchHeader
         region="충청"
         query={query}
@@ -47,7 +50,7 @@ export const Screen2RegionMap: React.FC<MapControlsProps> = ({
           </div>
         }
       />
-
+    }>
       <div className={`${MAP_AREA_HEIGHT} relative overflow-hidden isolate bg-[#38bdf8] select-none`} data-testid="map-area" data-region="충청">
         <MapLayer>
         <div
@@ -89,17 +92,6 @@ export const Screen2RegionMap: React.FC<MapControlsProps> = ({
         </MapLayer>
       </div>
 
-      </MapScrollBody>
-
-      <SchoolListSheet
-        title={`충청 대학 ${regionSchools.length}개`}
-        schools={listed}
-        query={query}
-        selectedSchoolId={selectedSchoolId}
-        onQueryChange={onQueryChange}
-        onSelectSchool={onSelectSchool}
-        onNavigateTab={onNavigateTab}
-      />
-    </PhoneShell>
+    </MapFrame>
   );
 };
