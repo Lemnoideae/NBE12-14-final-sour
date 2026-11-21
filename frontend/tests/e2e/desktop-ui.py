@@ -94,7 +94,7 @@ def mock_menu_flow(page, panel, path):
     return menus
 
 
-def shop_metrics(page, path, *, open_shop=True):
+def shop_metrics(page, path=None, *, open_shop=True):
     if open_shop:
         page.get_by_role('button', name='상점', exact=True).click()
     shop = page.locator('[data-game-layout="shop"]')
@@ -128,7 +128,8 @@ def shop_metrics(page, path, *, open_shop=True):
             }).every(Boolean),
         };
     }''')
-    snapshot(page, path)
+    if path is not None:
+        snapshot(page, path)
     left_delta = edges['firstLeft'] - altar['left']
     right_delta = edges['rightmost'] - altar['right']
     return {**edges, 'altar': altar, 'leftDelta': left_delta, 'rightDelta': right_delta,
