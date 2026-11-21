@@ -501,7 +501,8 @@
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   gap: .75rem;
-  block-size: max(30rem, calc(100dvh - 5.25rem));
+  --game-workspace-available-height: calc(100dvh - 5.25rem);
+  block-size: max(30rem, var(--game-workspace-available-height));
 }
 .game-workspace-side, .game-workspace-center {
   min-inline-size: 0;
@@ -529,11 +530,11 @@
 .game-panel-content:focus-visible { outline: 2px solid #49331d; outline-offset: 2px; }
 .game-panel-content { flex: 1; min-block-size: 16rem; min-inline-size: 0; overflow: auto; overscroll-behavior: contain; border: 1px solid #bd9e65; }
 .game-panel-content [data-phone-shell='embedded'] { overflow: hidden; }
-.game-panel-ranking { padding: .375rem; }
 .game-map-preview { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .375rem; padding: .5rem; background: #fff4d1; border-block-end: 1px solid #bd9e65; }
 .game-map-preview button { min-block-size: 2.75rem; }
 .game-map-preview button[aria-disabled='true'] { color: #5c4631; cursor: not-allowed; }
 .game-map-visit-notice { grid-column: 1 / -1; color: #672b14; }
+.game-map-preview-search-notice { grid-column: 1 / -1; min-block-size: 1.45em; color: #8b5327; line-height: 1.45; }
 .game-map-list { padding: .5rem; background: #fdf5df; }
 .game-map-row { display: flex; align-items: center; gap: .5rem; width: 100%; min-height: 2.75rem; }
 .game-map-row[aria-pressed='true'] { background: #fde9aa; border-color: #8b5327; }
@@ -574,21 +575,202 @@
   line-height: 1.45;
 }
 [data-desktop-game] [data-testid='map-search-box']:focus-within { outline: 2px solid #49331d; outline-offset: 2px; }
+[data-desktop-game] .game-map-search-status { font-size: var(--desktop-text-small); line-height: 1.2; }
+
+/* SCRUM-224: PC my-campus corner scaling — proportional to frame width with height-aware caps;
+   interactive buttons stand out clearly above the calmer top info labels. Visited/mobile/demo stay unchanged. */
+[data-desktop-game] [data-campus-stage][data-my-campus] {
+  --campus-label-size: .75rem;
+  --campus-btn-title: .9375rem;
+  --campus-btn-meta: .75rem;
+  --campus-board-w: 4rem;
+  --campus-board-h: 2.75rem;
+}
+@supports (font-size: 1cqb) {
+  [data-desktop-game] [data-campus-stage][data-my-campus] {
+    container-type: size;
+    --campus-label-size: clamp(.6875rem, min(.5rem + .7cqi, 2.8cqb), .875rem);
+    --campus-btn-title: clamp(.875rem, min(.625rem + 1.1cqi, 3.8cqb), 1.125rem);
+    --campus-btn-meta: clamp(.75rem, min(.5625rem + .85cqi, 3.2cqb), .9375rem);
+    --campus-board-w: clamp(3.75rem, min(10.5cqi, 15cqb), 5.25rem);
+    --campus-board-h: clamp(2.625rem, min(7.3cqi, 10.5cqb), 3.625rem);
+  }
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-label {
+  top: .75rem;
+  font-size: var(--campus-label-size);
+  line-height: 1.25;
+  padding: .25rem .5rem;
+  gap: .375rem;
+  max-inline-size: calc(50% - 1.25rem);
+  box-shadow: 2px 2px 0 #261608;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-label-level { left: .75rem; }
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-label-feature { right: .75rem; }
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-label-dot { width: .5rem; height: .5rem; }
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-label-text {
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-sign-btn {
+  bottom: .75rem;
+  right: .75rem;
+  min-inline-size: clamp(6.25rem, 18cqi, 9rem);
+  min-block-size: clamp(3.5rem, min(11cqi, 16cqb), 4.75rem);
+  padding: clamp(.375rem, 1.2cqb, .625rem) clamp(.625rem, 1.5cqi, .9375rem);
+  gap: .25rem;
+  box-shadow: 3px 3px 0 #261608;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-sign-btn:focus-visible,
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-guestbook-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-sign-title {
+  font-size: var(--campus-btn-title);
+  gap: .3125rem;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-sign-title svg {
+  width: 1.05em;
+  height: 1.05em;
+  flex: none;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-sign-value-wrap {
+  padding: .125rem .375rem;
+  gap: .3125rem;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-sign-dot { width: .4375rem; height: .4375rem; }
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-sign-value {
+  font-size: var(--campus-btn-meta);
+  font-weight: 700;
+  padding-block: .0625rem;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-guestbook-btn {
+  bottom: .75rem;
+  left: .75rem;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-guestbook-tags {
+  gap: .25rem;
+  margin-bottom: .25rem;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-guestbook-tag {
+  font-size: var(--campus-btn-title);
+  line-height: 1.15;
+  padding: .125rem .4375rem;
+  border-width: 2px;
+  box-shadow: 2px 2px 0 #261608;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-guestbook-badge {
+  font-size: var(--campus-btn-meta);
+  line-height: 1.15;
+  padding: .125rem .375rem;
+  border-width: 2px;
+  box-shadow: 2px 2px 0 #261608;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-guestbook-sparkle {
+  width: clamp(1rem, 2.2cqi, 1.375rem);
+  height: clamp(1rem, 2.2cqi, 1.375rem);
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-guestbook-board {
+  width: var(--campus-board-w);
+  height: var(--campus-board-h);
+  padding: .1875rem;
+  box-shadow: 3px 3px 0 #261608;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-guestbook-note {
+  width: 30%;
+  height: 58%;
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-guestbook-legs { padding-inline: 18%; }
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-guestbook-leg {
+  width: .375rem;
+  height: clamp(.625rem, 1.8cqb, .875rem);
+}
+[data-desktop-game] [data-campus-stage][data-my-campus] .game-campus-hand-label {
+  font-size: clamp(.75rem, .625rem + .6cqi, .875rem);
+  padding: .125rem .4375rem;
+  bottom: -1.375rem;
+}
+
+/* Detailed stats clicker breakdown: compact single line on mobile/demo, one item per line with bold numbers on PC. */
+.game-clicker-details { display: flex; flex-wrap: wrap; align-items: baseline; }
+.game-clicker-stat-num { font-weight: inherit; }
+[data-desktop-game] .game-clicker-details {
+  flex-direction: column;
+  gap: .1875rem;
+  font-size: var(--desktop-text-small);
+  line-height: 1.4;
+}
+[data-desktop-game] .game-clicker-sep { display: none; }
+[data-desktop-game] .game-clicker-stat { color: #261608; }
+[data-desktop-game] .game-clicker-stat-num { font-weight: 900; font-variant-numeric: tabular-nums; }
+[data-desktop-game] .game-clicker-note { color: #65401f; }
+
+/* Keep self rank onscreen even when the other columns hit the workspace's minimum height. */
+[data-desktop-game] .game-workspace-side:has(> .game-panel-content > .game-panel-ranking) {
+  max-block-size: var(--game-workspace-available-height);
+}
+[data-desktop-game] .game-panel-content:has(> .game-panel-ranking) {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+}
+/* The podium and rows share one scroll area; status notices can still scroll in the outer panel. */
+[data-desktop-game] .game-panel-content:has(> .game-panel-ranking > .game-ranking-scroll) { overflow: clip; }
+[data-desktop-game] .game-panel-ranking { flex: 1; min-block-size: 0; padding: .5rem; }
+[data-desktop-game] .game-panel-ranking > :not(.game-ranking-scroll) { flex-shrink: 0; }
+[data-desktop-game] .game-ranking-scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: .375rem;
+  min-block-size: 0;
+  padding: .25rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+[data-desktop-game] .game-ranking-scroll:focus-visible { outline: 2px solid #49331d; outline-offset: -2px; }
+[data-desktop-game] .game-ranking-list { flex: none; max-height: none; overflow: visible; padding: 0; }
+[data-desktop-game] .game-ranking-self { margin-block-start: 0; flex-wrap: wrap; gap: .25rem; }
+[data-desktop-game] .game-ranking-self-meta { max-inline-size: 100%; }
+[data-desktop-game] .game-ranking-self-rank { inline-size: auto; min-inline-size: 1.25rem; }
+[data-desktop-game] .game-ranking-self-badge { font-size: .625rem; white-space: nowrap; }
+[data-desktop-game] .game-ranking-self-score { margin-inline-start: auto; }
 
 /* The map itself keeps its sea background; only the workspace shell behind short lists changes. */
 [data-desktop-game] .game-map-frame[data-phone-shell='embedded'] { background: #fdf5df; }
 [data-desktop-game] .game-map-regions {
-  flex-wrap: wrap;
-  flex-wrap: balance;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(1.75rem, auto));
+  align-items: stretch;
   overflow: visible;
   margin-block-start: 0;
   /* Keep the plaque's 3px shadow and the 4px focus ring inside the scroll body. */
   padding: .375rem;
 }
-[data-desktop-game] .game-map-regions button:focus-visible { outline: 2px solid #49331d; outline-offset: 2px; }
+/* From the existing DOM order: 전체 spans both rows; the next six flow left to right. */
+[data-desktop-game] .game-map-regions > button:first-child { grid-area: 1 / 1 / span 2 / span 1; }
+[data-desktop-game] .game-map-regions > button {
+  min-inline-size: 0;
+  padding-inline: .125rem;
+  font-size: .6875rem;
+}
+[data-desktop-game] .game-map-regions > button:focus-visible {
+  z-index: 1;
+  outline: 2px solid #49331d;
+  outline-offset: 2px;
+}
 
 /* PC-only overlay: marker controls stay in CSS pixels, separate from the scaled map art. */
-.game-map-pins { position: absolute; inset: 0; z-index: 24; pointer-events: none; }
+.game-map-pins {
+  position: absolute;
+  inset: 0;
+  z-index: 24;
+  pointer-events: none;
+  /* Fixed clearance for two caption lines; read by the marker placer, not sized from the active caption. */
+  padding-block-end: 3rem;
+}
 .game-map-pin {
   position: absolute;
   pointer-events: auto;
@@ -619,7 +801,7 @@
 }
 .game-map-pin[aria-pressed='true'] .game-map-pin-logo { border-color: #facc15; }
 .game-map-pin:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
-.game-map-pin-name, .game-map-pin-rank, .game-map-pin-caption {
+.game-map-pin-name, .game-map-pin-rank {
   border: 1px solid #261608;
   box-shadow: 1px 1px #261608;
   padding: .125rem .25rem;
@@ -636,14 +818,37 @@
 .game-map-pin-lines { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; stroke: #261608; stroke-width: 1.5; }
 .game-map-pin-caption {
   position: absolute;
-  inset: auto .25rem .25rem;
-  min-block-size: 1.75rem;
+  inset: auto .5rem .375rem;
+  margin-inline: auto;
+  inline-size: fit-content;
+  max-inline-size: min(14rem, calc(100% - 1rem));
+  display: flex;
+  align-items: center;
+  gap: .375rem;
+  padding: .25rem .5rem;
+  border: 2px solid #261608;
+  box-shadow: 2px 2px #261608;
+  background: #fdf5df;
+  color: #261608;
+  font-size: .75rem;
+  font-weight: 700;
+  line-height: 1.25;
   text-align: center;
   overflow-wrap: anywhere;
-  visibility: hidden;
 }
-.game-map-pin-caption[data-revealed='true'] { visibility: visible; }
-.game-map-pins:has(.game-map-pin-caption[data-revealed='true']) { z-index: 26; }
+/* Leave the lower-left national region control (Jeju) uncovered, without moving its map point. */
+[data-testid='map-area'][data-region='전체'] .game-map-pin-caption {
+  margin-inline-end: 0;
+  max-inline-size: min(14rem, 60%);
+}
+.game-map-pin-caption span { min-inline-size: 0; }
+.game-map-pin-caption svg { flex: none; color: #b45309; }
+@keyframes map-hint-pulse {
+  50% { opacity: .72; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .game-map-pin-caption[data-revealed='false'] { animation: map-hint-pulse 2s ease-in-out 2; }
+}
 
 /* Keep shelf cards on the same outer edges as the altar, including while selected. */
 [data-desktop-game] .game-shelf-card {

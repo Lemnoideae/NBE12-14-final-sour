@@ -12,6 +12,7 @@ export type { ChatMessage } from '../data/mockChat.ts';
 interface ChatBottomSheetProps {
   onClose?: () => void;
   schoolOnly?: boolean;
+  showSoonRibbon?: boolean;
   mySchoolInitial: string;
   myNickname: string;
   myDepartment: string;
@@ -20,6 +21,7 @@ interface ChatBottomSheetProps {
 export const ChatBottomSheet: React.FC<ChatBottomSheetProps> = ({
   onClose,
   schoolOnly = false,
+  showSoonRibbon = true,
   mySchoolInitial,
   myNickname,
   myDepartment,
@@ -79,13 +81,12 @@ export const ChatBottomSheet: React.FC<ChatBottomSheetProps> = ({
     <div className="w-full h-full bg-[#fdf5df] border-t-4 border-[#261608] shadow-[0px_-6px_0px_#261608] flex flex-col justify-between select-none relative overflow-hidden">
       {/* Top Header */}
       <div className="w-full bg-[#faecc7] border-b-2 border-[#261608] px-3 py-2 flex items-center justify-between shrink-0 relative">
-        {/* SOON Ribbon at top-right corner of header */}
-        <div className="absolute -top-1 -right-1 z-30 pointer-events-none">
+        {showSoonRibbon ? <div className="absolute -top-1 -right-1 z-30 pointer-events-none">
           <div className="bg-[#e11d48] text-white font-press-start text-[7px] font-black px-2 py-0.5 border-2 border-[#261608] shadow-[1px_1px_0px_#261608] transform rotate-3 flex items-center gap-0.5">
             <Sparkles className="w-2 h-2 text-yellow-300" />
             <span>SOON</span>
           </div>
-        </div>
+        </div> : null}
 
         {/* Left: Title + Tabs */}
         <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">

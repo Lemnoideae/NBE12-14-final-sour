@@ -46,6 +46,25 @@ def set_zoom(context, page, factor):
     page.wait_for_function('factor => Math.abs(devicePixelRatio - factor) < .02', arg=factor)
 
 
+def check_rankings(page, panel, path):
+    panel.get_by_role('tab', name='순위').click()
+    rankings = panel.get_by_role('tabpanel', name='순위')
+    scroll = rankings.get_by_role('region', name='순위 목록')
+    own = rankings.locator('.game-ranking-self')
+    expect(own).to_be_in_viewport(ratio=1)
+    expect(own.locator('.game-ranking-self-badge')).to_have_text('내 학교')
+    before = own.bounding_box()
+    rows = scroll.locator('.game-ranking-row')
+    expect(rows).to_have_count(12)
+    scroll.evaluate("el => el.scrollTo({ top: el.scrollHeight, behavior: 'instant' })")
+    expect(rows).to_have_count(22)
+    assert own.bounding_box() == before
+    assert scroll.bounding_box()['y'] + scroll.bounding_box()['height'] < before['y']
+    capture(page, path)
+    panel.get_by_role('tab', name='지도', exact=True).click()
+    return True
+
+
 def check_wide(page, key, out):
     result = layout(page, True)
     panel = page.get_by_role('complementary', name='전국 경쟁 패널')
@@ -58,7 +77,10 @@ def check_wide(page, key, out):
     menu = ui.menu_metrics(page.locator('.game-panel-tabs button, .game-center-nav button'))
     assert len(menu) == 8 and all(m['fits'] and m['raised'] and m['iconLeft'] for m in menu), menu
     chips = ui.chip_metrics(regions)
-    assert chips['allVisible'], chips
+    assert chips['gridFits'], chips
+    region_flow = ui.map_region_flow(page, panel)
+    assert region_flow['focusFits'] and region_flow['focusVisible'], region_flow
+    capture(page, out / f'{key}-region-focus.png')
     maps = {}
     for region in ui.REGIONS:
         regions.get_by_role('button', name=region, exact=True).click()
@@ -68,11 +90,15 @@ def check_wide(page, key, out):
     jeju = ui.map_background(panel)
     assert jeju['matchesPanel'], jeju
     capture(page, out / f'{key}-jeju.png')
+    search_deltas = ui.map_search_selection(panel)
+    rankings_pinned = check_rankings(page, panel, out / f'{key}-rankings.png')
     shop = ui.shop_metrics(page)
     assert shop['aligned'], shop
     capture(page, out / f'{key}-shop.png')
     page.get_by_role('button', name='캠퍼스로 돌아가기').click()
-    return {**result, 'menuCount': len(menu), 'chips': chips['rows'], 'maps': maps, 'jeju': jeju, 'shop': shop}
+    return {**result, 'menuCount': len(menu), 'chips': chips['rows'], 'regionGrid': chips,
+            'regionKeyboard': region_flow, 'maps': maps, 'jeju': jeju, 'shop': shop,
+            'searchMapTopDeltas': search_deltas, 'rankingsPinned': rankings_pinned}
 
 
 def main():
@@ -91,7 +117,17 @@ def main():
         boundaries = {}
         for width, height, wide in ((1023, 720, False), (1024, 720, True), (1024, 480, False), (1024, 481, True)):
             page.set_viewport_size({'width': width, 'height': height})
-            boundaries[f'{width}x{height}'] = layout(page, wide)
+            result = layout(page, wide)
+            if wide:
+                panel = page.get_by_role('complementary', name='전국 경쟁 패널')
+                regions = panel.get_by_role('group', name='권역 선택')
+                page.evaluate('document.fonts.ready.then(() => true)')
+                chips = ui.chip_metrics(regions)
+                assert chips['gridFits'], chips
+                result['regionGrid'] = chips
+                ui.campus_corner_flow(page)
+                result['campusCorners'] = True
+            boundaries[f'{width}x{height}'] = result
             capture(page, args.out / f'boundary-{width}x{height}.png')
         browser.close()
 

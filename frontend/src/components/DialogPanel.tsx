@@ -17,7 +17,12 @@ export const DialogPanel: React.FC<DialogPanelProps> = ({ myContribution, clicke
   const itemShop = useItemShop();
   const { nextClicker, normalPower } = clicker;
   const cost = clicker.upgradeCost;
-  const progress = clicker.api?.loadNotice ? 0 : cost === null || cost === 0 ? 100 : Math.min(100, Math.floor(myContribution / cost * 100));
+  let progress = 100;
+  if (clicker.api?.loadNotice) progress = 0;
+  else if (cost !== null && cost !== 0) progress = Math.min(100, Math.floor(myContribution / cost * 100));
+  let costLabel = '추가 강화 없음';
+  if (clicker.api?.loadNotice) costLabel = '정보 확인 중';
+  else if (cost !== null) costLabel = `강화 비용 ${cost.toLocaleString('ko-KR')}점`;
   const buffStatus = activeBuff ? `${activeBuff.name} · ${remainingSeconds}초 남음${activeBuff.singleUse ? ' · 다음 클릭 1회' : ''}` : '활성 버프 없음';
 
   return (
@@ -36,10 +41,20 @@ export const DialogPanel: React.FC<DialogPanelProps> = ({ myContribution, clicke
           <span>🖋️ 클리커 Lv.{clickerLevel ?? '—'}</span>
           <span className="bg-[#fef08a] px-1 border border-[#261608]">클릭당 {normalPower}점</span>
         </div>
-        <p className="font-pixel text-[10px] text-[#8b5327]">기본 세기 {clicker.power}점 · {clicker.api ? '서버 기준' : '치명타 2배'} · 강화는 상점에서</p>
+        <div className="game-clicker-details font-pixel text-[10px] text-[#8b5327]">
+          <p className="game-clicker-stat">
+            기본 세기 <strong className="game-clicker-stat-num">{clicker.power}</strong>점
+          </p>
+          <span className="game-clicker-sep" aria-hidden="true"> · </span>
+          <p className="game-clicker-stat">
+            {clicker.api ? '서버 기준' : <>치명타 <strong className="game-clicker-stat-num">2</strong>배</>}
+          </p>
+          <span className="game-clicker-sep" aria-hidden="true"> · </span>
+          <p className="game-clicker-note">강화는 상점에서</p>
+        </div>
         <div className="font-pixel text-[10px] text-[#8b5327] flex justify-between gap-1">
           <span>{clicker.api?.loadNotice ?? (nextClicker ? `다음 Lv.${nextClicker.level} · 클릭당 ${nextClicker.power}점` : '최고 단계 달성')}</span>
-          <span>{clicker.api?.loadNotice ? '정보 확인 중' : cost === null ? '추가 강화 없음' : `강화 비용 ${cost.toLocaleString('ko-KR')}점`}</span>
+          <span>{costLabel}</span>
         </div>
         <div className="h-2.5 bg-[#faecc7] border-2 border-[#261608]" role="progressbar" aria-label="다음 강화 비용 대비 보유 기여도" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
           <div className="h-full bg-[#facc15]" style={{ width: `${progress}%` }} />

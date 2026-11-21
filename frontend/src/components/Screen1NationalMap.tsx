@@ -4,7 +4,7 @@ import { soundManager } from '../utils/sound';
 import { MapArt } from './MapArt.tsx';
 import { WorkspaceMapPins } from './WorkspaceMapPins';
 import { mapFramePercent } from '../utils/workspaceMapPins';
-import { MAP_AREA_HEIGHT, MapLayer, MapFrame, MapSearchHeader, SchoolListSheet, SchoolMarker, SchoolBadge, RankRibbon, type MapControlsProps } from './MapParts.tsx';
+import { MAP_AREA_HEIGHT, MapLayer, MapFrame, MapSearchHeader, SchoolListSheet, SchoolMarker, SchoolBadge, RankRibbon, formatWorkspaceSearchStatus, type MapControlsProps } from './MapParts.tsx';
 import { countByRegion, filterSchools, getTopSchools } from '../data/schoolDirectory.ts';
 import {
   MAP_CLUSTERS,
@@ -37,6 +37,7 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
   renderPanelList,
 }) => {
   const isNational = region === '전체';
+  const hint = isNational ? '지역을 눌러 대학을 확인하세요' : '학교를 눌러 선택하세요';
   const regionSchools = filterSchools(schools, region, '');
   const listed = filterSchools(schools, region, query);
   const counts = countByRegion(schools);
@@ -44,6 +45,7 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
   const viewport = isNational ? undefined : regionViewport(region as SchoolFilterRegion);
   const topSchools = isNational ? getTopSchools(schools.filter((school) => school.isTop3), 3) : [];
   const workspace = preview !== undefined;
+  const searchStatus = formatWorkspaceSearchStatus(workspace, query, listed.length);
   const pins = workspace ? (viewport ? regionSchools : topSchools).flatMap(school => {
     const ribbonPoint = viewport ? undefined : nationalRibbonPoint(school.id);
     const point = viewport ? regionMarkerPx(school.id, viewport) : ribbonPoint && mapFramePercent(ribbonPoint);
@@ -62,6 +64,7 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
         placeholder={isNational ? '학교 검색 (예: 서울대, KAIST, 부산대)' : `${region} 대학 검색`}
         onRegionChange={onRegionChange}
         onQueryChange={onQueryChange}
+        searchStatus={searchStatus}
         badge={
           <div className="bg-[#facc15] border-2 border-[#261608] px-2 py-1 flex items-center gap-1 shadow-[1px_1px_0px_#261608] shrink-0">
             {isNational ? <span className="w-2 h-2 bg-[#e11d48] border border-[#261608]" /> : <ZoomIn className="w-3 h-3 text-[#261608]" />}
@@ -181,16 +184,16 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
             })}
         </div>
         </MapLayer>
-        {workspace && <WorkspaceMapPins pins={pins} selectedId={selectedSchoolId} onSelect={onSelectSchool} />}
-
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-25 pointer-events-none">
-          <div className="rpg-box px-2.5 py-1 bg-[#fdf5df]/95 border-2 border-[#261608] shadow-[2px_2px_0px_#261608] flex items-center gap-1.5 whitespace-nowrap animate-pulse">
-            <Hand className="w-3 h-3 text-[#b45309]" />
-            <span className="font-pixel text-[10px] font-black text-[#261608]">
-              {isNational ? '지역을 눌러 대학을 확인하세요' : '학교를 눌러 선택하세요'}
-            </span>
+        {workspace ? (
+          <WorkspaceMapPins key={region} pins={pins} hint={hint} selectedId={selectedSchoolId} onSelect={onSelectSchool} />
+        ) : (
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-25 pointer-events-none">
+            <div className="rpg-box px-2.5 py-1 bg-[#fdf5df]/95 border-2 border-[#261608] shadow-[2px_2px_0px_#261608] flex items-center gap-1.5 whitespace-nowrap animate-pulse">
+              <Hand className="w-3 h-3 text-[#b45309]" />
+              <span className="font-pixel text-[10px] font-black text-[#261608]">{hint}</span>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
     </MapFrame>

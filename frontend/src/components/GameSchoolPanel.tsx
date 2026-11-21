@@ -111,13 +111,15 @@ function useApiOwnSchool(): OwnSchool {
 function SchoolChat({ mySchool }: { mySchool: SchoolView }) {
   const { player } = useMockGame();
   if (API_MODE === 'api') return <Suspense fallback={<p role="status" className="p-2">채팅 화면을 여는 중이에요.</p>}><LazyApiChat schoolOnly /></Suspense>;
-  return <ChatBottomSheet key={`${player.userId}:${mySchool.id}`} schoolOnly mySchoolInitial={mySchool.firstSyllable} myNickname={player.nickname} myDepartment={player.department} />;
+  return <ChatBottomSheet key={`${player.userId}:${mySchool.id}`} schoolOnly showSoonRibbon={false}
+    mySchoolInitial={mySchool.firstSyllable} myNickname={player.nickname} myDepartment={player.department} />;
 }
 
 function SchoolGuestbook({ school, mySchool, onGoToMap }: { school?: VisitSchoolView; mySchool: SchoolView; onGoToMap: () => void }) {
   const { player } = useMockGame();
   if (API_MODE === 'api') return <ApiGuestbookBottomSheet universityId={school?.id} schoolName={school?.name} onGoToMap={onGoToMap} />;
-  if (!school) return <OurSchoolGuestbookBottomSheet mySchoolId={mySchool.id} schoolName={mySchool.name} onGoToMap={onGoToMap} />;
+  if (!school) return <OurSchoolGuestbookBottomSheet showSoonRibbon={false}
+    mySchoolId={mySchool.id} schoolName={mySchool.name} onGoToMap={onGoToMap} />;
   return <GuestbookBottomSheet schoolId={school.id} schoolName={school.name} schoolInitial={school.firstSyllable} schoolBadgeColor={school.badgeColor}
     mySchoolId={mySchool.id} mySchoolName={mySchool.name} mySchoolInitial={mySchool.firstSyllable} mySchoolBadgeColor={mySchool.badgeColor} myNickname={player.nickname} />;
 }

@@ -5,7 +5,18 @@ import { soundManager } from '../utils/sound';
 import { SchoolBadge } from './MapParts';
 import { WorkspaceMenuLabel } from './GameWorkspace';
 
-export function WorkspaceMapPreview({ school, onVisit, blocked }: { school?: SchoolView; onVisit: (id: SchoolId) => void; blocked?: string }) {
+export function WorkspaceMapPreview({
+  school,
+  onVisit,
+  blocked,
+  excludedFromSearch = false,
+}: {
+  school?: SchoolView;
+  onVisit: (id: SchoolId) => void;
+  blocked?: string;
+  /** True when a search query is active and the currently selected school is not in the filtered results. */
+  excludedFromSearch?: boolean;
+}) {
   const noticeId = useId();
   return <section aria-label="학교 미리보기" className="game-map-preview">
     <div role="status" className="min-w-0">
@@ -16,6 +27,11 @@ export function WorkspaceMapPreview({ school, onVisit, blocked }: { school?: Sch
     </div>
     {school && <button type="button" className="game-workspace-action game-nav-control" aria-label={`${school.name} 방문`} aria-disabled={!!blocked} aria-describedby={blocked ? noticeId : undefined}
       onClick={() => { if (!blocked) { soundManager.playBuySound(); onVisit(school.id); } }}><WorkspaceMenuLabel icon="visit">방문</WorkspaceMenuLabel></button>}
+    {school && (
+      <p role="status" data-testid="map-preview-search-notice" className="game-map-preview-search-notice text-xs">
+        {excludedFromSearch ? '현재 검색 결과에 없음' : ''}
+      </p>
+    )}
     {school && blocked && <p id={noticeId} role="status" className="game-map-visit-notice text-xs">{blocked}</p>}
   </section>;
 }
@@ -23,8 +39,10 @@ export function WorkspaceMapPreview({ school, onVisit, blocked }: { school?: Sch
 export function WorkspaceMapSchoolList({ schools, selectedSchoolId, query, onSelect }: {
   schools: readonly SchoolView[]; selectedSchoolId?: SchoolId; query: string; onSelect: (id: SchoolId) => void;
 }) {
+  const isSearching = query.trim().length > 0;
+  const heading = isSearching ? `검색 학교 목록 - ${schools.length}개교` : `학교 목록 · ${schools.length}개교`;
   return <section aria-label="학교 목록" className="game-map-list">
-    <h3 className="font-bold">학교 목록 · {schools.length}개교</h3>
+    <h3 className="font-bold">{heading}</h3>
     {schools.length === 0 && <p role="status">‘{query.trim()}’에 맞는 학교가 없습니다.</p>}
     <ul className="flex flex-col gap-1">
       {schools.map((school) => <li key={school.id}>

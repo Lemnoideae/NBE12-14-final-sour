@@ -8,6 +8,7 @@ import { getOurSchoolGuestbookSamples, type GuestbookEntry } from '../data/mockG
 interface OurSchoolGuestbookBottomSheetProps {
   onClose?: () => void;
   onGoToMap?: () => void;
+  showSoonRibbon?: boolean;
   /** The player's school (M4); its own students' notes are left out. */
   mySchoolId: SchoolId;
   schoolName: string;
@@ -16,6 +17,7 @@ interface OurSchoolGuestbookBottomSheetProps {
 export const OurSchoolGuestbookBottomSheet: React.FC<OurSchoolGuestbookBottomSheetProps> = ({
   onClose,
   onGoToMap = () => {},
+  showSoonRibbon = true,
   mySchoolId,
   schoolName,
 }) => {
@@ -50,13 +52,12 @@ export const OurSchoolGuestbookBottomSheet: React.FC<OurSchoolGuestbookBottomShe
     <div className="w-full h-full bg-[#fdf5df] border-t-4 border-[#261608] shadow-[0px_-6px_0px_#261608] flex flex-col justify-between select-none relative overflow-hidden">
       {/* 1. Header: "{school} 방명록", subtitle, sort tabs "최신순" / "인기순", total count, close "▼" */}
       <div className="w-full bg-[#faecc7] border-b-2 border-[#261608] px-3 py-2 flex flex-col gap-1.5 shrink-0 relative">
-        {/* SOON Ribbon at top-right corner of header */}
-        <div className="absolute -top-1 -right-1 z-30 pointer-events-none">
+        {showSoonRibbon ? <div className="absolute -top-1 -right-1 z-30 pointer-events-none">
           <div className="bg-[#e11d48] text-white font-press-start text-[7px] font-black px-2 py-0.5 border-2 border-[#261608] shadow-[1px_1px_0px_#261608] transform rotate-3 flex items-center gap-0.5">
             <Sparkles className="w-2 h-2 text-yellow-300" />
             <span>SOON</span>
           </div>
-        </div>
+        </div> : null}
 
         {/* Row 1: Badge + Title + Close Button */}
         <div className="flex items-center justify-between">

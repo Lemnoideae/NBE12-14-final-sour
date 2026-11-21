@@ -44,6 +44,7 @@ const { SCHOOL_LOGO_ASSETS, schoolLogoStatus } = await import('../src/data/schoo
 const marquee = await import('../src/components/MarqueeText');
 const { BottomNav, AllianceNavProvider } = await import('../src/components/BottomNav');
 const { DialogPanel } = await import('../src/components/DialogPanel');
+const { CampusView } = await import('../src/components/CampusView');
 const { MOCK_CLICK_RULES } = await import('../src/utils/clickGuard');
 /** Default click rules without the interval check, for tests about same-millisecond clicks. */
 const SAME_TICK_RULES = { ...MOCK_CLICK_RULES, minIntervalMs: 0 };
@@ -869,4 +870,63 @@ test('P4-4: ImageChangeShop 확인 다이얼로그 액션 버튼 스타일 및 �
   assert.equal(confirmBtn.disabled, false);
   assert.doesNotMatch(confirmBtn.className, /opacity-50 cursor-not-allowed shadow-none/);
   assert.match(confirmBtn.className, /cursor-pointer/);
+});
+
+test('SCRUM-224: 내 캠퍼스 손 안내 문구·모서리 버튼 비전파·상세 스탯 항목 분리를 지킨다', () => {
+  let taps = 0;
+  let guestbookOpened = 0;
+  let statsOpened = 0;
+  render(
+    React.createElement(
+      MockGameProvider,
+      null,
+      React.createElement(CampusView, {
+        onTap: () => { taps += 1; },
+        clickPower: 30,
+        basePower: 30,
+        activeStudents: 37,
+        tapPrompt: '클릭!',
+        onOpenGuestbook: () => { guestbookOpened += 1; },
+        onOpenStats: () => { statsOpened += 1; },
+      }),
+    ),
+  );
+
+  const stage = document.querySelector('[data-campus-stage]');
+  assert.ok(stage?.hasAttribute('data-my-campus'), '내 캠퍼스 프레임에 전용 속성이 붙는다');
+  assert.ok(screen.getByText('클릭!'), 'PC에서는 손 모양 안내가 클릭!으로 보인다');
+  fireEvent.click(screen.getByRole('button', { name: '우리 학교 방명록 보기' }));
+  fireEvent.click(screen.getByTestId('campus-stats-button'));
+  assert.equal(guestbookOpened, 1);
+  assert.equal(statsOpened, 1);
+  assert.equal(taps, 0, '방명록·상세 스탯 버튼은 캠퍼스 점수 클릭을 유발하지 않는다');
+
+  fireEvent.click(screen.getByRole('button', { name: '캠퍼스 클릭 영역' }));
+  assert.equal(taps, 1);
+  assertAbsent(screen.queryByText('클릭!'), '첫 클릭 뒤에는 손 모양 안내가 사라진다');
+  cleanup();
+
+  // 기본값(모바일/시연)은 터치! 유지
+  render(
+    React.createElement(
+      MockGameProvider,
+      null,
+      React.createElement(CampusView, {
+        onTap: () => {},
+        clickPower: 30,
+        basePower: 30,
+        activeStudents: 37,
+      }),
+    ),
+  );
+  assert.ok(screen.getByText('터치!'), '기본 손 모양 안내는 터치!를 유지한다');
+  cleanup();
+
+  // 상세 스탯: 기본 세기·치명타·보조 안내 분리 및 숫자만 굵게
+  render(React.createElement(MockGameProvider, null, React.createElement(DialogPanel, { myContribution: 18560, clickerLevel: 3 })));
+  const stats = Array.from(document.querySelectorAll('.game-clicker-stat')).map((el) => el.textContent?.trim());
+  assert.deepEqual(stats, ['기본 세기 30점', '치명타 2배']);
+  const bolds = Array.from(document.querySelectorAll('.game-clicker-stat-num')).map((el) => el.textContent?.trim());
+  assert.deepEqual(bolds, ['30', '2'], '숫자만 굵게 표시한다');
+  assert.equal(document.querySelector('.game-clicker-note')?.textContent?.trim(), '강화는 상점에서');
 });

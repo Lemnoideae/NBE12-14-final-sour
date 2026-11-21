@@ -931,6 +931,7 @@ function AppContent() {
                     }}
                     showGuestbookBoard={true}
                     onOpenStats={() => wideCampus ? setSchoolPanelTab('detail') : setIsStatsSheetOpen(true)}
+                    tapPrompt={wideCampus ? '클릭!' : '터치!'}
                     fill
                   />
 
