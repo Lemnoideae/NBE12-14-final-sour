@@ -7,6 +7,7 @@ import { BottomNav, NavTab } from './BottomNav';
 import { BottomSheetDialog } from './BottomSheetDialog';
 import { CampusSignButton, CampusStage, GuestbookBoardButton } from './CampusStage';
 import { GameScreenLayout } from './GameScreenLayout';
+import { WorkspaceShortcut } from './GameWorkspace';
 import { TopHUD, schoolHudProps } from './TopHUD';
 import { LiveClicksEmpty, SPECTATOR_NOTICE, SpectatorBar, VisitNotFoundPhone, VisitSchoolInfoSheet, formatScore } from './VisitingParts.tsx';
 import { LoadNotice } from './LoadNotice';
@@ -130,7 +131,7 @@ export function VisitCampusScreen({
         : <SpectatorBar mySchoolShortName={visit.mySchoolShortName} onBackToMySchool={onBackToMySchool} />}
       nav={embedded ? (
         <nav aria-label="캠퍼스 메뉴" className="game-center-nav">
-          <button type="button" className="game-workspace-action" onClick={() => onNavigateTab('shop')}>상점</button>
+          <WorkspaceShortcut icon="shop" onClick={() => onNavigateTab('shop')}>상점</WorkspaceShortcut>
         </nav>
       ) : (
         <BottomNav

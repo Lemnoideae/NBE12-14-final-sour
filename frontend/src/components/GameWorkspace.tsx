@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { GameMenuIcon, type GameMenuIconName } from './GameMenuIcon';
 
 interface GameWorkspaceProps {
   wide: boolean;
@@ -18,6 +19,14 @@ export function GameWorkspace({ wide, left, right, children }: GameWorkspaceProp
   );
 }
 
-export function WorkspaceShortcut({ children, onClick }: { children: ReactNode; onClick: () => void }) {
-  return <button type="button" className="game-workspace-action" onClick={onClick}>{children}</button>;
+export function WorkspaceMenuLabel({ icon, children }: { icon: GameMenuIconName; children: ReactNode }) {
+  return <><GameMenuIcon name={icon} className="game-nav-icon" /><span className="game-nav-label">{children}</span></>;
+}
+
+export function WorkspaceShortcut({ icon, current, children, onClick }: {
+  icon: GameMenuIconName; current?: boolean; children: ReactNode; onClick: () => void;
+}) {
+  return <button type="button" className="game-workspace-action game-nav-control" aria-current={current ? 'page' : undefined} onClick={onClick}>
+    <WorkspaceMenuLabel icon={icon}>{children}</WorkspaceMenuLabel>
+  </button>;
 }

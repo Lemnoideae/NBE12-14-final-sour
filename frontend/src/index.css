@@ -519,25 +519,22 @@
   overflow: auto;
   overscroll-behavior: contain;
 }
-.game-workspace-side > h2 { padding-block-end: .5rem; border-block-end: 1px solid #bd9e65; font-weight: 800; }
-.game-school-summary { font-family: var(--font-pixel); font-size: .875rem; overflow-wrap: anywhere; }
+.game-workspace-side > h2 { padding-block-end: .5rem; border-block-end: 1px solid #bd9e65; font-weight: 900; }
+.game-school-summary { overflow-wrap: anywhere; }
 .game-school-summary > p { color: #65401f; }
-.game-school-summary h2 { font-size: 1.125rem; font-weight: 900; }
+.game-school-summary h2 { font-weight: 900; }
 .game-school-summary dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .125rem .5rem; margin-block-start: .25rem; }
 .game-school-summary dd { text-align: end; font-weight: 700; }
-.game-panel-tabs { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .25rem; }
-.game-panel-tabs .game-workspace-action { position: relative; font-family: var(--font-pixel); font-size: .8125rem; padding-inline: .375rem; }
-.game-panel-tabs [aria-selected='true'] { background: #fde9aa; }
-.game-panel-tabs [aria-selected='true']::before { content: ''; position: absolute; inset: auto 0 0; border-block-end: 3px solid #8b5327; }
-.game-panel-tabs :focus-visible, .game-panel-content:focus-visible { outline: 2px solid #49331d; outline-offset: 2px; }
+.game-panel-tabs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1.2fr); gap: .375rem; padding: .25rem; }
+.game-panel-content:focus-visible { outline: 2px solid #49331d; outline-offset: 2px; }
 .game-panel-content { flex: 1; min-block-size: 16rem; min-inline-size: 0; overflow: auto; overscroll-behavior: contain; border: 1px solid #bd9e65; }
 .game-panel-content [data-phone-shell='embedded'] { overflow: hidden; }
 .game-panel-ranking { padding: .375rem; }
-.game-map-preview { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .375rem; padding: .5rem; background: #fff4d1; border-block-end: 1px solid #bd9e65; font-family: var(--font-pixel); }
+.game-map-preview { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .375rem; padding: .5rem; background: #fff4d1; border-block-end: 1px solid #bd9e65; }
 .game-map-preview button { min-block-size: 2.75rem; }
 .game-map-preview button[aria-disabled='true'] { color: #5c4631; cursor: not-allowed; }
 .game-map-visit-notice { grid-column: 1 / -1; color: #672b14; }
-.game-map-list { padding: .5rem; background: #fdf5df; font-family: var(--font-pixel); font-size: .8125rem; }
+.game-map-list { padding: .5rem; background: #fdf5df; }
 .game-map-row { display: flex; align-items: center; gap: .5rem; width: 100%; min-height: 2.75rem; }
 .game-map-row[aria-pressed='true'] { background: #fde9aa; border-color: #8b5327; }
 .game-workspace-action {
@@ -552,6 +549,195 @@
 }
 .game-workspace-action:hover, .game-workspace-action[aria-current='page'] { background: #fde9aa; }
 .game-center-nav { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; margin-block-start: .5rem; }
+
+/* Use the resolved 3-column mode, not the viewport alone: the compact and demo views can be forced on PC. */
+[data-desktop-game] {
+  --desktop-text-small: .8125rem;
+  --desktop-text: .9375rem;
+  --desktop-title: 1.125rem;
+  font-family: var(--pixel-font);
+  font-size: var(--desktop-text);
+}
+@supports (font-size: 1cqi) {
+  [data-desktop-game] {
+    --desktop-text-small: clamp(.8125rem, .6875rem + .9cqi, .9375rem);
+    --desktop-text: clamp(.9375rem, .8125rem + .9cqi, 1.0625rem);
+    --desktop-title: clamp(1.125rem, .875rem + 1.8cqi, 1.375rem);
+  }
+  [data-desktop-game] :is(.game-top-bar, .game-workspace-side, .game-workspace-center) { container-type: inline-size; }
+}
+[data-desktop-game] :is(.font-press-start, .font-mono) { font-family: var(--pixel-font); font-variant-numeric: tabular-nums; }
+[data-desktop-game] :is(.game-workspace-side > h2, .game-school-summary h2, .game-campus-hud h1) { font-size: var(--desktop-title); line-height: 1.25; }
+[data-desktop-game] :is(.game-workspace-action, .game-school-summary, .game-map-list, .game-map-preview, .game-profile-actions, .game-brand, .game-campus-score) { font-size: var(--desktop-text); }
+[data-desktop-game] :is(.game-map-preview p, .game-brand-caption, .game-school-summary > p, .game-map-list small, [data-testid='map-search-box'] input, .game-campus-score-label) {
+  font-size: var(--desktop-text-small);
+  line-height: 1.45;
+}
+[data-desktop-game] [data-testid='map-search-box']:focus-within { outline: 2px solid #49331d; outline-offset: 2px; }
+
+/* The map itself keeps its sea background; only the workspace shell behind short lists changes. */
+[data-desktop-game] .game-map-frame[data-phone-shell='embedded'] { background: #fdf5df; }
+[data-desktop-game] .game-map-regions {
+  flex-wrap: wrap;
+  flex-wrap: balance;
+  overflow: visible;
+  margin-block-start: 0;
+  /* Keep the plaque's 3px shadow and the 4px focus ring inside the scroll body. */
+  padding: .375rem;
+}
+[data-desktop-game] .game-map-regions button:focus-visible { outline: 2px solid #49331d; outline-offset: 2px; }
+
+/* PC-only overlay: marker controls stay in CSS pixels, separate from the scaled map art. */
+.game-map-pins { position: absolute; inset: 0; z-index: 24; pointer-events: none; }
+.game-map-pin {
+  position: absolute;
+  pointer-events: auto;
+  cursor: pointer;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+}
+.game-map-pin[data-top-rank] { inline-size: 2rem; block-size: 2rem; }
+.game-map-pin-medal {
+  position: absolute;
+  inset: auto 0 0 auto;
+  min-inline-size: .875rem;
+  background: #261608;
+  color: #facc15;
+  font-size: .75rem;
+  line-height: 1.15;
+  text-align: center;
+}
+.game-map-pin-logo {
+  display: grid;
+  place-items: center;
+  inline-size: 100%;
+  block-size: 100%;
+  border: 2px solid #261608;
+  box-shadow: 2px 2px #261608;
+  color: #fff;
+  font-weight: 900;
+}
+.game-map-pin[aria-pressed='true'] .game-map-pin-logo { border-color: #facc15; }
+.game-map-pin:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.game-map-pin-name, .game-map-pin-rank, .game-map-pin-caption {
+  border: 1px solid #261608;
+  box-shadow: 1px 1px #261608;
+  padding: .125rem .25rem;
+  font-size: .75rem;
+  font-weight: 700;
+  line-height: 1.25;
+  background: #fdf5df;
+  color: #261608;
+}
+.game-map-pin-name, .game-map-pin-rank { position: absolute; inline-size: max-content; white-space: nowrap; }
+.game-map-pin-name[data-priority='true'] { background: #fef08a; }
+.game-map-pin-rank { display: flex; align-items: center; gap: .1875rem; padding: 0 .1875rem; letter-spacing: -.02em; background: #261608; color: #fff4cf; border-color: #facc15; }
+.game-map-pin-rank strong { color: #facc15; }
+.game-map-pin-lines { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; stroke: #261608; stroke-width: 1.5; }
+.game-map-pin-caption {
+  position: absolute;
+  inset: auto .25rem .25rem;
+  min-block-size: 1.75rem;
+  text-align: center;
+  overflow-wrap: anywhere;
+  visibility: hidden;
+}
+.game-map-pin-caption[data-revealed='true'] { visibility: visible; }
+.game-map-pins:has(.game-map-pin-caption[data-revealed='true']) { z-index: 26; }
+
+/* Keep shelf cards on the same outer edges as the altar, including while selected. */
+[data-desktop-game] .game-shelf-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-inline-size: 0;
+}
+[data-desktop-game] .game-shelf-card[data-selected] {
+  scale: none;
+  border-color: #261608;
+  box-shadow: inset 0 0 0 2px #facc15, 2px 2px #261608;
+}
+[data-desktop-game] .game-shelf-selected { right: auto; inset-inline-end: .375rem; }
+[data-desktop-game] .game-shelf-card-body { display: flex; align-items: flex-start; gap: .5rem; }
+[data-desktop-game] .game-shelf-card-copy { display: block; flex: 1; min-inline-size: 0; }
+[data-desktop-game] :is(.game-shelf-card-name, .game-shelf-card-description) {
+  display: block;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+  white-space: normal;
+  line-height: 1.3;
+}
+[data-desktop-game] .game-shelf-card-name { font-size: .875rem; }
+[data-desktop-game] .game-shelf-card-description { margin: .125rem 0 0; font-size: .75rem; }
+[data-desktop-game] .game-shelf-api-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border: 2px solid #261608;
+  background: #fef08a;
+  box-shadow: 2px 2px #261608;
+}
+[data-desktop-game] .game-shelf-api-details {
+  display: block;
+  margin-block-start: .5rem;
+  padding-block-start: .375rem;
+  border-block-start: 1px solid #eeddb6;
+  overflow-wrap: anywhere;
+}
+
+/* Match the mobile plaques' depth without changing compact buttons or general-purpose form actions. */
+.game-nav-icon { display: none; }
+[data-desktop-game] .game-nav-control {
+  --nav-face: #824921;
+  --nav-text: #fff4cf;
+  --nav-light: #ba7944;
+  --nav-edge: #562d13;
+  --nav-depth: 3px;
+  --nav-ink: #261608;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .25em;
+  min-inline-size: 0;
+  min-block-size: max(44px, 2.75rem);
+  padding: .375rem .4375rem;
+  border: 2px solid var(--nav-ink);
+  background: var(--nav-face);
+  color: var(--nav-text);
+  box-shadow: inset 0 0 0 1px var(--nav-light), inset 0 0 0 3px var(--nav-edge), var(--nav-depth) var(--nav-depth) var(--nav-ink);
+  line-height: 1.25;
+}
+[data-desktop-game] .game-panel-tabs .game-nav-control {
+  gap: .1875em;
+  padding-inline: .1875rem;
+  font-size: var(--desktop-text-small);
+}
+[data-desktop-game] .game-nav-icon { display: block; flex: none; inline-size: 1em; block-size: 1em; }
+[data-desktop-game] .game-nav-label { min-inline-size: 0; word-break: keep-all; overflow-wrap: anywhere; }
+[data-desktop-game] .game-nav-control:is([aria-current='page'], [aria-selected='true']) {
+  --nav-face: #facc15;
+  --nav-text: #261608;
+  --nav-light: #fff1a8;
+  --nav-edge: #9d6309;
+}
+[data-desktop-game] .game-nav-control:where(:not(:disabled, [aria-disabled='true'])):hover { filter: brightness(1.1); }
+[data-desktop-game] .game-nav-control:where(:not(:disabled, [aria-disabled='true'])):active { --nav-depth: 1px; }
+[data-desktop-game] .game-nav-control:focus-visible { outline: 2px solid #49331d; outline-offset: 2px; z-index: 1; }
+[data-desktop-game] .game-nav-control:is(:disabled, [aria-disabled='true']) {
+  --nav-face: #f0dfb9;
+  --nav-text: #5c4631;
+  --nav-light: #fff4d1;
+  --nav-edge: #d1b37c;
+  --nav-depth: 1px;
+  color: var(--nav-text);
+  cursor: not-allowed;
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-desktop-game] .game-nav-control:where(:not(:disabled, [aria-disabled='true'])):active { transform: translate(2px, 2px); }
+}
 
 /* M6: keep portrait mock frames scrollable on the page, but fit service modals to
    the actual viewport (including short landscape windows). No orientation lock. */

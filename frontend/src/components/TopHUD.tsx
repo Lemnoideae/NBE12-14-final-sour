@@ -66,7 +66,7 @@ export const TopHUD: React.FC<TopHUDProps> = ({
   const visiting = mode === 'visit';
 
   return (
-    <header className="rpg-box px-2.5 py-2 relative z-30 select-none">
+    <header className="game-campus-hud rpg-box px-2.5 py-2 relative z-30 select-none">
       {/* Top row: 로고, 게임 태그, 학교명(넘치면 왕복), 레벨, 소리. 지역은 로고 title로 제공해 한 줄로 유지 */}
       <div className="flex items-center justify-between gap-1.5 border-b-2 border-[#261608]/20 pb-1.5 mb-1.5">
         {/* Left: Square Pixel Badge & School Name */}
@@ -120,6 +120,7 @@ export const TopHUD: React.FC<TopHUDProps> = ({
             </span>
           ) : (
             <button
+              type="button"
               onClick={onOpenMap}
               title="캠퍼스 성장도 확인하기"
               className="pixel-plaque plaque-wood px-2 py-1 text-xs font-pixel font-bold cursor-pointer flex items-center gap-1"
@@ -130,6 +131,7 @@ export const TopHUD: React.FC<TopHUDProps> = ({
           )}
 
           <button
+            type="button"
             onClick={() => {
               onToggleSound();
               soundManager.playTabSound();
@@ -151,10 +153,10 @@ export const TopHUD: React.FC<TopHUDProps> = ({
       <div className="flex items-center justify-between gap-2">
         {/* School Score with Sunflower Yellow Accent */}
         <div className="flex items-baseline gap-1.5 min-w-0">
-          <span className="text-[11px] text-[#8b5327] font-bold font-pixel shrink-0">
+          <span className="game-campus-score-label text-[11px] text-[#8b5327] font-bold font-pixel shrink-0">
             학교 점수
           </span>
-          <div data-testid={visiting ? 'visit-score' : undefined} className="font-press-start text-xs sm:text-sm text-[#261608] font-black tracking-tight truncate bg-[#fef08a] border-2 border-[#261608] px-1.5 py-0.5 shadow-[1px_1px_0px_#261608]">
+          <div data-testid={visiting ? 'visit-score' : undefined} className="game-campus-score font-press-start text-xs sm:text-sm text-[#261608] font-black tracking-tight truncate bg-[#fef08a] border-2 border-[#261608] px-1.5 py-0.5 shadow-[1px_1px_0px_#261608]">
             {formattedScore}
             <span className="text-[10px] font-pixel font-bold ml-1 text-[#8b5327]">점</span>
           </div>
@@ -162,6 +164,7 @@ export const TopHUD: React.FC<TopHUDProps> = ({
 
         {/* Rank Badge: "전국 7위 ▲2" */}
         <button
+          type="button"
           onClick={onOpenRankings}
           className="pixel-plaque plaque-yellow px-2 py-1 flex items-center gap-1 text-xs font-pixel font-bold cursor-pointer shrink-0"
           title="전국 대학 순위 보기"

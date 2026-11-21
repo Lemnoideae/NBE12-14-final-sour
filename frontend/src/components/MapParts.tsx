@@ -77,7 +77,7 @@ export function MapFrame({ preview, search, list, searching, children }: {
   preview?: React.ReactNode; search: React.ReactNode; list: React.ReactNode; searching: boolean; children: React.ReactNode;
 }) {
   const embedded = preview !== undefined;
-  return <PhoneShell embedded={embedded} background="bg-[#38bdf8]">
+  return <PhoneShell embedded={embedded} background="bg-[#38bdf8]" className="game-map-frame justify-between">
     {preview}
     <MapScrollBody>
       {search}
@@ -132,7 +132,7 @@ export function MapSearchHeader({
         {badge}
       </div>
 
-      <div className="flex items-center gap-2 overflow-x-auto px-1 py-2.5 -mt-2.5 scrollbar-none" role="group" aria-label="권역 선택">
+      <fieldset className="game-map-regions flex min-w-0 items-center gap-2 overflow-x-auto px-1 py-2.5 -mt-2.5 scrollbar-none" aria-label="권역 선택">
         {MAP_REGIONS.map((item) => {
           const isActive = item === region;
           return (
@@ -152,7 +152,7 @@ export function MapSearchHeader({
             </button>
           );
         })}
-      </div>
+      </fieldset>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import type { SchoolView } from '../data/schoolDirectory';
 import type { SchoolId } from '../data/schoolIds';
 import { soundManager } from '../utils/sound';
 import { SchoolBadge } from './MapParts';
+import { WorkspaceMenuLabel } from './GameWorkspace';
 
 export function WorkspaceMapPreview({ school, onVisit, blocked }: { school?: SchoolView; onVisit: (id: SchoolId) => void; blocked?: string }) {
   const noticeId = useId();
@@ -13,8 +14,8 @@ export function WorkspaceMapPreview({ school, onVisit, blocked }: { school?: Sch
         <p className="text-xs">{school.city} · {school.score.toLocaleString('ko-KR')}점</p>
       </> : <p className="text-xs">지도나 목록에서 학교를 선택하세요.</p>}
     </div>
-    {school && <button type="button" className="game-workspace-action" aria-label={`${school.name} 방문`} aria-disabled={!!blocked} aria-describedby={blocked ? noticeId : undefined}
-      onClick={() => { if (!blocked) { soundManager.playBuySound(); onVisit(school.id); } }}>방문</button>}
+    {school && <button type="button" className="game-workspace-action game-nav-control" aria-label={`${school.name} 방문`} aria-disabled={!!blocked} aria-describedby={blocked ? noticeId : undefined}
+      onClick={() => { if (!blocked) { soundManager.playBuySound(); onVisit(school.id); } }}><WorkspaceMenuLabel icon="visit">방문</WorkspaceMenuLabel></button>}
     {school && blocked && <p id={noticeId} role="status" className="game-map-visit-notice text-xs">{blocked}</p>}
   </section>;
 }
