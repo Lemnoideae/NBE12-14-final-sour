@@ -36,7 +36,7 @@ export function GameCompetitionPanel({ tab, onTabChange, mapContext, onMapContex
             <MapScreenPhone context={mapContext} onContextChange={onMapContextChange} panel={{ onVisit, visitBlocked }} />
           </MockLoadGate>;
           case 'rankings': return <MockLoadGate name="순위" variant="panel">
-            <div className="game-panel-ranking"><RankingsView currentSchoolScore={schoolScore} /></div>
+            <RankingsView currentSchoolScore={schoolScore} desktopPanel />
           </MockLoadGate>;
           case 'alliance': return <GameAllianceFlow embedded screen={allianceScreen} onScreenChange={setAllianceScreen}
             onBack={() => openAndFocus('map')} onGoToLogin={onGoToLogin} />;

@@ -492,6 +492,9 @@ def compact_scope(browser, url):
             expect(area.locator('[data-map-pins]')).to_have_count(0)
             regions.get_by_role('button', name='제주', exact=True).click()
             expect(area).to_have_attribute('data-region', '제주')
+            nav.get_by_role('button', name='순위', exact=True).click()
+            expect(page.get_by_text('내 소속', exact=True)).to_be_visible()
+            expect(page.get_by_role('region', name='순위 목록')).to_have_count(0)
             shop.click()
             card = page.get_by_role('button', name='커피 한 잔 구매 선택')
             expect(card).to_be_visible()
@@ -531,6 +534,46 @@ def api_manual_tabs(page, panel, calls, sockets):
     panel.get_by_role('tab', name='지도').click()
 
 
+def api_ranking_layout(page, panel, data, shot):
+    page.set_viewport_size({'width': 1024, 'height': 481})
+    panel.get_by_role('tab', name='순위').click()
+    container = panel.locator('.game-panel-ranking')
+    scroll = container.get_by_role('region', name='순위 목록')
+    own = container.locator('.game-ranking-self')
+    badge = own.locator('.game-ranking-self-badge')
+    score = own.get_by_text('12,345,678,901', exact=True)
+    expect(badge).to_have_text('내 학교')
+    expect(score).to_be_in_viewport(ratio=1)
+    expect(own.get_by_text('12345', exact=True)).to_be_in_viewport(ratio=1)
+    expect(own).to_be_in_viewport(ratio=1)
+    badge_box, score_box = badge.bounding_box(), score.bounding_box()
+    assert score_box['y'] >= badge_box['y'] + badge_box['height'], (badge_box, score_box)
+    snapshot(page, shot)
+    before = own.bounding_box()
+    rank = data['/rankings/universities']['myUniversity']
+    rank['totalScore'] += 1
+    page.clock.run_for(5100)
+    expect(own.get_by_text('12,345,678,902', exact=True)).to_be_visible()
+    assert own.bounding_box() == before
+
+    container.get_by_role('button', name='교내 개인').click()
+    expect(container.get_by_role('alert')).to_contain_text('순위 조회에 실패했습니다')
+    expect(own).to_have_count(0)
+    data['/rankings/universities/8/users'] = {
+        'items': [], 'hasNext': False, 'page': 0, 'size': 20, 'totalCount': 0, 'me': None,
+    }
+    container.get_by_role('button', name='다시 시도').click()
+    expect(scroll.get_by_role('status')).to_have_text('표시할 순위가 없어요.')
+    expect(own).to_have_count(0)
+    assert scroll.evaluate('''el => {
+        const panel = el.closest('.game-panel-content');
+        const gutter = parseFloat(getComputedStyle(panel).borderBottomWidth)
+            + parseFloat(getComputedStyle(el.parentElement).paddingBottom);
+        return Math.abs(panel.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom - gutter) < 1;
+    }'''), 'Empty board must not reserve a self-rank slot'
+    panel.get_by_role('tab', name='지도').click()
+
+
 def api_shelf(browser, args):
     page = browser.new_page(viewport={'width': 1440, 'height': 900}, reduced_motion='reduce')
     profile = {'id': 501, 'nickname': '검증학생', 'email': 'student@example.test', 'role': 'USER', 'status': 'ACTIVE',
@@ -542,9 +585,11 @@ def api_shelf(browser, args):
     long_item = {**item, 'id': 4,
                  'name': '캠퍼스 기념 특별 메뉴 오늘의 야간 자율 학습 한정 간식 세트',
                  'content': '응원 이벤트 동안 사용할 수 있는 특별한 아이템입니다. 효과를 적용하면 기존 아이템 효과를 교체하며, 사용 가능 시간은 구매 확인창에서도 볼 수 있습니다. 식별 코드: ' + 'CAMPUS2026' * 5}
-    rank = {'rank': 7, 'universityId': 8, 'name': '한양대학교', 'logoUrl': None, 'totalScore': 1234, 'rankChange': -1}
+    rank = {'rank': 12345, 'universityId': 8, 'name': '한양대학교', 'logoUrl': None,
+            'totalScore': 12345678901, 'rankChange': -1}
     calls, sockets = [], []
-    data = {'/rankings/universities': {'items': [rank], 'myUniversity': rank, 'hasNext': False, 'page': 0},
+    data = {'/rankings/universities': {'items': [rank], 'myUniversity': rank, 'hasNext': False,
+                                      'page': 0, 'size': 20, 'totalCount': 1},
             '/chat/universities/8/messages': {'items': [], 'hasNext': False, 'nextCursor': None}, '/alliances/me': None,
             '/auth/reissue': {'accessToken': 'layout-fixture', 'expiresInSeconds': 3600}, '/users/me': profile,
             '/items': [item, long_item], '/items/me/active': None,
@@ -573,6 +618,8 @@ def api_shelf(browser, args):
         panel = ready(page, args.api_url)
         api_manual_tabs(page, panel, calls, sockets)
         print('PASS API tab focus/activation: no ranking request, guestbook request, or chat connection on focus alone')
+        api_ranking_layout(page, panel, data, args.out / '1024x481-rankings-api.png')
+        print('PASS API ranking: short list, refresh, failure/retry, and empty with no self-rank slot')
         results = {}
         for width, height in ((1440, 900), (1024, 720)):
             page.set_viewport_size({'width': width, 'height': height})

@@ -191,17 +191,36 @@ def map_search_metrics(panel, search_shot):
 def rankings_metrics(page, panel, shot):
     panel.get_by_role('tab', name='순위').click()
     container = panel.locator('.game-panel-ranking')
-    expect(container.get_by_text('전국 대항전', exact=True)).to_be_visible()
+    scroll = container.get_by_role('region', name='순위 목록')
+    expect(scroll).to_be_visible()
+    expect(container.locator('.game-ranking-self-badge')).to_have_text('내 학교')
     snapshot(page, shot)
-    return panel.evaluate('''panel => {
-        const ranking = panel.querySelector('.game-panel-ranking');
+    before = ranking_layout(container)
+    rows = scroll.locator('.game-ranking-row')
+    expect(rows).to_have_count(12)
+    scroll.focus()
+    expect(scroll).to_be_focused()
+    # A smooth End animation can keep following a moving bottom as mock pages append.
+    scroll.evaluate("el => el.scrollTo({ top: el.scrollHeight, behavior: 'instant' })")
+    expect(rows).to_have_count(22)
+    after = ranking_layout(container)
+    assert after['scrollTop'] > 0 and after['myRowTop'] == before['myRowTop'], after
+    assert after['podiumBottom'] < before['podiumBottom'] and after['scrollAreas'] == 1, after
+    for tab, badge in (('교내 학과', '내 학과'), ('교내 개인', '내 순위'), ('학교 순위', '내 학교')):
+        container.get_by_role('button', name=tab).click()
+        expect(container.locator('.game-ranking-self-badge')).to_have_text(badge)
+        metrics = ranking_layout(container)
+        assert metrics['scrollTop'] == 0 and metrics['pinned'], metrics
+    return before
+
+
+def ranking_layout(container):
+    return container.evaluate('''ranking => {
         const content = ranking.closest('.game-panel-content');
         const contentRect = content.getBoundingClientRect();
-        const scrollList = [...ranking.querySelectorAll('div')].find(
-            el => getComputedStyle(el).overflowY === 'auto' || getComputedStyle(el).overflowY === 'scroll'
-        );
-        const listRect = scrollList ? scrollList.getBoundingClientRect() : null;
-        const rows = scrollList ? [...scrollList.querySelectorAll(':scope > div.rpg-box')] : [];
+        const scrollList = ranking.querySelector('.game-ranking-scroll');
+        const listRect = scrollList.getBoundingClientRect();
+        const rows = [...scrollList.querySelectorAll('.game-ranking-row')];
         const visibleRows = listRect ? rows.filter(row => {
             const r = row.getBoundingClientRect();
             return r.bottom > listRect.top + 1 && r.top < listRect.bottom - 1;
@@ -210,12 +229,23 @@ def rankings_metrics(page, panel, shot):
             const r = row.getBoundingClientRect();
             return r.top >= listRect.top - 1 && r.bottom <= listRect.bottom + 1;
         }) : [];
-        const myChange = ranking.querySelector('[data-testid="my-rank-change"]');
-        const myRow = myChange ? myChange.closest('div.flex.items-center.justify-between') : null;
-        const myRect = myRow ? myRow.getBoundingClientRect() : null;
-        const badge = myRow ? [...myRow.querySelectorAll('span')].find(
-            el => ['MY', '내 학교', '내 학과', '내 순위'].includes(el.textContent.trim())
-        ) : null;
+        const myRow = ranking.querySelector('.game-ranking-self');
+        const myRect = myRow?.getBoundingClientRect();
+        const badge = myRow?.querySelector('.game-ranking-self-badge');
+        const textFits = el => {
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            const text = range.getBoundingClientRect();
+            return text.width > 0 && text.left >= myRect.left && text.right <= myRect.right;
+        };
+        const scrollAreas = [content, content.parentElement, ...ranking.querySelectorAll('div')]
+            .filter(el => ['auto', 'scroll'].includes(getComputedStyle(el).overflowY)
+                && el.scrollHeight > el.clientHeight + 1).length;
+        const pinned = myRect && myRect.top >= listRect.bottom + 4 && contentRect.bottom - myRect.bottom >= 4
+            && contentRect.bottom - myRect.bottom <= 12 && myRect.bottom <= innerHeight
+            && scrollList.scrollWidth === scrollList.clientWidth
+            && [badge, myRow.querySelector('.game-ranking-self-rank'), myRow.lastElementChild.firstElementChild]
+                .every(textFits);
         return {
             panelContentHeight: Number(contentRect.height.toFixed(2)),
             listHeight: listRect ? Number(listRect.height.toFixed(2)) : 0,
@@ -226,7 +256,11 @@ def rankings_metrics(page, panel, shot):
             fullVisibleRowCount: fullVisibleRows.length,
             myRowTop: myRect ? Number((myRect.top - contentRect.top).toFixed(2)) : null,
             myRowBottomGap: myRect ? Number((contentRect.bottom - myRect.bottom).toFixed(2)) : null,
-            myBadgeText: badge ? badge.textContent.trim() : null,
+            myBadgeText: badge?.textContent.trim() ?? null,
+            scrollTop: scrollList.scrollTop,
+            scrollAreas,
+            podiumBottom: scrollList.querySelector('.game-ranking-podium')?.getBoundingClientRect().bottom ?? null,
+            pinned,
         };
     }''')
 
@@ -288,6 +322,13 @@ def main():
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(executable_path=args.chromium)
         cases = [run_case(browser, args, *spec) for spec in VIEWPORTS]
+        min_page = browser.new_page(viewport={'width': 1024, 'height': 481}, reduced_motion='reduce')
+        try:
+            panel = ready(min_page, args.mock_url)
+            minimum = rankings_metrics(min_page, panel, args.out / '1024x481-rankings.png')
+            assert minimum['pinned'] and minimum['scrollAreas'] == 1, minimum
+        finally:
+            min_page.close()
         version = browser.version
         browser.close()
 
@@ -305,12 +346,14 @@ def main():
         hover = case['mapHover']
         if hover['bottomBoxCount'] != 1 or not hover['captionVisible'] or hover['captionText'] != 'KAIST':
             failures.append(f"{n}: map bottom hint and hovered school name are not unified into one box")
-        if case['rankings']['listMaxHeight'] == '160px' or case['rankings']['myBadgeText'] != '내 학교':
-            failures.append(f"{n}: ranking list still capped at 160px or bottom badge is {case['rankings']['myBadgeText']!r}")
+        rankings = case['rankings']
+        if (rankings['listMaxHeight'] != 'none' or not rankings['pinned'] or rankings['scrollAreas'] != 1
+                or (case['viewport']['width'] == 1920 and rankings['fullVisibleRowCount'] <= 3)):
+            failures.append(f'{n}: ranking list and pinned self-rank geometry failed: {rankings}')
         if case['soon']['chatSoonCount'] > 0 or case['soon']['guestbookSoonCount'] > 0:
             failures.append(f"{n}: SOON ribbon still shown in PC mock chat/guestbook")
 
-    report = {'chromium': version, 'cases': cases, 'failures': failures}
+    report = {'chromium': version, 'cases': cases, 'rankingsMinimum': minimum, 'failures': failures}
     (args.out / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     for failure in failures:
         print(f'FAIL {failure}')

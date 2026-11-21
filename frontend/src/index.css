@@ -501,7 +501,8 @@
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   gap: .75rem;
-  block-size: max(30rem, calc(100dvh - 5.25rem));
+  --game-workspace-available-height: calc(100dvh - 5.25rem);
+  block-size: max(30rem, var(--game-workspace-available-height));
 }
 .game-workspace-side, .game-workspace-center {
   min-inline-size: 0;
@@ -529,7 +530,6 @@
 .game-panel-content:focus-visible { outline: 2px solid #49331d; outline-offset: 2px; }
 .game-panel-content { flex: 1; min-block-size: 16rem; min-inline-size: 0; overflow: auto; overscroll-behavior: contain; border: 1px solid #bd9e65; }
 .game-panel-content [data-phone-shell='embedded'] { overflow: hidden; }
-.game-panel-ranking { padding: .375rem; }
 .game-map-preview { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .375rem; padding: .5rem; background: #fff4d1; border-block-end: 1px solid #bd9e65; }
 .game-map-preview button { min-block-size: 2.75rem; }
 .game-map-preview button[aria-disabled='true'] { color: #5c4631; cursor: not-allowed; }
@@ -705,6 +705,37 @@
 [data-desktop-game] .game-clicker-stat { color: #261608; }
 [data-desktop-game] .game-clicker-stat-num { font-weight: 900; font-variant-numeric: tabular-nums; }
 [data-desktop-game] .game-clicker-note { color: #65401f; }
+
+/* Keep self rank onscreen even when the other columns hit the workspace's minimum height. */
+[data-desktop-game] .game-workspace-side:has(> .game-panel-content > .game-panel-ranking) {
+  max-block-size: var(--game-workspace-available-height);
+}
+[data-desktop-game] .game-panel-content:has(> .game-panel-ranking) {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+}
+/* The podium and rows share one scroll area; status notices can still scroll in the outer panel. */
+[data-desktop-game] .game-panel-content:has(> .game-panel-ranking > .game-ranking-scroll) { overflow: clip; }
+[data-desktop-game] .game-panel-ranking { flex: 1; min-block-size: 0; padding: .5rem; }
+[data-desktop-game] .game-panel-ranking > :not(.game-ranking-scroll) { flex-shrink: 0; }
+[data-desktop-game] .game-ranking-scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: .375rem;
+  min-block-size: 0;
+  padding: .25rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+[data-desktop-game] .game-ranking-scroll:focus-visible { outline: 2px solid #49331d; outline-offset: -2px; }
+[data-desktop-game] .game-ranking-list { flex: none; max-height: none; overflow: visible; padding: 0; }
+[data-desktop-game] .game-ranking-self { margin-block-start: 0; flex-wrap: wrap; gap: .25rem; }
+[data-desktop-game] .game-ranking-self-meta { max-inline-size: 100%; }
+[data-desktop-game] .game-ranking-self-rank { inline-size: auto; min-inline-size: 1.25rem; }
+[data-desktop-game] .game-ranking-self-badge { font-size: .625rem; white-space: nowrap; }
+[data-desktop-game] .game-ranking-self-score { margin-inline-start: auto; }
 
 /* The map itself keeps its sea background; only the workspace shell behind short lists changes. */
 [data-desktop-game] .game-map-frame[data-phone-shell='embedded'] { background: #fdf5df; }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, type ReactNode, type UIEventHandler } from 'react';
 import { Crown, RefreshCw } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { useMySchool } from '../hooks/useSchoolViews';
@@ -10,11 +10,32 @@ interface RankingsViewProps {
   onCheer?: () => void;
   cheerCooldown?: number;
   onBackToCampus?: () => void;
+  desktopPanel?: boolean;
+}
+
+const SELF_RANK_LABEL: Record<RankingTab, string> = {
+  school: '내 학교',
+  dept: '내 학과',
+  personal: '내 순위',
+};
+
+function RankingScroll({ desktopPanel, tab, onScroll, children }: {
+  desktopPanel: boolean;
+  tab: RankingTab;
+  onScroll: UIEventHandler<HTMLDivElement>;
+  children: ReactNode;
+}) {
+  if (!desktopPanel) return <>{children}</>;
+  // Remount only the scroll area when changing boards, not when refreshing a board.
+  return <div key={tab} className="game-ranking-scroll" role="region" aria-label="순위 목록" tabIndex={0} onScroll={onScroll}>
+    {children}
+  </div>;
 }
 
 export const RankingsView: React.FC<RankingsViewProps> = ({
   currentSchoolScore,
   onBackToCampus,
+  desktopPanel = false,
 }) => {
   const [activeRankingTab, setActiveRankingTab] = useState<RankingTab>('school');
   const [refreshCountdown, setRefreshCountdown] = useState<number>(5);
@@ -37,6 +58,10 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   const remainingRows = board.rows.slice(3);
   const myRow = board.mine;
   const moreLabel = board.isSample ? '+ 10개 대학 더 불러오기' : '+ 더 불러오기';
+  const onRankingScroll: UIEventHandler<HTMLDivElement> = ({ currentTarget: el }) => {
+    // The button remains available when the first page is too short to scroll.
+    if (el.scrollHeight - (el.scrollTop + el.clientHeight) <= 24) board.loadMore();
+  };
 
   const renderPixelCrest = (item: RankingBoardRow, size: 'sm' | 'md' | 'lg' = 'sm') => {
     const sizeClass = { lg: 'w-10 h-10 text-sm font-black', md: 'w-8 h-8 text-xs font-bold', sm: 'w-6 h-6 text-[10px] font-bold' }[size];
@@ -55,7 +80,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   };
 
   return (
-    <div className="w-full flex flex-col gap-1.5 animate-fadeIn select-none">
+    <div className={`w-full flex flex-col gap-1.5 animate-fadeIn select-none${desktopPanel ? ' game-panel-ranking' : ''}`}>
       {/* Header Bar with "5초마다 갱신" and back button */}
       <div className="rpg-box p-2 flex items-center justify-between">
         <div className="flex items-center gap-1.5">
@@ -123,9 +148,10 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
       </div>
 
       {board.status === 'ready' ? (<>
+      <RankingScroll desktopPanel={desktopPanel} tab={activeRankingTab} onScroll={onRankingScroll}>
       {board.rows.length === 0 && <p role="status" className="rpg-box p-3 font-pixel text-xs">표시할 순위가 없어요.</p>}
       {/* Pixel Podium on Grassy Stage */}
-      {top1 && <div className="w-full border-3 border-[#261608] shadow-[2px_2px_0px_#261608] bg-[#38a134] overflow-hidden shrink-0 relative flex flex-col justify-end pt-2 pb-1 px-1.5">
+      {top1 && <div className="game-ranking-podium w-full border-3 border-[#261608] shadow-[2px_2px_0px_#261608] bg-[#38a134] overflow-hidden shrink-0 relative flex flex-col justify-end pt-2 pb-1 px-1.5">
         <div className="absolute inset-x-0 top-0 h-6 bg-[#38bdf8] border-b-2 border-[#261608] flex items-center justify-between px-2">
           <span className="font-pixel text-[8px] text-white font-bold">
             👑 TOP 3 명예의 전당
@@ -193,18 +219,13 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
 
       {/* Scrollable Parchment Rows (rank 4 and below, as loaded) */}
       <div
-        className="flex flex-col gap-1 max-h-[160px] overflow-y-auto pr-0.5"
-        onScroll={(event) => {
-          // Same as the standalone ranking screen: reaching the end loads more. The button stays as a fallback.
-          // Several scroll events can arrive before the longer list renders; loadMore ignores them while loading.
-          const el = event.currentTarget;
-          if (el.scrollHeight - (el.scrollTop + el.clientHeight) <= 24) board.loadMore();
-        }}
+        className="game-ranking-list flex flex-col gap-1 max-h-[160px] overflow-y-auto pr-0.5"
+        onScroll={desktopPanel ? undefined : onRankingScroll}
       >
         {remainingRows.map((row) => (
           <div
             key={row.key}
-            className="rpg-box p-1.5 flex items-center justify-between bg-[#fdf5df] border-2"
+            className="game-ranking-row rpg-box p-1.5 flex items-center justify-between bg-[#fdf5df] border-2"
           >
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="font-press-start text-[10px] font-black text-[#261608] w-5 text-center shrink-0">
@@ -248,16 +269,18 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
         )}
       </div>
 
-      {/* My Row: Pinned at bottom with glowing yellow pixel border */}
+      </RankingScroll>
+
+      {/* My Row: Outside the desktop scroll area, or just after the list in compact mode. */}
       {myRow && (
         <div
-          className="p-1.5 border-3 border-[#facc15] bg-[#fef08a] shadow-[0_0_0_2px_#261608,2px_2px_0px_#261608] flex items-center justify-between mt-1"
+          className="game-ranking-self p-1.5 border-3 border-[#facc15] bg-[#fef08a] shadow-[0_0_0_2px_#261608,2px_2px_0px_#261608] flex items-center justify-between mt-1"
           style={{
             boxShadow: '0 0 0 2px #261608, 2px 2px 0px #261608, 0 0 8px rgba(250, 204, 21, 0.9)',
           }}
         >
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="font-press-start text-xs font-black text-[#261608] w-5 text-center shrink-0">
+          <div className="game-ranking-self-meta flex items-center gap-1.5 min-w-0">
+            <span className="game-ranking-self-rank font-press-start text-xs font-black text-[#261608] w-5 text-center shrink-0">
               {myRow.rank}
             </span>
             {renderPixelCrest(myRow, 'sm')}
@@ -266,14 +289,14 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                 <span className="font-pixel text-xs font-black text-[#261608] truncate">
                   {myRow.name}
                 </span>
-                <span className="text-[8px] bg-[#e11d48] text-white font-mono px-0.5 border border-[#261608] shrink-0 font-black">
-                  MY
+                <span className="game-ranking-self-badge text-[8px] bg-[#e11d48] text-white font-mono px-0.5 border border-[#261608] shrink-0 font-black">
+                  {desktopPanel ? SELF_RANK_LABEL[activeRankingTab] : 'MY'}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="game-ranking-self-score flex items-center gap-1 shrink-0">
             <span className="font-press-start text-xs text-[#261608] font-black">
               {myRow.score.toLocaleString('ko-KR')}
             </span>
