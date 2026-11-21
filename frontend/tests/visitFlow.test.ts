@@ -30,6 +30,7 @@ dom.window.HTMLElement.prototype.scrollIntoView = function () {};
 installDialogStub(dom.window);
 
 const { render, screen, fireEvent, act, cleanup, within } = await import('@testing-library/react');
+const { clickTestView } = await import('./helpers/mockTools');
 const { MockGameProvider, useMockGame } = await import('../src/hooks/useMockGame');
 const { default: App } = await import('../src/App');
 const { VisitingScreen1Phone } = await import('../src/components/VisitingScreen1Phone');
@@ -61,7 +62,7 @@ after(() => { assetHooks.deregister(); dom.window.close(); });
 
 test('실제 경로: 캠퍼스 지도 탭 → 단일 지도 → 방문 → 지도 복귀 시 권역·검색·선택이 그대로다', () => {
   mountApp();
-  click('🎮 메인 게임 화면');
+  clickTestView('🎮 메인 게임 화면');
   click('지도');
   click('전국 지도');
   assert.equal(screen.getAllByTestId('map-area').length, 1, '단일 지도로 들어간다(D1)');
@@ -92,7 +93,7 @@ test('실제 경로: 캠퍼스 지도 탭 → 단일 지도 → 방문 → 지�
 
 test('A 방문 → 지도 → B 방문에서 학교 정보가 바뀌고 내 학교로 돌아가면 캠퍼스가 열린다', () => {
   mountApp();
-  click('🗺️ 단일 폰 지도');
+  clickTestView('🗺️ 단일 폰 지도');
   fireEvent.click(chip('영남'));
   const [a, b] = filterSchools(views, '영남', '');
   click(`${a.name} 방문`);
@@ -108,7 +109,7 @@ test('A 방문 → 지도 → B 방문에서 학교 정보가 바뀌고 내 학�
 
 test('지도에서 내 학교를 고르면 방문 화면이 아니라 내 캠퍼스로 간다', () => {
   mountApp();
-  click('🗺️ 단일 폰 지도');
+  clickTestView('🗺️ 단일 폰 지도');
   click('한양대학교 방문');
   assert.ok(screen.getByRole('button', { name: '캠퍼스 클릭 영역' }));
   assertAbsent(screen.queryByText('다른 학교는 구경만 할 수 있어요'));
@@ -116,7 +117,7 @@ test('지도에서 내 학교를 고르면 방문 화면이 아니라 내 캠퍼
 
 test('방문 화면의 방명록은 같은 학교 이름으로 열리고 닫으면 같은 학교로 돌아온다 (D3)', () => {
   mountApp();
-  click('🗺️ 단일 폰 지도');
+  clickTestView('🗺️ 단일 폰 지도');
   const kaist = view(SCHOOL_ID.kaist);
   click(`${kaist.name} 방문`);
   const trigger = screen.getByRole('button', { name: `${kaist.name} 방명록 보기` });
@@ -131,7 +132,7 @@ test('방문 화면의 방명록은 같은 학교 이름으로 열리고 닫으�
 
 test('학교 정보 시트의 방명록 전체보기는 정보 시트를 닫고 같은 학교 방명록을 연다 (V2, Q2)', () => {
   mountApp();
-  click('🗺️ 단일 폰 지도');
+  clickTestView('🗺️ 단일 폰 지도');
   const kaist = view(SCHOOL_ID.kaist);
   click(`${kaist.name} 방문`);
   fireEvent.click(screen.getByTestId('visit-info-button'));
@@ -144,7 +145,7 @@ test('학교 정보 시트의 방명록 전체보기는 정보 시트를 닫고 
 
 test('방문 방명록 새 글은 좋아요 0·미선택으로 시작하고 명시적 좋아요만 반영한다', () => {
   mountApp();
-  click('🗺️ 단일 폰 지도');
+  clickTestView('🗺️ 단일 폰 지도');
   click(`${view(SCHOOL_ID.kaist).name} 방문`);
   click(`${view(SCHOOL_ID.kaist).name} 방명록 보기`);
   const dialog = screen.getByRole('dialog', { name: `${view(SCHOOL_ID.kaist).name} 방명록` });
@@ -187,7 +188,7 @@ test('관전 클릭은 시간을 고정하면 게임 상태를 바꾸지 않고 
   t.mock.method(Math, 'random', () => 0.9);
   const initial = { ...INITIAL_GAME_STATE, activeBuff: { itemId: 'single-use-fixture', expiresAt: 300000 } };
   mountApp(initial, SINGLE_USE);
-  click('🗺️ 단일 폰 지도');
+  clickTestView('🗺️ 단일 폰 지도');
   const pusan = view(SCHOOL_ID.pusan);
   click(`${pusan.name} 방문`);
   const before = latest.state;
@@ -210,7 +211,7 @@ test('방문 중에도 시간 버프는 정상 만료되고 이동이 만료 시
   act(() => { latest.buy('coffee'); });
   const expiresAt = latest.state.activeBuff?.expiresAt;
   assert.equal(expiresAt, 31000);
-  click('🗺️ 단일 폰 지도');
+  clickTestView('🗺️ 단일 폰 지도');
   click(`${view(SCHOOL_ID.kaist).name} 방문`);
   act(() => { t.mock.timers.tick(10000); });
   assert.equal(latest.state.activeBuff?.expiresAt, expiresAt);
@@ -223,7 +224,7 @@ test('방문 중에도 시간 버프는 정상 만료되고 이동이 만료 시
 
 test('2-Phone 방문 비교 화면은 실제 학교를 보이고 관전 클릭이 점수를 바꾸지 않는다 (D4)', () => {
   mountApp();
-  click('📖 2-Phone 방문교 방명록');
+  clickTestView('📖 2-Phone 방문교 방명록');
   const demo = view(DEMO_VISIT_SCHOOL_ID);
   const before = latest.state;
   fireEvent.click(screen.getByRole('button', { name: `${demo.name} 캠퍼스 (관전 모드)` }));

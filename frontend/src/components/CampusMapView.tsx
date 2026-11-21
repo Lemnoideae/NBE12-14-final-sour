@@ -6,7 +6,6 @@ interface CampusMapViewProps {
   currentLevel: number;
   currentScore: number;
   onBackToCampus: () => void;
-  onOpenSpriteSheet?: () => void;
   onOpenKoreaMap?: () => void;
 }
 
@@ -14,7 +13,6 @@ export const CampusMapView: React.FC<CampusMapViewProps> = ({
   currentLevel,
   currentScore,
   onBackToCampus,
-  onOpenSpriteSheet,
   onOpenKoreaMap,
 }) => {
   const milestones = CAMPUS_STAGES;
@@ -40,7 +38,7 @@ export const CampusMapView: React.FC<CampusMapViewProps> = ({
               캠퍼스 성장 로드맵 (10단계)
             </h2>
             <p className="text-[10px] text-[#8b5327] font-mono">
-              현재 성장 단계: Lv.{currentLevel} / Lv.10 · 목업용 임시 기준
+              현재 성장 단계: Lv.{currentLevel} / Lv.10
             </p>
           </div>
         </div>
@@ -51,14 +49,6 @@ export const CampusMapView: React.FC<CampusMapViewProps> = ({
               className="pixel-plaque plaque-yellow text-[10px] font-pixel font-bold px-1.5 py-1 text-[#261608] cursor-pointer"
             >
               전국 지도
-            </button>
-          )}
-          {onOpenSpriteSheet && (
-            <button
-              onClick={onOpenSpriteSheet}
-              className="pixel-plaque plaque-parchment text-[10px] font-pixel font-bold px-1.5 py-1 text-[#261608] cursor-pointer"
-            >
-              [시연] 시트 보기
             </button>
           )}
           <button

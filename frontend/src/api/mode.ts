@@ -2,10 +2,12 @@
 // 'mock' keeps the mock data and demo state, so the prototype still runs without a backend. Plan:
 // .agents/01-PLAN/261118-1021-frontend_prototype_migration_plan.md §5 단계 0.
 
+import { SERVICE_BUILD } from '../utils/mockTools';
+
 export const API_MODES = ['api', 'mock'] as const;
 export type ApiMode = (typeof API_MODES)[number];
 
-/** Used when VITE_API_MODE is unset or empty: screens move to the API one by one, so the mock stays the default. */
+/** Local development, source tests and designated test builds can run without a backend. */
 export const DEFAULT_API_MODE: ApiMode = 'mock';
 
 function isApiMode(value: string): value is ApiMode {
@@ -24,7 +26,8 @@ export function resolveApiMode(env: Readonly<Record<string, unknown>> | undefine
   throw new Error(`VITE_API_MODE는 ${API_MODES.join(' 또는 ')}여야 합니다: ${JSON.stringify(raw)}`);
 }
 
-export const API_MODE: ApiMode = resolveApiMode();
+// The service build cannot enter the mock game, including from a stale VITE_API_MODE=mock setting.
+export const API_MODE: ApiMode = SERVICE_BUILD ? 'api' : resolveApiMode();
 
 /**
  * The adapter boundary: a domain hook lists one implementation per mode and gets the one for the current mode.

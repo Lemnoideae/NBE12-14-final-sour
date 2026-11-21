@@ -57,6 +57,22 @@ test('백엔드 경로만 넘기고, 앞부분만 같은 프론트 경로는 넘
   }
 });
 
+test('SCRUM-212: 도구는 로컬 dev와 지정 테스트 빌드에서만 켜지고 preview가 빌드 설정을 풀지 않는다', () => {
+  assert.equal(typeof viteConfig, 'function');
+  if (typeof viteConfig !== 'function') throw new Error('Expected Vite config factory');
+  for (const [command, mode, isPreview, mockTools, serviceBuild] of [
+    ['serve', 'development', false, true, false],
+    ['build', 'campus-test', false, true, false],
+    ['build', 'production', false, false, true],
+    ['build', 'development', false, false, true],
+    ['build', 'staging', false, false, true],
+    ['serve', 'campus-test', true, false, false],
+  ] as const) {
+    const config = viteConfig({ command, mode, isPreview, isSsrBuild: false });
+    assert.deepEqual(config.define, { __CAMPUS_MOCK_TOOLS__: String(mockTools), __CAMPUS_SERVICE_BUILD__: String(serviceBuild) });
+  }
+});
+
 async function resolvedConfig() {
   const config = typeof viteConfig === 'function'
     ? viteConfig({ command: 'serve', mode: 'test', isSsrBuild: false, isPreview: false })

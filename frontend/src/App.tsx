@@ -67,6 +67,7 @@ import { BattleProvider, useBattle } from './hooks/useMockBattle';
 import { CampusAmbienceProvider, useAmbienceControl } from './hooks/useCampusTimePhase';
 import type { AmbienceOverride } from './data/campusAmbience';
 import { soundManager } from './utils/sound';
+import { MOCK_TOOLS } from './utils/mockTools';
 import { Smartphone, Gamepad2, Layers, Trophy, ShoppingBag, MapPin, Image as ImageIcon, Compass, MessageSquare, BookOpen, Sparkles } from 'lucide-react';
 
 /** Service flow screens (M5-D). Demo tools and design comparisons are left out of the 44px touch areas. */
@@ -83,7 +84,9 @@ type GameView = ({ mode: 'visiting'; schoolId: SchoolId }
 function AppContent() {
   const [view, setView] = useState<GameView>({ mode: 'gameplay', schoolId: null, focusCenter: API_MODE === 'api' });
   const { mode: viewMode, schoolId: visitSchoolId } = view;
-  const setViewMode = useCallback((mode: OtherView) => setView({ mode, schoolId: null }), []);
+  const setViewMode = useCallback((mode: OtherView) => {
+    if (MOCK_TOOLS || SERVICE_VIEW_MODES.has(mode)) setView({ mode, schoolId: null });
+  }, []);
   const [isChatSheetOpen, setIsChatSheetOpen] = useState<boolean>(false);
   const [isOurGuestbookSheetOpen, setIsOurGuestbookSheetOpen] = useState<boolean>(false);
   const [isStatsSheetOpen, setIsStatsSheetOpen] = useState<boolean>(false);
@@ -99,15 +102,11 @@ function AppContent() {
   const isPhone = useDeviceMode() === 'full';
   const gameLayout = useGameLayout();
   const isServiceView = SERVICE_VIEW_MODES.has(viewMode);
-  const showMockSheet = isPhone || gameLayout === 'compact';
-  const showPresentation = !showMockSheet && (gameLayout === 'legacy' || !isServiceView);
-  const showGameBar = isServiceView && (gameLayout === 'wide' || API_MODE === 'api');
+  const compact = isPhone || gameLayout === 'compact';
   const wideCampus = gameLayout === 'wide' && (viewMode === 'gameplay' || viewMode === 'visiting' || viewMode === 'shop');
-  let backdrop = 'min-h-screen p-2 sm:p-5 bg-[#f1f5f9]';
-  if (showMockSheet) backdrop = showGameBar ? 'device-full device-full-with-profile min-h-dvh bg-[#f1f5f9]' : 'device-full min-h-dvh bg-[#f1f5f9]';
-  else if (showGameBar) backdrop = 'game-backdrop';
+  const backdrop = compact && isServiceView ? 'device-full-with-profile min-h-dvh bg-[#f1f5f9]' : 'game-backdrop';
   const visit = useVisitSchool(visitSchoolId);
-  const shellVariant = showMockSheet && isServiceView ? 'full' : 'framed';
+  const shellVariant = compact && isServiceView ? 'full' : 'framed';
   const viewWrap = shellVariant === 'full' ? 'w-full flex flex-col' : 'w-full flex flex-col items-center py-2 animate-fadeIn';
   const game = useMockGame();
   const campusClicks = useCampusClicks();
@@ -281,11 +280,10 @@ function AppContent() {
     : shopItems.some((item) => !item.previewOnly && myContribution >= item.cost))
     || (clicker.upgradeCost !== null && myContribution >= clicker.upgradeCost);
 
-  // View menus and demo tools: in the desktop header, or in the mock menu sheet on a phone (T2, plan §5, Q5).
-  // View switcher (M5-D): service flow screens and design comparisons/demo tools are kept apart.
-  const viewMenus = (inSheet: boolean) => (
-    <div className={`flex flex-col gap-1.5 ${inSheet ? 'items-start' : 'items-end'}`}>
-      <nav aria-label="서비스 흐름" className={`flex items-center gap-1.5 flex-wrap ${inSheet ? 'justify-start' : 'justify-end'}`}>
+  // The launchers and settings mount only while the tool sheet is open.
+  const viewMenus = MOCK_TOOLS && isMockMenuOpen && (
+    <div className="flex flex-col items-start gap-2">
+      <nav aria-label="서비스 흐름" className="flex items-center gap-1.5 flex-wrap">
         <span className="font-pixel text-[10px] font-black text-[#15803d]">서비스 흐름</span>
         <button
           onClick={() => {
@@ -428,7 +426,7 @@ function AppContent() {
           <span>📮 비회원 문의</span>
         </button>
       </nav>
-      <nav aria-label="[시연] 시안 비교·도구" className={`flex items-center gap-1.5 flex-wrap ${inSheet ? 'justify-start' : 'justify-end'}`}>
+      <nav aria-label="[시연] 시안 비교·도구" className="flex items-center gap-1.5 flex-wrap">
         <span className="font-pixel text-[10px] font-black text-[#8b5327]">[시연] 시안 비교·도구</span>
         <button
           onClick={() => {
@@ -536,7 +534,7 @@ function AppContent() {
       </nav>
     </div>
   );
-  const demoTools = (
+  const demoTools = MOCK_TOOLS && isMockMenuOpen && (
     <section aria-label="[시연] 도구" className="mb-3 flex flex-wrap items-center justify-center gap-3 border-2 border-dashed border-[#8b5327] bg-[#fffbeb] px-3 py-1.5">
       <span className="font-pixel text-xs font-black text-[#8b5327]">[시연] 도구</span>
       <label className="font-pixel text-xs font-bold">[시연] 시간대{' '}
@@ -577,7 +575,9 @@ function AppContent() {
     <OtherClicksFeedContext.Provider value={campusClicks.otherClicksFeed}>
     <AllianceNavProvider value={allianceNav}>
       <div className={`w-full flex flex-col items-center justify-start select-none text-[#261608] ${backdrop}`}>
-        {showGameBar && <GameProfileBar mode={API_MODE} nickname={playerInfo.nickname} onCampus={goToMySchool} onNavigate={setViewMode} />}
+        <GameProfileBar mode={API_MODE} nickname={playerInfo.nickname} onCampus={goToMySchool} onNavigate={setViewMode}
+          tools={MOCK_TOOLS && <button type="button" aria-haspopup="dialog" className="game-workspace-action shrink-0"
+            onClick={(event) => { event.currentTarget.focus(); setIsMockMenuOpen(true); soundManager.playTabSound(); }}>테스트 도구</button>} />
         {API_MODE === 'api' && <ApiPlayerSync getPendingScore={campusClicks.getPendingScore} />}
         {API_MODE === 'api' && <ApiSchoolScoreSync getPendingScore={campusClicks.getPendingScore} isSending={campusClicks.isSending} />}
         {API_MODE === 'api' && <ApiTestToolsNotice schoolName={schoolNameTest} />}
@@ -594,52 +594,15 @@ function AppContent() {
           </div>
         )}
         <AttackNotice attacks={campusAttacks} />
-        {/* [목업] Phone: the presentation header, view menus and demo tools move into a sheet behind this bar (Q5). Not part of the real service. */}
-        {showMockSheet && (
-          <div className="mock-menu-bar w-full shrink-0 flex items-center justify-end gap-2 bg-[#fffbeb] border-b-2 border-dashed border-[#8b5327]">
-            <span className="font-pixel text-[10px] font-bold text-[#8b5327] truncate">[시연] 다른 목업 화면·도구</span>
-            <button type="button" onClick={() => { setIsMockMenuOpen(true); soundManager.playTabSound(); }}
-              className="pixel-plaque plaque-parchment px-2 py-0.5 text-[10px] font-pixel font-bold cursor-pointer shrink-0">
-              목업
-            </button>
-          </div>
-        )}
-        {showMockSheet && isMockMenuOpen && (
-          <BottomSheetDialog label="목업 메뉴" onClose={() => setIsMockMenuOpen(false)}>
-            {/* Choosing a screen closes the sheet; the demo tools (selects, checkbox) keep it open. */}
+        {MOCK_TOOLS && isMockMenuOpen && (
+          <BottomSheetDialog label="테스트 도구" onClose={() => setIsMockMenuOpen(false)}>
+            {/* Choosing a screen closes the sheet; changing demo settings keeps it open. */}
             <div className="p-3 flex flex-col gap-3" onClick={(e) => { if ((e.target as Element).closest('nav button')) setIsMockMenuOpen(false); }}>
-              {viewMenus(true)}
+              {viewMenus}
               {demoTools}
             </div>
           </BottomSheetDialog>
         )}
-        {/* Top Presentation Bar: Clean Flat Presentation on Plain Light Background */}
-        {showPresentation && (
-        <div className="w-full max-w-7xl flex flex-col sm:flex-row items-center justify-between gap-3 mb-4 px-2">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-[#facc15] border-3 border-[#261608] shadow-[2px_2px_0px_#261608] flex items-center justify-center font-press-start text-xs font-black text-[#261608]">
-              대
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h1 className="font-pixel text-base sm:text-lg font-black text-[#261608] tracking-tight">
-                  대대대 (DAEDAEDAE)
-                </h1>
-                <span className="text-[10px] font-pixel text-[#ffffff] bg-[#e11d48] border border-[#261608] px-1.5 py-0.2 shadow-[1px_1px_0px_#261608]">
-                  UI Mockup
-                </span>
-              </div>
-              <p className="font-pixel text-[11px] text-[#8b5327]">
-                전국 가상 대학교 대항전 픽셀 클리커 게임 온보딩 플로우 (9:19.5 포트레이트)
-              </p>
-            </div>
-          </div>
-
-          {viewMenus(false)}
-        </div>
-        )}
-
-        {showPresentation && demoTools}
 
         {/* Main Content Area based on viewMode. Service screens get 44px touch areas (src/index.css). */}
         <PhoneShellVariantContext.Provider value={shellVariant}>
@@ -797,7 +760,7 @@ function AppContent() {
                   } else if (tab === 'shop') {
                     openShop();
                   } else if (tab === 'map') {
-                    setViewMode('map_screens');
+                    goToMap();
                   }
                 }}
               />
@@ -846,17 +809,6 @@ function AppContent() {
           <ApiLoginPhone onGoToSignup={() => setViewMode('signup')} onGoToCampus={goToMySchool} onOpenMyInfo={() => setViewMode('my_info')} />
         ) : (
           <div className={wideCampus ? 'h-full' : viewWrap}>
-            {showPresentation && <div className="mb-2 font-pixel text-xs text-[#8b5327] font-bold flex items-center gap-2">
-              <span>입학생: {playerInfo.nickname} ({playerInfo.department})</span>
-              <button
-                data-no-touch44
-                onClick={() => setViewMode('spritesheet')}
-                className="pixel-plaque plaque-parchment px-2 py-0.5 text-[10px] cursor-pointer"
-              >
-                [시연] 성장 시트 보기
-              </button>
-            </div>}
-
             <GameScreenLayout
               kind="my-campus"
               embedded={wideCampus}
@@ -999,7 +951,6 @@ function AppContent() {
                   currentLevel={campusLevel}
                   currentScore={schoolScore}
                   onBackToCampus={() => setActiveTab('campus')}
-                  onOpenSpriteSheet={() => setViewMode('spritesheet')}
                   onOpenKoreaMap={goToMap}
                 />
               )}

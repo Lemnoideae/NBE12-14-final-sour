@@ -4,7 +4,7 @@ import type { JSDOM } from 'jsdom';
  * browser's top layer, inertness, Tab navigation, Escape dispatch or layout.
  * Do not use this stub as evidence of actual browser modal behavior.
  */
-export function installDialogStub(window: JSDOM['window']) {
+export function installDialogStub(window: Pick<JSDOM['window'], 'HTMLDialogElement'>) {
   window.HTMLDialogElement.prototype.showModal = function () {
     this.setAttribute('open', '');
     this.dataset.modal = 'true';

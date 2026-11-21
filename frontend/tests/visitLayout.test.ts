@@ -29,6 +29,7 @@ dom.window.HTMLElement.prototype.scrollIntoView = function () {};
 installDialogStub(dom.window);
 
 const { render, screen, fireEvent, cleanup, within } = await import('@testing-library/react');
+const { clickTestView } = await import('./helpers/mockTools');
 const { MockGameProvider } = await import('../src/hooks/useMockGame');
 const { default: App } = await import('../src/App');
 const { getSchoolById, getSchoolViews } = await import('../src/data/schoolDirectory');
@@ -72,7 +73,7 @@ function visitPusan() {
 
 test('방문 화면은 메인 게임과 같은 레이아웃 뼈대·캠퍼스 틀을 쓴다 (V1)', () => {
   mountApp();
-  click('🎮 메인 게임 화면');
+  clickTestView('🎮 메인 게임 화면');
   const mine = skeleton('my-campus');
   visitPusan();
   const visit = skeleton('visit');
@@ -82,7 +83,7 @@ test('방문 화면은 메인 게임과 같은 레이아웃 뼈대·캠퍼스 �
 
 test('방문 화면: 방문 HUD·관전 바·학교 정보 표지판, 내 캠퍼스 전용 요소 없음 (V2)', () => {
   mountApp();
-  click('🎮 메인 게임 화면');
+  clickTestView('🎮 메인 게임 화면');
   assertAbsent(screen.queryByTestId('spectator-bar'), '내 캠퍼스에는 관전 바가 없다');
   assertAbsent(screen.queryByTestId('visit-tag'));
   visitPusan();
@@ -118,7 +119,7 @@ test('관전 클릭은 안내만 띄우고 건물을 흔들지 않는다 (Q5); �
   proto.animate = () => { animations++; return { cancel() {} }; };
   try {
     mountApp();
-    click('🎮 메인 게임 화면');
+    clickTestView('🎮 메인 게임 화면');
     visitPusan();
     const campus = screen.getByRole('button', { name: `${pusan.name} 캠퍼스 (관전 모드)` });
     assert.ok(campus.querySelector('[data-wobble]'), '흔들 건물이 있는 장면이다');

@@ -7,10 +7,10 @@
  */
 import assert from 'node:assert/strict';
 import { pressKey } from './cdp-input.mjs';
+import { selectMockScreen } from './cdp-mock-tools.mjs';
 
 const endpoint = process.env.TOUCH_CDP_URL ?? process.env.M6_CDP_URL ?? 'http://127.0.0.1:9222';
-// T2: touch emulation matches (pointer: coarse) and turns on the full-screen phone mode, which hides the demo
-// menus these checks drive. They cover the framed demo screens, so pin ?device=framed (mobile-full.mjs covers full).
+// These checks cover the framed demo screens, so pin ?device=framed (mobile-full.mjs covers full).
 const app = (() => { const url = new URL(process.env.TOUCH_APP_URL ?? process.env.M6_APP_URL ?? 'http://127.0.0.1:4173'); if (!url.searchParams.has('device')) url.searchParams.set('device', 'framed'); return url.href; })();
 const REACH = 21; // 44px area: 22px each side of the center, probed 1px inside.
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -119,10 +119,10 @@ async function run(width, height, orientation) {
   await send('Page.navigate', { url: app });
   await pause(1500);
   for (const screen of SCREENS) {
-    await press(screen);
+    await selectMockScreen(evaluate, screen);
     report.push({ orientation, screen, ...(await probe()) });
   }
-  await press('🎮 메인 게임 화면');
+  await selectMockScreen(evaluate, MAIN);
   for (const [steps, label, leave] of FLOWS) {
     for (const step of steps) {
       if (step === '__toggleSheet__') await toggleSheet();
@@ -136,7 +136,8 @@ async function run(width, height, orientation) {
       } else if (step === '__visitInfo__') {
         await evaluate(`document.querySelector('[data-testid="visit-info-button"]').click()`);
         await pause(350);
-      } else await press(step);
+      } else if (SCREENS.includes(step)) await selectMockScreen(evaluate, step);
+      else await press(step);
     }
     report.push({ orientation, screen: label, ...(await probe()) });
     for (const step of leave) {

@@ -4,7 +4,7 @@ import { CampusScene } from './CampusScene';
 
 /**
  * Capture frame for the growth-stage screenshots (scripts/campus-shots/capture.ts): one campus scene
- * by day, without in-game labels, guestbook, tap hint or chat. Dev server only (`?campusShot=<level>`,
+ * by day, without in-game labels, guestbook, tap hint or chat. Dev/test builds only (`?campusShot=<level>`,
  * src/main.tsx). Plan: docs/261110-0747-campus_level_shots_plan.md (5-1).
  */
 export function CampusShot({ level }: { level: number }) {

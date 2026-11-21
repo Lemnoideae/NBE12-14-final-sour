@@ -61,13 +61,13 @@ test('T2: index.html viewport에 viewport-fit=cover가 있다 (safe-area inset �
   assert.match(viewport, /(^|,\s*)viewport-fit=cover(\s*,|$)/);
 });
 
-test('T2: 명시적 시안 모드에서는 발표 헤더·메뉴·[시연] 도구와 390×844 프레임을 그대로 보인다', () => {
+test('SCRUM-212: 시안 모드에서도 메뉴·도구는 처음에는 닫혀 있고 390×844 프레임을 유지한다', () => {
   dom.reconfigure({ url: 'http://localhost/?device=framed' });
   asDesktop();
   mountApp();
-  assert.ok(screen.getByRole('navigation', { name: '서비스 흐름' }));
-  assert.ok(screen.getByRole('region', { name: '[시연] 도구' }));
-  assertAbsent(screen.queryByRole('button', { name: '목업' }));
+  assertAbsent(screen.queryByRole('navigation', { name: '서비스 흐름' }));
+  assertAbsent(screen.queryByRole('region', { name: '[시연] 도구' }));
+  assert.ok(screen.getByRole('button', { name: '테스트 도구' }));
   const [shell] = shells();
   assert.equal(shell.dataset.phoneShell, 'framed');
   assert.match(shell.className, /h-\[844px\]/);
@@ -247,7 +247,7 @@ test('SCRUM-209: 방문 학교·양쪽 탭·구매 확인을 리사이즈 후 �
   screen.getByRole('button', { name: '캠퍼스 클릭 영역' });
 });
 
-test('T2: 폰에서는 서비스 화면이 전체 화면 셸이 되고, 메뉴·도구는 “목업” 시트로 들어간다 (Q5)', () => {
+test('T2: 폰에서는 서비스 화면이 전체 화면 셸이 되고, 메뉴·도구는 “테스트 도구” 시트로 들어간다 (Q5)', () => {
   asPhone();
   mountApp();
   assertAbsent(screen.queryByRole('navigation', { name: '서비스 흐름' }), '페이지에는 메뉴 없음');
@@ -259,20 +259,20 @@ test('T2: 폰에서는 서비스 화면이 전체 화면 셸이 되고, 메뉴·
   assert.equal(shell.querySelectorAll('[data-phone-status-bar], [data-phone-home-bar]').length, 0, '실기기 상태바와 겹치는 목업 상태바·홈 바 없음');
   assert.ok(document.querySelector('main[data-game-main] [aria-label="캠퍼스 클릭 영역"]'));
 
-  const trigger = screen.getByRole('button', { name: '목업' });
+  const trigger = screen.getByRole('button', { name: '테스트 도구' });
   trigger.focus();
   fireEvent.click(trigger);
-  const sheet = screen.getByRole('dialog', { name: '목업 메뉴' });
+  const sheet = screen.getByRole('dialog', { name: '테스트 도구' });
   assert.ok(within(sheet).getByRole('navigation', { name: '서비스 흐름' }));
   assert.ok(within(sheet).getByRole('navigation', { name: '[시연] 시안 비교·도구' }));
   const tools = within(sheet).getByRole('region', { name: '[시연] 도구' });
 
   // A demo tool keeps the sheet open; choosing a screen closes it and shows that screen.
   fireEvent.change(within(tools).getByRole('combobox', { name: '[시연] 시간대' }), { target: { value: 'night' } });
-  assert.ok(screen.getByRole('dialog', { name: '목업 메뉴' }));
+  assert.ok(screen.getByRole('dialog', { name: '테스트 도구' }));
   fireEvent.click(within(sheet).getByRole('button', { name: /랭킹 화면/ }));
-  assertAbsent(screen.queryByRole('dialog', { name: '목업 메뉴' }));
-  assertSameNode(document.activeElement, trigger, '닫으면 “목업” 버튼으로 포커스가 돌아온다');
+  assertAbsent(screen.queryByRole('dialog', { name: '테스트 도구' }));
+  assertSameNode(document.activeElement, trigger, '닫으면 “테스트 도구” 버튼으로 포커스가 돌아온다');
   assertAbsent(document.querySelector('main[data-game-main]'), '메인 게임에서 랭킹 화면으로 바뀐다');
   assert.equal(shells()[0].dataset.phoneShell, 'full');
 });
@@ -280,23 +280,23 @@ test('T2: 폰에서는 서비스 화면이 전체 화면 셸이 되고, 메뉴·
 test('T2: 폰에서도 시안 비교 화면은 390×844 프레임을 유지하고, ?device=framed는 데스크톱 화면을 강제한다', () => {
   asPhone();
   mountApp();
-  fireEvent.click(screen.getByRole('button', { name: '목업' }));
-  fireEvent.click(within(screen.getByRole('dialog', { name: '목업 메뉴' })).getByRole('button', { name: /2-Phone 채팅 비교/ }));
+  fireEvent.click(screen.getByRole('button', { name: '테스트 도구' }));
+  fireEvent.click(within(screen.getByRole('dialog', { name: '테스트 도구' })).getByRole('button', { name: /2-Phone 채팅 비교/ }));
   assert.ok(shells().length >= 2);
   for (const shell of shells()) assert.equal(shell.dataset.phoneShell, 'framed');
   cleanup();
 
   dom.reconfigure({ url: 'http://localhost/?device=framed' });
   mountApp();
-  assert.ok(screen.getByRole('navigation', { name: '서비스 흐름' }));
+  assertAbsent(screen.queryByRole('navigation', { name: '서비스 흐름' }));
   assert.equal(shells()[0].dataset.phoneShell, 'framed');
 });
 
 test('T2: 폰의 순차 온보딩은 바깥 안내문 없이 전체 화면이고, 목업 메일함 안내는 화면 안에 남는다', () => {
   asPhone();
   mountApp();
-  fireEvent.click(screen.getByRole('button', { name: '목업' }));
-  fireEvent.click(within(screen.getByRole('dialog', { name: '목업 메뉴' })).getByRole('button', { name: /순차 온보딩/ }));
+  fireEvent.click(screen.getByRole('button', { name: '테스트 도구' }));
+  fireEvent.click(within(screen.getByRole('dialog', { name: '테스트 도구' })).getByRole('button', { name: /순차 온보딩/ }));
   assertAbsent(screen.queryByText('순차 온보딩 · 목업 인증 (실제 메일 발송 없음)'));
   const onboarding = screen.getByRole('region', { name: '순차 온보딩' });
   assert.equal(onboarding.dataset.phoneShell, 'full');

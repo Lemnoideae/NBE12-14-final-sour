@@ -8,6 +8,7 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { openMockTools, selectMockScreen } from './cdp-mock-tools.mjs';
 
 const app = process.env.WOBBLE_APP_URL ?? process.env.M6_APP_URL ?? 'http://127.0.0.1:4173';
 const endpoint = process.env.WOBBLE_CDP_URL ?? process.env.M6_CDP_URL ?? 'http://127.0.0.1:9222';
@@ -53,10 +54,11 @@ async function open(level, { phase = 'day', reducedMotion = false } = {}) {
   await send('Page.navigate', { url: app });
   await waitFor(`document.readyState === 'complete' && !!document.querySelector('${AREA}')`);
   await evaluate('document.fonts.ready.then(() => true)');
+  await openMockTools(evaluate);
   await evaluate(`(() => { const s = document.querySelector('select[aria-label="[시연] 시간대"]');
     Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, ${JSON.stringify(phase)});
     s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-  await button('[시연] 성장 시트 보기');
+  await selectMockScreen(evaluate, '🏛️ 10단계 캠퍼스 성장 시트 (5x2)');
   await evaluate(`document.querySelector('[title="Lv.${level} 단계 확인"]').click()`);
   await pause(50);
   await button('성장 시연: 학교 점수를 기준값으로 설정');

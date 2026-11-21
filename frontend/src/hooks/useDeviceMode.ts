@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { MOCK_TOOLS } from '../utils/mockTools';
 import { GAME_WIDE_QUERY, MOBILE_DEVICE_QUERY, resolveDeviceMode, resolveGameLayout, type DeviceMode, type GameLayout } from '../utils/deviceMode';
 
 const query = () => (typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(MOBILE_DEVICE_QUERY) : null);
@@ -9,7 +10,8 @@ function subscribe(onChange: () => void) {
   return () => list?.removeEventListener('change', onChange);
 }
 
-const snapshot = (): DeviceMode => resolveDeviceMode(typeof window === 'undefined' ? '' : window.location.search, query()?.matches ?? false);
+const previewSearch = () => MOCK_TOOLS && typeof window !== 'undefined' ? window.location.search : '';
+const snapshot = (): DeviceMode => resolveDeviceMode(previewSearch(), query()?.matches ?? false);
 
 /** Current device mode; follows the media query live (rotation, devtools device toggles). */
 export function useDeviceMode(): DeviceMode {
@@ -28,7 +30,7 @@ function subscribeGameLayout(onChange: () => void) {
 
 function gameLayoutSnapshot(): GameLayout {
   const list = gameQuery();
-  return list ? resolveGameLayout(window.location.search, list.matches) : 'legacy';
+  return list ? resolveGameLayout(previewSearch(), list.matches) : MOCK_TOOLS ? 'legacy' : 'compact';
 }
 
 export function useGameLayout(): GameLayout {

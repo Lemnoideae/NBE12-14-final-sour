@@ -16,6 +16,7 @@ const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http:
 for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document, navigator: dom.window.navigator, HTMLElement: dom.window.HTMLElement, Node: dom.window.Node, requestAnimationFrame: dom.window.requestAnimationFrame.bind(dom.window), cancelAnimationFrame: dom.window.cancelAnimationFrame.bind(dom.window), IS_REACT_ACT_ENVIRONMENT: true })) Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
 dom.window.HTMLElement.prototype.scrollIntoView = function () {};
 const { render, screen, fireEvent, cleanup } = await import('@testing-library/react');
+const { clickTestView, withToolSetting } = await import('./helpers/mockTools');
 const { MockGameProvider } = await import('../src/hooks/useMockGame');
 const { CampusAmbienceProvider } = await import('../src/hooks/useCampusTimePhase');
 const { CampusView } = await import('../src/components/CampusView');
@@ -81,19 +82,19 @@ test('시연 override 공유, 자동 복귀 및 적용 범위 제한', (t) => {
   dom.reconfigure({ url: 'http://localhost/?device=framed' });
   t.after(() => dom.reconfigure({ url: 'http://localhost/' }));
   render(React.createElement(MockGameProvider, null, React.createElement(App)));
-  const selector = screen.getByLabelText('[시연] 시간대');
+  const setPhase = (value: string) => withToolSetting('[시연] 시간대', (control) => fireEvent.change(control, { target: { value } }));
   for (const name of ['3단 온보딩 화면', '🗺️ 단일 폰 지도', '🏪 상점 & 강화 (Single Phone)', '🏆 랭킹 화면 (Single Phone)']) {
-    fireEvent.click(screen.getByRole('button', { name }));
+    clickTestView(name);
     assertAbsent(screen.queryByTestId('campus-ambience'));
   }
-  fireEvent.click(screen.getByRole('button', { name: '🎮 메인 게임 화면' }));
-  fireEvent.change(selector, { target: { value: 'night' } });
+  clickTestView('🎮 메인 게임 화면');
+  setPhase('night');
   assert.equal(screen.getByTestId('campus-ambience').getAttribute('data-phase'), 'night');
-  fireEvent.change(selector, { target: { value: 'day' } });
+  setPhase('day');
   assertAbsent(screen.getByTestId('campus-ambience').querySelector('[data-ambience-layer="window"]'));
-  fireEvent.change(selector, { target: { value: 'auto' } });
+  setPhase('auto');
   assert.equal(screen.getByTestId('campus-ambience').getAttribute('data-phase'), 'day');
-  fireEvent.change(selector, { target: { value: 'dusk' } });
-  fireEvent.click(screen.getByRole('button', { name: '📖 2-Phone 방문교 방명록' }));
+  setPhase('dusk');
+  clickTestView('📖 2-Phone 방문교 방명록');
   assert.ok(screen.getAllByTestId('campus-ambience').every((el) => el.getAttribute('data-phase') === 'dusk'));
 });

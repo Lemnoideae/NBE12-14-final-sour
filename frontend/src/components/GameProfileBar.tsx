@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useApiClient } from '../api/ApiProvider';
 import { logout } from '../api/auth';
@@ -11,6 +11,7 @@ interface GameProfileBarProps {
   nickname: string;
   onNavigate: (action: ProfileAction) => void;
   onCampus: () => void;
+  tools?: ReactNode;
 }
 
 function MemberProfile({ nickname, onNavigate }: Pick<GameProfileBarProps, 'nickname' | 'onNavigate'>) {
@@ -51,14 +52,17 @@ function MemberProfile({ nickname, onNavigate }: Pick<GameProfileBarProps, 'nick
   );
 }
 
-export function GameProfileBar({ mode, nickname, onNavigate, onCampus }: GameProfileBarProps) {
+export function GameProfileBar({ mode, nickname, onNavigate, onCampus, tools }: GameProfileBarProps) {
   return (
     <header className="game-top-bar game-width">
       <button type="button" onClick={onCampus} className="game-brand" aria-label="대대대 내 캠퍼스">
         <span className="game-wordmark" aria-hidden="true">대</span>
-        <span className="font-black">대대대 <span className="text-xs text-[#775430]">캠퍼스 대항전</span></span>
+        <span className="font-black">대대대 <span className="hidden sm:inline text-xs text-[#775430]">캠퍼스 대항전</span></span>
       </button>
-      {mode === 'api' && <div className="ms-auto min-w-0"><MemberProfile nickname={nickname} onNavigate={onNavigate} /></div>}
+      {(tools || mode === 'api') && <div className="ms-auto flex min-w-0 items-center gap-1 sm:gap-2">
+        {tools}
+        {mode === 'api' && <MemberProfile nickname={nickname} onNavigate={onNavigate} />}
+      </div>}
     </header>
   );
 }

@@ -398,25 +398,15 @@
   min-height: 480px;
   padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
-.device-full {
-  --mock-menu-inset: env(safe-area-inset-top);
-  --mock-menu-height: calc(28px + var(--mock-menu-inset));
-  --shell-offset: var(--mock-menu-height);
-}
 .device-full-with-profile {
-  --mock-menu-inset: 0px;
   --profile-height: calc(3rem + env(safe-area-inset-top));
-  --shell-offset: calc(var(--mock-menu-height) + var(--profile-height));
+  --shell-offset: var(--profile-height);
 }
 .device-full-with-profile > .game-top-bar {
   min-block-size: var(--profile-height);
   margin-block-end: 0;
   padding-block-start: env(safe-area-inset-top);
   padding-inline: max(.5rem, env(safe-area-inset-left)) max(.5rem, env(safe-area-inset-right));
-}
-.mock-menu-bar {
-  height: var(--mock-menu-height);
-  padding: var(--mock-menu-inset) calc(8px + env(safe-area-inset-right)) 0 calc(8px + env(safe-area-inset-left));
 }
 
 /* SCRUM-206: shared service chrome and the campus workspace. Panels scroll independently. */

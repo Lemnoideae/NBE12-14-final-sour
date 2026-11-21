@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pressKey } from './cdp-input.mjs';
+import { MOCK_TOOL_BUTTON, selectMockScreen } from './cdp-mock-tools.mjs';
 
 // T2: touch emulation matches (pointer: coarse) and turns on the full-screen phone mode, which hides the demo
 // menus these checks drive. They cover the framed demo screens, so pin ?device=framed (mobile-full.mjs covers full).
@@ -76,9 +77,9 @@ try {
       screenOrientation: { type: width > height ? 'landscapePrimary' : 'portraitPrimary', angle: width > height ? 90 : 0 } });
     await send('Emulation.setTouchEmulationEnabled', { enabled: true });
     await send('Page.navigate', { url: app });
-    await waitFor(`document.readyState==='complete' && !!document.querySelector('nav[aria-label="서비스 흐름"]')`);
+    await waitFor(`document.readyState==='complete' && !!document.querySelector(${JSON.stringify(MOCK_TOOL_BUTTON)})`);
     await evaluate('document.fonts.ready.then(()=>true)');
-    await button('🎮 메인 게임 화면');
+    await selectMockScreen(evaluate, '🎮 메인 게임 화면');
     await evaluate(`window.scrollTo(0,30)`);
     const beforeOpen = await evaluate('scrollY');
     await evaluate(`document.querySelector('[title="우리 학교 방명록 보기"]').click()`);
@@ -115,7 +116,7 @@ try {
     });
     results.push({ width, height, beforeOpen, metrics, background, afterList, afterBoundary });
   }
-  await button('🗺️ 단일 폰 지도');
+  await selectMockScreen(evaluate, '🗺️ 단일 폰 지도');
   await evaluate(`document.querySelector('button[aria-label="KAIST 방문"]').click()`);
   await evaluate(`document.querySelector('[aria-label="KAIST 방명록 보기"]').click()`);
   await waitFor(`!!document.querySelector('dialog[open] textarea')`);
