@@ -1,6 +1,8 @@
 import React from 'react';
 import { ZoomIn } from 'lucide-react';
 import { MapArt } from './MapArt.tsx';
+import { WorkspaceMapPins } from './WorkspaceMapPins';
+import { mapFramePercent } from '../utils/workspaceMapPins';
 import { MAP_AREA_HEIGHT, MapLayer, MapFrame, MapSearchHeader, SchoolListSheet, SchoolMarker, type MapControlsProps } from './MapParts.tsx';
 import { filterSchools } from '../data/schoolDirectory.ts';
 import { CHUNGCHEONG_PLACEMENTS } from '../data/schoolMapLayout.ts';
@@ -30,6 +32,11 @@ export const Screen2RegionMap: React.FC<MapControlsProps> = ({
 }) => {
   const regionSchools = filterSchools(schools, '충청', '');
   const listed = filterSchools(schools, '충청', query);
+  const workspace = preview !== undefined;
+  const pins = workspace ? regionSchools.flatMap(school => {
+    const placement = CHUNGCHEONG_PLACEMENTS[school.id];
+    return placement ? [{ school, point: mapFramePercent(placement) }] : [];
+  }) : [];
 
   return (
     <MapFrame preview={preview} searching={query.trim().length > 0} list={renderPanelList?.(listed) ?? <SchoolListSheet
@@ -73,7 +80,7 @@ export const Screen2RegionMap: React.FC<MapControlsProps> = ({
         </div>
 
         <div className="absolute inset-0 z-20 pointer-events-auto">
-          {regionSchools.map((school) => {
+          {!workspace && regionSchools.map((school) => {
             const placement = CHUNGCHEONG_PLACEMENTS[school.id];
             if (!placement) return null;
             return (
@@ -90,6 +97,7 @@ export const Screen2RegionMap: React.FC<MapControlsProps> = ({
           })}
         </div>
         </MapLayer>
+        {workspace && <WorkspaceMapPins pins={pins} selectedId={selectedSchoolId} onSelect={onSelectSchool} />}
       </div>
 
     </MapFrame>

@@ -212,6 +212,58 @@ def map_search_flow(panel, path):
     return {'gangwon': gangwon, 'chungcheongFits': chungcheong['allVisible'], 'empty': empty, 'restored': restored, 'passed': passed}
 
 
+def pin_metrics(area):
+    return area.evaluate('''area => {
+        const frame = area.getBoundingClientRect();
+        const visible = node => getComputedStyle(node).visibility === 'visible';
+        const pins = [...area.querySelectorAll('.game-map-pin')];
+        const names = [...area.querySelectorAll('.game-map-pin-name')];
+        const ranks = [...area.querySelectorAll('.game-map-pin-rank')];
+        const clusters = [...area.querySelectorAll('[data-cluster-region], .game-map-own-tag')];
+        const elements = [...pins, ...ranks, ...names.filter(visible)];
+        const boxes = elements.map(node => node.getBoundingClientRect());
+        const intersects = (a, b) => a.left < b.right - .1 && a.right > b.left + .1 && a.top < b.bottom - .1 && a.bottom > b.top + .1;
+        const overlap = boxes.some((box, index) => boxes.slice(index + 1).some(other => intersects(box, other))
+            || clusters.some(cluster => intersects(box, cluster.getBoundingClientRect())));
+        const clipped = boxes.some(box => box.left < frame.left || box.top < frame.top || box.right > frame.right || box.bottom > frame.bottom);
+        const sized = pins.every(pin => pin.getBoundingClientRect().width >= (pin.hasAttribute('data-top-rank') ? 31.9 : 27.9))
+            && [...names.filter(visible), ...ranks].every(node => parseFloat(getComputedStyle(node).fontSize) >= 12);
+        const priorities = names.filter(name => name.dataset.priority === 'true');
+        return {total: pins.length, ranked: ranks.length, labels: names.filter(visible).length, overlap, clipped,
+            passed: !overlap && !clipped && sized && [...pins, ...ranks, ...priorities].every(visible)};
+    }''')
+
+
+def reveal_folded_pin(page, panel, path):
+    panel.get_by_role('button', name='수도권', exact=True).click()
+    area = panel.get_by_test_id('map-area')
+    expect(area).to_have_attribute('data-region', '수도권')
+    pin_id = area.locator('.game-map-pin-name').filter(visible=False).first.get_attribute('data-pin-id')
+    pin = area.locator(f'button[data-school-id="{pin_id}"]')
+    name = pin.get_attribute('aria-label').split(' 전국 ')[0]
+    caption = area.locator('.game-map-pin-caption')
+    pin.hover()
+    expect(caption).to_be_visible()
+    expect(caption).to_have_text(name)
+    panel.get_by_role('textbox', name='학교 검색').hover()
+    expect(caption).to_be_hidden()
+    page.keyboard.press('Tab')
+    pin.focus()
+    expect(caption).to_be_visible()
+    expect(caption).to_have_text(name)
+    snapshot(page, path)
+    page.keyboard.press('Escape')
+    expect(caption).to_be_hidden()
+    page.keyboard.press('Enter')
+    expect(pin).to_have_attribute('aria-pressed', 'true')
+    expect(pin.locator('.game-map-pin-name')).to_be_visible()
+    panel.get_by_role('button', name=f'{name} 방문').click()
+    expect(page.get_by_test_id('visit-tag')).to_be_visible()
+    expect(page.locator('[data-game-layout="visit"] h1')).to_have_text(name)
+    page.get_by_role('button', name='대대대 내 캠퍼스').click()
+    expect(pin).to_have_attribute('aria-pressed', 'true')
+
+
 def mock_case(browser, args, width, height, dpr):
     viewport = {'width': width, 'height': height}
     name = f'{width}x{height}-dpr{dpr}'
@@ -227,7 +279,7 @@ def mock_case(browser, args, width, height, dpr):
             'brand': page.get_by_role('button', name='대대대 내 캠퍼스').evaluate('e => getComputedStyle(e).fontFamily'),
             'heading': panel.get_by_role('heading', name='전국 경쟁', exact=True).evaluate('e => getComputedStyle(e).fontFamily'),
             'campusHud': page.locator('.game-campus-score').evaluate('e => getComputedStyle(e).fontFamily'),
-            'rankScore': panel.locator('[data-top-rank] .font-press-start').first.evaluate('e => getComputedStyle(e).fontFamily'),
+            'rankScore': panel.locator('.game-map-pin-rank span').first.evaluate('e => getComputedStyle(e).fontFamily'),
             'list': panel.get_by_role('region', name='학교 목록').evaluate('e => getComputedStyle(e).fontFamily'),
             'search': panel.get_by_role('textbox', name='학교 검색').evaluate('e => getComputedStyle(e).fontFamily'),
             'faces': page.evaluate('''() => [...document.fonts].filter(face => face.family.includes('Maplestory'))
@@ -240,20 +292,22 @@ def mock_case(browser, args, width, height, dpr):
         assert len(menus) == 8
         chips = chip_metrics(regions)
         area = panel.get_by_test_id('map-area')
-        top3 = area.locator('[data-top-rank]').first
-        expect(top3).to_be_visible()
-        marker = top3.evaluate('''e => {
-            const logo = e.querySelector('[data-logo-status]');
-            const name = e.lastElementChild.firstElementChild;
-            const rank = e.firstElementChild.querySelector('span:last-child');
-            const scale = new DOMMatrixReadOnly(getComputedStyle(e.closest('[data-map-layer]')).transform).a;
-            return {logoWidth: logo.getBoundingClientRect().width, scale,
-                nameSize: parseFloat(getComputedStyle(name).fontSize) * scale,
-                scoreSize: parseFloat(getComputedStyle(rank).fontSize) * scale};
-        }''')
+        expect(area.locator('[data-top-rank]')).to_have_count(3)
+        marker = pin_metrics(area)
+        assert marker['ranked'] == 3
         snapshot(page, args.out / f'{name}-national.png')
         region_flow = map_region_flow(page, panel)
         snapshot(page, args.out / f'{name}-jeju.png')
+        pins = {'제주': pin_metrics(area)}
+        assert pins['제주']['total'] == 2
+        for region, school_count in (('수도권', 25), ('강원', 4), ('충청', 24), ('영남', 11), ('호남', 10)):
+            regions.get_by_role('button', name=region, exact=True).click()
+            expect(area).to_have_attribute('data-region', region)
+            pins[region] = pin_metrics(area)
+            assert pins[region]['total'] == school_count
+        if (width, height, dpr) == (1440, 900, 1):
+            reveal_folded_pin(page, panel, args.out / f'{name}-metro.png')
+        regions.get_by_role('button', name='제주', exact=True).click()
         search_flow = map_search_flow(panel, args.out / f'{name}-empty-search.png') if (width, height) == (2560, 1440) else None
         shop = None
         if (width, height, dpr) == (1440, 900, 1):
@@ -262,7 +316,7 @@ def mock_case(browser, args, width, height, dpr):
             regions.get_by_role('button', name='전체', exact=True).click()
             menus += mock_menu_flow(page, panel, args.out / f'{name}-visit-shop.png')
         return {'name': name, 'viewport': viewport, 'dpr': dpr, 'fonts': fonts, 'chips': chips,
-                'top3': marker, 'regionFlow': region_flow, 'searchFlow': search_flow, 'mockShop': shop, 'menus': menus}
+                'top3': marker, 'regionalPins': pins, 'regionFlow': region_flow, 'searchFlow': search_flow, 'mockShop': shop, 'menus': menus}
     finally:
         page.close()
 
@@ -294,6 +348,8 @@ def compact_scope(browser, url):
                 return style.flexWrap === 'nowrap' && style.overflowX === 'auto';
             }''')
             assert area.evaluate("e => getComputedStyle(e.closest('[data-phone-shell]')).backgroundColor") == SEA
+            expect(area.locator('[data-map-layer] [data-top-rank]')).to_have_count(3)
+            expect(area.locator('[data-map-pins]')).to_have_count(0)
             regions.get_by_role('button', name='제주', exact=True).click()
             expect(area).to_have_attribute('data-region', '제주')
         finally:
@@ -401,9 +457,8 @@ def main():
                  for m in case['menus'])),
             ('all seven region chips and focus ring fit without horizontal scroll',
              case['chips']['allVisible'] and case['regionFlow']['focusVisible'] and case['regionFlow']['focusFits']),
-            ('TOP 3 logo ≥32 CSS px and name/score ≥12 CSS px after scale',
-             case['top3']['logoWidth'] >= 32 - TOLERANCE
-             and min(case['top3']['nameSize'], case['top3']['scoreSize']) >= 12 - TOLERANCE),
+            ('TOP 3 and regional pins fit; logos ≥28/32 CSS px and visible text ≥12 CSS px',
+             case['top3']['passed'] and all(pins['passed'] for pins in case['regionalPins'].values())),
             ('Jeju panel backing cream and map area sea blue', case['regionFlow']['jeju']['matchesPanel']),
         ):
             if not passed:

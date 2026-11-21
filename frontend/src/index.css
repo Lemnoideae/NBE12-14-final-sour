@@ -587,6 +587,64 @@
 }
 [data-desktop-game] .game-map-regions button:focus-visible { outline: 2px solid #49331d; outline-offset: 2px; }
 
+/* PC-only overlay: marker controls stay in CSS pixels, separate from the scaled map art. */
+.game-map-pins { position: absolute; inset: 0; z-index: 24; pointer-events: none; }
+.game-map-pin {
+  position: absolute;
+  pointer-events: auto;
+  cursor: pointer;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+}
+.game-map-pin[data-top-rank] { inline-size: 2rem; block-size: 2rem; }
+.game-map-pin-medal {
+  position: absolute;
+  inset: auto 0 0 auto;
+  min-inline-size: .875rem;
+  background: #261608;
+  color: #facc15;
+  font-size: .75rem;
+  line-height: 1.15;
+  text-align: center;
+}
+.game-map-pin-logo {
+  display: grid;
+  place-items: center;
+  inline-size: 100%;
+  block-size: 100%;
+  border: 2px solid #261608;
+  box-shadow: 2px 2px #261608;
+  color: #fff;
+  font-weight: 900;
+}
+.game-map-pin[aria-pressed='true'] .game-map-pin-logo { border-color: #facc15; }
+.game-map-pin:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.game-map-pin-name, .game-map-pin-rank, .game-map-pin-caption {
+  border: 1px solid #261608;
+  box-shadow: 1px 1px #261608;
+  padding: .125rem .25rem;
+  font-size: .75rem;
+  font-weight: 700;
+  line-height: 1.25;
+  background: #fdf5df;
+  color: #261608;
+}
+.game-map-pin-name, .game-map-pin-rank { position: absolute; inline-size: max-content; white-space: nowrap; }
+.game-map-pin-name[data-priority='true'] { background: #fef08a; }
+.game-map-pin-rank { display: flex; align-items: center; gap: .1875rem; padding: 0 .1875rem; letter-spacing: -.02em; background: #261608; color: #fff4cf; border-color: #facc15; }
+.game-map-pin-rank strong { color: #facc15; }
+.game-map-pin-lines { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; stroke: #261608; stroke-width: 1.5; }
+.game-map-pin-caption {
+  position: absolute;
+  inset: auto .25rem .25rem;
+  min-block-size: 1.75rem;
+  text-align: center;
+  overflow-wrap: anywhere;
+  visibility: hidden;
+}
+.game-map-pin-caption[data-revealed='true'] { visibility: visible; }
+.game-map-pins:has(.game-map-pin-caption[data-revealed='true']) { z-index: 26; }
+
 /* Match the mobile plaques' depth without changing compact buttons or general-purpose form actions. */
 .game-nav-icon { display: none; }
 [data-desktop-game] .game-nav-control {

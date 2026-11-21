@@ -2,6 +2,8 @@ import React from 'react';
 import { Hand, ZoomIn } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { MapArt } from './MapArt.tsx';
+import { WorkspaceMapPins } from './WorkspaceMapPins';
+import { mapFramePercent } from '../utils/workspaceMapPins';
 import { MAP_AREA_HEIGHT, MapLayer, MapFrame, MapSearchHeader, SchoolListSheet, SchoolMarker, SchoolBadge, RankRibbon, type MapControlsProps } from './MapParts.tsx';
 import { countByRegion, filterSchools, getTopSchools } from '../data/schoolDirectory.ts';
 import {
@@ -12,6 +14,7 @@ import {
   nationalRibbonPoint,
   projectToViewport,
   regionViewport,
+  regionMarkerPx,
   type MapRegion,
   type SchoolFilterRegion,
 } from '../data/schoolMapLayout.ts';
@@ -39,6 +42,13 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
   const counts = countByRegion(schools);
   const mySchool = schools.find((school) => school.isMySchool);
   const viewport = isNational ? undefined : regionViewport(region as SchoolFilterRegion);
+  const topSchools = isNational ? getTopSchools(schools.filter((school) => school.isTop3), 3) : [];
+  const workspace = preview !== undefined;
+  const pins = workspace ? (viewport ? regionSchools : topSchools).flatMap(school => {
+    const ribbonPoint = viewport ? undefined : nationalRibbonPoint(school.id);
+    const point = viewport ? regionMarkerPx(school.id, viewport) : ribbonPoint && mapFramePercent(ribbonPoint);
+    return point ? [{ school, point }] : [];
+  }) : [];
 
   return (
     <MapFrame preview={preview} searching={query.trim().length > 0} list={renderPanelList?.(listed) ?? <SchoolListSheet
@@ -97,7 +107,7 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
                   )}
                   {hasMySchool && mySchool && (
                     // Above the bubble: to the right it ran under the 강원 bubble and hid the rank (M1 browser check, 2026-11-08).
-                    <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 bg-[#e11d48] text-white border-2 border-[#261608] px-1 py-0.2 shadow-[2px_2px_0px_#261608] whitespace-nowrap flex items-center gap-0.5 z-40 animate-pulse">
+                    <div className="game-map-own-tag absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 bg-[#e11d48] text-white border-2 border-[#261608] px-1 py-0.2 shadow-[2px_2px_0px_#261608] whitespace-nowrap flex items-center gap-0.5 z-40 animate-pulse">
                       <span className="w-1.5 h-1.5 bg-[#facc15] border border-[#261608]" />
                       <span className="font-pixel text-[8px] font-black tracking-tight" data-testid="my-school-tag">
                         내 학교 {mySchool.shortName} · {mySchool.rank}위
@@ -116,8 +126,7 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
               );
             })}
 
-          {isNational &&
-            getTopSchools(schools.filter((school) => school.isTop3), 3).map((school) => {
+          {!workspace && topSchools.map((school) => {
               const point = nationalRibbonPoint(school.id);
               if (!point) return null;
               return (
@@ -150,7 +159,7 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
               );
             })}
 
-          {viewport &&
+          {!workspace && viewport &&
             regionSchools.map((school) => {
               const placement = NATIONAL_PLACEMENTS[school.id];
               if (!placement) return null;
@@ -172,6 +181,7 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
             })}
         </div>
         </MapLayer>
+        {workspace && <WorkspaceMapPins pins={pins} selectedId={selectedSchoolId} onSelect={onSelectSchool} />}
 
         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-25 pointer-events-none">
           <div className="rpg-box px-2.5 py-1 bg-[#fdf5df]/95 border-2 border-[#261608] shadow-[2px_2px_0px_#261608] flex items-center gap-1.5 whitespace-nowrap animate-pulse">
