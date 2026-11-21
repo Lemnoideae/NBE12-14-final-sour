@@ -34,6 +34,7 @@ for (const [key, value] of Object.entries({
 dom.window.HTMLElement.prototype.scrollIntoView = function () {};
 
 const { render, screen, fireEvent, act, cleanup } = await import('@testing-library/react');
+const { testViewButton } = await import('./helpers/mockTools');
 const {
   applyBattleRequest,
   getDefaultRequestedStartTime,
@@ -78,7 +79,7 @@ test('1. 대결 신청 및 현황 화면 진입·복귀와 네비게이션 간 �
   render(React.createElement(MockGameProvider, null, React.createElement(App)));
 
   // 1. 데모 상단 런처에서 '대결 신청' 진입 버튼 클릭 (초기 소속 연합 없음 상태 확인)
-  const launcherBattleApplyBtn = screen.getByRole('button', { name: '⚔️ 대결 신청 (Battle Apply)' });
+  const launcherBattleApplyBtn = testViewButton('⚔️ 대결 신청 (Battle Apply)');
   act(() => {
     fireEvent.click(launcherBattleApplyBtn);
   });
@@ -95,7 +96,7 @@ test('1. 대결 신청 및 현황 화면 진입·복귀와 네비게이션 간 �
   assert.equal(screen.queryAllByText(/연합별 3개교/).length, 0, '3:3 대결은 없다');
 
   // 3. '🛡️ 현재 연합 (Current Alliance)' 런처 버튼으로 현재 연합 화면 이동
-  const launcherCurAllianceBtn = screen.getByRole('button', { name: '🛡️ 현재 연합 (Current Alliance)' });
+  const launcherCurAllianceBtn = testViewButton('🛡️ 현재 연합 (Current Alliance)');
   act(() => {
     fireEvent.click(launcherCurAllianceBtn);
   });

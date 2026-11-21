@@ -29,6 +29,7 @@ dom.window.HTMLElement.prototype.scrollIntoView = function () {};
 installDialogStub(dom.window);
 
 const { render, screen, fireEvent, act, cleanup, within } = await import('@testing-library/react');
+const { clickTestView } = await import('./helpers/mockTools');
 const { MockGameProvider, useMockGame } = await import('../src/hooks/useMockGame');
 const { default: App } = await import('../src/App');
 const { DEMO_VISIT_SCHOOL_ID } = await import('../src/data/schoolDirectory');
@@ -76,7 +77,7 @@ test('방문 미리보기는 전체 방명록과 같은 샘플 중 좋아요가 
 
 test('KAIST 입학: 실제 우리 학교 방명록 시트는 KAIST 이름이고 KAIST 글이 없으며 개수가 목록 수와 같다', () => {
   mountAsKaist();
-  click('🎮 메인 게임 화면');
+  clickTestView('🎮 메인 게임 화면');
   click('우리 학교 방명록 보기');
   const sheet = screen.getByRole('dialog', { name: '우리 학교 방명록' });
   assert.ok(sheet.textContent!.includes(`${kaist.name} 방명록`));
@@ -90,7 +91,7 @@ test('KAIST 입학: 실제 우리 학교 방명록 시트는 KAIST 이름이고 
 test('KAIST 입학: 우리 방명록·채팅 시안 화면에 한양대 고정값이 없다', () => {
   mountAsKaist();
   for (const view of ['📜 2-Phone 우리 방명록 (Screen 1 & 2)', '💬 2-Phone 채팅 비교']) {
-    click(view);
+    clickTestView(view);
     const text = document.body.textContent!;
     assert.ok(!text.includes(hanyang.name), `${view}: ${hanyang.name}`);
     assert.ok(!text.includes('한양'), `${view}: 한양`);
@@ -100,7 +101,7 @@ test('KAIST 입학: 우리 방명록·채팅 시안 화면에 한양대 고정�
 
 test('KAIST 입학: 방문 시안 화면의 미리보기에 방문 학교 글이 없고 작성자는 KAIST 학생이다', () => {
   mountAsKaist();
-  click('📖 2-Phone 방문교 방명록');
+  clickTestView('📖 2-Phone 방문교 방명록');
   // The preview notes moved into the 학교 정보 sheet (V2, Q2).
   fireEvent.click(screen.getByTestId('visit-info-button'));
   const notes = screen.getAllByTestId('guestbook-preview-note');

@@ -5,6 +5,7 @@
  * Plan: docs/261109-1749-map_integrity_plan.md.
  */
 import assert from 'node:assert/strict';
+import { selectMockScreen } from './cdp-mock-tools.mjs';
 
 const endpoint = process.env.MAP_CDP_URL ?? process.env.M6_CDP_URL ?? 'http://127.0.0.1:9222';
 const app = process.env.MAP_APP_URL ?? process.env.M6_APP_URL ?? 'http://127.0.0.1:4173';
@@ -31,11 +32,7 @@ async function evaluate(expression) {
   return response.result.result.value;
 }
 const pressText = async (name) => {
-  await evaluate(`(() => {
-    const found = [...document.querySelectorAll('button')].filter((b) => b.textContent.trim() === ${JSON.stringify(name)});
-    if (found.length === 0) throw new Error('No button: ' + ${JSON.stringify(name)});
-    found[0].click();
-  })()`);
+  await selectMockScreen(evaluate, name);
   await pause(600);
 };
 

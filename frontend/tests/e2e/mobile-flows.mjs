@@ -1,7 +1,7 @@
 /** Additional real-browser M6 flows. Physical keyboard/IME and devices remain separate. */
 import assert from 'node:assert/strict';
 
-export async function runMobileFlows({ send, evaluate, waitFor, pause, button, fill, key, viewport, load, screenshot, touch, checkSheet, results }) {
+export async function runMobileFlows({ send, evaluate, waitFor, pause, button, screen, fill, key, viewport, load, screenshot, touch, checkSheet, results }) {
   // T5: the main screen shows a compact contribution (1.2M); the stats button's accessible name keeps the full number.
   // V1 (docs/261110-2005-visit_ui_jeju_map_plan.md §4): my campus and a visited campus share one layout.
   const layoutBoxes = () => evaluate(`(() => {
@@ -37,7 +37,7 @@ export async function runMobileFlows({ send, evaluate, waitFor, pause, button, f
       const text=document.querySelector('dialog[open][aria-label="상세 스탯"]').textContent;
       const clicker=text.match(/클리커 Lv\\.(\\d+)/),buff=text.match(/커피 한 잔 · (\\d+)초 남음/);
       if(!clicker||!buff)throw new Error('Expected upgraded clicker and active coffee');
-      return {clicker:Number(clicker[1]),buffSeconds:Number(buff[1]),contribution:Number(document.querySelector('[data-testid="campus-stats-button"]').getAttribute('aria-label').replace(/[^0-9]/g,'')),school:document.querySelector('header').textContent};
+      return {clicker:Number(clicker[1]),buffSeconds:Number(buff[1]),contribution:Number(document.querySelector('[data-testid="campus-stats-button"]').getAttribute('aria-label').replace(/[^0-9]/g,'')),school:document.querySelector('[data-game-layout="my-campus"] > div:first-child').textContent};
     })()`);
     await key('Escape');
     await waitFor(`!document.querySelector('dialog[open]')`);
@@ -64,7 +64,7 @@ export async function runMobileFlows({ send, evaluate, waitFor, pause, button, f
   }
 
   for (const [width,height] of [[390,844],[844,390]]) {
-    await viewport(width,height); await load(); await button('🎮 메인 게임 화면');
+    await viewport(width,height); await load(); await screen('🎮 메인 게임 화면');
     await scoredTouch(); const afterTap = await contribution();
     await touch('[title="우리 학교 방명록 보기"]'); await waitFor(`!!document.querySelector('dialog[open]')`);
     const sheetList = 'dialog div[class*="overflow-y-auto"][class*="px-2.5"]';
@@ -94,11 +94,11 @@ export async function runMobileFlows({ send, evaluate, waitFor, pause, button, f
     results.push({width,height,sheets:'own guestbook/chat touch scrolling; native text insertion, touch send, close'});
 
     // Map overview contains nine region clusters and three score ribbons (logos are placeholders, M1 D1).
-    await button('🗺️ 단일 폰 지도');
+    await screen('🗺️ 단일 폰 지도');
     assert.equal(await evaluate(`document.querySelectorAll('[data-cluster-region]').length`),9);
     assert.equal(await evaluate(`document.querySelectorAll('[data-top-rank]').length`),3);
     await touch('[data-cluster-region="강원"]');
-    assert.equal(await evaluate(`document.querySelectorAll('button[data-school-id]').length`),5);
+    assert.equal(await evaluate(`document.querySelectorAll('button[data-school-id]').length`),4, 'The current Gangwon fixture has four campuses');
     await fill('[aria-label="학교 검색"]','강원');
     const mapTargets = await sizeTargets('[aria-label="학교 검색"], button[aria-label="검색어 지우기"]');
     const schoolId = await evaluate(`document.querySelector('button[data-school-id]').dataset.schoolId`);
@@ -153,14 +153,14 @@ export async function runMobileFlows({ send, evaluate, waitFor, pause, button, f
     results.push({width,height,visit:'clusters/top scores, two school visits, layout parity with my campus, info sheet, spectator no-score, guestbook keyboard/touch/send/rotation/focus, map query/selection return, scoring resumes',mapTargets});
 
     // Onboarding failures and success at both orientations. Reload resets only this local mock session.
-    await load(); await button('🎮 메인 게임 화면'); await button('상점');
+    await load(); await screen('🎮 메인 게임 화면'); await button('상점');
     await evaluate(`[...document.querySelectorAll('[data-game-main] button')].find(b=>b.textContent.includes('업그레이드')).click()`); await pause(100);
     await touch('[aria-label="커피 한 잔 구매 선택"]'); await button('구매 및 사용'); await button('캠퍼스');
     const gameBefore = await gameSnapshot(); assert.equal(gameBefore.clicker,4);
     await viewport(height,width); const rotatedBefore = await gameSnapshot();
     assert.equal(rotatedBefore.contribution,gameBefore.contribution); assert.equal(rotatedBefore.clicker,4);
     assert.ok(rotatedBefore.buffSeconds <= gameBefore.buffSeconds && rotatedBefore.buffSeconds > 0);
-    await viewport(width,height); await button('📱 순차 온보딩 (Single Phone)');
+    await viewport(width,height); await screen('📱 순차 온보딩 (Single Phone)');
     const emailTargets = await sizeTargets('[aria-label="목업 샘플 이메일"] button');
     await fill('input[type="email"]','m6@unknown.example'); await button('인증 코드 받기');
     assert.equal(await evaluate(`document.querySelector('[role="alert"]').textContent.includes('지원하지 않는')`),true);
@@ -183,7 +183,14 @@ export async function runMobileFlows({ send, evaluate, waitFor, pause, button, f
     assert.equal(await evaluate(`document.querySelector('input[placeholder="열정학번사자"]').value`),'M6검증');
     await viewport(width,height);
     await button('입학하기!'); await button('캠퍼스로 이동');
-    assert.equal(await evaluate(`document.body.textContent.includes('M6검증')`),true);
+    // Check the enrolled nickname in a real game interaction rather than the removed presentation header.
+    await touch('[title="채팅창 열기"]');
+    await fill('dialog [aria-label="채팅 메시지"]', '입학 후 닉네임 확인');
+    await button('전송');
+    await waitFor(`document.querySelector('dialog[open]').textContent.includes('입학 후 닉네임 확인')`);
+    assert.ok(await evaluate(`document.querySelector('dialog[open]').textContent.includes('M6검증')`));
+    await key('Escape');
+    await waitFor(`!document.querySelector('dialog[open]')`);
     await viewport(height,width); await viewport(width,height);
     const gameAfter = await gameSnapshot();
     assert.equal(gameAfter.contribution,gameBefore.contribution,'Same-school enrollment and rotation keep contribution');
@@ -196,7 +203,7 @@ export async function runMobileFlows({ send, evaluate, waitFor, pause, button, f
   }
 
   // Genuine touch drag rather than assigning scrollTop. Start with the standalone ranking's 15 rows.
-  await viewport(390,844); await load(); await button('🏆 랭킹 화면 (Single Phone)');
+  await viewport(390,844); await load(); await screen('🏆 랭킹 화면 (Single Phone)');
   const rankList = '[style*="touch-action: pan-y"]';
   const before = await evaluate(`document.querySelector(${JSON.stringify(rankList)}).scrollTop`);
   await drag(rankList);
@@ -212,9 +219,9 @@ export async function runMobileFlows({ send, evaluate, waitFor, pause, button, f
 
   // Growth-stage screenshots use the actual game renderer, not the comparison sprite sheet.
   for(const [width,height] of [[360,740],[740,360]]) {
-    await viewport(width,height); await load(); await button('🎮 메인 게임 화면');
+    await viewport(width,height); await load(); await screen('🎮 메인 게임 화면');
     for(let level=1;level<=10;level++) {
-      await button('[시연] 성장 시트 보기');
+      await screen('🏛️ 10단계 캠퍼스 성장 시트 (5x2)');
       await evaluate(`document.querySelector('[title="Lv.${level} 단계 확인"]').click()`); await pause(50);
       await button('성장 시연: 학교 점수를 기준값으로 설정'); await button('인게임으로');
       assert.equal(await evaluate(`Number(document.querySelector('[data-testid="campus-scene"]').dataset.level)`),level);

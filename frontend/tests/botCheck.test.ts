@@ -30,6 +30,7 @@ dom.window.HTMLElement.prototype.scrollIntoView = function () {};
 installDialogStub(dom.window);
 
 const { render, screen, fireEvent, act, cleanup } = await import('@testing-library/react');
+const { clickTestView, withToolSetting } = await import('./helpers/mockTools');
 const { MockGameProvider, useMockGame } = await import('../src/hooks/useMockGame');
 const { default: App } = await import('../src/App');
 const { MOCK_REQUEST_RULES } = await import('../src/utils/mockRequest');
@@ -67,13 +68,15 @@ async function mountApp(loader: TurnstileLoader) {
     turnstileLoader: loader,
     children: React.createElement(React.Fragment, null, React.createElement(App), React.createElement(Probe)),
   }));
-  fireEvent.click(screen.getByRole('button', { name: '🎮 메인 게임 화면' }));
+  clickTestView('🎮 메인 게임 화면');
 }
-const flagSwitch = () => screen.getByLabelText('[시연] 어뷰징 의심 표시 (봇 확인 요구)') as HTMLInputElement;
+const flagLabel = '[시연] 어뷰징 의심 표시 (봇 확인 요구)';
+const flagChecked = () => withToolSetting(flagLabel, (control) => (control as HTMLInputElement).checked);
+const toggleFlag = () => withToolSetting(flagLabel, fireEvent.click);
 const campus = () => screen.getByRole('button', { name: '캠퍼스 클릭 영역' });
 const dialog = () => screen.queryByTestId('bot-check-dialog');
 const settle = () => act(async () => {});
-const setRequestMode = (mode: string) => fireEvent.change(screen.getByLabelText('[시연] 요청 상태'), { target: { value: mode } });
+const setRequestMode = (mode: string) => withToolSetting('[시연] 요청 상태', (control) => fireEvent.change(control, { target: { value: mode } }));
 
 function useClock(t: TestContext) {
   t.mock.timers.enable({ apis: ['Date', 'setInterval', 'setTimeout'], now: 1000 });
@@ -89,7 +92,7 @@ test('의심 표시가 있으면 클릭을 반영하지 않고 확인 창을 띄
   const turnstile = fakeTurnstile();
   await mountApp(() => Promise.resolve(turnstile.api));
 
-  fireEvent.click(flagSwitch());
+  toggleFlag();
   const before = latest.state;
   fireEvent.click(campus());
   await settle();
@@ -101,7 +104,7 @@ test('의심 표시가 있으면 클릭을 반영하지 않고 확인 창을 띄
   turnstile.solve();
   await settle();
   assertAbsent(dialog());
-  assert.equal(flagSwitch().checked, false, '표시가 지워진다');
+  assert.equal(flagChecked(), false, '표시가 지워진다');
   assert.deepEqual(turnstile.removed, ['widget-1'], '창을 닫으며 위젯을 지운다');
 
   tick(100);
@@ -113,12 +116,12 @@ test('위젯 스크립트를 불러오지 못하면 위젯 없이 확인을 요�
   useClock(t);
   await mountApp(() => Promise.reject(new Error('Turnstile 스크립트를 불러오지 못했습니다')));
 
-  fireEvent.click(flagSwitch());
+  toggleFlag();
   fireEvent.click(campus());
   await settle();
 
   assertAbsent(dialog());
-  assert.equal(flagSwitch().checked, false);
+  assert.equal(flagChecked(), false);
 });
 
 test('확인 요청이 실패하면 표시를 남기고 다시 시도할 수 있다. 다시 시도는 위젯을 초기화해 새 토큰을 받는다', async (t) => {
@@ -127,7 +130,7 @@ test('확인 요청이 실패하면 표시를 남기고 다시 시도할 수 있
   await mountApp(() => Promise.resolve(turnstile.api));
   setRequestMode('fail-once');
 
-  fireEvent.click(flagSwitch());
+  toggleFlag();
   fireEvent.click(campus());
   await settle();
   turnstile.solve();
@@ -135,14 +138,14 @@ test('확인 요청이 실패하면 표시를 남기고 다시 시도할 수 있
   tick(MOCK_REQUEST_RULES.failDelayMs);
 
   assert.match(screen.getByTestId('bot-check-error').textContent ?? '', /확인 요청이 실패했습니다/);
-  assert.equal(flagSwitch().checked, true, '실패하면 표시가 남는다');
+  assert.equal(flagChecked(), true, '실패하면 표시가 남는다');
 
   fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
   assert.deepEqual(turnstile.reset, ['widget-1'], '토큰은 한 번만 쓸 수 있어 위젯을 초기화한다');
   turnstile.solve();
   await settle();
   assertAbsent(dialog());
-  assert.equal(flagSwitch().checked, false);
+  assert.equal(flagChecked(), false);
 });
 
 test('확인하지 않고 창을 닫으면 표시가 남아 다음 클릭에서 다시 뜬다', async (t) => {
@@ -151,7 +154,7 @@ test('확인하지 않고 창을 닫으면 표시가 남아 다음 클릭에서 
   const turnstile = fakeTurnstile();
   await mountApp(() => Promise.resolve(turnstile.api));
 
-  fireEvent.click(flagSwitch());
+  toggleFlag();
   const before = latest.state;
   fireEvent.click(campus());
   await settle();
@@ -172,11 +175,11 @@ test('시연 스위치를 끄면 표시와 확인 창이 함께 사라진다', a
   const turnstile = fakeTurnstile();
   await mountApp(() => Promise.resolve(turnstile.api));
 
-  fireEvent.click(flagSwitch());
+  toggleFlag();
   fireEvent.click(campus());
   await settle();
-  fireEvent.click(flagSwitch());
+  toggleFlag();
 
   assertAbsent(dialog());
-  assert.equal(flagSwitch().checked, false);
+  assert.equal(flagChecked(), false);
 });

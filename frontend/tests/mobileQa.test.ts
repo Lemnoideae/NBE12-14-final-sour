@@ -25,6 +25,7 @@ dom.window.HTMLElement.prototype.scrollIntoView = function () {};
 installDialogStub(dom.window);
 
 const { render, screen, fireEvent, cleanup, within, act } = await import('@testing-library/react');
+const { clickTestView, openTestTools } = await import('./helpers/mockTools');
 const { default: App } = await import('../src/App');
 const { BottomSheetDialog } = await import('../src/components/BottomSheetDialog');
 const { MockGameProvider, useMockGame } = await import('../src/hooks/useMockGame');
@@ -33,7 +34,7 @@ function Probe() { game = useMockGame(); return null; }
 function mountGame() {
   render(React.createElement(MockGameProvider, null, React.createElement(React.Fragment, null,
     React.createElement(App), React.createElement(Probe))));
-  fireEvent.click(screen.getByRole('button', { name: '🎮 메인 게임 화면' }));
+  clickTestView('🎮 메인 게임 화면');
 }
 afterEach(cleanup);
 after(() => { assets.deregister(); dom.window.close(); });
@@ -181,18 +182,15 @@ test('M6: 게임 화면 순위 탭은 목록 끝까지 스크롤하면 다음 10
 test('터치 영역 44px: 서비스 화면만 표시하고 [시연]·시안 비교·지도 마커는 제외한다', () => {
   mountGame();
   const area = () => document.querySelector('[data-touch-area="44"]');
-  const press = (name: string) => fireEvent.click(screen.getByRole('button', { name }));
   assert.ok(area()?.contains(screen.getByRole('navigation', { name: '주요 메뉴' })), '게임 화면은 서비스 영역');
-  assert.ok(area()?.contains(screen.getByRole('button', { name: '[시연] 성장 시트 보기' })));
-  assert.ok(screen.getByRole('button', { name: '[시연] 성장 시트 보기' }).hasAttribute('data-no-touch44'));
-  assert.ok(!area()?.contains(screen.getByRole('button', { name: '🎮 메인 게임 화면' })), '서비스 흐름 메뉴는 영역 밖');
-  press('🗺️ 단일 폰 지도');
+  assert.ok(!area()?.contains(openTestTools().getByRole('button', { name: '🏛️ 10단계 캠퍼스 성장 시트 (5x2)' })), '성장 시트는 서비스 영역 밖');
+  clickTestView('🗺️ 단일 폰 지도');
   const markers = document.querySelectorAll('[data-school-id]:is(button), [data-cluster-region]');
   assert.ok(markers.length > 0);
   for (const marker of markers) assert.ok(marker.hasAttribute('data-no-touch44'), marker.getAttribute('aria-label') ?? '');
   assert.ok(area()?.querySelector('button[aria-label$=" 방문"]:not([data-no-touch44])'), '마커 대신 목록의 방문 버튼은 44px 대상');
   for (const comparison of ['📜 2-Phone 우리 방명록 (Screen 1 & 2)', '💬 2-Phone 채팅 비교', '📖 2-Phone 방문교 방명록']) {
-    press(comparison);
+    clickTestView(comparison);
     assert.equal(area(), null, comparison);
   }
 });

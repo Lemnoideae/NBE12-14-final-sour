@@ -33,6 +33,7 @@ for (const [key, value] of Object.entries({
 dom.window.HTMLElement.prototype.scrollIntoView = function () {};
 
 const { render, screen, fireEvent, act, cleanup } = await import('@testing-library/react');
+const { testViewButton } = await import('./helpers/mockTools');
 const {
   ALLIANCE_SIZE,
   applyAllianceRequest,
@@ -313,7 +314,7 @@ test('화면 전환 시 연합 상태가 보존되며 기존 게임 상태(점�
   render(React.createElement(MockGameProvider, null, React.createElement(App)));
 
   // 1. 연합 신청 화면으로 이동하여 연합 신청 및 수락
-  const applyNavBtn = screen.getByRole('button', { name: /연합 신청 \(Alliance Apply\)/ });
+  const applyNavBtn = testViewButton(/연합 신청 \(Alliance Apply\)/);
   act(() => {
     fireEvent.click(applyNavBtn);
   });

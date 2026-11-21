@@ -6,6 +6,7 @@
  * Needs a running Chromium CDP endpoint and Vite preview; it never launches a browser and closes only its own tab.
  */
 import assert from 'node:assert/strict';
+import { selectMockScreen } from './cdp-mock-tools.mjs';
 
 const endpoint = process.env.NARROW_CDP_URL ?? process.env.M6_CDP_URL ?? 'http://127.0.0.1:9222';
 const app = process.env.NARROW_APP_URL ?? process.env.M6_APP_URL ?? 'http://127.0.0.1:4173';
@@ -62,7 +63,7 @@ try {
     const badNav = nav.filter((n) => n.width > n.room || !n.oneLine || n.icon < 24);
     if (badNav.length) failures.push(`${size} 하단 내비 라벨·아이콘 ${JSON.stringify(badNav)}`);
 
-    await press('🏪 상점 & 강화 (Single Phone)');
+    await selectMockScreen(evaluate, '🏪 상점 & 강화 (Single Phone)');
     const shop = await evaluate(`(() => {
       const preview = document.querySelector('[data-testid="clicker-upgrade-preview"]');
       const button = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('업그레이드'));
@@ -73,7 +74,7 @@ try {
     report.push(`${size} 강화 미리보기 "${shop.text}"`);
     if (shop.cut || !shop.inside) failures.push(`${size} 강화 미리보기 잘림 ${JSON.stringify(shop)}`);
 
-    await press('🗺️ 단일 폰 지도');
+    await selectMockScreen(evaluate, '🗺️ 단일 폰 지도');
     const search = await evaluate(`(() => {
       const box = document.querySelector('[data-testid="map-search-box"]').getBoundingClientRect();
       const input = document.querySelector('input[aria-label="학교 검색"]').getBoundingClientRect();
@@ -82,7 +83,7 @@ try {
     report.push(`${size} 검색 상자 ${search.box}px (입력 ${search.input}px)`);
     if (search.input < 44 || search.box > search.input + 0.5) failures.push(`${size} 검색 상자 높이 ${JSON.stringify(search)}`);
 
-    await press('📱 순차 온보딩 (Single Phone)');
+    await selectMockScreen(evaluate, '📱 순차 온보딩 (Single Phone)');
     await evaluate(`(() => {
       const input = document.querySelector('input[type="email"]');
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'narrow@kaist.ac.kr');

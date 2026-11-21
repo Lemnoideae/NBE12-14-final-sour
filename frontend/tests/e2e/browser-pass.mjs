@@ -1,7 +1,8 @@
 /**
  * E2E Interactive Browser Pass for P4 (resolves R4-2, P2-6, P3-5)
  *
- * Drives real Chromium against Vite production preview using Chrome DevTools Protocol (CDP)
+ * Build first with `npm run build -- --mode campus-test` (mock mode).
+ * Drives real Chromium against the test build using Chrome DevTools Protocol (CDP)
  * over Node 26 global WebSocket without external packages.
  */
 
@@ -10,6 +11,7 @@ import { promises as fs } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { selectMockScreen } from './cdp-mock-tools.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -422,7 +424,7 @@ async function run() {
     // =========================================================================
     console.log('\n--- Step 1: Shop & School Image Change ---');
     // Open Gameplay view, then open Shop tab inside phone frame so TopHUD is visible
-    await clickByText('button', '🎮 메인 게임 화면', 'Open Gameplay view');
+    await selectMockScreen(cdpClient.evaluate.bind(cdpClient), '🎮 메인 게임 화면');
     await delay(500);
 
     await clickByExactText('button', '상점', 'Open Shop tab in gameplay via bottom nav');
@@ -599,7 +601,7 @@ async function run() {
     // STEP 2: Alliance Application & Formation
     // =========================================================================
     console.log('\n--- Step 2: Alliance Application & Formation ---');
-    await clickByText('button', '🛡️ 현재 연합 (Current Alliance)', 'Navigate to current alliance');
+    await selectMockScreen(cdpClient.evaluate.bind(cdpClient), '🛡️ 현재 연합 (Current Alliance)');
     await delay(500);
 
     // Verify empty alliance state
@@ -648,7 +650,7 @@ async function run() {
     // STEP 3: Battle Application, Clock Advance & Lifecycle
     // =========================================================================
     console.log('\n--- Step 3: Battle Application, Clock Advance & Lifecycle ---');
-    await clickByText('button', '⚔️ 대결 신청 (Battle Apply)', 'Navigate to battle apply');
+    await selectMockScreen(cdpClient.evaluate.bind(cdpClient), '⚔️ 대결 신청 (Battle Apply)');
     await delay(500);
 
     await captureScreenAndCheckOverflow('battle-apply');
