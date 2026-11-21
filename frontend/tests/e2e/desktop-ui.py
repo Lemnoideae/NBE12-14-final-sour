@@ -255,6 +255,56 @@ def map_region_flow(page, panel):
             'focusVisible': ring['style'] == 'solid' and ring['width'] >= 1.5, 'jeju': map_background(panel)}
 
 
+def campus_corner_flow(page):
+    left = page.get_by_role('complementary', name='학교 패널')
+    stage = page.locator('[data-campus-stage][data-my-campus]')
+    expect(stage.get_by_text('클릭!', exact=True)).to_be_visible()
+    score = stage.get_by_test_id('campus-stats-contribution')
+    before = score.inner_text()
+    for control, target in ((stage.get_by_role('button', name='우리 학교 방명록 보기'), '방명록'),
+                            (stage.get_by_test_id('campus-stats-button'), '상세')):
+        control.click()
+        expect(left.get_by_role('tab', name=target, exact=True)).to_have_attribute('aria-selected', 'true')
+        expect(score).to_have_text(before)
+        expect(stage.get_by_text('클릭!', exact=True)).to_be_visible()
+    stats = left.get_by_role('tabpanel', name='상세')
+    expect(stats.locator('.game-clicker-stat')).to_have_count(2)
+    expect(stats.locator('.game-clicker-stat-num')).to_have_text(['30', '2'])
+
+
+def map_search_selection(panel):
+    area = panel.get_by_test_id('map-area')
+    panel.get_by_role('button', name='전체', exact=True).click()
+    schools = panel.get_by_role('region', name='학교 목록')
+    schools.get_by_role('button', name='서울대학교', exact=True).click()
+    search = panel.get_by_role('textbox', name='학교 검색')
+    search.click()
+    preview = panel.get_by_role('region', name='학교 미리보기')
+    visit = preview.get_by_role('button', name='서울대학교 방문')
+    notice = preview.get_by_text('현재 검색 결과에 없음', exact=True)
+    top = area.bounding_box()['y']
+    deltas = []
+    for term, count, status in (('KAIST', 1, '1개교'), ('없는학교-SCRUM230', 0, '검색 결과 없음')):
+        search.fill(term)
+        expect(panel.get_by_test_id('map-search-status')).to_have_text(status)
+        expect(schools.get_by_role('button')).to_have_count(count)
+        expect(visit).to_be_enabled()
+        expect(notice).to_be_visible()
+        deltas.append(area.bounding_box()['y'] - top)
+    panel.get_by_role('button', name='검색어 지우기').click()
+    expect(search).to_have_value('')
+    expect(notice).to_have_count(0)
+    expect(visit).to_be_enabled()
+    deltas.append(area.bounding_box()['y'] - top)
+    assert max(map(abs, deltas)) <= TOLERANCE, deltas
+    search.fill('KAIST')
+    schools.get_by_role('button', name='KAIST', exact=True).click()
+    expect(preview.get_by_role('button', name='KAIST 방문')).to_be_enabled()
+    expect(notice).to_have_count(0)
+    panel.get_by_role('button', name='검색어 지우기').click()
+    return deltas
+
+
 def map_search_flow(panel, path):
     regions = panel.get_by_role('group', name='권역 선택')
     area = panel.get_by_test_id('map-area')
@@ -450,6 +500,8 @@ def mock_case(browser, args, width, height, dpr):
         caption_widths = None
         if (width, height, dpr) == (1440, 900, 1):
             regions.get_by_role('button', name='전체', exact=True).click()
+            campus_corner_flow(page)
+            map_search_selection(panel)
             caption_widths = map_caption_flow(page, panel, args.out)
             reveal_folded_pin(page, panel, args.out / f'{name}-metro.png')
         regions.get_by_role('button', name='제주', exact=True).click()
