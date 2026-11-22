@@ -117,6 +117,11 @@ class AssistIntegrationTest {
         // dirty:alliance는 공유 키라 이 테스트가 넣은 연합만 뺀다. 남기면 배치 테스트에서 이 연합을 반영하려 한다
         redis.opsForSet().remove(RedisKey.DIRTY_ALLIANCE.of(), String.valueOf(allianceId));
         redis.opsForSet().remove(RedisKey.DIRTY_ALLIANCE.of() + ":flushing", String.valueOf(allianceId));
+        if (!matchIds.isEmpty()) {
+            Object[] members = matchIds.stream().map(String::valueOf).toArray();
+            redis.opsForSet().remove(RedisKey.DIRTY_MATCH.of(), members);
+            redis.opsForSet().remove(RedisKey.DIRTY_MATCH.of() + ":flushing", members);
+        }
 
         jdbcTemplate.update("DELETE FROM alliance_match WHERE alliance_a_id IN (SELECT id FROM alliance WHERE name LIKE '지원테스트%')"
                 + " OR alliance_b_id IN (SELECT id FROM alliance WHERE name LIKE '지원테스트%')");
@@ -282,6 +287,7 @@ class AssistIntegrationTest {
         assertThat(redis.opsForHash().get(RedisKey.MATCH_SCORE.of(matchId), "A")).isEqualTo("6");
         assertThat(redis.opsForHash().get(RedisKey.MATCH_SCORE.of(matchId), "B")).isNull();
         assertThat(redis.opsForValue().get(RedisKey.UNIV_MATCH.of(allyId))).isEqualTo(matchId + ":A");
+        assertThat(redis.opsForSet().isMember(RedisKey.DIRTY_MATCH.of(), String.valueOf(matchId))).isTrue();
         assertThat(redis.getExpire(RedisKey.UNIV_MATCH.of(allyId))).isPositive();
         assertThat(redis.opsForHash().get(RedisKey.ALLIANCE_SCORE.of(allianceId), String.valueOf(allyId)))
                 .isEqualTo("6");

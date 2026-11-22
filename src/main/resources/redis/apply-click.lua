@@ -6,10 +6,11 @@
 -- KEYS[8] clicks:univ:{u}:{nowSec-1}    직전 1초 학교 클릭 수
 -- KEYS[9] alliance:{a}:score            연합 점수 HASH universityId
 -- KEYS[10] match:{m}:score               대결 점수 HASH A, B
--- KEYS[11] dirty:alliance
+-- KEYS[11] dirty:alliance  KEYS[12] dirty:match
 -- ARGV[1] universityId  ARGV[2] departmentId  ARGV[3] userId
 -- ARGV[4] earnedScore (정수)  ARGV[5] clickCount
 -- ARGV[6] allianceId    ARGV[7] team(A|B)
+-- ARGV[8] matchId
 
 local earned = tonumber(ARGV[4])
 
@@ -24,6 +25,7 @@ end
 
 if ARGV[7] ~= '' then
     redis.call('HINCRBY', KEYS[10], ARGV[7], earned)
+    redis.call('SADD', KEYS[12], ARGV[8])
 end
 
 -- 1분 배치가 바뀐 대상만 DB에 쓰도록 표시

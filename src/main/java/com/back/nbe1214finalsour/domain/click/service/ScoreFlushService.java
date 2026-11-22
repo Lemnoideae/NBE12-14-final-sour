@@ -27,12 +27,15 @@ public class ScoreFlushService {
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
 
+    private static final String FLUSHING = ":flushing";
+
     public void flush() {
-        String newUserDirtyKey = RedisKey.DIRTY_USER.of() + ":flushing";
-        String newUnivDirtyKey = RedisKey.DIRTY_UNIV.of() + ":flushing";
-        String newDeptDirtyKey = RedisKey.DIRTY_DEPT.of() + ":flushing";
-        String newClickerDirtyKey = RedisKey.DIRTY_CLICKER.of() + ":flushing";
-        String newAllianceDirtyKey = RedisKey.DIRTY_ALLIANCE.of() + ":flushing";
+        String newUserDirtyKey = RedisKey.DIRTY_USER.of() + FLUSHING;
+        String newUnivDirtyKey = RedisKey.DIRTY_UNIV.of() + FLUSHING;
+        String newDeptDirtyKey = RedisKey.DIRTY_DEPT.of() + FLUSHING;
+        String newClickerDirtyKey = RedisKey.DIRTY_CLICKER.of() + FLUSHING;
+        String newAllianceDirtyKey = RedisKey.DIRTY_ALLIANCE.of() + FLUSHING;
+        String newMatchDirtyKey = RedisKey.DIRTY_MATCH.of() + FLUSHING;
 
         // 개인 점수 저장
         if (detach(RedisKey.DIRTY_USER.of(), newUserDirtyKey)) {
@@ -59,8 +62,14 @@ public class ScoreFlushService {
             flushAlliance(newAllianceDirtyKey);
         }
 
+        // 대결 점수 저장
+        if (detach(RedisKey.DIRTY_MATCH.of(), newMatchDirtyKey)) {
+            flushMatch(newMatchDirtyKey);
+        }
+
         // 기존 dirty 제거
-        stringRedisTemplate.delete(List.of(newUserDirtyKey, newUnivDirtyKey, newDeptDirtyKey, newClickerDirtyKey, newAllianceDirtyKey));
+        stringRedisTemplate.delete(List.of(newUserDirtyKey, newUnivDirtyKey, newDeptDirtyKey,
+                newClickerDirtyKey, newAllianceDirtyKey, newMatchDirtyKey));
     }
 
     private boolean detach(String dirtyKey, String flushingKey) {
@@ -75,6 +84,34 @@ public class ScoreFlushService {
             stringRedisTemplate.delete(incomingKey);
         }
         return hasNew || hasLeftover;
+    }
+
+    private void flushMatch(String dirtyKey) {
+        List<Long> dirtyMatches = stringRedisTemplate.opsForSet().members(dirtyKey).stream().map(Long::parseLong).toList();
+
+        List<Long> ids = new ArrayList<>();
+        List<Long> aScores = new ArrayList<>();
+        List<Long> bScores = new ArrayList<>();
+
+        for (Long matchId : dirtyMatches) {
+            Map<Object, Object> bySide = stringRedisTemplate.opsForHash().entries(RedisKey.MATCH_SCORE.of(matchId));
+            if (bySide.isEmpty()) continue;
+            ids.add(matchId);
+            aScores.add(Long.parseLong((String) bySide.getOrDefault("A", "0")));
+            bScores.add(Long.parseLong((String) bySide.getOrDefault("B", "0")));
+        }
+
+        if (ids.isEmpty()) return;
+
+        jdbcTemplate.update("""
+                update alliance_match m
+                set a_score = x.a, b_score = x.b
+                from unnest(?::bigint[], ?::bigint[], ?::bigint[]) as x(id, a, b)
+                where m.id = x.id
+                    and m.status = 'IN_PROGRESS'
+                    and (m.a_score, m.b_score) is distinct from (x.a, x.b)
+                """, ids.toArray(Long[]::new), aScores.toArray(Long[]::new), bScores.toArray(Long[]::new));
+
     }
 
     private void flushAlliance(String dirtyKey) {

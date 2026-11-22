@@ -68,13 +68,14 @@ public class AssistService {
                 List.of(RedisKey.RANK_UNIV.of(), RedisKey.RANK_USER.of(universityId),
                         RedisKey.DIRTY_UNIV.of(), RedisKey.DIRTY_USER.of(),
                         RedisKey.ALLIANCE_SCORE.of(allianceStanding.allianceId()), RedisKey.MATCH_SCORE.of(allianceStanding.matchId()),
-                        RedisKey.DIRTY_ALLIANCE.of()),
+                        RedisKey.DIRTY_ALLIANCE.of(), RedisKey.DIRTY_MATCH.of()),
                 String.valueOf(targetUniversityId),
                 String.valueOf(assistScore),
                 String.valueOf(userId),
                 String.valueOf(contribScore),
                 String.valueOf(allianceStanding.allianceId()),
-                allianceStanding.team()
+                allianceStanding.team(),
+                String.valueOf(allianceStanding.matchId())
         );
         return new AssistResponse(
                 (long) clickCount,

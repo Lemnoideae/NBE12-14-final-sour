@@ -149,6 +149,7 @@ class RedisKeyTest {
                 "DIRTY_USER|dirty:user|SET|PLAIN",
                 "DIRTY_CLICKER|dirty:clicker|SET|PLAIN",
                 "DIRTY_ALLIANCE|dirty:alliance|SET|PLAIN",
+                "DIRTY_MATCH|dirty:match|SET|PLAIN",
                 // 클릭 (Click)
                 "CLICKS_UNIV_SECOND|clicks:univ:%s:%s|STRING|PLAIN",
                 "ATTACKS_UNIV_SECOND|attacks:univ:%s:%s|STRING|PLAIN",

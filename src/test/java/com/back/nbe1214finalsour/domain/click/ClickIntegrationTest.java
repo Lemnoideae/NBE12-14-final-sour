@@ -115,6 +115,7 @@ class ClickIntegrationTest {
             redis.opsForSet().remove(RedisKey.DIRTY_DEPT.of(), String.valueOf(otherDepartmentId));
         }
         redis.opsForSet().remove(RedisKey.DIRTY_USER.of(), String.valueOf(user.getId()));
+
         redis.delete(List.of(
                 RedisKey.RANK_DEPT.of(universityId),
                 RedisKey.RANK_USER.of(universityId),
@@ -136,6 +137,11 @@ class ClickIntegrationTest {
             Object[] members = allianceIds.stream().map(String::valueOf).toArray();
             redis.opsForSet().remove(RedisKey.DIRTY_ALLIANCE.of(), members);
             redis.opsForSet().remove(RedisKey.DIRTY_ALLIANCE.of() + ":flushing", members);
+        }
+        if (!matchIds.isEmpty()) {
+            Object[] members = matchIds.stream().map(String::valueOf).toArray();
+            redis.opsForSet().remove(RedisKey.DIRTY_MATCH.of(), members);
+            redis.opsForSet().remove(RedisKey.DIRTY_MATCH.of() + ":flushing", members);
         }
         redis.delete(matchIds.stream().map(RedisKey.MATCH_SCORE::of).toList());
         // 연합 행은 회원(applicant/approver)을 참조하므로 회원보다 먼저 지운다
@@ -498,6 +504,8 @@ class ClickIntegrationTest {
         assertThat(redis.opsForHash().get(RedisKey.MATCH_SCORE.of(matchId), "B")).isEqualTo("5");
         assertThat(redis.opsForHash().get(RedisKey.MATCH_SCORE.of(matchId), "A")).isNull();
         assertThat(redis.opsForValue().get(RedisKey.UNIV_MATCH.of(universityId))).isEqualTo(matchId + ":B");
+        // 1분 배치가 DB 대결 점수에 반영하도록 표시한다
+        assertThat(redis.opsForSet().isMember(RedisKey.DIRTY_MATCH.of(), String.valueOf(matchId))).isTrue();
         assertThat(redis.getExpire(RedisKey.UNIV_MATCH.of(universityId))).isPositive();
         // 대결 중에도 연합 점수는 따로 쌓인다
         assertThat(redis.opsForHash().get(RedisKey.ALLIANCE_SCORE.of(myAlliance), String.valueOf(universityId)))

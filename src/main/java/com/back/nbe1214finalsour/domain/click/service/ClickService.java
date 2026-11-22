@@ -81,7 +81,8 @@ public class ClickService {
                 RedisKey.CLICKS_UNIV_SECOND.of(universityId, nowSec - 1),
                 RedisKey.ALLIANCE_SCORE.of(allianceStanding.allianceId()),
                 RedisKey.MATCH_SCORE.of(allianceStanding.matchId()),
-                RedisKey.DIRTY_ALLIANCE.of()
+                RedisKey.DIRTY_ALLIANCE.of(),
+                RedisKey.DIRTY_MATCH.of()
         );
 
         List<String> r = stringRedisTemplate.execute(
@@ -93,7 +94,8 @@ public class ClickService {
                 String.valueOf(score),
                 String.valueOf(clickCount),
                 String.valueOf(allianceStanding.allianceId()),
-                allianceStanding.team()
+                allianceStanding.team(),
+                String.valueOf(allianceStanding.matchId())
         );
         ClickApplyResponse clickApplyResponse = new ClickApplyResponse(
                 Long.valueOf(r.get(0)),

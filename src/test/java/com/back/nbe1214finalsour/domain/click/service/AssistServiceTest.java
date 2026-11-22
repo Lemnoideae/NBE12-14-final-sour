@@ -106,20 +106,20 @@ class AssistServiceTest {
         // clickCount 7 × clickPower 3
         given(clickActionGuard.verifyAndGetBaseScore(USER_ID, "sub-1", 7)).willReturn(21L);
         given(redisHandler.getHash(RedisKey.USER_EFFECT.of(USER_ID), "multiplier", Double.class)).willReturn(Optional.of(1.5));
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(List.of("5402322", "41", "12928"));
 
         AssistResponse response = assistService.assist(USER_ID, UNIVERSITY_ID, request(ALLY_ID, 7));
 
         ArgumentCaptor<List<String>> keys = ArgumentCaptor.captor();
         ArgumentCaptor<Object> args = ArgumentCaptor.captor();
-        verify(stringRedisTemplate).execute(any(), keys.capture(), args.capture(), args.capture(), args.capture(), args.capture(), args.capture(), args.capture());
+        verify(stringRedisTemplate).execute(any(), keys.capture(), args.capture(), args.capture(), args.capture(), args.capture(), args.capture(), args.capture(), args.capture());
         assertThat(keys.getValue()).containsExactly(RedisKey.RANK_UNIV.of(), RedisKey.RANK_USER.of(UNIVERSITY_ID),
                 RedisKey.DIRTY_UNIV.of(), RedisKey.DIRTY_USER.of(),
                 RedisKey.ALLIANCE_SCORE.of(0), RedisKey.MATCH_SCORE.of(0),
-                RedisKey.DIRTY_ALLIANCE.of());
+                RedisKey.DIRTY_ALLIANCE.of(), RedisKey.DIRTY_MATCH.of());
         // floor(21 * 0.3) = 6, floor(21 * 1.5) = 31
-        assertThat(args.getAllValues()).containsExactly("15", "6", "1", "31", "0", "");
+        assertThat(args.getAllValues()).containsExactly("15", "6", "1", "31", "0", "", "0");
         assertThat(response).isEqualTo(new AssistResponse(7L, 6L,
                 new AssistResponse.AssistUniversityResponse(ALLY_ID, "서울시립대학교", 5402322L, 41L), 12928L));
     }
@@ -132,7 +132,7 @@ class AssistServiceTest {
         given(allianceAllyChecker.areAllies(UNIVERSITY_ID, ALLY_ID)).willReturn(true);
         given(clickActionGuard.verifyAndGetBaseScore(USER_ID, "sub-1", 7)).willReturn(21L);
         given(redisHandler.getHash(RedisKey.USER_EFFECT.of(USER_ID), "multiplier", Double.class)).willReturn(Optional.empty());
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(List.of("100", "3", "21"));
     }
 
@@ -141,7 +141,7 @@ class AssistServiceTest {
         ArgumentCaptor<List<String>> keys = ArgumentCaptor.captor();
         ArgumentCaptor<Object> args = ArgumentCaptor.captor();
         verify(stringRedisTemplate).execute(any(), keys.capture(), args.capture(), args.capture(), args.capture(),
-                args.capture(), args.capture(), args.capture());
+                args.capture(), args.capture(), args.capture(), args.capture());
         return List.of(keys.getValue().get(4), keys.getValue().get(5),
                 (String) args.getAllValues().get(4), (String) args.getAllValues().get(5));
     }

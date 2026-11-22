@@ -58,11 +58,11 @@ class ScoreFlushIntegrationTest {
 
     private final List<String> usedKeys = new ArrayList<>(List.of(
             RedisKey.DIRTY_USER.of(), RedisKey.DIRTY_UNIV.of(), RedisKey.DIRTY_DEPT.of(),
-            RedisKey.DIRTY_CLICKER.of(), RedisKey.DIRTY_ALLIANCE.of(),
+            RedisKey.DIRTY_CLICKER.of(), RedisKey.DIRTY_ALLIANCE.of(), RedisKey.DIRTY_MATCH.of(),
             // 테스트가 중간에 실패하면 배치가 떼어 낸 키가 남는다
             RedisKey.DIRTY_USER.of() + ":flushing", RedisKey.DIRTY_UNIV.of() + ":flushing",
             RedisKey.DIRTY_DEPT.of() + ":flushing", RedisKey.DIRTY_CLICKER.of() + ":flushing",
-            RedisKey.DIRTY_ALLIANCE.of() + ":flushing"));
+            RedisKey.DIRTY_ALLIANCE.of() + ":flushing", RedisKey.DIRTY_MATCH.of() + ":flushing"));
     /** {@code rank:univ}는 키가 하나뿐이라 통째로 지우지 않고 테스트가 넣은 학교만 뺀다. */
     private final List<String> addedUnivRankMembers = new ArrayList<>();
 
@@ -400,6 +400,115 @@ class ScoreFlushIntegrationTest {
         // then
         assertThat(stringRedisTemplate.hasKey(RedisKey.DIRTY_ALLIANCE.of())).isFalse();
         assertThat(stringRedisTemplate.hasKey(RedisKey.DIRTY_ALLIANCE.of() + ":flushing")).isFalse();
+    }
+
+    // --- 대결 점수 ---
+    // match:{m}:score HASH(field = A, B)를 alliance_match.a_score·b_score에 쓴다.
+    // 끝난 대결의 점수는 정산이 확정하므로 IN_PROGRESS일 때만 쓴다.
+
+    @Test
+    @DisplayName("진행 중인 dirty 대결의 Redis A·B 점수로 DB 대결 점수를 덮어쓴다")
+    void flushesInProgressMatchScore() {
+        // given
+        long matchId = givenMatch("IN_PROGRESS", 0, 0);
+        givenMatchScore(matchId, "A", "40", "B", "25");
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_MATCH.of(), String.valueOf(matchId));
+
+        // when
+        scoreFlushService.flush();
+
+        // then
+        assertThat(matchScoresOf(matchId)).containsExactly(40L, 25L);
+    }
+
+    @Test
+    @DisplayName("한쪽 편만 점수가 있으면 다른 편은 0으로 쓴다")
+    void missingSideIsZero() {
+        // given: DB에는 이전 배치 값이 있다고 가정. B는 아직 Redis에 쌓인 적이 없다
+        long matchId = givenMatch("IN_PROGRESS", 3, 0);
+        givenMatchScore(matchId, "A", "9");
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_MATCH.of(), String.valueOf(matchId));
+
+        // when
+        scoreFlushService.flush();
+
+        // then
+        assertThat(matchScoresOf(matchId)).containsExactly(9L, 0L);
+    }
+
+    @Test
+    @DisplayName("끝난(FINISHED) 대결은 정산이 확정한 점수를 덮지 않는다")
+    void doesNotOverwriteFinishedMatch() {
+        // given: 정산이 50:20으로 확정한 뒤, 마감 직전 클릭으로 dirty가 남은 상황
+        long matchId = givenMatch("FINISHED", 50, 20);
+        givenMatchScore(matchId, "A", "55", "B", "20");
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_MATCH.of(), String.valueOf(matchId));
+
+        // when
+        scoreFlushService.flush();
+
+        // then
+        assertThat(matchScoresOf(matchId)).containsExactly(50L, 20L);
+    }
+
+    @Test
+    @DisplayName("Redis 대결 점수가 없는 dirty 대결은 0으로 덮지 않고 건너뛰고, 나머지 대결은 반영한다")
+    void skipsMatchWithoutRedisScore() {
+        // given
+        long lostMatchId = givenMatch("IN_PROGRESS", 30, 10);
+        long matchId = givenMatch("IN_PROGRESS", 0, 0);
+        usedKeys.add(RedisKey.MATCH_SCORE.of(lostMatchId));
+        givenMatchScore(matchId, "B", "4");
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_MATCH.of(),
+                String.valueOf(lostMatchId), String.valueOf(matchId));
+
+        // when
+        scoreFlushService.flush();
+
+        // then
+        assertThat(matchScoresOf(lostMatchId)).containsExactly(30L, 10L);
+        assertThat(matchScoresOf(matchId)).containsExactly(0L, 4L);
+    }
+
+    @Test
+    @DisplayName("대결 점수를 반영한 뒤에는 dirty:match와 떼어 낸 dirty:match:flushing을 지운다")
+    void clearsDirtyMatchAfterFlush() {
+        // given
+        long matchId = givenMatch("IN_PROGRESS", 0, 0);
+        givenMatchScore(matchId, "A", "1");
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_MATCH.of(), String.valueOf(matchId));
+
+        // when
+        scoreFlushService.flush();
+
+        // then
+        assertThat(stringRedisTemplate.hasKey(RedisKey.DIRTY_MATCH.of())).isFalse();
+        assertThat(stringRedisTemplate.hasKey(RedisKey.DIRTY_MATCH.of() + ":flushing")).isFalse();
+    }
+
+    /** 3시간짜리 대결. 시작 1시간 전, 종료 2시간 뒤 */
+    private long givenMatch(String status, long aScore, long bScore) {
+        long allianceA = givenAlliance(0);
+        long allianceB = givenAlliance(0);
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO alliance_match (alliance_a_id, alliance_b_id, started_at, ended_at, duration_hours,
+                                            request_expired_at, status, a_score, b_score)
+                VALUES (?, ?, now() - INTERVAL '1 hour', now() + INTERVAL '2 hours', 3, now(), ?, ?, ?)
+                RETURNING id""", Long.class, allianceA, allianceB, status, aScore, bScore);
+    }
+
+    /** 편(A/B)과 점수를 번갈아 받는다 */
+    private void givenMatchScore(long matchId, String... sideAndScore) {
+        String key = RedisKey.MATCH_SCORE.of(matchId);
+        usedKeys.add(key);
+        for (int i = 0; i < sideAndScore.length; i += 2) {
+            stringRedisTemplate.opsForHash().put(key, sideAndScore[i], sideAndScore[i + 1]);
+        }
+    }
+
+    private List<Long> matchScoresOf(long matchId) {
+        return jdbcTemplate.queryForObject("SELECT a_score, b_score FROM alliance_match WHERE id = ?",
+                (rs, n) -> List.of(rs.getLong("a_score"), rs.getLong("b_score")), matchId);
     }
 
     private long givenAlliance(long totalScore) {

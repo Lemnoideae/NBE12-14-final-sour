@@ -135,7 +135,7 @@ class ClickServiceTest {
     }
 
     private void givenScriptResult() {
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
     }
 
@@ -243,7 +243,7 @@ class ClickServiceTest {
     @DisplayName("한도 안이면 의심 표시를 남기지 않는다")
     void click_withinLimitsDoesNotFlag() {
         givenHappyPathBeforeScript();
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
@@ -282,7 +282,7 @@ class ClickServiceTest {
         given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(null);
         given(userClickerLevelCache.loadIfAbsent(USER_ID)).willReturn(3L);
         given(clickerService.getClickerById(3L)).willReturn(CLICKER_LV3);
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
@@ -315,7 +315,7 @@ class ClickServiceTest {
     @DisplayName("요청 한도를 통과하면 clickCount를 그대로 클릭 수 한도에 넘긴다")
     void click_passesClickCountToClickCountLimiter() {
         givenHappyPathBeforeScript();
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(7));
@@ -348,7 +348,7 @@ class ClickServiceTest {
     @DisplayName("레벨은 loadIfAbsent 값을 쓰고 레벨 키를 직접 쓰지 않는다")
     void click_cacheHitDoesNotWriteCache() {
         givenHappyPathBeforeScript();
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
@@ -361,7 +361,7 @@ class ClickServiceTest {
     @DisplayName("토큰의 학과 ID가 있으면 회원을 DB에서 조회하지 않는다")
     void click_cacheHitWithDepartmentClaimSkipsUserLookup() {
         givenHappyPathBeforeScript();
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
@@ -375,7 +375,7 @@ class ClickServiceTest {
         givenHappyPathBeforeScript();
         given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
         given(user.getDepartmentId()).willReturn(9L);
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, null, request(3));
@@ -383,7 +383,8 @@ class ClickServiceTest {
         ArgumentCaptor<Object> argsCaptor = ArgumentCaptor.captor();
         verify(stringRedisTemplate).execute(any(), anyList(),
                 argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(),
-                argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture());
+                argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(),
+                argsCaptor.capture(), argsCaptor.capture());
         assertThat(argsCaptor.getAllValues().get(1)).isEqualTo("9");
         assertThat(response).extracting("department.id").isEqualTo(9L);
         verify(valueOperations, never()).set(eq("user:1:clicker"), anyString());
@@ -396,7 +397,7 @@ class ClickServiceTest {
     void click_scoreWithoutMultiplier() {
         givenHappyPathBeforeScript();
         given(redisHandler.getHash("user:1:effect", "multiplier", Double.class)).willReturn(Optional.empty());
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
@@ -410,7 +411,7 @@ class ClickServiceTest {
     void click_scoreWithMultiplier() {
         givenHappyPathBeforeScript();
         given(redisHandler.getHash("user:1:effect", "multiplier", Double.class)).willReturn(Optional.of(1.5));
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
@@ -424,7 +425,7 @@ class ClickServiceTest {
     void click_scoreIsFloored() {
         givenHappyPathBeforeScript();
         given(redisHandler.getHash("user:1:effect", "multiplier", Double.class)).willReturn(Optional.of(1.09));
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
@@ -518,10 +519,11 @@ class ClickServiceTest {
         ArgumentCaptor<Object> argsCaptor = ArgumentCaptor.captor();
         verify(stringRedisTemplate).execute(any(), anyList(),
                 argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(),
-                argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture());
+                argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(),
+                argsCaptor.capture(), argsCaptor.capture());
 
-        // ARGV: universityId, departmentId, userId, earnedScore, clickCount, allianceId(없음 0), team(없음 "")
-        assertThat(argsCaptor.getAllValues()).containsExactly("12", "5", "1", "36", "3", "0", "");
+        // ARGV: universityId, departmentId, userId, earnedScore, clickCount, allianceId(없음 0), team(없음 ""), matchId(없음 0)
+        assertThat(argsCaptor.getAllValues()).containsExactly("12", "5", "1", "36", "3", "0", "", "0");
     }
 
     // --- 4.7단계: 연합·대결 점수 ---
@@ -535,7 +537,7 @@ class ClickServiceTest {
         ArgumentCaptor<Object> argsCaptor = ArgumentCaptor.captor();
         verify(stringRedisTemplate).execute(any(), keysCaptor.capture(),
                 argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(),
-                argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture());
+                argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture());
         List<String> keys = keysCaptor.getValue();
         List<Object> args = argsCaptor.getAllValues();
         return List.of(keys.get(8), keys.get(9), (String) args.get(5), (String) args.get(6));
@@ -575,7 +577,7 @@ class ClickServiceTest {
     void click_passesKeysAndArgsInLuaOrder() {
         givenHappyPathBeforeScript();
         given(redisHandler.getHash("user:1:effect", "multiplier", Double.class)).willReturn(Optional.of(1.5));
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
@@ -584,10 +586,11 @@ class ClickServiceTest {
         ArgumentCaptor<Object> argsCaptor = ArgumentCaptor.captor();
         verify(stringRedisTemplate).execute(any(), keysCaptor.capture(),
                 argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(),
-                argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture());
+                argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(),
+                argsCaptor.capture(), argsCaptor.capture());
 
         List<String> keys = keysCaptor.getValue();
-        assertThat(keys).hasSize(11);
+        assertThat(keys).hasSize(12);
         assertThat(keys.subList(0, 6)).containsExactly(
                 "rank:univ",            // KEYS[1]
                 "rank:univ:12:dept",    // KEYS[2]
@@ -604,8 +607,8 @@ class ClickServiceTest {
         // KEYS[9], KEYS[10]: 연합·대결이 없으면 0번 자리 키를 넘기고 Lua가 ARGV로 건너뛴다
         assertThat(keys.subList(8, 10)).containsExactly("alliance:0:score", "match:0:score");
 
-        // ARGV: universityId, departmentId, userId, earnedScore, clickCount, allianceId, team
-        assertThat(argsCaptor.getAllValues()).containsExactly("12", "5", "1", "45", "3", "0", "");
+        // ARGV: universityId, departmentId, userId, earnedScore, clickCount, allianceId, team, matchId
+        assertThat(argsCaptor.getAllValues()).containsExactly("12", "5", "1", "45", "3", "0", "", "0");
     }
 
     @Test
@@ -613,7 +616,7 @@ class ClickServiceTest {
     void click_mapsScriptResultToResponse() {
         givenHappyPathBeforeScript();
         given(redisHandler.getHash("user:1:effect", "multiplier", Double.class)).willReturn(Optional.of(1.5));
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
 
         ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
