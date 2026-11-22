@@ -22,15 +22,17 @@ public class AllianceStandingResolver {
 
     public AllianceStanding resolve(Long universityId) {
         // 연합 점수, 없으면 DB 조회
+        OffsetDateTime now = OffsetDateTime.now();
+
         String stringAllianceId = stringRedisTemplate.opsForValue().get(RedisKey.UNIV_ALLIANCE.of(universityId));
         Long allianceId = 0L;
         if (stringAllianceId == null) {
-            Alliance alliance = allianceRepository.findCurrentByUniversityId(universityId, OffsetDateTime.now())
+            Alliance alliance = allianceRepository.findCurrentByUniversityId(universityId, now)
                     .orElse(null);
             if (alliance != null) {
                 stringRedisTemplate.opsForValue().set(RedisKey.UNIV_ALLIANCE.of(universityId),
                         String.valueOf(alliance.getId()),
-                        Duration.between(OffsetDateTime.now(), alliance.getExpiredAt()));
+                        Duration.between(now, alliance.getExpiredAt()));
                 allianceId = alliance.getId();
             } else {
                 stringRedisTemplate.opsForValue()
@@ -46,13 +48,13 @@ public class AllianceStandingResolver {
         if (allianceId != 0L) {
             String matchResult = stringRedisTemplate.opsForValue().get(RedisKey.UNIV_MATCH.of(universityId));
             if (matchResult == null) {
-                AllianceMatch match = allianceMatchRepository.findByAllianceId(allianceId, OffsetDateTime.now())
+                AllianceMatch match = allianceMatchRepository.findByAllianceId(allianceId, now)
                         .orElse(null);
 
                 if (match != null) {
                     team = match.getAllianceAId().equals(allianceId) ? "A" : "B";
                     stringRedisTemplate.opsForValue()
-                            .set(RedisKey.UNIV_MATCH.of(universityId), match.getId() + ":" + team, Duration.between(OffsetDateTime.now(), match.getEndedAt()));
+                            .set(RedisKey.UNIV_MATCH.of(universityId), match.getId() + ":" + team, Duration.between(now, match.getEndedAt()));
                     matchId = match.getId();
                 } else {
                     stringRedisTemplate.opsForValue()
