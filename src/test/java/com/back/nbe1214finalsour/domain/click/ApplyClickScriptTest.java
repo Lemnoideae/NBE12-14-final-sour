@@ -161,12 +161,17 @@ class ApplyClickScriptTest {
                         RedisKey.DIRTY_DEPT.of(),
                         RedisKey.DIRTY_USER.of(),
                         RedisKey.CLICKS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec),
-                        RedisKey.CLICKS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec - 1)),
+                        RedisKey.CLICKS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec - 1),
+                        // 연합·대결 점수는 ClickIntegrationTest에서 본다. 여기서는 없음(0, "")으로 건너뛴다
+                        RedisKey.ALLIANCE_SCORE.of(0),
+                        RedisKey.MATCH_SCORE.of(0)),
                 String.valueOf(UNIVERSITY_ID),
                 String.valueOf(DEPARTMENT_ID),
                 String.valueOf(USER_ID),
                 String.valueOf(earnedScore),
-                String.valueOf(clickCount));
+                String.valueOf(clickCount),
+                "0",
+                "");
     }
 
     private static String univ(long universityId) {

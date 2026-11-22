@@ -89,4 +89,15 @@ public interface AllianceMatchRepository extends JpaRepository<AllianceMatch, Lo
         """, nativeQuery = true)
     List<Long> findDueInProgressIds(@Param("now") OffsetDateTime now);
 
+    @Query("""
+        select m
+        from AllianceMatch m
+        where (m.allianceAId = :allianceId
+        or m.allianceBId = :allianceId)
+        and m.status = AllianceMatchStatus.IN_PROGRESS
+        and m.endedAt > :now
+        and m.deletedAt is null
+        """)
+    Optional<AllianceMatch> findByAllianceId(@Param("allianceId") Long allianceId,
+                                             @Param("now") OffsetDateTime now);
 }

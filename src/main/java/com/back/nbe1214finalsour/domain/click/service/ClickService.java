@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.click.service;
 
+import com.back.nbe1214finalsour.domain.alliance.service.AllianceStandingResolver;
 import com.back.nbe1214finalsour.domain.click.dto.ClickApplyResponse;
 import com.back.nbe1214finalsour.domain.click.dto.ClickRequest;
 import com.back.nbe1214finalsour.domain.click.dto.ClickResponse;
@@ -29,6 +30,7 @@ public class ClickService {
     private final RedisHandler redisHandler;
     private final ClickActionGuard clickActionGuard;
     private final LibraryBonusChecker libraryBonusChecker;
+    private final AllianceStandingResolver allianceStandingResolver;
 
     private static final RedisScript<List> APPLY_CLICK = RedisScript.of(new ClassPathResource("redis/apply-click.lua"), List.class);
     private static final BigDecimal LIBRARY_MULTIPLIER = new BigDecimal("1.2");
@@ -63,6 +65,9 @@ public class ClickService {
         score = multiplierBigDecimal.multiply(BigDecimal.valueOf(score))
                 .setScale(0, RoundingMode.FLOOR).longValueExact();
 
+        // 연합·대결 확인
+        AllianceStandingResolver.AllianceStanding allianceStanding = allianceStandingResolver.resolve(universityId);
+
         // 4. Redis에 반영
         long nowSec = Instant.now().getEpochSecond();
         List<String> keys = List.of(
@@ -73,7 +78,11 @@ public class ClickService {
                 RedisKey.DIRTY_DEPT.of(),
                 RedisKey.DIRTY_USER.of(),
                 RedisKey.CLICKS_UNIV_SECOND.of(universityId, nowSec),
-                RedisKey.CLICKS_UNIV_SECOND.of(universityId, nowSec - 1)
+                RedisKey.CLICKS_UNIV_SECOND.of(universityId, nowSec - 1),
+                RedisKey.ALLIANCE_SCORE.of(allianceStanding.allianceId()),
+                RedisKey.MATCH_SCORE.of(allianceStanding.matchId()),
+                RedisKey.DIRTY_ALLIANCE.of(),
+                RedisKey.DIRTY_MATCH.of()
         );
 
         List<String> r = stringRedisTemplate.execute(
@@ -83,7 +92,10 @@ public class ClickService {
                 String.valueOf(departmentId),
                 String.valueOf(userId),
                 String.valueOf(score),
-                String.valueOf(clickCount)
+                String.valueOf(clickCount),
+                String.valueOf(allianceStanding.allianceId()),
+                allianceStanding.team(),
+                String.valueOf(allianceStanding.matchId())
         );
         ClickApplyResponse clickApplyResponse = new ClickApplyResponse(
                 Long.valueOf(r.get(0)),
