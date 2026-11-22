@@ -2,8 +2,9 @@ import React from 'react';
 import { Hand, ZoomIn } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { MapArt } from './MapArt.tsx';
-import { MAP_AREA_HEIGHT, MapLayer, MapScrollBody, MapSearchHeader, SchoolListSheet, SchoolMarker, SchoolBadge, RankRibbon, type MapControlsProps } from './MapParts.tsx';
-import { PhoneShell } from './PhoneShell';
+import { WorkspaceMapPins } from './WorkspaceMapPins';
+import { mapFramePercent } from '../utils/workspaceMapPins';
+import { MAP_AREA_HEIGHT, MapLayer, MapFrame, MapSearchHeader, SchoolListSheet, SchoolMarker, SchoolBadge, RankRibbon, formatWorkspaceSearchStatus, type MapControlsProps } from './MapParts.tsx';
 import { countByRegion, filterSchools, getTopSchools } from '../data/schoolDirectory.ts';
 import {
   MAP_CLUSTERS,
@@ -13,6 +14,7 @@ import {
   nationalRibbonPoint,
   projectToViewport,
   regionViewport,
+  regionMarkerPx,
   type MapRegion,
   type SchoolFilterRegion,
 } from '../data/schoolMapLayout.ts';
@@ -31,24 +33,38 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
   onQueryChange,
   onSelectSchool,
   onNavigateTab,
+  preview,
+  renderPanelList,
 }) => {
   const isNational = region === '전체';
+  const hint = isNational ? '지역을 눌러 대학을 확인하세요' : '학교를 눌러 선택하세요';
   const regionSchools = filterSchools(schools, region, '');
   const listed = filterSchools(schools, region, query);
   const counts = countByRegion(schools);
   const mySchool = schools.find((school) => school.isMySchool);
   const viewport = isNational ? undefined : regionViewport(region as SchoolFilterRegion);
+  const topSchools = isNational ? getTopSchools(schools.filter((school) => school.isTop3), 3) : [];
+  const workspace = preview !== undefined;
+  const searchStatus = formatWorkspaceSearchStatus(workspace, query, listed.length);
+  const pins = workspace ? (viewport ? regionSchools : topSchools).flatMap(school => {
+    const ribbonPoint = viewport ? undefined : nationalRibbonPoint(school.id);
+    const point = viewport ? regionMarkerPx(school.id, viewport) : ribbonPoint && mapFramePercent(ribbonPoint);
+    return point ? [{ school, point }] : [];
+  }) : [];
 
   return (
-    <PhoneShell background="bg-[#38bdf8]">
-
-      <MapScrollBody>
+    <MapFrame preview={preview} searching={query.trim().length > 0} list={renderPanelList?.(listed) ?? <SchoolListSheet
+      title={`${isNational ? '전체' : region} 대학 ${regionSchools.length}개`}
+      schools={listed} query={query} selectedSchoolId={selectedSchoolId}
+      onQueryChange={onQueryChange} onSelectSchool={onSelectSchool} onNavigateTab={onNavigateTab}
+    />} search={
       <MapSearchHeader
         region={region}
         query={query}
         placeholder={isNational ? '학교 검색 (예: 서울대, KAIST, 부산대)' : `${region} 대학 검색`}
         onRegionChange={onRegionChange}
         onQueryChange={onQueryChange}
+        searchStatus={searchStatus}
         badge={
           <div className="bg-[#facc15] border-2 border-[#261608] px-2 py-1 flex items-center gap-1 shadow-[1px_1px_0px_#261608] shrink-0">
             {isNational ? <span className="w-2 h-2 bg-[#e11d48] border border-[#261608]" /> : <ZoomIn className="w-3 h-3 text-[#261608]" />}
@@ -56,7 +72,7 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
           </div>
         }
       />
-
+    }>
       <div className={`${MAP_AREA_HEIGHT} relative overflow-hidden isolate bg-[#38bdf8] select-none`} data-testid="map-area" data-region={region}>
         <MapLayer>
         <div
@@ -94,7 +110,7 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
                   )}
                   {hasMySchool && mySchool && (
                     // Above the bubble: to the right it ran under the 강원 bubble and hid the rank (M1 browser check, 2026-11-08).
-                    <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 bg-[#e11d48] text-white border-2 border-[#261608] px-1 py-0.2 shadow-[2px_2px_0px_#261608] whitespace-nowrap flex items-center gap-0.5 z-40 animate-pulse">
+                    <div className="game-map-own-tag absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 bg-[#e11d48] text-white border-2 border-[#261608] px-1 py-0.2 shadow-[2px_2px_0px_#261608] whitespace-nowrap flex items-center gap-0.5 z-40 animate-pulse">
                       <span className="w-1.5 h-1.5 bg-[#facc15] border border-[#261608]" />
                       <span className="font-pixel text-[8px] font-black tracking-tight" data-testid="my-school-tag">
                         내 학교 {mySchool.shortName} · {mySchool.rank}위
@@ -113,8 +129,7 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
               );
             })}
 
-          {isNational &&
-            getTopSchools(schools.filter((school) => school.isTop3), 3).map((school) => {
+          {!workspace && topSchools.map((school) => {
               const point = nationalRibbonPoint(school.id);
               if (!point) return null;
               return (
@@ -122,6 +137,7 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
                   type="button"
                   key={school.id}
                   aria-label={`${school.name} 전국 ${school.rank}위`}
+                  aria-pressed={preview === undefined ? undefined : selectedSchoolId === school.id}
                   data-school-id={school.id}
                   data-top-rank={school.rank}
                   data-no-touch44
@@ -146,7 +162,7 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
               );
             })}
 
-          {viewport &&
+          {!workspace && viewport &&
             regionSchools.map((school) => {
               const placement = NATIONAL_PLACEMENTS[school.id];
               if (!placement) return null;
@@ -168,28 +184,18 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
             })}
         </div>
         </MapLayer>
-
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-25 pointer-events-none">
-          <div className="rpg-box px-2.5 py-1 bg-[#fdf5df]/95 border-2 border-[#261608] shadow-[2px_2px_0px_#261608] flex items-center gap-1.5 whitespace-nowrap animate-pulse">
-            <Hand className="w-3 h-3 text-[#b45309]" />
-            <span className="font-pixel text-[10px] font-black text-[#261608]">
-              {isNational ? '지역을 눌러 대학을 확인하세요' : '학교를 눌러 선택하세요'}
-            </span>
+        {workspace ? (
+          <WorkspaceMapPins key={region} pins={pins} hint={hint} selectedId={selectedSchoolId} onSelect={onSelectSchool} />
+        ) : (
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-25 pointer-events-none">
+            <div className="rpg-box px-2.5 py-1 bg-[#fdf5df]/95 border-2 border-[#261608] shadow-[2px_2px_0px_#261608] flex items-center gap-1.5 whitespace-nowrap animate-pulse">
+              <Hand className="w-3 h-3 text-[#b45309]" />
+              <span className="font-pixel text-[10px] font-black text-[#261608]">{hint}</span>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
-      </MapScrollBody>
-
-      <SchoolListSheet
-        title={`${isNational ? '전체' : region} 대학 ${regionSchools.length}개`}
-        schools={listed}
-        query={query}
-        selectedSchoolId={selectedSchoolId}
-        onQueryChange={onQueryChange}
-        onSelectSchool={onSelectSchool}
-        onNavigateTab={onNavigateTab}
-      />
-    </PhoneShell>
+    </MapFrame>
   );
 };

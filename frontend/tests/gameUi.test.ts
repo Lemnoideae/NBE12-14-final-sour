@@ -29,6 +29,7 @@ for (const [key, value] of Object.entries({
 dom.window.HTMLElement.prototype.scrollIntoView = function () {};
 
 const { render, screen, fireEvent, act, cleanup, within } = await import('@testing-library/react');
+const { clickTestView, openTestTools, withToolSetting } = await import('./helpers/mockTools');
 const { MockGameProvider, useMockGame } = await import('../src/hooks/useMockGame');
 const { default: App } = await import('../src/App');
 const { SharedImageProvider, MOCK_IMAGE_DIRECTORY, useImageStore } = await import('../src/hooks/useSharedImages');
@@ -43,6 +44,7 @@ const { SCHOOL_LOGO_ASSETS, schoolLogoStatus } = await import('../src/data/schoo
 const marquee = await import('../src/components/MarqueeText');
 const { BottomNav, AllianceNavProvider } = await import('../src/components/BottomNav');
 const { DialogPanel } = await import('../src/components/DialogPanel');
+const { CampusView } = await import('../src/components/CampusView');
 const { MOCK_CLICK_RULES } = await import('../src/utils/clickGuard');
 /** Default click rules without the interval check, for tests about same-millisecond clicks. */
 const SAME_TICK_RULES = { ...MOCK_CLICK_RULES, minIntervalMs: 0 };
@@ -88,7 +90,7 @@ test('폰 목업 화면은 모두 같은 PhoneShell(390×844, 상태바·홈 바
     '3단 온보딩 화면',
   ];
   for (const view of views) {
-    clickButton(view);
+    clickTestView(view);
     const shells = Array.from(document.querySelectorAll('[data-phone-shell]'));
     assert.ok(shells.length > 0, view);
     for (const shell of shells) {
@@ -112,14 +114,17 @@ test('메인 게임의 상점 탭은 게임 폰 안에 상태바·홈 바를 또
 
 test('온보딩은 셸의 select-none을 끄고 글자를 선택할 수 있다: 목업 메일함 인증 코드 복사 (T1b)', () => {
   mount();
-  clickButton('📱 순차 온보딩 (Single Phone)');
+  clickTestView('📱 순차 온보딩 (Single Phone)');
   const content = screen.getByRole('region', { name: '순차 온보딩' }).querySelector(':scope > :not([data-phone-status-bar]):not([data-phone-home-bar])');
   assert.match(content?.className ?? '', /(^| )select-text( |$)/, 'T1b 이전 온보딩 프레임에는 select-none이 없었다');
 });
 
 test('앱을 열면 메뉴를 누르지 않아도 메인 게임 화면이 첫 화면이다 (사용자 지시 2026-11-10)', () => {
   mount();
-  assert.match(screen.getByRole('button', { name: '🎮 메인 게임 화면' }).className, /\bplaque-green\b/, 'the main game menu is the selected one');
+  assertAbsent(screen.queryByRole('navigation', { name: '서비스 흐름' }));
+  const tools = openTestTools();
+  assert.match(tools.getByRole('button', { name: '🎮 메인 게임 화면' }).className, /\bplaque-green\b/, 'the main game menu is the selected one');
+  fireEvent.click(tools.getByRole('button', { name: /닫기/ }));
   assert.ok(screen.getByRole('button', { name: '캠퍼스' }), 'the main game tabs are on screen');
   assertAbsent(screen.queryByRole('region', { name: '순차 온보딩' }));
 });
@@ -206,7 +211,7 @@ test('모의 이미지 결제 성공·실패·취소는 공유 화면과 게임 
 
 test('메인 상점 → 독립 상점 → 교내 개인 순위 → 캠퍼스에서 같은 잔액·강화·버프를 사용한다', () => {
   mount();
-  clickButton('🎮 메인 게임 화면');
+  clickTestView('🎮 메인 게임 화면');
   const initial = latest.state;
   clickButton('상점');
   clickButton(/업그레이드/);
@@ -216,14 +221,14 @@ test('메인 상점 → 독립 상점 → 교내 개인 순위 → 캠퍼스에�
   assert.equal(latest.state.departmentScore, initial.departmentScore);
   clickButton('캠퍼스');
   assert.equal(screen.getByTestId('campus-stats-contribution').textContent, '17,060', '메인 스탯 버튼이 강화 뒤 보유 기여도를 보인다 (T5)');
-  clickButton('🏪 상점 & 강화 (Single Phone)');
+  clickTestView('🏪 상점 & 강화 (Single Phone)');
   selectAndBuy('커피 한 잔');
   assert.equal(latest.state.contribution, 16940);
   assert.equal(latest.normalPower, 80);
-  clickButton('🏆 랭킹 화면 (Single Phone)');
+  clickTestView('🏆 랭킹 화면 (Single Phone)');
   clickButton('교내 개인');
   assert.ok(screen.getAllByText('16,940').length > 0);
-  clickButton('🎮 메인 게임 화면');
+  clickTestView('🎮 메인 게임 화면');
   assert.equal(screen.getByTestId('campus-stats-contribution').textContent, '16,940');
   assert.equal(latest.state.clickerId, 4);
   assert.equal(latest.state.activeBuff?.itemId, 'coffee');
@@ -236,7 +241,7 @@ test('모바일 touchstart 뒤 click이 이어져도 한 번만 득점하고 키
   let clock = 1000;
   t.mock.method(Date, 'now', () => clock);
   mount();
-  clickButton('🎮 메인 게임 화면');
+  clickTestView('🎮 메인 게임 화면');
   const initial = latest.state;
   const campus = screen.getByRole('button', { name: '캠퍼스 클릭 영역' });
   fireEvent.touchStart(campus, { touches: [{ clientX: 100, clientY: 100 }] });
@@ -259,7 +264,7 @@ test('같은 밀리초 연속 클릭 시 표시 점수와 실제 지급액이 �
   // Same-millisecond consistency of the reducer and effect keys is the subject here, so the M5 interval check
   // is set to 0; the default rules refuse the second click (see tests/clickGuard.test.ts).
   render(React.createElement(MockGameProvider, { clickRules: SAME_TICK_RULES, children: React.createElement(React.Fragment, null, React.createElement(App), React.createElement(Probe)) }));
-  clickButton('🎮 메인 게임 화면');
+  clickTestView('🎮 메인 게임 화면');
   act(() => { latest.buy('coffee'); });
   const balance = latest.state.contribution;
   const schoolScore = latest.state.schoolScore;
@@ -281,7 +286,7 @@ test('비판매 1회 버프의 같은 밀리초 연속 클릭도 최신 상태�
   const errors = t.mock.method(console, 'error');
   const fixture = { id: 'single-use-fixture', name: 'test', description: '', cost: 0, iconType: 'pass' as const, multiplier: 1, bonus: 50, durationMs: 300000, singleUse: true };
   render(React.createElement(MockGameProvider, { clickRules: SAME_TICK_RULES, initialState: { ...INITIAL_GAME_STATE, activeBuff: { itemId: fixture.id, expiresAt: 301000 } }, extraBuffs: [fixture], children: React.createElement(React.Fragment, null, React.createElement(App), React.createElement(Probe)) }));
-  clickButton('🎮 메인 게임 화면');
+  clickTestView('🎮 메인 게임 화면');
   const balance = latest.state.contribution;
   const schoolScore = latest.state.schoolScore;
   const campus = screen.getByRole('button', { name: '캠퍼스 클릭 영역' });
@@ -327,7 +332,7 @@ test('공유 타이머는 교체된 버프를 이전 만료 시각에 지우지 
 test('성장 시연 선택을 학교 점수·HUD·메인 캠퍼스 이미지에 함께 반영한다', () => {
   mount();
   const balance = latest.state.contribution;
-  clickButton('🏛️ 10단계 캠퍼스 성장 시트 (5x2)');
+  clickTestView('🏛️ 10단계 캠퍼스 성장 시트 (5x2)');
   fireEvent.click(screen.getByText('L.1', { exact: true }));
   clickButton('성장 시연: 학교 점수를 기준값으로 설정');
   assert.equal(latest.state.schoolScore, 0);
@@ -343,7 +348,7 @@ test('성장 시연 선택을 학교 점수·HUD·메인 캠퍼스 이미지에 
 
 test('메인 화면은 헤더·main·푸터로 나뉘고 연합·대결 진입은 하단 내비의 캠퍼스와 지도 사이에 있다 (T3, 2-1-2)', () => {
   mount();
-  clickButton('🎮 메인 게임 화면');
+  clickTestView('🎮 메인 게임 화면');
   const main = document.querySelector('main[data-game-main]');
   const footer = main?.parentElement?.querySelector(':scope > footer');
   const hud = main?.parentElement?.querySelector(':scope > div > header');
@@ -387,8 +392,8 @@ test('MarqueeText는 칸보다 길 때만 페이드·왕복 설정을 켜고 전
 
 test('헤더 학교명은 시연 선택값을 따르고 지역 줄 없이 한 줄로 표시된다', () => {
   mount();
-  clickButton('🎮 메인 게임 화면');
-  fireEvent.change(screen.getByLabelText('[시연] 학교명'), { target: { value: 'long' } });
+  clickTestView('🎮 메인 게임 화면');
+  withToolSetting('[시연] 학교명', (control) => fireEvent.change(control, { target: { value: 'long' } }));
   const hud = document.querySelector('main[data-game-main]')!.parentElement!.querySelector(':scope > div > header')!;
   assert.equal(hud.querySelector('h1')?.textContent, '한국방송통신대학교 프라임칼리지 서울캠퍼스');
   assert.doesNotMatch(hud.textContent ?? '', /서울 · 수도권/);
@@ -397,7 +402,7 @@ test('헤더 학교명은 시연 선택값을 따르고 지역 줄 없이 한 �
 test('연합·대결 버튼은 모든 폰 화면 하단 내비에 같고, 알림이 있을 때만 배지를 표시한다', () => {
   mount();
   for (const view of ['🏪 상점 & 강화 (Single Phone)', '🏆 랭킹 화면 (Single Phone)', '📱📱 2-Phone 지도 비교']) {
-    clickButton(view);
+    clickTestView(view);
     const navs = Array.from(document.querySelectorAll('nav[aria-label="주요 메뉴"]'));
     assert.ok(navs.length > 0, view);
     for (const nav of navs) {
@@ -447,7 +452,7 @@ test('연합·대결 4개 화면은 하단 내비를 푸터에 두고 연합·�
   ];
   for (const view of views) {
     for (const [tab, isShown] of destinations) {
-      clickButton(view);
+      clickTestView(view);
       const shell = document.querySelector('[data-phone-shell]')!;
       const navs = shell.querySelectorAll('nav[aria-label="주요 메뉴"]');
       assert.equal(navs.length, 1, `${view}: 하단 내비 1개`);
@@ -478,7 +483,7 @@ test('연합·대결 4개 화면은 하단 내비를 푸터에 두고 연합·�
 
 test('D2: 메인 캠퍼스 칸은 남는 높이를 채우되 220px 이상, 검사한 최대 비율 이하이고, 스탯 시트의 패널은 기여도·클리커 두 상자에 모든 정보를 담는다 (T2·T5)', () => {
   mount();
-  clickButton('🎮 메인 게임 화면');
+  clickTestView('🎮 메인 게임 화면');
   // T2 (계획서 §5): 고정 375px 대신 가변 높이. 실제 픽셀(7개 크기, 220px 이상)은 e2e가 잰다.
   const campus = screen.getByRole('button', { name: '캠퍼스 클릭 영역' });
   const classes = campus.className.split(/\s+/);
@@ -509,7 +514,7 @@ test('채팅·방명록 비교 화면에도 공유 클리커·기여도·버프�
   mount();
   act(() => { latest.upgrade(); latest.buy('coffee'); });
   const balance = latest.state.contribution;
-  clickButton('💬 2-Phone 채팅 비교');
+  clickTestView('💬 2-Phone 채팅 비교');
   const shownContributions = () => screen.getAllByTestId('campus-stats-contribution').map((el) => el.textContent);
   assert.deepEqual(new Set(shownContributions()), new Set([balance.toLocaleString('ko-KR')]), '비교 화면 스탯 버튼은 공유 보유 기여도를 보인다 (T5)');
   const campuses = screen.getAllByRole('button', { name: '캠퍼스 클릭 영역' });
@@ -518,14 +523,14 @@ test('채팅·방명록 비교 화면에도 공유 클리커·기여도·버프�
   assert.equal(latest.state.contribution, balance + 80);
   fireEvent.click(campuses[1]);
   assert.equal(latest.state.contribution, balance + 80, '시안용 폰은 실제 점수를 중복 지급하지 않는다.');
-  clickButton('📜 2-Phone 우리 방명록 (Screen 1 & 2)');
+  clickTestView('📜 2-Phone 우리 방명록 (Screen 1 & 2)');
   assert.deepEqual(new Set(shownContributions()), new Set([(balance + 80).toLocaleString('ko-KR')]));
   assert.doesNotMatch(document.body.textContent ?? '', /EXP|성장 경험치|숙련도/);
 });
 
 test('상점은 판매 중단 상품을 숨기고 잔액 부족 시 구매·강화를 비활성화한다', () => {
   mount();
-  clickButton('🏪 상점 & 강화 (Single Phone)');
+  clickTestView('🏪 상점 & 강화 (Single Phone)');
   assertAbsent(screen.queryByText('황금 클리커 조각'));
   assertAbsent(screen.queryByText('응원 깃발'));
   assertAbsent(screen.queryByText('도서관 열람권'));
@@ -865,4 +870,63 @@ test('P4-4: ImageChangeShop 확인 다이얼로그 액션 버튼 스타일 및 �
   assert.equal(confirmBtn.disabled, false);
   assert.doesNotMatch(confirmBtn.className, /opacity-50 cursor-not-allowed shadow-none/);
   assert.match(confirmBtn.className, /cursor-pointer/);
+});
+
+test('SCRUM-224: 내 캠퍼스 손 안내 문구·모서리 버튼 비전파·상세 스탯 항목 분리를 지킨다', () => {
+  let taps = 0;
+  let guestbookOpened = 0;
+  let statsOpened = 0;
+  render(
+    React.createElement(
+      MockGameProvider,
+      null,
+      React.createElement(CampusView, {
+        onTap: () => { taps += 1; },
+        clickPower: 30,
+        basePower: 30,
+        activeStudents: 37,
+        tapPrompt: '클릭!',
+        onOpenGuestbook: () => { guestbookOpened += 1; },
+        onOpenStats: () => { statsOpened += 1; },
+      }),
+    ),
+  );
+
+  const stage = document.querySelector('[data-campus-stage]');
+  assert.ok(stage?.hasAttribute('data-my-campus'), '내 캠퍼스 프레임에 전용 속성이 붙는다');
+  assert.ok(screen.getByText('클릭!'), 'PC에서는 손 모양 안내가 클릭!으로 보인다');
+  fireEvent.click(screen.getByRole('button', { name: '우리 학교 방명록 보기' }));
+  fireEvent.click(screen.getByTestId('campus-stats-button'));
+  assert.equal(guestbookOpened, 1);
+  assert.equal(statsOpened, 1);
+  assert.equal(taps, 0, '방명록·상세 스탯 버튼은 캠퍼스 점수 클릭을 유발하지 않는다');
+
+  fireEvent.click(screen.getByRole('button', { name: '캠퍼스 클릭 영역' }));
+  assert.equal(taps, 1);
+  assertAbsent(screen.queryByText('클릭!'), '첫 클릭 뒤에는 손 모양 안내가 사라진다');
+  cleanup();
+
+  // 기본값(모바일/시연)은 터치! 유지
+  render(
+    React.createElement(
+      MockGameProvider,
+      null,
+      React.createElement(CampusView, {
+        onTap: () => {},
+        clickPower: 30,
+        basePower: 30,
+        activeStudents: 37,
+      }),
+    ),
+  );
+  assert.ok(screen.getByText('터치!'), '기본 손 모양 안내는 터치!를 유지한다');
+  cleanup();
+
+  // 상세 스탯: 기본 세기·치명타·보조 안내 분리 및 숫자만 굵게
+  render(React.createElement(MockGameProvider, null, React.createElement(DialogPanel, { myContribution: 18560, clickerLevel: 3 })));
+  const stats = Array.from(document.querySelectorAll('.game-clicker-stat')).map((el) => el.textContent?.trim());
+  assert.deepEqual(stats, ['기본 세기 30점', '치명타 2배']);
+  const bolds = Array.from(document.querySelectorAll('.game-clicker-stat-num')).map((el) => el.textContent?.trim());
+  assert.deepEqual(bolds, ['30', '2'], '숫자만 굵게 표시한다');
+  assert.equal(document.querySelector('.game-clicker-note')?.textContent?.trim(), '강화는 상점에서');
 });

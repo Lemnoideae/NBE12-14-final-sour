@@ -81,7 +81,7 @@ const fits = () => evaluate(`(() => {
   const shell = document.querySelector('[data-phone-shell]');
   const nav = [...document.querySelectorAll('nav')].filter(n => n.getBoundingClientRect().height > 0 && !n.closest('dialog')).at(-1);
   return { shell: shell.dataset.phoneShell, chrome: !!shell.querySelector('[data-phone-status-bar]'),
-    mockBar: !!document.querySelector('.mock-menu-bar'), demoNav: !!document.querySelector('nav[aria-label="서비스 흐름"]'),
+    toolButton: !!document.querySelector('.game-top-bar button[aria-haspopup="dialog"]'), demoNav: !!document.querySelector('nav[aria-label="서비스 흐름"]'),
     navBottom: nav ? Math.round(nav.getBoundingClientRect().bottom) : null, vh: innerHeight,
     pageScroll: document.documentElement.scrollHeight - innerHeight };
 })()`);
@@ -163,11 +163,15 @@ async function statsSheet(width, height) {
 }
 
 /** The national map shows every region cluster and score ribbon at each size (the map crops to cover its area). */
+async function openTools() {
+  await touch('.game-top-bar button[aria-haspopup="dialog"]');
+  await waitFor(`!!document.querySelector('dialog[open][aria-label="테스트 도구"]')`);
+}
+
 async function mapOverview(width, height) {
   const name = `${width}x${height}`;
   await open(width, height);
-  await touch('.mock-menu-bar button');
-  await waitFor(`!!document.querySelector('dialog[open][aria-label="목업 메뉴"]')`);
+  await openTools();
   await button('🗺️ 단일 폰 지도', `document.querySelector('dialog[open]')`);
   const r = await evaluate(`(() => {
     const a = document.querySelector('[data-testid="map-area"]').getBoundingClientRect();
@@ -186,8 +190,7 @@ async function serviceScreens(width, height) {
   const screens = ['🎮 메인 게임 화면', '📱 순차 온보딩', '🗺️ 단일 폰 지도', '🏆 랭킹 화면', '🏪 상점 & 강화', '🤝 연합 신청', '현재 연합', '⚔️ 대결 신청', '📊 대결 현황'];
   for (const screen of [...screens, 'visiting']) {
     await open(width, height);
-    await touch('.mock-menu-bar button');
-    await waitFor(`!!document.querySelector('dialog[open][aria-label="목업 메뉴"]')`);
+    await openTools();
     await button(screen === 'visiting' ? '🗺️ 단일 폰 지도' : screen, `document.querySelector('dialog[open]')`);
     await check(`${name} ${screen}: menu pick closes the mock sheet`, async () => assert.equal(await evaluate(`!!document.querySelector('dialog[open]')`), false));
     if (screen === 'visiting') {
@@ -199,7 +202,7 @@ async function serviceScreens(width, height) {
       await pause(300);
     }
     const r = await fits();
-    await check(`${name} ${screen}: full shell without chrome`, () => assert.ok(r.shell === 'full' && !r.chrome && r.mockBar && !r.demoNav, JSON.stringify(r)));
+    await check(`${name} ${screen}: full shell without chrome`, () => assert.ok(r.shell === 'full' && !r.chrome && r.toolButton && !r.demoNav, JSON.stringify(r)));
     await check(`${name} ${screen}: no page scroll`, () => assert.ok(r.pageScroll <= 0, JSON.stringify(r)));
     await check(`${name} ${screen}: nav inside viewport`, () => assert.ok(r.navBottom === null || r.navBottom <= r.vh, JSON.stringify(r)));
     results.push({ size: name, screen, ...r });
@@ -207,8 +210,7 @@ async function serviceScreens(width, height) {
   }
   for (const comparison of ['💬 2-Phone 채팅 비교', '📜 2-Phone 우리 방명록']) {
     await open(width, height);
-    await touch('.mock-menu-bar button');
-    await waitFor(`!!document.querySelector('dialog[open][aria-label="목업 메뉴"]')`);
+    await openTools();
     await button(comparison, `document.querySelector('dialog[open]')`);
     const r = await evaluate(`({ shells: [...document.querySelectorAll('[data-phone-shell]')].map(e => e.dataset.phoneShell),
       stats: document.querySelectorAll('[data-testid="campus-stats-button"]').length,
@@ -232,14 +234,14 @@ try {
   };
   await send('Page.enable'); await send('Runtime.enable');
 
-  // Detection: touch phone -> full; same width without touch (narrow desktop window) or desktop -> framed; override wins.
+  // Narrow windows use the real single-column flow regardless of pointer type. A wide game has no phone chrome.
   for (const [label, width, height, phone, query, shell] of [
-    ['touch phone', 390, 844, true, '', 'full'], ['narrow mouse window', 390, 844, false, '', 'framed'],
-    ['desktop', 1280, 1000, false, '', 'framed'], ['phone ?device=framed', 390, 844, true, '?device=framed', 'framed'],
+    ['touch phone', 390, 844, true, '', 'full'], ['narrow mouse window', 390, 844, false, '', 'full'],
+    ['desktop', 1280, 1000, false, '', 'embedded'], ['phone ?device=framed', 390, 844, true, '?device=framed', 'framed'],
     ['desktop ?device=full', 1280, 1000, false, '?device=full', 'full']]) {
     await open(width, height, { phone, query });
     const r = await fits();
-    await check(`detection: ${label}`, () => assert.ok(r.shell === shell && r.mockBar === (shell === 'full') && r.demoNav === (shell === 'framed') && r.chrome === (shell === 'framed'), JSON.stringify(r)));
+    await check(`detection: ${label}`, () => assert.ok(r.shell === shell && r.toolButton && !r.demoNav && r.chrome === (shell === 'framed'), JSON.stringify(r)));
     results.push({ detection: label, ...r });
   }
   await capture('desktop-1280x1000-full-override');

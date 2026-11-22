@@ -31,6 +31,8 @@ interface CampusViewProps {
    * ancestor as wide as the frame. Without it the frame keeps the fixed 375px of the comparison mockups.
    */
   fill?: boolean;
+  /** Label beneath the initial hand prompt ('터치!' on mobile/demo, '클릭!' on wide PC). */
+  tapPrompt?: string;
   otherClicksSource?: OtherClicksSource;
   realtimeConfig?: MockRealtimeConfig;
   realtimeScheduler?: OtherClickScheduler;
@@ -47,6 +49,7 @@ export const CampusView: React.FC<CampusViewProps> = ({
   onOpenStats,
   showStatsButton = true,
   fill = false,
+  tapPrompt = '터치!',
   otherClicksSource,
   realtimeConfig,
   realtimeScheduler,
@@ -220,6 +223,7 @@ export const CampusView: React.FC<CampusViewProps> = ({
         role: 'button',
         tabIndex: 0,
         'aria-label': '캠퍼스 클릭 영역',
+        ...({ 'data-my-campus': '' } as Record<string, string>),
         onClick: (e) => handleCampusTap(e.clientX, e.clientY),
         onKeyDown: (e) => {
           if (e.target !== e.currentTarget || !CLICK_KEYS.includes(e.key)) return;
@@ -303,6 +307,7 @@ export const CampusView: React.FC<CampusViewProps> = ({
             }}
           >
             <svg
+              aria-hidden="true"
               className="w-10 h-10 drop-shadow-[2px_2px_0px_#261608]"
               viewBox="0 0 24 24"
               fill="none"
@@ -316,8 +321,8 @@ export const CampusView: React.FC<CampusViewProps> = ({
               />
               <circle cx="9.5" cy="5.5" r="1" fill="#facc15" />
             </svg>
-            <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-[#261608] text-[#fef08a] text-[9px] font-pixel px-1.5 py-0.2 border border-[#fef08a] whitespace-nowrap">
-              터치!
+            <div className="game-campus-hand-label absolute -bottom-4 left-1/2 -translate-x-1/2 bg-[#261608] text-[#fef08a] text-[9px] font-pixel px-1.5 py-0.2 border border-[#fef08a] whitespace-nowrap">
+              {tapPrompt}
             </div>
           </div>
         )}
@@ -359,7 +364,7 @@ export const CampusView: React.FC<CampusViewProps> = ({
               height: `${sp.size}px`,
             }}
           >
-            <svg viewBox="0 0 16 16" fill="none" className="w-full h-full">
+            <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" className="w-full h-full">
               <path
                 d="M8 0L9.5 6.5L16 8L9.5 9.5L8 16L6.5 9.5L0 8L6.5 6.5L8 0Z"
                 fill={sp.color}

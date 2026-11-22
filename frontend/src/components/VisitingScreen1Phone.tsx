@@ -1,5 +1,5 @@
 import type { SchoolId } from '../data/schoolIds.ts';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Trophy } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { formatContribution } from '../utils/formatContribution';
@@ -7,10 +7,11 @@ import { BottomNav, NavTab } from './BottomNav';
 import { BottomSheetDialog } from './BottomSheetDialog';
 import { CampusSignButton, CampusStage, GuestbookBoardButton } from './CampusStage';
 import { GameScreenLayout } from './GameScreenLayout';
+import { WorkspaceShortcut } from './GameWorkspace';
 import { TopHUD, schoolHudProps } from './TopHUD';
 import { LiveClicksEmpty, SPECTATOR_NOTICE, SpectatorBar, VisitNotFoundPhone, VisitSchoolInfoSheet, formatScore } from './VisitingParts.tsx';
 import { LoadNotice } from './LoadNotice';
-import { useVisitSchool } from '../hooks/useVisitSchool.ts';
+import { useVisitSchool, type VisitSchool } from '../hooks/useVisitSchool.ts';
 import { CAMPUS_ACTION_LABEL, type CampusActionKind, type CampusAttacks } from '../hooks/useCampusAttacks';
 import { VisitAttackBar } from './VisitAttackBar';
 
@@ -22,6 +23,10 @@ interface VisitingScreen1PhoneProps {
   onBackToMySchool?: () => void;
   onNavigateTab?: (tab: NavTab) => void;
   onOpenGuestbook?: () => void;
+  /** In the wide workspace the campus signs open the side panel instead of a dialog. */
+  onOpenDetails?: () => void;
+  embedded?: boolean;
+  mainRef?: React.Ref<HTMLElement>;
   /** The game's sound setting (App). Without it, as on the comparison mockup, the screen keeps its own. */
   soundEnabled?: boolean;
   onToggleSound?: () => void;
@@ -35,20 +40,30 @@ interface VisitingScreen1PhoneProps {
  * bar where the chat preview is. Mock/guest spectating never scores; signed-in API members attack without granting
  * contribution or consuming a mock buff (SCRUM-168), and assist a school of their current alliance instead (SCRUM-187).
  */
-export const VisitingScreen1Phone: React.FC<VisitingScreen1PhoneProps> = ({
+export function VisitingScreen1Phone(props: VisitingScreen1PhoneProps) {
+  const { schoolId } = props;
+  const visit = useVisitSchool(schoolId);
+  return <VisitCampusScreen {...props} visit={visit} />;
+}
+
+/** The service workspace shares one visit result between this campus and the left panel. */
+export function VisitCampusScreen({
   schoolId,
+  visit,
   onBackToMap = () => {},
   onBackToMySchool = () => {},
   onNavigateTab = () => {},
   onOpenGuestbook = () => {},
+  onOpenDetails,
+  embedded = false,
+  mainRef,
   soundEnabled,
   onToggleSound,
   attacks = null,
-}) => {
+}: VisitingScreen1PhoneProps & { visit: VisitSchool }) {
   const [clickNoticeToast, setClickNoticeToast] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [localSound, setLocalSound] = useState(() => soundManager.enabled);
-  const visit = useVisitSchool(schoolId);
   const { school, isMyUniversity } = visit;
   const attackMode = !!attacks?.ready && !!school && !isMyUniversity && attacks.myUniversityId !== school.id;
   // The server decides who is an ally; an ally is assisted, never attacked.
@@ -58,6 +73,9 @@ export const VisitingScreen1Phone: React.FC<VisitingScreen1PhoneProps> = ({
   useEffect(() => {
     if (isMyUniversity) onBackToMySchool();
   }, [isMyUniversity, onBackToMySchool]);
+  useEffect(() => {
+    if (embedded) setIsInfoOpen(false);
+  }, [embedded]);
 
   const handleCampusClick = () => {
     soundManager.playTapSound();
@@ -73,10 +91,11 @@ export const VisitingScreen1Phone: React.FC<VisitingScreen1PhoneProps> = ({
     soundManager.playTabSound();
   };
 
-  if (visit.status === 'not-found') return <VisitNotFoundPhone schoolId={schoolId} onBackToMap={onBackToMap} />;
+  if (visit.status === 'not-found') return <VisitNotFoundPhone schoolId={schoolId} onBackToMap={onBackToMap} embedded={embedded} />;
   if (visit.status !== 'ready' || !school) {
     return (
       <LoadNotice
+        variant={embedded ? 'panel' : 'phone'}
         status={visit.status === 'failed' ? 'failed' : 'loading'}
         name="방문 학교"
         failureDetail={visit.failureDetail}
@@ -90,6 +109,8 @@ export const VisitingScreen1Phone: React.FC<VisitingScreen1PhoneProps> = ({
   return (
     <GameScreenLayout
       kind="visit"
+      embedded={embedded}
+      mainRef={mainRef}
       fillMain
       header={
         <TopHUD
@@ -108,7 +129,11 @@ export const VisitingScreen1Phone: React.FC<VisitingScreen1PhoneProps> = ({
       previewBar={attackMode && attacks
         ? <VisitAttackBar attacks={attacks} schoolId={school.id} onBackToMySchool={onBackToMySchool} kind={actionKind} />
         : <SpectatorBar mySchoolShortName={visit.mySchoolShortName} onBackToMySchool={onBackToMySchool} />}
-      nav={
+      nav={embedded ? (
+        <nav aria-label="캠퍼스 메뉴" className="game-center-nav">
+          <WorkspaceShortcut icon="shop" onClick={() => onNavigateTab('shop')}>상점</WorkspaceShortcut>
+        </nav>
+      ) : (
         <BottomNav
           activeTab="map"
           onChangeTab={(tab) => {
@@ -118,9 +143,9 @@ export const VisitingScreen1Phone: React.FC<VisitingScreen1PhoneProps> = ({
           hasShopUpgrade={false}
           hasRankChange={false}
         />
-      }
+      )}
       overlays={
-        isInfoOpen && (
+        !embedded && isInfoOpen && (
           <BottomSheetDialog label={`${school.name} 학교 정보`} onClose={closeInfo}>
             <VisitSchoolInfoSheet
               school={school}
@@ -166,9 +191,9 @@ export const VisitingScreen1Phone: React.FC<VisitingScreen1PhoneProps> = ({
           value={formatContribution(school.score)}
           tooltip={`학교 정보 보기 · 학교 점수 ${formatScore(school.score)}`}
           ariaLabel={`학교 정보 보기, 학교 점수 ${formatScore(school.score)}`}
-          onOpen={() => setIsInfoOpen(true)}
+          onOpen={onOpenDetails ?? (() => setIsInfoOpen(true))}
         />
       </CampusStage>
     </GameScreenLayout>
   );
-};
+}

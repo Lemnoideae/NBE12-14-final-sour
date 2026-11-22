@@ -30,6 +30,7 @@ dom.window.HTMLElement.prototype.scrollIntoView = function () {};
 installDialogStub(dom.window);
 
 const { render, screen, fireEvent, act, cleanup, within } = await import('@testing-library/react');
+const { clickTestView } = await import('./helpers/mockTools');
 const { MockGameProvider, useMockGame } = await import('../src/hooks/useMockGame');
 const { default: App } = await import('../src/App');
 const { getSchoolViews } = await import('../src/data/schoolDirectory');
@@ -96,7 +97,7 @@ test('앱: 한양대(연합 없음)는 연합 채팅 빈 상태와 비활성 입
   const Probe = () => { latest = useMockGame(); return null; };
   render(React.createElement(MockGameProvider, { children: React.createElement(React.Fragment, null, React.createElement(App), React.createElement(Probe)) }));
   const openUnion = () => {
-    fireEvent.click(screen.getByRole('button', { name: '🎮 메인 게임 화면' }));
+    clickTestView('🎮 메인 게임 화면');
     fireEvent.click(screen.getByTitle('채팅창 열기'));
     const dialog = screen.getByRole('dialog', { name: '채팅' });
     fireEvent.click(within(dialog).getByRole('button', { name: '연합 채팅' }));

@@ -9,17 +9,17 @@ interface Props {
   /** Omitted for the signed-in member's own university; never infer that ID from the mock player. */
   universityId?: number;
   schoolName?: string;
-  onClose: () => void;
+  onClose?: () => void;
   onGoToMap?: () => void;
   onGoToLogin?: () => void;
 }
 const buttonClass = 'pixel-plaque plaque-parchment px-3 min-h-12 font-pixel text-xs disabled:opacity-50';
 const dateFormat = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'short' });
-function Frame({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+function Frame({ title, onClose, children }: { title: string; onClose?: () => void; children: ReactNode }) {
   return <section className="h-full w-full min-w-0 flex flex-col bg-[#fdf5df] text-[#261608] font-pixel border-t-4 border-[#261608]">
     <header className="flex items-center justify-between gap-2 px-3 py-1 border-b-2 border-[#261608] bg-[#faecc7] shrink-0">
       <div className="min-w-0"><h2 className="font-bold text-sm break-words">{title} 방명록</h2><p className="text-[10px]">다른 학교 학생들이 남긴 응원 · 최신순</p></div>
-      <button type="button" aria-label="방명록 닫기" className={buttonClass} onClick={onClose}><ChevronDown aria-hidden className="w-4 h-4" /></button>
+      {onClose && <button type="button" aria-label="방명록 닫기" className={buttonClass} onClick={onClose}><ChevronDown aria-hidden className="w-4 h-4" /></button>}
     </header>
     {children}
   </section>;
@@ -67,6 +67,14 @@ function GuestbookLikeControl({ item, universityId, viewerId, onChanged }: { ite
     </div>}
   </div>;
 }
+function guestbookWriteError(error: unknown) {
+  if (isApiError(error)) {
+    if (error.code === 'GUEST_TOO_FREQUENT') return '방명록은 학교와 관계없이 1분에 한 번 작성할 수 있어요. 잠시 후 다시 시도해 주세요.';
+    if (error.code === 'GUEST_OWN_UNIVERSITY') return '우리 학교에는 방명록을 작성할 수 없어요. 내 소속을 다시 확인해 주세요.';
+  }
+  return errorMessage(error);
+}
+
 function GuestbookContents({ universityId, title, member, onClose, onGoToMap, onGoToLogin }: Props & { universityId: number; title: string; member: MyInfo | null }) {
   const list = useGuestbookPages(universityId, member?.id ?? null);
   const write = useCreateGuestbook(universityId);
@@ -94,10 +102,7 @@ function GuestbookContents({ universityId, title, member, onClose, onGoToMap, on
       onSettled: () => { posting.current = false; },
     });
   }
-  const writeError = write.isError ? isApiError(write.error) && write.error.code === 'GUEST_TOO_FREQUENT'
-    ? '방명록은 학교와 관계없이 1분에 한 번 작성할 수 있어요. 잠시 후 다시 시도해 주세요.'
-    : isApiError(write.error) && write.error.code === 'GUEST_OWN_UNIVERSITY' ? '우리 학교에는 방명록을 작성할 수 없어요. 내 소속을 다시 확인해 주세요.'
-      : errorMessage(write.error) : '';
+  const writeError = write.isError ? guestbookWriteError(write.error) : '';
   return <Frame title={title} onClose={onClose}>
     <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 flex flex-col gap-3 text-xs" aria-busy={list.isFetching}>
       <div className="flex items-center justify-between gap-2"><span>불러온 글 {items.length}개</span>
@@ -117,7 +122,7 @@ function GuestbookContents({ universityId, title, member, onClose, onGoToMap, on
             {member ? <GuestbookLikeControl key={`${item.id}:${member.id}`} item={item} universityId={universityId} viewerId={member.id}
               onChanged={(result) => setCreated((current) => current?.id === result.guestbookId
                 ? { ...current, likeCount: result.likeCount, likedByMe: result.liked } : current)} />
-              : <span aria-label={`좋아요 ${item.likeCount}개`} className="flex gap-1 items-center text-[#8b5327]">
+              : <span role="img" aria-label={`좋아요 ${item.likeCount}개`} className="flex gap-1 items-center text-[#8b5327]">
                 <Heart aria-hidden className="w-3 h-3" />{item.likeCount}
               </span>}
           </div>
@@ -129,9 +134,9 @@ function GuestbookContents({ universityId, title, member, onClose, onGoToMap, on
       {list.isSuccess && !list.hasNextPage && items.length > 0 && <p>마지막 방명록입니다.</p>}
     </div>
     <div className="shrink-0 max-h-[50%] overflow-y-auto border-t-2 border-[#261608] bg-[#faecc7] p-3 text-xs">
-      {!member ? <div><p>방명록을 작성하려면 로그인해 주세요.</p>{onGoToLogin && <button type="button" className={buttonClass} onClick={onGoToLogin}>로그인</button>}</div>
-        : ownSchool ? <div><p>우리 학교에는 글을 남길 수 없어요. 다른 학교에 응원을 남겨 보세요.</p>{onGoToMap && <button type="button" className={buttonClass} onClick={onGoToMap}>지도로 이동</button>}</div>
-          : <form aria-label="방명록 작성" onSubmit={submit} noValidate className="flex flex-col gap-2">
+      {!member && <div><p>방명록을 작성하려면 로그인해 주세요.</p>{onGoToLogin && <button type="button" className={buttonClass} onClick={onGoToLogin}>로그인</button>}</div>}
+      {ownSchool && <div><p>우리 학교에는 글을 남길 수 없어요. 다른 학교에 응원을 남겨 보세요.</p>{onGoToMap && <button type="button" className={buttonClass} onClick={onGoToMap}>지도로 이동</button>}</div>}
+      {member && !ownSchool && <form aria-label="방명록 작성" onSubmit={submit} noValidate className="flex flex-col gap-2">
             <label htmlFor={`${id}-content`}>방명록 내용 (필수 · 500자 이하)</label>
             <textarea ref={inputRef} id={`${id}-content`} name="content" required rows={2} disabled={write.isPending}
               value={draft} aria-invalid={!!problem} aria-describedby={`${id}-help${problem || writeError ? ` ${id}-error` : ''}`}

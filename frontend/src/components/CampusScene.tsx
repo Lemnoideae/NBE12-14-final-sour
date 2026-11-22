@@ -6,6 +6,7 @@ import { useCampusTimePhase } from '../hooks/useCampusTimePhase';
 import { CAMPUS_STAGES } from '../data/gameRules';
 import { CampusSprite } from './CampusSprite';
 import { WOBBLE_STYLE } from '../utils/campusWobble';
+import { MOCK_TOOLS } from '../utils/mockTools';
 
 // Ground shadows suit trees and props. A building's anchor is its bounding-box bottom-center, so an
 // ellipse there floats beside the footprint; buildings get no shadow unless a placement asks for one.
@@ -18,7 +19,7 @@ const TERRAIN_EDGE_WIDTH = 4;
 // Fixed star field (frame units) so night skies do not flicker between renders.
 const STARS = Array.from({ length: 28 }, (_, i) => ({ x: (i * 97 + 13) % CAMPUS_FRAME_WIDTH, y: (i * 53 + 7) % 44, big: i % 5 === 0 }));
 
-const DEBUG = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('campusDebug');
+const DEBUG = MOCK_TOOLS && typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('campusDebug');
 
 interface FrameSize {
   /** Height / width. */

@@ -1,6 +1,6 @@
 import type { SchoolId } from '../data/schoolIds.ts';
 import React, { useState } from 'react';
-import { ChevronDown, Heart, Sparkles, MapPin, Info } from 'lucide-react';
+import { ChevronDown, Heart, Sparkles, Info } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { SharedImage } from './SharedImage.tsx';
 import { getOurSchoolGuestbookSamples, type GuestbookEntry } from '../data/mockGuestbook.ts';
@@ -8,14 +8,16 @@ import { getOurSchoolGuestbookSamples, type GuestbookEntry } from '../data/mockG
 interface OurSchoolGuestbookBottomSheetProps {
   onClose?: () => void;
   onGoToMap?: () => void;
+  showSoonRibbon?: boolean;
   /** The player's school (M4); its own students' notes are left out. */
   mySchoolId: SchoolId;
   schoolName: string;
 }
 
 export const OurSchoolGuestbookBottomSheet: React.FC<OurSchoolGuestbookBottomSheetProps> = ({
-  onClose = () => {},
+  onClose,
   onGoToMap = () => {},
+  showSoonRibbon = true,
   mySchoolId,
   schoolName,
 }) => {
@@ -50,13 +52,12 @@ export const OurSchoolGuestbookBottomSheet: React.FC<OurSchoolGuestbookBottomShe
     <div className="w-full h-full bg-[#fdf5df] border-t-4 border-[#261608] shadow-[0px_-6px_0px_#261608] flex flex-col justify-between select-none relative overflow-hidden">
       {/* 1. Header: "{school} 방명록", subtitle, sort tabs "최신순" / "인기순", total count, close "▼" */}
       <div className="w-full bg-[#faecc7] border-b-2 border-[#261608] px-3 py-2 flex flex-col gap-1.5 shrink-0 relative">
-        {/* SOON Ribbon at top-right corner of header */}
-        <div className="absolute -top-1 -right-1 z-30 pointer-events-none">
+        {showSoonRibbon ? <div className="absolute -top-1 -right-1 z-30 pointer-events-none">
           <div className="bg-[#e11d48] text-white font-press-start text-[7px] font-black px-2 py-0.5 border-2 border-[#261608] shadow-[1px_1px_0px_#261608] transform rotate-3 flex items-center gap-0.5">
             <Sparkles className="w-2 h-2 text-yellow-300" />
             <span>SOON</span>
           </div>
-        </div>
+        </div> : null}
 
         {/* Row 1: Badge + Title + Close Button */}
         <div className="flex items-center justify-between">
@@ -74,13 +75,14 @@ export const OurSchoolGuestbookBottomSheet: React.FC<OurSchoolGuestbookBottomShe
             </div>
           </div>
 
-          <button
+          {onClose && <button
+            type="button"
             onClick={onClose}
             title="방명록 닫기"
             className="pixel-plaque plaque-parchment p-1 border-2 border-[#261608] flex items-center justify-center cursor-pointer hover:bg-stone-100 active:scale-95 shrink-0"
           >
             <ChevronDown className="w-4 h-4 text-[#261608]" />
-          </button>
+          </button>}
         </div>
 
         {/* Row 2: Sort Tabs ("최신순" active / "인기순") + Total Count */}
@@ -88,6 +90,7 @@ export const OurSchoolGuestbookBottomSheet: React.FC<OurSchoolGuestbookBottomShe
           {/* Sort Tabs */}
           <div className="flex items-center gap-1 bg-[#ecd9b2] p-0.5 border border-[#261608]">
             <button
+              type="button"
               onClick={() => {
                 setSortTab('latest');
                 soundManager.playTabSound();
@@ -99,6 +102,7 @@ export const OurSchoolGuestbookBottomSheet: React.FC<OurSchoolGuestbookBottomShe
               최신순
             </button>
             <button
+              type="button"
               onClick={() => {
                 setSortTab('popular');
                 soundManager.playTabSound();
@@ -170,6 +174,7 @@ export const OurSchoolGuestbookBottomSheet: React.FC<OurSchoolGuestbookBottomShe
             {/* Footer with Like Button */}
             <div className="flex items-center justify-end gap-1 pt-0.5 border-t border-stone-200">
               <button
+                type="button"
                 onClick={() => toggleLike(item.id)}
                 className={`flex items-center gap-1 px-1.5 py-0.5 border border-[#261608] text-[9px] font-pixel font-bold cursor-pointer transition-transform active:scale-95 ${
                   item.likedByMe
@@ -202,6 +207,7 @@ export const OurSchoolGuestbookBottomSheet: React.FC<OurSchoolGuestbookBottomShe
 
         {/* Link-style button: "지도에서 학교 찾기 >" */}
         <button
+          type="button"
           onClick={() => {
             soundManager.playTabSound();
             onGoToMap();

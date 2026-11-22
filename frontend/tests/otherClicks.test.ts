@@ -15,6 +15,7 @@ const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http:
 for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document, navigator: dom.window.navigator, HTMLElement: dom.window.HTMLElement, Node: dom.window.Node, requestAnimationFrame: dom.window.requestAnimationFrame.bind(dom.window), cancelAnimationFrame: dom.window.cancelAnimationFrame.bind(dom.window), IS_REACT_ACT_ENVIRONMENT: true })) Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
 dom.window.HTMLElement.prototype.scrollIntoView = function () {};
 const { render, screen, fireEvent, cleanup, act } = await import('@testing-library/react');
+const { clickTestView } = await import('./helpers/mockTools');
 const { useMockOtherClicks } = await import('../src/hooks/useMockOtherClicks');
 const { MockGameProvider, useMockGame } = await import('../src/hooks/useMockGame');
 const { CampusView } = await import('../src/components/CampusView');
@@ -141,10 +142,12 @@ test('렌더 상한·수명·입력·감속 모션과 게임 데이터 불변', 
   view.unmount();
 });
 
-test('방문·대결 화면에는 타 클릭 파티클 없음', () => {
+test('방문·대결 화면에는 타 클릭 파티클 없음', (t) => {
+  dom.reconfigure({ url: 'http://localhost/?device=framed' });
+  t.after(() => dom.reconfigure({ url: 'http://localhost/' }));
   render(React.createElement(MockGameProvider, null, React.createElement(App)));
   for (const name of ['📖 2-Phone 방문교 방명록', '⚔️ 대결 신청 (Battle Apply)', '📊 대결 현황 (Battle Status)']) {
-    fireEvent.click(screen.getByRole('button', { name }));
+    clickTestView(name);
     assert.equal(screen.queryAllByTestId('other-click-particle').length, 0);
   }
 });

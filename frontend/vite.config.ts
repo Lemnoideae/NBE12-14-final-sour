@@ -28,12 +28,18 @@ export function apiProxy(target: string): Record<string, ProxyOptions> {
   };
 }
 
-export default defineConfig(({mode}) => {
+export default defineConfig(({command, mode, isPreview}) => {
+  const testBuild = command === 'build' && mode === 'campus-test';
+  const localDev = command === 'serve' && !isPreview;
   // API_PROXY_TARGET has no VITE_ prefix: it configures the dev server only and never reaches the browser bundle.
   const env = loadEnv(mode, configDir, '');
   const proxy = apiProxy(env.API_PROXY_TARGET || DEFAULT_API_PROXY_TARGET);
   return {
     plugins: [react(), tailwindcss()],
+    define: {
+      __CAMPUS_MOCK_TOOLS__: JSON.stringify(localDev || testBuild),
+      __CAMPUS_SERVICE_BUILD__: JSON.stringify(command === 'build' && !testBuild),
+    },
     build: {
       // HD campus sprites stay separate files so each layer fetches only the scale it draws
       // (docs/261108-1014-campus_hd_default_plan.md 4-4); other small assets inline as before.

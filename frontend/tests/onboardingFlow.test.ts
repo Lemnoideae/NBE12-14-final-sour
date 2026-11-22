@@ -30,6 +30,7 @@ dom.window.HTMLElement.prototype.scrollIntoView = function () {};
 installDialogStub(dom.window);
 
 const { render, screen, fireEvent, act, cleanup, within } = await import('@testing-library/react');
+const { clickTestView } = await import('./helpers/mockTools');
 const { MockGameProvider, useMockGame } = await import('../src/hooks/useMockGame');
 const { default: App } = await import('../src/App');
 const { INITIAL_GAME_STATE } = await import('../src/utils/gameModel');
@@ -57,7 +58,7 @@ function mountApp(initialState = INITIAL_GAME_STATE) {
 const click = (name: string | RegExp) => fireEvent.click(screen.getByRole('button', { name }));
 const phone = () => within(screen.getByRole('region', { name: '순차 온보딩' }));
 const alertText = () => phone().getByRole('alert').textContent ?? '';
-const openSequential = () => click('📱 순차 온보딩 (Single Phone)');
+const openSequential = () => clickTestView('📱 순차 온보딩 (Single Phone)');
 
 function requestCodeFor(email: string) {
   fireEvent.change(phone().getByLabelText('학교 이메일 주소'), { target: { value: email } });
@@ -93,7 +94,7 @@ test('기준 6: KAIST 메일로 가입하면 HUD·지도·순위·채팅이 같�
   click('캠퍼스로 이동');
   const kaist = getSchoolById(getSchoolViews(initialSchoolScore(SCHOOL_ID.kaist), SCHOOL_ID.kaist), SCHOOL_ID.kaist)!;
   assert.equal(screen.getByRole('heading', { level: 1, name: 'KAIST' }).textContent, 'KAIST', 'HUD 학교명');
-  assert.ok(screen.getByText(`입학생: 카이스트새내기 (전기및전자공학부)`));
+  assertAbsent(screen.queryByText(/^입학생:/), '실제 캠퍼스에는 시안 발표 문구가 없다');
 
   fireEvent.click(screen.getByTitle('채팅창 열기'));
   assert.ok(screen.getAllByText(/카이스트새내기/).length > 0, '채팅 작성자 닉네임');
@@ -113,12 +114,12 @@ test('기준 6: KAIST 메일로 가입하면 HUD·지도·순위·채팅이 같�
   click('전국 지도');
   click('KAIST 방문');
   assert.ok(screen.getByRole('button', { name: '캠퍼스 클릭 영역' }), '내 학교(KAIST)는 방문이 아니라 내 캠퍼스');
-  click('🗺️ 단일 폰 지도');
+  clickTestView('🗺️ 단일 폰 지도');
   click('한양대학교 방문');
   assert.ok(screen.getByRole('heading', { level: 1, name: '한양대학교' }), '이전 학교(한양대)는 이제 방문 대상');
 
   // The full ranking screen labels its in-school tabs with the player's school too (fixed in M5).
-  click('🏆 랭킹 화면 (Single Phone)');
+  clickTestView('🏆 랭킹 화면 (Single Phone)');
   click('교내 학과');
   assert.ok(screen.getByText(/KAIST 교내 학과/));
   assertAbsent(screen.queryByText(/한양대 교내/));
@@ -165,7 +166,7 @@ test('기준 1·2: 틀린 코드는 막히고, 한도를 넘긴 뒤에는 화면
   }
   assertAbsent(phone().queryByLabelText('플레이어 닉네임'), '틀린 코드로는 프로필 단계가 없다');
 
-  click('🎮 메인 게임 화면');
+  clickTestView('🎮 메인 게임 화면');
   openSequential();
   assert.equal(phone().getByTestId('attempts-left').textContent, '남은 시도 1회', '다시 열어도 횟수 유지');
   enterCode('999999');
@@ -228,7 +229,7 @@ test('기준 3: 입학하기를 연달아 눌러도 가입은 한 번만 적용�
 
 test('3단 비교 화면은 고정 샘플을 보여 주고 상태를 바꾸지 않으며 버튼은 순차 온보딩으로 이동한다', () => {
   mountApp();
-  click('3단 온보딩 화면');
+  clickTestView('3단 온보딩 화면');
   const before = latest.player;
   assertAbsent(screen.queryByText(/한빛/), '가상 학교 한빛대 제거');
   assert.ok(screen.getAllByText(/한양대학교/).length > 0);

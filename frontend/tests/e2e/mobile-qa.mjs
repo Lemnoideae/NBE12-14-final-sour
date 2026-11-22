@@ -8,6 +8,9 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pressKey } from './cdp-input.mjs';
 import { runMobileFlows } from './mobile-flows.mjs';
+import { MOCK_TOOL_BUTTON, selectMockScreen } from './cdp-mock-tools.mjs';
+
+const screen = (label) => selectMockScreen(evaluate, label);
 
 const endpoint = process.env.M6_CDP_URL ?? 'http://127.0.0.1:9222';
 // T2: touch emulation matches (pointer: coarse) and turns on the full-screen phone mode, which hides the demo
@@ -71,7 +74,7 @@ async function viewport(width, height) {
 }
 async function load() {
   await send('Page.navigate', { url: app });
-  await waitFor(`document.readyState === 'complete' && !!document.querySelector('nav[aria-label="서비스 흐름"]')`);
+  await waitFor(`document.readyState === 'complete' && !!document.querySelector(${JSON.stringify(MOCK_TOOL_BUTTON)})`);
   await evaluate('document.fonts.ready.then(() => true)');
 }
 async function screenshot(name, selector) {
@@ -158,7 +161,7 @@ try {
     await viewport(width, height);
     await load();
     for (const [index, name] of screens.entries()) {
-      await button(name);
+      await screen(name);
       const overflow = await evaluate('Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth');
       assert.ok(overflow <= 1, `${width}x${height} ${name}: horizontal overflow ${overflow}`);
       await screenshot(`${width}x${height}-screen-${index}`);
@@ -175,22 +178,22 @@ try {
       })()`);
       for (const b of reachable) assert.equal(b.reachable, true, `Scroll access: ${width}x${height} ${b.text}`);
     }
-    await button('🎮 메인 게임 화면');
+    await screen('🎮 메인 게임 화면');
     await checkSheet('[title="채팅창 열기"]', '채팅', width, height);
     await checkSheet('[title="우리 학교 방명록 보기"]', '우리 학교 방명록', width, height);
     await button('지도');
-    const header = await evaluate(`[...document.querySelectorAll('[data-game-main] button')].slice(0,3).map(b => {
+    const header = await evaluate(`[...document.querySelectorAll('[data-game-main] button')].map(b => {
       const s = getComputedStyle(b), r = b.getBoundingClientRect();
       return { text:b.textContent.trim(), height:r.height, singleLine:parseFloat(s.lineHeight)+parseFloat(s.paddingTop)+parseFloat(s.paddingBottom)+parseFloat(s.borderTopWidth)+parseFloat(s.borderBottomWidth) };
     })`);
-    assert.equal(header.length, 3);
+    assert.deepEqual(header.map(b => b.text), ['전국 지도', '돌아가기']);
     for (const b of header) assert.ok(b.height <= b.singleLine + 1, `Header wrapping: ${JSON.stringify(b)}`);
     results.push({ width, height, screens: 9, sheets: 'native keyboard / focus / bounds passed', header });
   }
 
   await viewport(390, 844);
   await load();
-  await button('🎮 메인 게임 화면');
+  await screen('🎮 메인 게임 화면');
   await touch('[title="채팅창 열기"]');
   await waitFor(`!!document.querySelector('dialog[open]')`);
   await fill('[aria-label="채팅 메시지"]', '가로 회전 중 작성');
@@ -202,7 +205,7 @@ try {
   await key('Escape');
   results.push({ rotation: 'same modal node, draft and contribution preserved; touch opens chat' });
 
-  await button('📱 순차 온보딩 (Single Phone)');
+  await screen('📱 순차 온보딩 (Single Phone)');
   await fill('input[type="email"]', 'm6@kaist.ac.kr');
   await button('인증 코드 받기');
   await waitFor(`!!document.querySelector('[data-testid="mock-mailbox-code"]')`);
@@ -212,14 +215,14 @@ try {
   assert.equal(await evaluate(`document.querySelector('[data-testid="attempts-left"]').textContent.includes('0회')`), true);
   await enterCode(issued);
   assert.equal(await evaluate(`document.querySelector('[role="alert"]').textContent.includes('시도 횟수를 모두')`), true);
-  await button('🎮 메인 게임 화면');
-  await button('📱 순차 온보딩 (Single Phone)');
+  await screen('🎮 메인 게임 화면');
+  await screen('📱 순차 온보딩 (Single Phone)');
   assert.equal(await evaluate(`document.querySelector('[data-testid="attempts-left"]').textContent.includes('0회')`), true);
   await enterCode(issued);
   assert.equal(await evaluate(`document.querySelector('[role="alert"]').textContent.includes('시도 횟수를 모두')`), true);
   await screenshot('auth-attempt-limit');
   results.push({ auth: 'five wrong attempts lock even the correct code; lock persists when reopening screen' });
-  await runMobileFlows({ send, evaluate, waitFor, pause, button, fill, key, viewport, load, screenshot, touch, checkSheet, results });
+  await runMobileFlows({ send, evaluate, waitFor, pause, button, screen, fill, key, viewport, load, screenshot, touch, checkSheet, results });
   assert.deepEqual(errors, [], 'No console errors or unhandled exceptions');
   await writeFile(path.join(out, 'report.json'), JSON.stringify({ browser: version.Browser, app, results, errors, notCovered: ['Physical device/IME/safe areas/browser chrome height/pinch zoom', 'Code reuse already-used branch: inaccessible through the successful UI (model regression exists)', 'Growth screenshots require separate visual review; automated capture is not a visual pass', 'All possible school badges and every list/tab combination'] }, null, 2));
   console.log(`M6 browser checks passed: ${out}/report.json`);

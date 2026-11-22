@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type SubmitEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type SubmitEvent } from 'react';
 import type { ShopItem } from '../api/items';
 import type { ItemShopView } from '../hooks/useItemShop';
 import { ActiveItemEffect } from './ActiveItemEffect';
@@ -29,7 +29,7 @@ function PurchaseDialog({ item, shop, onClose }: { item: ShopItem; shop: ItemSho
       {shop.error && <p role="alert" className="text-xs text-[#b91c1c] mb-2">{shop.error}</p>}
       {shop.reconcile && <button type="button" onClick={shop.reconcile} className="pixel-plaque plaque-yellow min-h-12 px-3 mb-2 text-xs font-bold cursor-pointer">구매 결과 서버 확인</button>}
       <div className="grid grid-cols-2 gap-2">
-        <form method="dialog"><button ref={cancelRef} autoFocus type="submit" className="pixel-plaque plaque-parchment min-h-12 w-full px-2 text-xs font-bold cursor-pointer">취소</button></form>
+        <form method="dialog"><button ref={cancelRef} type="submit" className="pixel-plaque plaque-parchment min-h-12 w-full px-2 text-xs font-bold cursor-pointer">취소</button></form>
         <form method="post" action={`/api/v1/items/${item.id}/purchase`} onSubmit={submit} aria-busy={shop.pending}>
           <button type="submit" disabled={reason !== null} className="pixel-plaque plaque-green min-h-12 w-full px-2 text-xs font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
             {shop.pending ? '요청 중…' : `${item.price.toLocaleString('ko-KR')}점 구매 및 사용`}
@@ -42,9 +42,15 @@ function PurchaseDialog({ item, shop, onClose }: { item: ShopItem; shop: ItemSho
 }
 
 /** API-only shelf. The existing mock shelf and image-change preview remain untouched in mock mode. */
-export function ApiItemShop({ shop }: { shop: ItemShopView }) {
+export function ApiItemShop({ shop, onConfirmationChange }: { shop: ItemShopView; onConfirmationChange?: (confirming: boolean) => void }) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const selected = shop.items.find((item) => item.id === selectedId) ?? null;
+  const confirming = selected !== null;
+  useLayoutEffect(() => {
+    if (!confirming) return;
+    onConfirmationChange?.(true);
+    return () => onConfirmationChange?.(false);
+  }, [confirming, onConfirmationChange]);
   useEffect(() => { if (shop.receipt) setSelectedId(null); }, [shop.receipt]);
   useEffect(() => {
     if (selectedId !== null && !shop.items.some((item) => item.id === selectedId)) setSelectedId(null);
@@ -65,13 +71,19 @@ export function ApiItemShop({ shop }: { shop: ItemShopView }) {
           const unavailable = item.payType !== 'CONTRIBUTION' || item.type !== 'MULTIPLIER';
           return <button key={item.id} type="button" disabled={unavailable} onClick={() => setSelectedId(item.id)}
             aria-label={`${item.name} ${unavailable ? '구매 준비 중' : '구매 선택'}`}
-            className="text-left bg-[#fdf5df] border-3 border-[#261608] shadow-[2px_2px_0px_#261608] p-2 font-pixel cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed min-h-24">
-            <span aria-hidden="true" className="text-xl">{unavailable ? '🔒' : '☕'}</span>
-            <span className="block text-xs font-black break-words">{item.name}</span>
-            <span className="block text-[10px] text-[#8b5327] my-1 break-words">{item.content}</span>
-            <span className="block text-[10px] font-bold">{item.price.toLocaleString('ko-KR')}{item.payType === 'CREDIT' ? ' 크레딧' : '점'}</span>
-            {item.durationSeconds !== null && <span className="block text-[10px]">지속 {item.durationSeconds}초</span>}
-            {unavailable && <span className="block text-[10px]">{item.payType === 'CREDIT' ? '결제 준비 중' : '지원 준비 중'}</span>}
+            className="game-shelf-card text-left bg-[#fdf5df] border-3 border-[#261608] shadow-[2px_2px_0px_#261608] p-2 font-pixel cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed min-h-24">
+            <span className="contents game-shelf-card-body">
+              <span aria-hidden="true" className="game-shelf-api-icon text-xl">{unavailable ? '🔒' : '☕'}</span>
+              <span className="contents game-shelf-card-copy">
+                <span className="game-shelf-card-name block text-xs font-black break-words">{item.name}</span>
+                <span className="game-shelf-card-description block text-[10px] text-[#8b5327] my-1 break-words">{item.content}</span>
+              </span>
+            </span>
+            <span className="contents game-shelf-api-details">
+              <span className="block text-[10px] font-bold">{item.price.toLocaleString('ko-KR')}{item.payType === 'CREDIT' ? ' 크레딧' : '점'}</span>
+              {item.durationSeconds !== null && <span className="block text-[10px]">지속 {item.durationSeconds}초</span>}
+              {unavailable && <span className="block text-[10px]">{item.payType === 'CREDIT' ? '결제 준비 중' : '지원 준비 중'}</span>}
+            </span>
           </button>;
         })}
       </div>

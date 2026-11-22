@@ -1,5 +1,5 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
-import { Sparkles, AlertTriangle, ArrowRight, Check, X, ShieldAlert } from 'lucide-react';
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { AlertTriangle, Check, X } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { BottomNav, NavTab } from './BottomNav';
 import { type MockStoreItem } from '../data/gameRules';
@@ -13,6 +13,7 @@ import { PhoneShell } from './PhoneShell';
 
 interface ShopScreenPhoneProps {
   embedded?: boolean;
+  onConfirmationChange?: (confirming: boolean) => void;
   onNavigateTab: (tab: NavTab) => void;
 }
 
@@ -28,6 +29,7 @@ function ShopFrame({ embedded, children }: { embedded: boolean; children: React.
 
 export const ShopScreenPhone: React.FC<ShopScreenPhoneProps> = ({
   embedded = false,
+  onConfirmationChange,
   onNavigateTab,
 }) => {
   const game = useMockGame();
@@ -52,12 +54,20 @@ export const ShopScreenPhone: React.FC<ShopScreenPhoneProps> = ({
   const [requestError, setRequestError] = useState<{ key: 'shop-buy' | 'shop-upgrade'; message: string } | null>(null);
 
   const storeItems = game.storeItems;
+  const selectedItem = storeItems.find((item) => item.id === selectedItemId) || storeItems[0];
+  const confirmedItemId = showConfirmDialog ? selectedItem?.id : undefined;
   const confirmRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (showConfirmDialog) confirmRef.current?.scrollIntoView({ block: 'nearest' });
-  }, [showConfirmDialog, selectedItemId]);
+    if (confirmedItemId) confirmRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [confirmedItemId]);
 
-  const selectedItem = storeItems.find((item) => item.id === selectedItemId) || storeItems[0];
+  const [imageConfirming, setImageConfirming] = useState(false);
+  const confirming = !api && (imageConfirming || (showConfirmDialog && !!selectedItem && !selectedItem.previewOnly));
+  useLayoutEffect(() => {
+    if (!confirming) return;
+    onConfirmationChange?.(true);
+    return () => onConfirmationChange?.(false);
+  }, [confirming, onConfirmationChange]);
 
   const showToast = (msg: string) => setToastMessage(msg);
   useEffect(() => {
@@ -440,7 +450,7 @@ export const ShopScreenPhone: React.FC<ShopScreenPhoneProps> = ({
 
           {/* ========================================================= */}
           {/* WOODEN SHELVES SECTION HEADER                             */}
-          {api ? itemShop && <ApiItemShop shop={itemShop} /> : <>
+          {api ? itemShop && <ApiItemShop shop={itemShop} onConfirmationChange={onConfirmationChange} /> : <>
           {/* ========================================================= */}
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-1.5">
@@ -472,22 +482,23 @@ export const ShopScreenPhone: React.FC<ShopScreenPhoneProps> = ({
                     key={item.id}
                     onClick={() => handleSelectItem(item.id)}
                     aria-label={`${item.name} ${item.previewOnly ? '시안 보기' : '구매 선택'}`}
-                    className={`text-left cursor-pointer transition-all duration-100 flex flex-col justify-between p-2 relative bg-[#fdf5df] border-3 ${
+                    data-selected={isSelected || undefined}
+                    className={`game-shelf-card text-left cursor-pointer transition-all duration-100 flex flex-col justify-between p-2 relative bg-[#fdf5df] border-3 ${
                       isSelected
                         ? 'border-[#facc15] shadow-[0_0_0_2px_#261608,3px_3px_0px_#261608,0_0_10px_rgba(250,204,21,0.9)] scale-[1.02]'
                         : 'border-[#261608] shadow-[2px_2px_0px_#261608] hover:bg-[#fffbeb]'
                     }`}
                   >
                     {isSelected && (
-                      <div className="absolute -top-2.5 -right-2 bg-[#facc15] text-[#261608] border border-[#261608] px-1 py-0.2 font-pixel text-[9px] font-black shadow-[1px_1px_0px_#261608] flex items-center gap-0.5 z-20 animate-pulse">
+                      <div className="game-shelf-selected absolute -top-2.5 -right-2 bg-[#facc15] text-[#261608] border border-[#261608] px-1 py-0.2 font-pixel text-[9px] font-black shadow-[1px_1px_0px_#261608] flex items-center gap-0.5 z-20 animate-pulse">
                         <span>선택됨</span><span>👈</span>
                       </div>
                     )}
-                    <div className="flex items-start gap-2">
+                    <div className="game-shelf-card-body flex items-start gap-2">
                       {renderPixelIcon(item.iconType)}
-                      <div className="min-w-0 flex-1">
-                        <h3 className="font-pixel text-xs font-black text-[#261608] leading-tight truncate">{item.name}</h3>
-                        <p className="font-pixel text-[9px] text-[#8b5327] mt-0.5 leading-tight line-clamp-2">{item.description}</p>
+                      <div className="game-shelf-card-copy min-w-0 flex-1">
+                        <h3 className="game-shelf-card-name font-pixel text-xs font-black text-[#261608] leading-tight truncate">{item.name}</h3>
+                        <p className="game-shelf-card-description font-pixel text-[9px] text-[#8b5327] mt-0.5 leading-tight line-clamp-2">{item.description}</p>
                       </div>
                     </div>
                     <div className="mt-2 pt-1.5 border-t border-[#eeddb6] flex items-center justify-between w-full">
@@ -510,7 +521,7 @@ export const ShopScreenPhone: React.FC<ShopScreenPhoneProps> = ({
             </div>
           </div>
 
-          <ImageChangeShop />
+          <ImageChangeShop onConfirmationChange={setImageConfirming} />
 
           {/* ========================================================= */}
           {/* CONFIRMATION DIALOG BOX FOR SELECTED CARD                 */}

@@ -1,8 +1,9 @@
 import React from 'react';
 import { ZoomIn } from 'lucide-react';
 import { MapArt } from './MapArt.tsx';
-import { MAP_AREA_HEIGHT, MapLayer, MapScrollBody, MapSearchHeader, SchoolListSheet, SchoolMarker, type MapControlsProps } from './MapParts.tsx';
-import { PhoneShell } from './PhoneShell';
+import { WorkspaceMapPins } from './WorkspaceMapPins';
+import { mapFramePercent } from '../utils/workspaceMapPins';
+import { MAP_AREA_HEIGHT, MapLayer, MapFrame, MapSearchHeader, SchoolListSheet, SchoolMarker, formatWorkspaceSearchStatus, type MapControlsProps } from './MapParts.tsx';
 import { filterSchools } from '../data/schoolDirectory.ts';
 import { CHUNGCHEONG_PLACEMENTS } from '../data/schoolMapLayout.ts';
 
@@ -26,20 +27,31 @@ export const Screen2RegionMap: React.FC<MapControlsProps> = ({
   onQueryChange,
   onSelectSchool,
   onNavigateTab,
+  preview,
+  renderPanelList,
 }) => {
   const regionSchools = filterSchools(schools, '충청', '');
   const listed = filterSchools(schools, '충청', query);
+  const workspace = preview !== undefined;
+  const searchStatus = formatWorkspaceSearchStatus(workspace, query, listed.length);
+  const pins = workspace ? regionSchools.flatMap(school => {
+    const placement = CHUNGCHEONG_PLACEMENTS[school.id];
+    return placement ? [{ school, point: mapFramePercent(placement) }] : [];
+  }) : [];
 
   return (
-    <PhoneShell background="bg-[#38bdf8]">
-
-      <MapScrollBody>
+    <MapFrame preview={preview} searching={query.trim().length > 0} list={renderPanelList?.(listed) ?? <SchoolListSheet
+      title={`충청 대학 ${regionSchools.length}개`}
+      schools={listed} query={query} selectedSchoolId={selectedSchoolId}
+      onQueryChange={onQueryChange} onSelectSchool={onSelectSchool} onNavigateTab={onNavigateTab}
+    />} search={
       <MapSearchHeader
         region="충청"
         query={query}
         placeholder="충청 대학 검색 (예: KAIST, 충남대)"
         onRegionChange={onRegionChange}
         onQueryChange={onQueryChange}
+        searchStatus={searchStatus}
         badge={
           <div className="bg-[#facc15] border-2 border-[#261608] px-2 py-1 flex items-center gap-1 shadow-[1px_1px_0px_#261608] shrink-0">
             <ZoomIn className="w-3 h-3 text-[#261608]" />
@@ -47,7 +59,7 @@ export const Screen2RegionMap: React.FC<MapControlsProps> = ({
           </div>
         }
       />
-
+    }>
       <div className={`${MAP_AREA_HEIGHT} relative overflow-hidden isolate bg-[#38bdf8] select-none`} data-testid="map-area" data-region="충청">
         <MapLayer>
         <div
@@ -70,7 +82,7 @@ export const Screen2RegionMap: React.FC<MapControlsProps> = ({
         </div>
 
         <div className="absolute inset-0 z-20 pointer-events-auto">
-          {regionSchools.map((school) => {
+          {!workspace && regionSchools.map((school) => {
             const placement = CHUNGCHEONG_PLACEMENTS[school.id];
             if (!placement) return null;
             return (
@@ -87,19 +99,9 @@ export const Screen2RegionMap: React.FC<MapControlsProps> = ({
           })}
         </div>
         </MapLayer>
+        {workspace && <WorkspaceMapPins pins={pins} hint="학교를 눌러 선택하세요" selectedId={selectedSchoolId} onSelect={onSelectSchool} />}
       </div>
 
-      </MapScrollBody>
-
-      <SchoolListSheet
-        title={`충청 대학 ${regionSchools.length}개`}
-        schools={listed}
-        query={query}
-        selectedSchoolId={selectedSchoolId}
-        onQueryChange={onQueryChange}
-        onSelectSchool={onSelectSchool}
-        onNavigateTab={onNavigateTab}
-      />
-    </PhoneShell>
+    </MapFrame>
   );
 };

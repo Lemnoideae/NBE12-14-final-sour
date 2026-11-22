@@ -1,5 +1,5 @@
 import type { SchoolId } from '../data/schoolIds.ts';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { ChevronDown, Heart, Send, Sparkles, Pin, AlertCircle } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { SharedImage } from './SharedImage.tsx';
@@ -107,14 +107,15 @@ export const GuestbookBottomSheet: React.FC<GuestbookBottomSheetProps> = ({
             <span style={{ backgroundColor: schoolBadgeColor }} className="w-5 h-5 border-2 border-[#261608] text-white font-pixel font-black text-[10px] flex items-center justify-center shadow-[1px_1px_0px_#261608]">
               {schoolInitial}
             </span>
-            <span className="font-pixel text-xs sm:text-sm font-black text-[#261608]">
+            <h2 className="font-pixel text-xs sm:text-sm font-black text-[#261608]">
               {schoolName} 방명록
-            </span>
+            </h2>
           </div>
 
           {/* Sort Tabs: "인기순" (active) / "최신순" */}
           <div className="flex items-center gap-1 bg-[#ecd9b2] p-0.5 border border-[#261608]">
             <button
+              type="button"
               onClick={() => {
                 setSortTab('popular');
                 soundManager.playTabSound();
@@ -126,6 +127,7 @@ export const GuestbookBottomSheet: React.FC<GuestbookBottomSheetProps> = ({
               인기순
             </button>
             <button
+              type="button"
               onClick={() => {
                 setSortTab('latest');
                 soundManager.playTabSound();
@@ -140,13 +142,14 @@ export const GuestbookBottomSheet: React.FC<GuestbookBottomSheetProps> = ({
         </div>
 
         {/* Right: Close "▼" button */}
-        <button
+        {onClose && <button
+          type="button"
           onClick={onClose}
           title="방명록 닫기"
           className="pixel-plaque plaque-parchment p-1 border-2 border-[#261608] flex items-center justify-center cursor-pointer hover:bg-stone-100 active:scale-95 ml-auto shrink-0"
         >
           <ChevronDown className="w-4 h-4 text-[#261608]" />
-        </button>
+        </button>}
       </div>
 
       {/* 2. Scrollable List of Paper-Note Style Entries */}
@@ -193,6 +196,7 @@ export const GuestbookBottomSheet: React.FC<GuestbookBottomSheetProps> = ({
             {/* Footer with Like Button */}
             <div className="flex items-center justify-end gap-1 pt-0.5 border-t border-stone-200">
               <button
+                type="button"
                 onClick={() => toggleLike(item.id)}
                 className={`flex items-center gap-1 px-1.5 py-0.5 border border-[#261608] text-[9px] font-pixel font-bold cursor-pointer transition-transform active:scale-95 ${
                   item.likedByMe

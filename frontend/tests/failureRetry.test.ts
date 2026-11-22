@@ -28,6 +28,7 @@ for (const [key, value] of Object.entries({
 dom.window.HTMLElement.prototype.scrollIntoView = function () {};
 
 const { render, screen, fireEvent, act, cleanup, within } = await import('@testing-library/react');
+const { clickTestView, openTestTools, withToolSetting } = await import('./helpers/mockTools');
 const { MockGameProvider, useMockGame } = await import('../src/hooks/useMockGame');
 const { default: App } = await import('../src/App');
 const { MOCK_CLICK_RULES } = await import('../src/utils/clickGuard');
@@ -50,8 +51,9 @@ function mountApp() {
 }
 const click = (name: string | RegExp) => fireEvent.click(screen.getByRole('button', { name }));
 const campus = () => screen.getByRole('button', { name: '캠퍼스 클릭 영역' });
-const setRequestMode = (mode: string) => fireEvent.change(screen.getByLabelText('[시연] 요청 상태'), { target: { value: mode } });
-const requestMode = () => (screen.getByLabelText('[시연] 요청 상태') as HTMLSelectElement).value;
+const setRequestMode = (mode: string) => withToolSetting('[시연] 요청 상태', (control) => fireEvent.change(control, { target: { value: mode } }));
+const requestMode = () => withToolSetting('[시연] 요청 상태', (control) => (control as HTMLSelectElement).value);
+const toggleRefusal = () => withToolSetting('[시연] 서버 클릭 거절 응답', fireEvent.click);
 const COFFEE = STORE_ITEMS.find((item) => item.id === 'coffee')!;
 
 function useClock(t: TestContext) {
@@ -66,18 +68,18 @@ test('기준 3: 시연 거절 응답이 켜지면 점수·버프가 그대로이
   t.mock.method(Math, 'random', () => 0.9);
   const tick = useClock(t);
   mountApp();
-  click('🎮 메인 게임 화면');
+  clickTestView('🎮 메인 게임 화면');
   act(() => { latest.buy('coffee'); });
   const before = latest.state;
 
-  fireEvent.click(screen.getByLabelText('[시연] 서버 클릭 거절 응답'));
+  toggleRefusal();
   tick(100);
   fireEvent.click(campus());
   assert.deepEqual(latest.state, before, '개인·학교·학과 점수와 버프 그대로');
   assert.match(screen.getByTestId('click-rejected-notice').textContent ?? '', /\[시연\] 서버가 클릭을 거절했습니다/);
   assert.ok(screen.getByText('거절'), '눌린 자리에 거절 표시');
 
-  fireEvent.click(screen.getByLabelText('[시연] 서버 클릭 거절 응답'));
+  toggleRefusal();
   assertAbsent(screen.queryByTestId('click-rejected-notice'));
   tick(100);
   fireEvent.click(campus());
@@ -89,7 +91,7 @@ test('기준 3: 간격이 너무 짧은 클릭은 반영하지 않고, 차단 �
   t.mock.method(Math, 'random', () => 0.9);
   const tick = useClock(t);
   mountApp();
-  click('🎮 메인 게임 화면');
+  clickTestView('🎮 메인 게임 화면');
   fireEvent.click(campus());
   const afterFirst = latest.state;
   fireEvent.click(campus());
@@ -111,7 +113,7 @@ test('키보드: 눌렀다 뗄 때 한 번만 반영하고, 누르고 있는 동
   t.mock.method(Math, 'random', () => 0.9);
   const tick = useClock(t);
   mountApp();
-  click('🎮 메인 게임 화면');
+  clickTestView('🎮 메인 게임 화면');
   const start = latest.state.contribution;
   const area = campus();
 
@@ -145,7 +147,7 @@ test('기준 2: 지연 중 구매를 두 번 눌러도 기여도는 한 번만 �
   const tick = useClock(t);
   mountApp();
   setRequestMode('delay');
-  click('🏪 상점 & 강화 (Single Phone)');
+  clickTestView('🏪 상점 & 강화 (Single Phone)');
   const before = latest.state.contribution;
   click('커피 한 잔 구매 선택');
   act(() => {
@@ -166,7 +168,7 @@ test('기준 1·2: 구매가 1회 실패하면 기여도는 그대로이고, 다
   const tick = useClock(t);
   mountApp();
   setRequestMode('fail-once');
-  click('🏪 상점 & 강화 (Single Phone)');
+  clickTestView('🏪 상점 & 강화 (Single Phone)');
   const before = latest.state.contribution;
   click('커피 한 잔 구매 선택');
   click('구매 및 사용');
@@ -184,7 +186,7 @@ test('기준 1·2: 구매가 1회 실패하면 기여도는 그대로이고, 다
 test('기준 1·2: 코드 확인 요청이 실패하면 시도 횟수를 쓰지 않고 입력이 남으며, 다시 시도하면 진행된다', (t) => {
   const tick = useClock(t);
   mountApp();
-  click('📱 순차 온보딩 (Single Phone)');
+  clickTestView('📱 순차 온보딩 (Single Phone)');
   const phone = () => within(screen.getByRole('region', { name: '순차 온보딩' }));
   fireEvent.change(phone().getByLabelText('학교 이메일 주소'), { target: { value: 'student@kaist.ac.kr' } });
   click('인증 코드 받기');
@@ -208,7 +210,7 @@ test('기준 1: 순위·지도·방문 조회 실패를 고정 조작으로 재�
   mountApp();
 
   setRequestMode('fail');
-  click('🏆 랭킹 화면 (Single Phone)');
+  clickTestView('🏆 랭킹 화면 (Single Phone)');
   assert.match(screen.getByRole('status').textContent ?? '', /순위 불러오는 중/);
   tick(MOCK_REQUEST_RULES.failDelayMs);
   assert.match(screen.getByRole('alert').textContent ?? '', /순위 조회에 실패했습니다/);
@@ -220,7 +222,7 @@ test('기준 1: 순위·지도·방문 조회 실패를 고정 조작으로 재�
   assert.ok(screen.getByRole('heading', { name: '전국 랭킹 대항전' }), '정상 화면');
 
   setRequestMode('fail-once');
-  click('🗺️ 단일 폰 지도');
+  clickTestView('🗺️ 단일 폰 지도');
   tick(MOCK_REQUEST_RULES.failDelayMs);
   assert.match(screen.getByRole('alert').textContent ?? '', /학교 지도 조회에 실패했습니다/);
   click('다시 시도');
@@ -236,7 +238,7 @@ test('기준 1: 순위·지도·방문 조회 실패를 고정 조작으로 재�
   assert.ok(screen.getByRole('button', { name: `${pusan.name} 방문` }), '실패 화면에서 지도로 복귀');
 
   // The ranking tab inside the game screen fails in place and leads back to the campus.
-  click('🎮 메인 게임 화면');
+  clickTestView('🎮 메인 게임 화면');
   setRequestMode('fail');
   click('순위');
   tick(MOCK_REQUEST_RULES.failDelayMs);
@@ -246,9 +248,11 @@ test('기준 1: 순위·지도·방문 조회 실패를 고정 조작으로 재�
   assert.ok(campus(), '캠퍼스로 복귀');
 });
 
-test('기준 4: 메뉴가 서비스 흐름과 시안 비교·시연 도구로 나뉘고 성장 시연 진입에 [시연] 표시가 있다', () => {
+test('기준 4: 테스트 도구를 열면 서비스 흐름과 시안 비교가 나뉘고 닫으면 둘 다 사라진다', () => {
   mountApp();
-  const service = within(screen.getByRole('navigation', { name: '서비스 흐름' }));
+  assertAbsent(screen.queryByRole('navigation', { name: '서비스 흐름' }));
+  const sheet = openTestTools();
+  const service = within(sheet.getByRole('navigation', { name: '서비스 흐름' }));
   for (const name of ['🎮 메인 게임 화면', '📱 순차 온보딩 (Single Phone)', '🗺️ 단일 폰 지도', '🏆 랭킹 화면 (Single Phone)', '🏪 상점 & 강화 (Single Phone)']) {
     assert.ok(service.getByRole('button', { name }), name);
   }
@@ -263,6 +267,7 @@ test('기준 4: 메뉴가 서비스 흐름과 시안 비교·시연 도구로 �
   const tools = within(screen.getByRole('region', { name: '[시연] 도구' }));
   assert.ok(tools.getByLabelText('[시연] 요청 상태'));
   assert.ok(tools.getByLabelText('[시연] 서버 클릭 거절 응답'));
-  click('🎮 메인 게임 화면');
-  assert.ok(screen.getByRole('button', { name: '[시연] 성장 시트 보기' }));
+  clickTestView('🎮 메인 게임 화면');
+  assertAbsent(screen.queryByRole('navigation', { name: '[시연] 시안 비교·도구' }));
+  assert.ok(screen.getByRole('button', { name: '캠퍼스 클릭 영역' }));
 });

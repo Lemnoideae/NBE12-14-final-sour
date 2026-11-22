@@ -30,6 +30,7 @@ dom.window.HTMLElement.prototype.scrollIntoView = function () {};
 installDialogStub(dom.window);
 
 const { render, screen, fireEvent, act, cleanup } = await import('@testing-library/react');
+const { clickTestView, withToolSetting } = await import('./helpers/mockTools');
 const { MockGameProvider } = await import('../src/hooks/useMockGame');
 const { default: App } = await import('../src/App');
 const { MOCK_REQUEST_RULES } = await import('../src/utils/mockRequest');
@@ -57,7 +58,7 @@ function fakeTurnstile() {
 
 function mountApp(loader: TurnstileLoader) {
   render(React.createElement(MockGameProvider, { turnstileLoader: loader, children: React.createElement(App) }));
-  fireEvent.click(screen.getByRole('button', { name: '📮 비회원 문의' }));
+  clickTestView('📮 비회원 문의');
 }
 const field = (label: string) => screen.getByLabelText(label) as HTMLInputElement | HTMLTextAreaElement;
 const fill = (title = '결제 문의') => {
@@ -70,7 +71,7 @@ const botCheck = () => screen.queryByTestId('support-bot-check');
 const result = () => screen.queryByTestId('support-result')?.textContent ?? '';
 const sentCount = () => screen.getByTestId('support-sent-count').textContent ?? '';
 const settle = () => act(async () => {});
-const setRequestMode = (mode: string) => fireEvent.change(screen.getByLabelText('[시연] 요청 상태'), { target: { value: mode } });
+const setRequestMode = (mode: string) => withToolSetting('[시연] 요청 상태', (control) => fireEvent.change(control, { target: { value: mode } }));
 
 /** Sends one inquiry; from the third on, solves the widget that appears. */
 async function sendOne(turnstile: ReturnType<typeof fakeTurnstile>) {

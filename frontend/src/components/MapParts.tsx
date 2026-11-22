@@ -5,6 +5,7 @@ import React, { useLayoutEffect, useRef, useState } from 'react';
 import { Search, Crown, X, ChevronUp, ChevronDown } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { BottomNav, type NavTab } from './BottomNav';
+import { PhoneShell } from './PhoneShell';
 import { ImageFallback, SharedImage } from './SharedImage.tsx';
 import { SCHOOL_LOGO_ASSETS } from '../data/schoolLogos.ts';
 import { MAP_DESIGN_FRAME_PX, MAP_REGIONS, mapLayerFit, type MapRegion } from '../data/schoolMapLayout.ts';
@@ -67,6 +68,30 @@ export interface MapControlsProps {
   onQueryChange: (query: string) => void;
   onSelectSchool: (schoolId: SchoolId) => void;
   onNavigateTab?: (tab: NavTab) => void;
+  /** In the workspace, the preview and visit action sit above the scrollable map and list. */
+  preview?: React.ReactNode;
+  renderPanelList?: (schools: readonly SchoolView[]) => React.ReactNode;
+}
+
+/** Compact status shown beside the workspace search input while searching. */
+export function formatWorkspaceSearchStatus(workspace: boolean, query: string, count: number): string | undefined {
+  if (!workspace || query.trim().length === 0) return undefined;
+  return count > 0 ? `${count}개교` : '검색 결과 없음';
+}
+
+export function MapFrame({ preview, search, list, children }: {
+  preview?: React.ReactNode; search: React.ReactNode; list: React.ReactNode; searching?: boolean; children: React.ReactNode;
+}) {
+  const embedded = preview !== undefined;
+  return <PhoneShell embedded={embedded} background="bg-[#38bdf8]" className="game-map-frame justify-between">
+    {preview}
+    <MapScrollBody>
+      {search}
+      {children}
+      {embedded && list}
+    </MapScrollBody>
+    {!embedded && list}
+  </PhoneShell>;
 }
 
 export function MapSearchHeader({
@@ -74,6 +99,7 @@ export function MapSearchHeader({
   query,
   placeholder,
   badge,
+  searchStatus,
   onRegionChange,
   onQueryChange,
 }: {
@@ -81,6 +107,8 @@ export function MapSearchHeader({
   query: string;
   placeholder: string;
   badge: React.ReactNode;
+  /** Compact inline status shown beside the search input while searching on PC workspace. */
+  searchStatus?: string;
   onRegionChange: (region: MapRegion) => void;
   onQueryChange: (query: string) => void;
 }) {
@@ -109,10 +137,18 @@ export function MapSearchHeader({
             </button>
           )}
         </div>
-        {badge}
+        {searchStatus ? (
+          <span
+            role="status"
+            data-testid="map-search-status"
+            className="game-map-search-status bg-[#faecc7] border-2 border-[#261608] px-2 py-1 font-pixel text-[10px] font-bold text-[#261608] shadow-[1px_1px_0px_#261608] shrink-0 whitespace-nowrap"
+          >
+            {searchStatus}
+          </span>
+        ) : badge}
       </div>
 
-      <div className="flex items-center gap-2 overflow-x-auto px-1 py-2.5 -mt-2.5 scrollbar-none" role="group" aria-label="권역 선택">
+      <fieldset className="game-map-regions flex min-w-0 items-center gap-2 overflow-x-auto px-1 py-2.5 -mt-2.5 scrollbar-none" aria-label="권역 선택">
         {MAP_REGIONS.map((item) => {
           const isActive = item === region;
           return (
@@ -132,7 +168,7 @@ export function MapSearchHeader({
             </button>
           );
         })}
-      </div>
+      </fieldset>
     </div>
   );
 }

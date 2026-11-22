@@ -5,6 +5,7 @@ import { useGuestSupportSender, type GuestSupportSender } from '../hooks/useGues
 import { useTurnstileWidget } from '../hooks/useTurnstileWidget';
 import { TURNSTILE_ACTIONS } from '../utils/turnstile';
 import { soundManager } from '../utils/sound';
+import { MOCK_TOOLS } from '../utils/mockTools';
 import {
   normalizeSupportForm,
   SUPPORT_FORM_LIMITS,
@@ -160,7 +161,7 @@ export function SupportGuestView({ sender, onBack = () => {} }: { sender: GuestS
           <p data-testid="support-error" role="alert" className="rpg-box p-2.5 bg-[#fee2e2] border-2 border-[#991b1b] text-[11px] font-bold text-[#7f1d1d]">{notice.text}</p>
         )}
 
-        {demo && <div className="border-2 border-dashed border-[#8b5327] bg-[#fffbeb] p-2 flex flex-wrap items-center gap-2 text-[10px] text-[#8b5327]">
+        {MOCK_TOOLS && demo && <div className="border-2 border-dashed border-[#8b5327] bg-[#fffbeb] p-2 flex flex-wrap items-center gap-2 text-[10px] text-[#8b5327]">
           <span data-testid="support-sent-count" className="font-bold">[시연] 보낸 문의 수: {demo.sentCount}</span>
           <button type="button" onClick={resetDemo} className="pixel-plaque plaque-parchment px-2 py-0.5 text-[10px] font-bold cursor-pointer">[시연] 보낸 문의 수 초기화</button>
           <p className="w-full leading-tight">[시연] 서버는 IP마다 1시간 동안 셉니다. 3건째부터 확인, 6건째부터 거절합니다. 목업은 이 화면에서 보낸 수로 대신합니다.</p>
@@ -198,7 +199,7 @@ function SupportBotCheck({ onToken, failed, sending, onCancel }: {
         <button type="button" onClick={onCancel} disabled={sending}
           className="pixel-plaque plaque-parchment px-3 py-1 text-xs font-bold cursor-pointer disabled:opacity-60">확인 취소</button>
       </div>
-      <p className="text-[10px] text-[#8b5327]">[시연] 위젯 키를 설정하지 않으면 Cloudflare 테스트 키(항상 통과)를 씁니다.</p>
+      {MOCK_TOOLS && <p className="text-[10px] text-[#8b5327]">[시연] 위젯 키를 설정하지 않으면 Cloudflare 테스트 키(항상 통과)를 씁니다.</p>}
     </section>
   );
 }
