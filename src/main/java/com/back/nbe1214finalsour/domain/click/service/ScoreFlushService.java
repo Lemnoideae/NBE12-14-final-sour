@@ -111,7 +111,6 @@ public class ScoreFlushService {
                     and m.status = 'IN_PROGRESS'
                     and (m.a_score, m.b_score) is distinct from (x.a, x.b)
                 """, ids.toArray(Long[]::new), aScores.toArray(Long[]::new), bScores.toArray(Long[]::new));
-
     }
 
     private void flushAlliance(String dirtyKey) {
@@ -120,15 +119,38 @@ public class ScoreFlushService {
         List<Long> ids = new ArrayList<>();
         List<Long> scores = new ArrayList<>();
 
+        List<Long> memberAllianceIds = new ArrayList<>();
+        List<Long> memberUnivIds = new ArrayList<>();
+        List<Long> memberScores = new ArrayList<>();
+
         for (Long allianceId : dirtyAlliances) {
             Map<Object, Object> byUniv = stringRedisTemplate.opsForHash().entries(RedisKey.ALLIANCE_SCORE.of(allianceId));
             if (byUniv.isEmpty()) continue;
+            byUniv.forEach((univId, score) -> {
+                memberAllianceIds.add(allianceId);
+                memberUnivIds.add(Long.parseLong((String) univId));
+                memberScores.add(Long.parseLong((String) score));
+            });
             ids.add(allianceId);
             scores.add(byUniv.values().stream().mapToLong(v -> Long.parseLong((String) v)).sum());
         }
 
         if (ids.isEmpty()) return;
 
+        // AllianceUniversity totalScore 값 저장
+        jdbcTemplate.update("""
+                update alliance_university au
+                set total_score = x.score
+                from unnest(?::bigint[], ?::bigint[], ?::bigint[]) as x(alliance_id, university_id, score)
+                where au.id = (select max(id) from alliance_university sau
+                            where sau.alliance_id = x.alliance_id
+                                and sau.university_id = x.university_id
+                                and sau.status in ('ACCEPTED', 'LEFT')
+                                and sau.deleted_at is null)
+                    and au.total_score is distinct from x.score
+                """, memberAllianceIds.toArray(Long[]::new), memberUnivIds.toArray(Long[]::new), memberScores.toArray(Long[]::new));
+
+        // Alliance totalScore 저장
         jdbcTemplate.update("""
                 update alliance a
                 set total_score = x.score

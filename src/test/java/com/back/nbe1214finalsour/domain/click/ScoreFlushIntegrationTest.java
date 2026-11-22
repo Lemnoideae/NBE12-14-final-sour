@@ -402,6 +402,106 @@ class ScoreFlushIntegrationTest {
         assertThat(stringRedisTemplate.hasKey(RedisKey.DIRTY_ALLIANCE.of() + ":flushing")).isFalse();
     }
 
+    // 학교별 점수는 alliance_university(신청·가입·탈퇴 이력)의 ACCEPTED·LEFT 중 가장 최근 행에 쓴다
+
+    @Test
+    @DisplayName("dirty 연합의 학교별 Redis 점수를 각 학교의 소속 행(alliance_university)에 쓴다")
+    void flushesAllianceScorePerUniversity() {
+        // given
+        University univ1 = universityRepository.saveAndFlush(new University("배치연합1대학교"));
+        University univ2 = universityRepository.saveAndFlush(new University("배치연합2대학교"));
+        long userId = saveUser(univ1, departmentRepository.saveAndFlush(new Department(univ1, "배치학과")),
+                "배치연합회원", "flush-alliance@test.ac.kr").getId();
+        long allianceId = givenAlliance(0);
+        long member1 = givenMember(allianceId, univ1.getId(), userId, "ACCEPTED");
+        long member2 = givenMember(allianceId, univ2.getId(), userId, "ACCEPTED");
+        givenAllianceScore(allianceId, String.valueOf(univ1.getId()), "30", String.valueOf(univ2.getId()), "12");
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_ALLIANCE.of(), String.valueOf(allianceId));
+
+        // when
+        scoreFlushService.flush();
+
+        // then
+        assertThat(memberScoreOf(member1)).isEqualTo(30L);
+        assertThat(memberScoreOf(member2)).isEqualTo(12L);
+        assertThat(allianceScoreOf(allianceId)).isEqualTo(42L);
+    }
+
+    @Test
+    @DisplayName("연합이 만료돼 소속 행이 LEFT가 된 뒤에 배치가 돌아도 그 행에 쓴다")
+    void flushesToLeftMemberAfterExpiry() {
+        // given: 만료 스케줄러가 먼저 돌아 ACCEPTED → LEFT
+        University univ = universityRepository.saveAndFlush(new University("배치연합1대학교"));
+        long userId = saveUser(univ, departmentRepository.saveAndFlush(new Department(univ, "배치학과")),
+                "배치연합회원", "flush-alliance@test.ac.kr").getId();
+        long allianceId = givenAlliance(0);
+        long member = givenMember(allianceId, univ.getId(), userId, "LEFT");
+        givenAllianceScore(allianceId, String.valueOf(univ.getId()), "8");
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_ALLIANCE.of(), String.valueOf(allianceId));
+
+        // when
+        scoreFlushService.flush();
+
+        // then
+        assertThat(memberScoreOf(member)).isEqualTo(8L);
+    }
+
+    @Test
+    @DisplayName("같은 학교의 이력 행이 여럿이면 가장 최근 ACCEPTED·LEFT 행에만 쓰고, 거절·대기 행은 건드리지 않는다")
+    void flushesOnlyToLatestMembershipRow() {
+        // given: 거절 → 가입 후 탈퇴 → 재가입
+        University univ = universityRepository.saveAndFlush(new University("배치연합1대학교"));
+        long userId = saveUser(univ, departmentRepository.saveAndFlush(new Department(univ, "배치학과")),
+                "배치연합회원", "flush-alliance@test.ac.kr").getId();
+        long allianceId = givenAlliance(0);
+        long rejected = givenMember(allianceId, univ.getId(), userId, "REJECTED");
+        long oldLeft = givenMember(allianceId, univ.getId(), userId, "LEFT");
+        long current = givenMember(allianceId, univ.getId(), userId, "ACCEPTED");
+        givenAllianceScore(allianceId, String.valueOf(univ.getId()), "15");
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_ALLIANCE.of(), String.valueOf(allianceId));
+
+        // when
+        scoreFlushService.flush();
+
+        // then
+        assertThat(memberScoreOf(current)).isEqualTo(15L);
+        assertThat(memberScoreOf(oldLeft)).isZero();
+        assertThat(memberScoreOf(rejected)).isZero();
+    }
+
+    @Test
+    @DisplayName("탈퇴한 뒤 같은 연합에 다시 신청 중(PENDING)이면, 가장 최근 행인 신청 행이 아니라 LEFT 행에 쓴다")
+    void skipsNewerPendingRow() {
+        // given
+        University univ = universityRepository.saveAndFlush(new University("배치연합1대학교"));
+        long userId = saveUser(univ, departmentRepository.saveAndFlush(new Department(univ, "배치학과")),
+                "배치연합회원", "flush-alliance@test.ac.kr").getId();
+        long allianceId = givenAlliance(0);
+        long left = givenMember(allianceId, univ.getId(), userId, "LEFT");
+        long pending = jdbcTemplate.queryForObject("""
+                INSERT INTO alliance_university (alliance_id, university_id, applicant_user_id, status)
+                VALUES (?, ?, ?, 'PENDING') RETURNING id""", Long.class, allianceId, univ.getId(), userId);
+        givenAllianceScore(allianceId, String.valueOf(univ.getId()), "6");
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_ALLIANCE.of(), String.valueOf(allianceId));
+
+        // when
+        scoreFlushService.flush();
+
+        // then
+        assertThat(memberScoreOf(left)).isEqualTo(6L);
+        assertThat(memberScoreOf(pending)).isZero();
+    }
+
+    private long givenMember(long allianceId, long universityId, long userId, String status) {
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO alliance_university (alliance_id, university_id, applicant_user_id, approver_user_id, status)
+                VALUES (?, ?, ?, ?, ?) RETURNING id""", Long.class, allianceId, universityId, userId, userId, status);
+    }
+
+    private Long memberScoreOf(long memberId) {
+        return jdbcTemplate.queryForObject("SELECT total_score FROM alliance_university WHERE id = ?", Long.class, memberId);
+    }
+
     // --- 대결 점수 ---
     // match:{m}:score HASH(field = A, B)를 alliance_match.a_score·b_score에 쓴다.
     // 끝난 대결의 점수는 정산이 확정하므로 IN_PROGRESS일 때만 쓴다.
