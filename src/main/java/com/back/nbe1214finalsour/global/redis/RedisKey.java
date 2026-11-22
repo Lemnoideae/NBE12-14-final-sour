@@ -76,6 +76,7 @@ public enum RedisKey {
     DIRTY_DEPT("dirty:dept", Structure.SET, ValueFormat.PLAIN),
     DIRTY_USER("dirty:user", Structure.SET, ValueFormat.PLAIN),
     DIRTY_CLICKER("dirty:clicker", Structure.SET, ValueFormat.PLAIN),
+    DIRTY_ALLIANCE("dirty:alliance", Structure.SET, ValueFormat.PLAIN),
 
     // 클릭 (Click)
     /** 클릭 직전 1초 클릭 수. of(universityId, epochSec), INCR */

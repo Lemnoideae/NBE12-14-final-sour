@@ -587,7 +587,7 @@ class ClickServiceTest {
                 argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture());
 
         List<String> keys = keysCaptor.getValue();
-        assertThat(keys).hasSize(10);
+        assertThat(keys).hasSize(11);
         assertThat(keys.subList(0, 6)).containsExactly(
                 "rank:univ",            // KEYS[1]
                 "rank:univ:12:dept",    // KEYS[2]

@@ -114,6 +114,9 @@ class AssistIntegrationTest {
                 RedisKey.UNIV_MATCH.of(universityId), RedisKey.UNIV_MATCH.of(allyId),
                 RedisKey.ALLIANCE_SCORE.of(allianceId)));
         redis.delete(matchIds.stream().map(RedisKey.MATCH_SCORE::of).toList());
+        // dirty:alliance는 공유 키라 이 테스트가 넣은 연합만 뺀다. 남기면 배치 테스트에서 이 연합을 반영하려 한다
+        redis.opsForSet().remove(RedisKey.DIRTY_ALLIANCE.of(), String.valueOf(allianceId));
+        redis.opsForSet().remove(RedisKey.DIRTY_ALLIANCE.of() + ":flushing", String.valueOf(allianceId));
 
         jdbcTemplate.update("DELETE FROM alliance_match WHERE alliance_a_id IN (SELECT id FROM alliance WHERE name LIKE '지원테스트%')"
                 + " OR alliance_b_id IN (SELECT id FROM alliance WHERE name LIKE '지원테스트%')");
@@ -257,6 +260,7 @@ class AssistIntegrationTest {
         assertThat(redis.opsForValue().get(RedisKey.UNIV_ALLIANCE.of(allyId))).isEqualTo(String.valueOf(allianceId));
         assertThat(redis.opsForValue().get(RedisKey.UNIV_MATCH.of(allyId))).isEqualTo("none");
         assertThat(redis.hasKey(RedisKey.UNIV_ALLIANCE.of(universityId))).isFalse();
+        assertThat(redis.opsForSet().isMember(RedisKey.DIRTY_ALLIANCE.of(), String.valueOf(allianceId))).isTrue();
     }
 
     @Test

@@ -4,6 +4,7 @@
 -- KEYS[3] dirty:univ   KEYS[4] dirty:user
 -- KEYS[5] alliance:{allianceId}:score    연합 점수
 -- KEYS[6] match:{matchId}:score       대결 점수
+-- KEYS[7] dirty:alliance
 -- ARGV[1] targetUniversityId  ARGV[2] assistScore (정수)  ARGV[3] userId  ARGV[4] contribScore (정수)
 -- ARGV[5] allianceId
 -- ARGV[6] team(A|B)
@@ -20,6 +21,7 @@ redis.call('SADD', KEYS[4], ARGV[3])
 
 if ARGV[5] ~= '0' then
     redis.call('HINCRBY', KEYS[5], ARGV[1], assist)
+    redis.call('SADD', KEYS[7], ARGV[5])
 end
 
 if ARGV[6] ~= '' then

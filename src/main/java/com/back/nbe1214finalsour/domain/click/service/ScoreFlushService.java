@@ -32,6 +32,7 @@ public class ScoreFlushService {
         String newUnivDirtyKey = RedisKey.DIRTY_UNIV.of() + ":flushing";
         String newDeptDirtyKey = RedisKey.DIRTY_DEPT.of() + ":flushing";
         String newClickerDirtyKey = RedisKey.DIRTY_CLICKER.of() + ":flushing";
+        String newAllianceDirtyKey = RedisKey.DIRTY_ALLIANCE.of() + ":flushing";
 
         // 개인 점수 저장
         if (detach(RedisKey.DIRTY_USER.of(), newUserDirtyKey)) {
@@ -53,8 +54,13 @@ public class ScoreFlushService {
             flushClickerLevels(newClickerDirtyKey);
         }
 
+        // 연합 점수 저장
+        if (detach(RedisKey.DIRTY_ALLIANCE.of(), newAllianceDirtyKey)) {
+            flushAlliance(newAllianceDirtyKey);
+        }
+
         // 기존 dirty 제거
-        stringRedisTemplate.delete(List.of(newUserDirtyKey, newUnivDirtyKey, newDeptDirtyKey, newClickerDirtyKey));
+        stringRedisTemplate.delete(List.of(newUserDirtyKey, newUnivDirtyKey, newDeptDirtyKey, newClickerDirtyKey, newAllianceDirtyKey));
     }
 
     private boolean detach(String dirtyKey, String flushingKey) {
@@ -69,6 +75,30 @@ public class ScoreFlushService {
             stringRedisTemplate.delete(incomingKey);
         }
         return hasNew || hasLeftover;
+    }
+
+    private void flushAlliance(String dirtyKey) {
+        List<Long> dirtyAlliances = stringRedisTemplate.opsForSet().members(dirtyKey).stream().map(Long::parseLong).toList();
+
+        List<Long> ids = new ArrayList<>();
+        List<Long> scores = new ArrayList<>();
+
+        for (Long allianceId : dirtyAlliances) {
+            Map<Object, Object> byUniv = stringRedisTemplate.opsForHash().entries(RedisKey.ALLIANCE_SCORE.of(allianceId));
+            if (byUniv.isEmpty()) continue;
+            ids.add(allianceId);
+            scores.add(byUniv.values().stream().mapToLong(v -> Long.parseLong((String) v)).sum());
+        }
+
+        if (ids.isEmpty()) return;
+
+        jdbcTemplate.update("""
+                update alliance a
+                set total_score = x.score
+                from unnest(?::bigint[], ?::bigint[]) as x(id, score)
+                where a.id = x.id
+                    and a.total_score is distinct from x.score
+                """, ids.toArray(Long[]::new), scores.toArray(Long[]::new));
     }
 
     private void flushDepts(String dirtyKey) {

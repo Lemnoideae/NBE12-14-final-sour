@@ -131,6 +131,12 @@ class ClickIntegrationTest {
 
         redis.delete(List.of(RedisKey.UNIV_ALLIANCE.of(universityId), RedisKey.UNIV_MATCH.of(universityId)));
         redis.delete(allianceIds.stream().map(RedisKey.ALLIANCE_SCORE::of).toList());
+        if (!allianceIds.isEmpty()) {
+            // dirty:alliance는 공유 키라 이 테스트가 넣은 연합만 뺀다. 남기면 배치 테스트에서 이 연합을 반영하려 한다
+            Object[] members = allianceIds.stream().map(String::valueOf).toArray();
+            redis.opsForSet().remove(RedisKey.DIRTY_ALLIANCE.of(), members);
+            redis.opsForSet().remove(RedisKey.DIRTY_ALLIANCE.of() + ":flushing", members);
+        }
         redis.delete(matchIds.stream().map(RedisKey.MATCH_SCORE::of).toList());
         // 연합 행은 회원(applicant/approver)을 참조하므로 회원보다 먼저 지운다
         jdbcTemplate.update("DELETE FROM alliance_match WHERE alliance_a_id IN (SELECT id FROM alliance WHERE name = '클릭테스트연합')");
@@ -475,6 +481,8 @@ class ClickIntegrationTest {
                 .isEqualTo(String.valueOf(myAlliance));
         assertThat(redis.getExpire(RedisKey.UNIV_ALLIANCE.of(universityId))).isPositive();
         assertThat(redis.opsForValue().get(RedisKey.UNIV_MATCH.of(universityId))).isEqualTo("none");
+        // 1분 배치가 DB 연합 점수에 반영하도록 표시한다
+        assertThat(redis.opsForSet().isMember(RedisKey.DIRTY_ALLIANCE.of(), String.valueOf(myAlliance))).isTrue();
     }
 
     @Test

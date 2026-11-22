@@ -58,10 +58,11 @@ class ScoreFlushIntegrationTest {
 
     private final List<String> usedKeys = new ArrayList<>(List.of(
             RedisKey.DIRTY_USER.of(), RedisKey.DIRTY_UNIV.of(), RedisKey.DIRTY_DEPT.of(),
-            RedisKey.DIRTY_CLICKER.of(),
+            RedisKey.DIRTY_CLICKER.of(), RedisKey.DIRTY_ALLIANCE.of(),
             // 테스트가 중간에 실패하면 배치가 떼어 낸 키가 남는다
             RedisKey.DIRTY_USER.of() + ":flushing", RedisKey.DIRTY_UNIV.of() + ":flushing",
-            RedisKey.DIRTY_DEPT.of() + ":flushing", RedisKey.DIRTY_CLICKER.of() + ":flushing"));
+            RedisKey.DIRTY_DEPT.of() + ":flushing", RedisKey.DIRTY_CLICKER.of() + ":flushing",
+            RedisKey.DIRTY_ALLIANCE.of() + ":flushing"));
     /** {@code rank:univ}는 키가 하나뿐이라 통째로 지우지 않고 테스트가 넣은 학교만 뺀다. */
     private final List<String> addedUnivRankMembers = new ArrayList<>();
 
@@ -348,6 +349,78 @@ class ScoreFlushIntegrationTest {
     }
 
     /** DB 레벨 2·3이 FK(users.clicker_id → clicker.id)를 통과하도록 한다. 시드에 있으면 건너뛰고, 트랜잭션 롤백으로 사라진다. */
+    // --- 연합 점수 ---
+    // alliance:{a}:score HASH(field = 학교 ID)의 합을 alliance.total_score에 쓴다
+
+    @Test
+    @DisplayName("dirty 연합의 학교별 Redis 점수를 합쳐 DB 연합 점수를 덮어쓴다")
+    void flushesDirtyAllianceTotalScore() {
+        // given
+        long allianceId = givenAlliance(0);
+        givenAllianceScore(allianceId, "101", "30", "102", "12");
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_ALLIANCE.of(), String.valueOf(allianceId));
+
+        // when
+        scoreFlushService.flush();
+
+        // then
+        assertThat(allianceScoreOf(allianceId)).isEqualTo(42L);
+    }
+
+    @Test
+    @DisplayName("Redis 연합 점수가 없는 dirty 연합은 0으로 덮지 않고 건너뛰고, 나머지 연합은 반영한다")
+    void skipsAllianceWithoutRedisScore() {
+        // given: Redis가 유실된 연합(DB 100점)과 정상 연합
+        long lostAllianceId = givenAlliance(100);
+        long allianceId = givenAlliance(0);
+        usedKeys.add(RedisKey.ALLIANCE_SCORE.of(lostAllianceId));
+        givenAllianceScore(allianceId, "101", "7");
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_ALLIANCE.of(),
+                String.valueOf(lostAllianceId), String.valueOf(allianceId));
+
+        // when
+        scoreFlushService.flush();
+
+        // then
+        assertThat(allianceScoreOf(lostAllianceId)).isEqualTo(100L);
+        assertThat(allianceScoreOf(allianceId)).isEqualTo(7L);
+    }
+
+    @Test
+    @DisplayName("연합 점수를 반영한 뒤에는 dirty:alliance와 떼어 낸 dirty:alliance:flushing을 지운다")
+    void clearsDirtyAllianceAfterFlush() {
+        // given
+        long allianceId = givenAlliance(0);
+        givenAllianceScore(allianceId, "101", "5");
+        stringRedisTemplate.opsForSet().add(RedisKey.DIRTY_ALLIANCE.of(), String.valueOf(allianceId));
+
+        // when
+        scoreFlushService.flush();
+
+        // then
+        assertThat(stringRedisTemplate.hasKey(RedisKey.DIRTY_ALLIANCE.of())).isFalse();
+        assertThat(stringRedisTemplate.hasKey(RedisKey.DIRTY_ALLIANCE.of() + ":flushing")).isFalse();
+    }
+
+    private long givenAlliance(long totalScore) {
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO alliance (name, duration_hours, expired_at, total_score)
+                VALUES ('배치테스트연합', 24, now() + INTERVAL '24 hours', ?) RETURNING id""", Long.class, totalScore);
+    }
+
+    /** 학교 ID와 점수를 번갈아 받는다 */
+    private void givenAllianceScore(long allianceId, String... univAndScore) {
+        String key = RedisKey.ALLIANCE_SCORE.of(allianceId);
+        usedKeys.add(key);
+        for (int i = 0; i < univAndScore.length; i += 2) {
+            stringRedisTemplate.opsForHash().put(key, univAndScore[i], univAndScore[i + 1]);
+        }
+    }
+
+    private Long allianceScoreOf(long allianceId) {
+        return jdbcTemplate.queryForObject("SELECT total_score FROM alliance WHERE id = ?", Long.class, allianceId);
+    }
+
     private void ensureClickerLevels() {
         jdbcTemplate.update("""
                 INSERT INTO clicker (id, click_power, required_score)

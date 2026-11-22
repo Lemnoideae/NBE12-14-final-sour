@@ -6,6 +6,7 @@
 -- KEYS[8] clicks:univ:{u}:{nowSec-1}    직전 1초 학교 클릭 수
 -- KEYS[9] alliance:{a}:score            연합 점수 HASH universityId
 -- KEYS[10] match:{m}:score               대결 점수 HASH A, B
+-- KEYS[11] dirty:alliance
 -- ARGV[1] universityId  ARGV[2] departmentId  ARGV[3] userId
 -- ARGV[4] earnedScore (정수)  ARGV[5] clickCount
 -- ARGV[6] allianceId    ARGV[7] team(A|B)
@@ -18,6 +19,7 @@ local myContrib = redis.call('ZINCRBY', KEYS[3], earned, ARGV[3])
 
 if ARGV[6] ~= '0' then
     redis.call('HINCRBY', KEYS[9], ARGV[1], earned)
+    redis.call('SADD', KEYS[11], ARGV[6])
 end
 
 if ARGV[7] ~= '' then

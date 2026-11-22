@@ -116,7 +116,8 @@ class AssistServiceTest {
         verify(stringRedisTemplate).execute(any(), keys.capture(), args.capture(), args.capture(), args.capture(), args.capture(), args.capture(), args.capture());
         assertThat(keys.getValue()).containsExactly(RedisKey.RANK_UNIV.of(), RedisKey.RANK_USER.of(UNIVERSITY_ID),
                 RedisKey.DIRTY_UNIV.of(), RedisKey.DIRTY_USER.of(),
-                RedisKey.ALLIANCE_SCORE.of(0), RedisKey.MATCH_SCORE.of(0));
+                RedisKey.ALLIANCE_SCORE.of(0), RedisKey.MATCH_SCORE.of(0),
+                RedisKey.DIRTY_ALLIANCE.of());
         // floor(21 * 0.3) = 6, floor(21 * 1.5) = 31
         assertThat(args.getAllValues()).containsExactly("15", "6", "1", "31", "0", "");
         assertThat(response).isEqualTo(new AssistResponse(7L, 6L,
