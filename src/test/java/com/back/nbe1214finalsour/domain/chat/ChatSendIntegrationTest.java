@@ -1,12 +1,5 @@
 package com.back.nbe1214finalsour.domain.chat;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-
 import com.back.nbe1214finalsour.IntegrationTest;
 import com.back.nbe1214finalsour.domain.chat.dto.ChatMessageResponse;
 import com.back.nbe1214finalsour.domain.chat.entity.ChatMessage;
@@ -23,11 +16,6 @@ import com.back.nbe1214finalsour.global.redis.RedisKey;
 import com.back.nbe1214finalsour.global.security.AuthUser;
 import com.back.nbe1214finalsour.global.security.Role;
 import com.back.nbe1214finalsour.global.security.jwt.JwtProvider;
-import java.time.Duration;
-import java.time.OffsetDateTime;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,10 +28,20 @@ import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+
+import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.*;
 
 /**
  * 대학 채팅 보내기 (SCRUM-130). 실제 서버에 STOMP로 연결해 보내고, 방 구독과 에러 큐로 결과를 받는다.
@@ -78,9 +76,9 @@ class ChatSendIntegrationTest {
     @Autowired
     private EmailHasher emailHasher;
 
-    @MockitoSpyBean
+    @Autowired
     private ChatMessageRepository chatMessageRepository;
-    @MockitoSpyBean
+    @Autowired
     private ChatMessagePublisher chatMessagePublisher;
 
     private long universityId;
