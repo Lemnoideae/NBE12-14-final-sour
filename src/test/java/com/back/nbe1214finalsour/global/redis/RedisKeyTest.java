@@ -135,6 +135,7 @@ class RedisKeyTest {
                 "USER_EFFECT_VOIDED|user:%s:effect:voided|HASH|JSON",
                 // 순위 (ZSet)
                 "RANK_UNIV|rank:univ|ZSET|PLAIN",
+                "RANK_UNIV_HIDDEN|rank:hidden:univ|ZSET|PLAIN",
                 "RANK_DEPT|rank:univ:%s:dept|ZSET|PLAIN",
                 "RANK_USER|rank:univ:%s:user|ZSET|PLAIN",
                 "SCORE_USER_ATTACK|score:user:attack|HASH|PLAIN",

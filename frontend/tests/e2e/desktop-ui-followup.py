@@ -1,6 +1,6 @@
 """Capture PC 3-column follow-up UI measurements (SCRUM-222 / SCRUM-223).
 
-Run against a local Vite dev server with VITE_API_MODE=mock.
+Run against a local Vite dev server with VITE_API_MODE=mock (`npm run dev:mock`).
 Requires Python Playwright and Chromium; not part of npm test.
 """
 

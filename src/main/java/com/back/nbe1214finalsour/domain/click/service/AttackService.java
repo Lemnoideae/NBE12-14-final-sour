@@ -55,8 +55,9 @@ public class AttackService {
                 : base * 3 / 10;
 
         // Redis에 반영
+        // 숨김 학교도 일반 학교처럼 공격받지만, 점수는 공개 학교 순위에 넣지 않는다 (SCRUM-238)
         List<String> keys = List.of(
-                RedisKey.RANK_UNIV.of(),
+                RedisKey.univRank(universityCache.isHidden(targetUniversityId)),
                 RedisKey.DIRTY_UNIV.of(),
                 RedisKey.SCORE_USER_ATTACK.of()
         );

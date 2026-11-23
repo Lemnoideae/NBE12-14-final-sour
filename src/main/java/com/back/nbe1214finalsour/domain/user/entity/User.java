@@ -106,6 +106,15 @@ public class User extends BaseTimeEntity {
      */
     public static User create(Long universityId, Long departmentId, String nickname, String email, String emailHash,
             String encodedPassword, OffsetDateTime approvedAt) {
+        return create(universityId, departmentId, nickname, email, emailHash, encodedPassword, approvedAt, Role.USER);
+    }
+
+    /**
+     * 권한을 정해 회원을 만든다. 가입 API를 거치지 않는 개발자 공용 계정(SCRUM-237)만 쓴다. 상태는 ACTIVE다.
+     * 나머지 인자는 {@link #create(Long, Long, String, String, String, String, OffsetDateTime)}와 같다.
+     */
+    public static User create(Long universityId, Long departmentId, String nickname, String email, String emailHash,
+            String encodedPassword, OffsetDateTime approvedAt, Role role) {
         User user = new User();
         user.universityId = universityId;
         user.departmentId = departmentId;
@@ -114,7 +123,7 @@ public class User extends BaseTimeEntity {
         user.emailHash = emailHash;
         user.password = encodedPassword;
         user.approvedAt = approvedAt;
-        user.role = Role.USER;
+        user.role = role;
         user.status = UserStatus.ACTIVE;
         return user;
     }

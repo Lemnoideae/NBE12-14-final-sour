@@ -201,11 +201,14 @@ public class ScoreFlushService {
         List<String> univIds = new ArrayList<>(dirtyUnivs);
         List<Double> values = stringRedisTemplate.opsForZSet()
                 .score(RedisKey.RANK_UNIV.of(), univIds.toArray());
+        // 숨김 학교 점수는 공개 학교 순위가 아닌 RANK_UNIV_HIDDEN에 있다 (SCRUM-238)
+        List<Double> hiddenValues = stringRedisTemplate.opsForZSet()
+                .score(RedisKey.RANK_UNIV_HIDDEN.of(), univIds.toArray());
 
         List<Long> ids = new ArrayList<>();
         List<Long> scores = new ArrayList<>();
         for (int i = 0; i < univIds.size(); i++) {
-            Double v = values.get(i);
+            Double v = values.get(i) != null ? values.get(i) : hiddenValues.get(i);
             if (v == null) continue;
             ids.add(Long.parseLong(univIds.get(i)));
             scores.add(v.longValue());

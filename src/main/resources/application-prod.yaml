@@ -32,6 +32,13 @@ file:
   logo-bucket: ${FILE_LOGO_BUCKET}
   # 로고 이미지 주소의 앞부분. CloudFront가 /custom-logo/* 를 로고 버킷으로 보내므로 기본은 공개 주소와 같다
   logo-public-base-url: ${FILE_LOGO_PUBLIC_BASE_URL:${file.public-base-url}}
+
+# 개발자 공용 계정 (SCRUM-237). 운영은 기본으로 꺼져 있고, 권한 기본값은 USER다.
+# 켜려면 배포 시크릿으로 DEV_ACCOUNT_ENABLED=true와 DEV_ACCOUNT_PASSWORD를 넣는다
+dev-account:
+  enabled: ${DEV_ACCOUNT_ENABLED:false}
+  role: ${DEV_ACCOUNT_ROLE:USER}
+
 # 운영에서는 API 문서를 열지 않는다 (SecurityConfig가 경로를 열어 두므로 여기서 끈다)
 springdoc:
   api-docs:
