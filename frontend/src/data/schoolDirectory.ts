@@ -14,7 +14,10 @@ import { getCampusStage } from '../utils/gameModel.ts';
  */
 export const DEMO_VISIT_SCHOOL_ID: SchoolId = SCHOOL_ID.pusan;
 
-export interface SchoolView extends Omit<UniversityItem, 'score'> {
+export interface SchoolView extends Omit<UniversityItem, 'score' | 'region' | 'filterRegion'> {
+  /** '기타' only for my school outside the static list (offListSchoolView, #144). Rows of getSchoolViews never have it. */
+  region: UniversityItem['region'] | '기타';
+  filterRegion: UniversityItem['filterRegion'] | '기타';
   score: number;
   /** National rank from the shared ranking rule (score desc, then name, then ID). */
   rank: number;
@@ -48,6 +51,20 @@ export function getSchoolViews(schoolScore = INITIAL_SCHOOL_SCORE, mySchoolId = 
   });
 }
 
+/**
+ * My school when it is outside the static list: the hidden operator school (와플대학교, #144) is kept out of the map,
+ * rankings and search on purpose, so it never joins getSchoolViews. Name and score come from the server and game
+ * state; it has no region and no national rank (0).
+ */
+export function offListSchoolView(schoolId: SchoolId, name: string, score: number): SchoolView {
+  return {
+    id: schoolId, name, shortName: name, firstSyllable: name.slice(0, 1), badgeColor: '#6b7280',
+    region: '기타', filterRegion: '기타', city: '비공개 학교',
+    score, rank: 0, rankChange: '-', campusLevel: getCampusStage(score).level,
+    isMySchool: true, isTop3: false, logoStatus: schoolLogoStatus(schoolId),
+  };
+}
+
 export function getSchoolById(views: readonly SchoolView[], schoolId: SchoolId): SchoolView | undefined {
   return views.find((school) => school.id === schoolId);
 }
@@ -58,7 +75,10 @@ export function getTopSchools(views: readonly SchoolView[], count = 3): SchoolVi
 
 export function countByRegion(views: readonly SchoolView[]): Map<SchoolRegion, number> {
   const counts = new Map<SchoolRegion, number>();
-  for (const school of views) counts.set(school.region, (counts.get(school.region) ?? 0) + 1);
+  for (const school of views) {
+    if (school.region === '기타') continue; // Not on the map (offListSchoolView).
+    counts.set(school.region, (counts.get(school.region) ?? 0) + 1);
+  }
   return counts;
 }
 
