@@ -52,6 +52,11 @@ public class UniversityRankingService {
         return redisHandler.getRankScore(key, universityId);
     }
 
+    /** 숨김 학교(운영팀용) 점수. 공개 학교 순위에 없으므로 순위는 없다 (SCRUM-238) */
+    public OptionalDouble getHiddenUniversityScore(Long universityId) {
+        return redisHandler.getRankScore(RedisKey.RANK_UNIV_HIDDEN.of(), universityId);
+    }
+
     public List<RedisHandler.RankEntry> getTopDepartments(Long universityId) {
         String key = RedisKey.RANK_DEPT.of(universityId);
 

@@ -65,7 +65,8 @@ public class AssistService {
 
         List<String> r = stringRedisTemplate.execute(
                 APPLY_ASSIST,
-                List.of(RedisKey.RANK_UNIV.of(), RedisKey.RANK_USER.of(universityId),
+                // 숨김 학교도 연합 학교로 지원받지만, 점수는 공개 학교 순위에 넣지 않는다 (SCRUM-238)
+                List.of(RedisKey.univRank(universityCache.isHidden(targetUniversityId)), RedisKey.RANK_USER.of(universityId),
                         RedisKey.DIRTY_UNIV.of(), RedisKey.DIRTY_USER.of(),
                         RedisKey.ALLIANCE_SCORE.of(allianceStanding.allianceId()), RedisKey.MATCH_SCORE.of(allianceStanding.matchId()),
                         RedisKey.DIRTY_ALLIANCE.of(), RedisKey.DIRTY_MATCH.of()),
