@@ -1,5 +1,6 @@
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.gradle.testing.jacoco.tasks.JacocoReport
+import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 
 plugins {
     java
@@ -124,14 +125,18 @@ tasks.check {
     dependsOn(integrationTest)
 }
 
+val testTasks = tasks.withType<Test>()
+
+val testCoverageData = files()
+
+testTasks.configureEach {
+    val jacocoExt = extensions.getByType<JacocoTaskExtension>()
+    testCoverageData.from(provider { jacocoExt.destinationFile })
+}
+
 tasks.register<JacocoReport>("codeCoverageReport") {
-    dependsOn(tasks.named("test"), integrationTest)
-
-    executionData(
-        tasks.named<Test>("test").get(),
-        integrationTest.get()
-    )
-
+    dependsOn(testTasks)
+    executionData(testCoverageData)
     sourceSets(sourceSets.main.get())
 
     reports {
