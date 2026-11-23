@@ -132,4 +132,21 @@ class CreditHistoryRepositoryTest {
                 "SELECT count(*) FROM credit_history WHERE idempotency_key = ?", Long.class, KEY))
                 .isEqualTo(2L);
     }
+
+    @Test
+    @DisplayName("멱등 키가 없는 사용 내역은 같은 회원이라도 여러 건 저장된다")
+    void allowsMultipleNullIdempotencyKeys() {
+        // given
+        Long secondUserItemId = insertLogoUserItem(userId);
+
+        // when
+        creditHistoryRepository.saveAndFlush(CreditHistory.use(userId, userItemId, 3900L, 1100L, null));
+        creditHistoryRepository.saveAndFlush(CreditHistory.use(userId, secondUserItemId, 3900L, 1100L, null));
+
+        // then
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM credit_history WHERE user_id = ? AND idempotency_key IS NULL",
+                Long.class, userId))
+                .isEqualTo(2L);
+    }
 }
