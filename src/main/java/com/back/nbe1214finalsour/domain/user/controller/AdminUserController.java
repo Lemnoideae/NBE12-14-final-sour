@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.user.controller;
 
+import com.back.nbe1214finalsour.domain.user.controller.docs.AdminUserApiDocs;
 import com.back.nbe1214finalsour.domain.user.dto.AdminUserStatusRequest;
 import com.back.nbe1214finalsour.domain.user.dto.AdminUserStatusResponse;
 import com.back.nbe1214finalsour.domain.user.service.AdminUserService;
@@ -22,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/admin/users")
-public class AdminUserController {
+public class AdminUserController implements AdminUserApiDocs {
 
     private final AdminUserService adminUserService;
 

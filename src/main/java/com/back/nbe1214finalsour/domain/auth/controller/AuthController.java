@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.auth.controller;
 
+import com.back.nbe1214finalsour.domain.auth.controller.docs.AuthApiDocs;
 import com.back.nbe1214finalsour.domain.auth.dto.EmailCodeRequest;
 import com.back.nbe1214finalsour.domain.auth.dto.EmailCodeResponse;
 import com.back.nbe1214finalsour.domain.auth.dto.EmailVerifyRequest;
@@ -36,7 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/auth")
-public class AuthController {
+public class AuthController implements AuthApiDocs {
 
     private final EmailVerificationService emailVerificationService;
     private final SignupService signupService;

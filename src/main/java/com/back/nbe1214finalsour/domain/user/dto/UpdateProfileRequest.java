@@ -1,6 +1,7 @@
 package com.back.nbe1214finalsour.domain.user.dto;
 
 import com.back.nbe1214finalsour.domain.user.validation.Nickname;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
  * {@code PATCH /api/v1/users/me} 요청 (추가 명세 §3-1). 빠지거나 {@code null}이면 그대로 둔다.
@@ -10,5 +11,7 @@ import com.back.nbe1214finalsour.domain.user.validation.Nickname;
  *
  * @param nickname 규칙은 {@link Nickname}
  */
-public record UpdateProfileRequest(@Nickname String nickname) {
+public record UpdateProfileRequest(
+        @Schema(description = "변경할 닉네임", example = "학생")
+        @Nickname String nickname) {
 }
