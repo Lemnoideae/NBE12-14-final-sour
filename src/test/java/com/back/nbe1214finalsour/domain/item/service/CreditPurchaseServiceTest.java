@@ -30,6 +30,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -66,6 +67,7 @@ class CreditPurchaseServiceTest {
     @InjectMocks
     private CreditPurchaseService creditPurchaseService;
 
+    private static final UUID KEY = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
     private static final Long USER_ID = 1L;
     private static final Long UNIVERSITY_ID = 12L;
     private static final Long DEPARTMENT_ID = 34L;
@@ -102,7 +104,7 @@ class CreditPurchaseServiceTest {
         given(this.creditWallet.tryDeduct(USER_ID, 3900L)).willReturn(OptionalLong.of(1100L));
         givenUniversity();
 
-        this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, UNIVERSITY_LOGO, LOGO_URL);
+        this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, UNIVERSITY_LOGO, LOGO_URL, KEY);
 
         verify(this.creditWallet).tryDeduct(USER_ID, 3900L);
     }
@@ -110,7 +112,7 @@ class CreditPurchaseServiceTest {
     @Test
     @DisplayName("로고 이미지 주소가 없으면 ITEM_LOGO_IMAGE_REQUIRED, 크레딧을 차감하지 않는다")
     void purchase_logoImageRequired() {
-        assertThatThrownBy(() -> this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, UNIVERSITY_LOGO, null))
+        assertThatThrownBy(() -> this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, UNIVERSITY_LOGO, null, KEY))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ITEM_LOGO_IMAGE_REQUIRED);
@@ -125,7 +127,7 @@ class CreditPurchaseServiceTest {
         given(this.creditWallet.tryDeduct(USER_ID, 3900L))
                 .willReturn(OptionalLong.empty());
 
-        assertThatThrownBy(() -> this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, UNIVERSITY_LOGO, LOGO_URL))
+        assertThatThrownBy(() -> this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, UNIVERSITY_LOGO, LOGO_URL, KEY))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ITEM_NOT_ENOUGH_CREDIT);
@@ -143,7 +145,7 @@ class CreditPurchaseServiceTest {
                 .willReturn(OptionalLong.of(1100L));
         givenUniversity();
 
-        this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, UNIVERSITY_LOGO, LOGO_URL);
+        this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, UNIVERSITY_LOGO, LOGO_URL, KEY);
 
         ArgumentCaptor<UserItem> captor = ArgumentCaptor.forClass(UserItem.class);
         verify(this.userItemRepository).save(captor.capture());
@@ -164,7 +166,7 @@ class CreditPurchaseServiceTest {
         givenUserItemSavedWithId(7001L);
         givenUniversity();
 
-        this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, UNIVERSITY_LOGO, LOGO_URL);
+        this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, UNIVERSITY_LOGO, LOGO_URL, KEY);
 
         ArgumentCaptor<CreditHistory> captor = ArgumentCaptor.forClass(CreditHistory.class);
         verify(this.creditHistoryRepository).save(captor.capture());
@@ -187,7 +189,7 @@ class CreditPurchaseServiceTest {
                 .willReturn(12888L);
         givenUniversity();
 
-        ItemPurchaseResult result = this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, UNIVERSITY_LOGO, LOGO_URL);
+        ItemPurchaseResult result = this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, UNIVERSITY_LOGO, LOGO_URL, KEY);
 
         assertThat(result.userItemId()).isEqualTo(7001L);
         assertThat(result.item()).isSameAs(UNIVERSITY_LOGO);
@@ -203,7 +205,7 @@ class CreditPurchaseServiceTest {
         given(this.creditWallet.tryDeduct(USER_ID, 3900L)).willReturn(OptionalLong.of(1100L));
         University university = givenUniversity();
 
-        this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, UNIVERSITY_LOGO, LOGO_URL);
+        this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, UNIVERSITY_LOGO, LOGO_URL, KEY);
 
         assertThat(university.getLogoUrl()).isEqualTo(LOGO_URL);
     }
@@ -215,7 +217,7 @@ class CreditPurchaseServiceTest {
         Department department = new Department(new University("로고테스트대"), "컴퓨터공학과");
         given(this.departmentRepository.findById(DEPARTMENT_ID)).willReturn(Optional.of(department));
 
-        this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, DEPARTMENT_LOGO, LOGO_URL);
+        this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, DEPARTMENT_LOGO, LOGO_URL, KEY);
 
         assertThat(department.getLogoUrl()).isEqualTo(LOGO_URL);
     }
@@ -228,7 +230,7 @@ class CreditPurchaseServiceTest {
                 "a".repeat(64), "encoded", OffsetDateTime.now());
         given(this.userRepository.findById(USER_ID)).willReturn(Optional.of(user));
 
-        this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, PROFILE_LOGO, PROFILE_URL);
+        this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, PROFILE_LOGO, PROFILE_URL, KEY);
 
         assertThat(user.getLogoUrl()).isEqualTo(PROFILE_URL);
     }

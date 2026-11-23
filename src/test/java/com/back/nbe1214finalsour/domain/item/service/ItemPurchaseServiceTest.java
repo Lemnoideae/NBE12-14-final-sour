@@ -115,7 +115,7 @@ public class ItemPurchaseServiceTest {
         given(this.itemService.getItems()).willReturn(ITEMS);
         givenLogoUploaded();
         ItemPurchaseResult expected = new ItemPurchaseResult(7001L, ITEMS.get(2), 3900L, null, 12888L, 1100L);
-        given(this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, ITEMS.get(2), LOGO_URL)).willReturn(expected);
+        given(this.creditPurchaseService.purchase(eq(USER_ID), eq(UNIVERSITY_ID), eq(DEPARTMENT_ID), eq(ITEMS.get(2)), eq(LOGO_URL), any())).willReturn(expected);
 
         ItemPurchaseResult result = this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_IMAGE, UUID.randomUUID());
 
@@ -160,7 +160,7 @@ public class ItemPurchaseServiceTest {
     void purchase_creditItem_purchaseFails_deletesUploadedImage() {
         given(this.itemService.getItems()).willReturn(ITEMS);
         givenLogoUploaded();
-        given(this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, ITEMS.get(2), LOGO_URL))
+        given(this.creditPurchaseService.purchase(eq(USER_ID), eq(UNIVERSITY_ID), eq(DEPARTMENT_ID), eq(ITEMS.get(2)), eq(LOGO_URL), any()))
                 .willThrow(new BusinessException(ErrorCode.ITEM_NOT_ENOUGH_CREDIT));
 
         assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_IMAGE, UUID.randomUUID()))
@@ -178,7 +178,7 @@ public class ItemPurchaseServiceTest {
     void purchase_creditItem_deleteAlsoFails_keepsPurchaseFailure() {
         given(this.itemService.getItems()).willReturn(ITEMS);
         givenLogoUploaded();
-        given(this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, ITEMS.get(2), LOGO_URL))
+        given(this.creditPurchaseService.purchase(eq(USER_ID), eq(UNIVERSITY_ID), eq(DEPARTMENT_ID), eq(ITEMS.get(2)), eq(LOGO_URL), any()))
                 .willThrow(new BusinessException(ErrorCode.ITEM_NOT_ENOUGH_CREDIT));
         willThrow(new RuntimeException("S3 삭제 실패")).given(this.imageStorage).delete(anyString());
 

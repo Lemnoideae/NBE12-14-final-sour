@@ -59,7 +59,7 @@ public class ItemPurchaseService {
         String logoImageUrl = this.imageStorage.upload(key, logoImage, type);
 
         try {
-            return this.creditPurchaseService.purchase(userId, universityId, departmentId, item, logoImageUrl);
+            return this.creditPurchaseService.purchase(userId, universityId, departmentId, item, logoImageUrl, null);
         } catch (RuntimeException e) {
             // S3는 DB 롤백에 묶이지 않으므로 직접 되돌린다
             deleteUploadedLogo(key, e);
