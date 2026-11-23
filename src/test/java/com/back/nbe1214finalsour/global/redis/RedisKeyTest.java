@@ -19,7 +19,6 @@ class RedisKeyTest {
     void ofFillsPattern() {
         assertThat(RedisKey.AUTH_EMAIL_CODE.of("abc123")).isEqualTo("auth:email:code:abc123");
         assertThat(RedisKey.RANK_DEPT.of(7)).isEqualTo("rank:univ:7:dept");
-        assertThat(RedisKey.UNIV_CUSTOM_LOGO.of(7)).isEqualTo("univ:7:custom-logo");
         assertThat(RedisKey.CHAT_UNIV_CHANNEL.of(7)).isEqualTo("chat:univ:7");
     }
 
@@ -153,7 +152,6 @@ class RedisKeyTest {
                 "DIRTY_MATCH|dirty:match|SET|PLAIN",
                 // 클릭 (Click)
                 "CLICKS_UNIV_SECOND|clicks:univ:%s:%s|STRING|PLAIN",
-                "ATTACKS_UNIV_SECOND|attacks:univ:%s:%s|STRING|PLAIN",
                 "SUBMIT_DEDUPE|submit:%s:%s|STRING|PLAIN",
                 // 요청 한도 (RateLimit)
                 "RATELIMIT_ACTION|ratelimit:action:%s|STRING|PLAIN",
@@ -166,7 +164,6 @@ class RedisKeyTest {
                 // 어뷰징 (Abuse)
                 "ABUSE_VERIFY_USER|abuse:verify:user:%s|STRING|PLAIN",
                 // 학교 (University)
-                "UNIV_CUSTOM_LOGO|univ:%s:custom-logo|STRING|PLAIN",
                 "UNIV_ALLIANCE|univ:%s:alliance|STRING|PLAIN",
                 "UNIV_MATCH|univ:%s:match|STRING|PLAIN",
                 // 대결·연합 (Match, Alliance)
