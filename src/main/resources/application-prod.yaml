@@ -32,3 +32,9 @@ file:
   logo-bucket: ${FILE_LOGO_BUCKET}
   # 로고 이미지 주소의 앞부분. CloudFront가 /custom-logo/* 를 로고 버킷으로 보내므로 기본은 공개 주소와 같다
   logo-public-base-url: ${FILE_LOGO_PUBLIC_BASE_URL:${file.public-base-url}}
+# 운영에서는 API 문서를 열지 않는다 (SecurityConfig가 경로를 열어 두므로 여기서 끈다)
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

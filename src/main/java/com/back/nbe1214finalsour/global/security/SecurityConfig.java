@@ -73,6 +73,8 @@ public class SecurityConfig {
                         // 채팅 WebSocket 핸드셰이크. 인증은 STOMP CONNECT 프레임에서 한다 (ChatStompInterceptor, SCRUM-128)
                         .requestMatchers(HttpMethod.GET, "/ws").permitAll()
                         .requestMatchers("/error", "/actuator/health").permitAll()
+                        // API 문서 (Swagger UI). 운영은 application-prod.yaml에서 springdoc을 꺼서 열리지 않는다
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .anyRequest().denyAll());
         return http.build();
     }

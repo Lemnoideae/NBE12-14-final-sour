@@ -151,3 +151,10 @@ chat:
     # 아래 둘은 Spring 기본값. 느린 클라이언트에게 보내지 못하고 이만큼 밀리면 연결을 끊는다
     send-time-limit: 10s
     send-buffer-size-limit: 512KB
+
+# API 문서 (OpenApiConfig). /api/** 만 싣고 actuator·/error는 뺀다. 운영은 application-prod.yaml에서 끈다
+springdoc:
+  paths-to-match: /api/**
+  swagger-ui:
+    tags-sorter: alpha
+    operations-sorter: alpha
