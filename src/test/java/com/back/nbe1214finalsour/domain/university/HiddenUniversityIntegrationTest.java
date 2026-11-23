@@ -1,6 +1,8 @@
 package com.back.nbe1214finalsour.domain.university;
 
 import com.back.nbe1214finalsour.IntegrationTest;
+import com.back.nbe1214finalsour.domain.alliance.service.AllianceMatchRedisSettlementService;
+import com.back.nbe1214finalsour.domain.click.service.ScoreFlushService;
 import com.back.nbe1214finalsour.domain.clicker.service.ClickerService;
 import com.back.nbe1214finalsour.domain.university.repository.UniversityCache;
 import com.back.nbe1214finalsour.domain.user.entity.User;
@@ -27,6 +29,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.LongStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -43,6 +46,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * <p>숨김 학교 점수는 {@link RedisKey#RANK_UNIV_HIDDEN}에 쌓이고 {@link RedisKey#RANK_UNIV}에는 들어가지 않는다.
  * 순위·지도·어제 순위는 RANK_UNIV만 읽으므로, 숨김 학교는 목록에서 빠지고 다른 학교의 순위 번호도 밀지 않는다.
+ * 공개 목록 밖에서는 일반 학교와 같다: 공격·지원·연합 대결·학교 상세를 쓸 수 있다 (SCRUM-238).
  *
  * <p>테스트 학교는 서버가 뜬 뒤 만들어지므로 학교 캐시를 다시 불러온다. 운영에서는 숨김 학교가 마이그레이션으로만 들어가
  * 서버가 뜰 때 캐시에 있다.
@@ -67,6 +71,10 @@ class HiddenUniversityIntegrationTest {
     private ClickerService clickerService;
     @Autowired
     private UniversityCache universityCache;
+    @Autowired
+    private AllianceMatchRedisSettlementService settlementService;
+    @Autowired
+    private ScoreFlushService scoreFlushService;
 
     private long hiddenUnivId;
     private long publicUnivId;
@@ -74,6 +82,10 @@ class HiddenUniversityIntegrationTest {
     private String publicToken;
     private final List<Long> userIds = new ArrayList<>();
     private final List<Long> departmentIds = new ArrayList<>();
+    /** 정산 테스트가 쓴 캐시 밖 학교 ID와 대결 ID */
+    private final List<Long> settledIds = new ArrayList<>();
+    private final List<Long> settledMatches = new ArrayList<>();
+    private Long allianceId;
 
     @BeforeEach
     void setUp() {
@@ -109,6 +121,18 @@ class HiddenUniversityIntegrationTest {
                     RedisKey.RATELIMIT_CLICK.of(userId)));
         }
         redis.delete(RedisKey.CACHE_MAP_UNIVERSITIES.of());
+        settledIds.forEach(id -> {
+            redis.opsForZSet().remove(RedisKey.RANK_UNIV.of(), String.valueOf(id));
+            redis.opsForSet().remove(RedisKey.DIRTY_UNIV.of(), String.valueOf(id));
+        });
+        redis.delete(settledMatches.stream().map(id -> "match:" + id + ":settled").toList());
+        if (allianceId != null) {
+            redis.delete(RedisKey.ALLIANCE_SCORE.of(allianceId));
+            redis.opsForSet().remove(RedisKey.DIRTY_ALLIANCE.of(), String.valueOf(allianceId));
+            redis.opsForSet().remove(RedisKey.DIRTY_ALLIANCE.of() + ":flushing", String.valueOf(allianceId));
+            jdbcTemplate.update("DELETE FROM alliance_university WHERE alliance_id = ?", allianceId);
+            jdbcTemplate.update("DELETE FROM alliance WHERE id = ?", allianceId);
+        }
 
         jdbcTemplate.update("DELETE FROM users WHERE university_id IN (?, ?)", hiddenUnivId, publicUnivId);
         jdbcTemplate.update("DELETE FROM department WHERE university_id IN (?, ?)", hiddenUnivId, publicUnivId);
@@ -149,18 +173,59 @@ class HiddenUniversityIntegrationTest {
     }
 
     @Test
-    @DisplayName("숨김 학교는 공격·지원 대상이 될 수 없고, 숨김 학교 점수도 그대로다")
-    void hiddenUniversityCannotBeTargeted() throws Exception {
-        click(hiddenToken, "hidden-2", 4).andExpect(status().isOk());
+    @DisplayName("SCRUM-238: 숨김 학교도 공격·지원받지만, 점수는 숨김 학교 순위에만 반영된다")
+    void hiddenUniversityCanBeAttackedAndAssisted() throws Exception {
+        click(hiddenToken, "hidden-2", 10).andExpect(status().isOk());
 
-        target("/api/v1/attacks", "attack-1", hiddenUnivId)
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("UNIV_NOT_FOUND"));
-        target("/api/v1/assists", "assist-1", hiddenUnivId)
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("UNIV_NOT_FOUND"));
+        // 기본 클리커(클릭당 1점): 공격 피해와 지원 점수는 클릭 수의 0.3배 (10 → 3, 20 → 6)
+        target("/api/v1/attacks", "attack-1", hiddenUnivId, 10).andExpect(status().isOk());
+        assertThat(hiddenScore()).isEqualTo(7.0);
 
-        assertThat(redis.opsForZSet().score(RedisKey.RANK_UNIV_HIDDEN.of(), String.valueOf(hiddenUnivId))).isEqualTo(4.0);
+        joinAlliance();
+        target("/api/v1/assists", "assist-1", hiddenUnivId, 20).andExpect(status().isOk());
+        assertThat(hiddenScore()).isEqualTo(13.0);
+        assertThat(redis.opsForZSet().score(RedisKey.RANK_UNIV.of(), String.valueOf(hiddenUnivId))).isNull();
+    }
+
+    @Test
+    @DisplayName("SCRUM-238: 숨김 학교 상세는 순위 없이 숨김 학교 점수를 보여 주고, 점수 배치가 DB 점수도 맞춘다")
+    void hiddenUniversityDetailShowsScoreWithoutRank() throws Exception {
+        click(hiddenToken, "hidden-3", 6).andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/universities/{id}", hiddenUnivId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hiddenToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalScore").value(6))
+                .andExpect(jsonPath("$.data.rank").doesNotExist())
+                .andExpect(jsonPath("$.data.isMyUniversity").value(true));
+
+        scoreFlushService.flush();
+        assertThat(jdbcTemplate.queryForObject("SELECT total_score FROM university WHERE id = ?", Long.class,
+                hiddenUnivId)).isEqualTo(6L);
+    }
+
+    @Test
+    @DisplayName("SCRUM-238: 대결 정산은 숨김 학교 점수를 숨김 학교 순위에서 차감·지급하고 공개 순위에 넣지 않는다")
+    void settlementKeepsHiddenUniversityOutOfPublicRanking() {
+        // 숨김 학교와 캐시에 없는 학교 ID(공개 학교로 취급)로 대결 두 번: 숨김 학교가 질 때와 이길 때
+        long base = ThreadLocalRandom.current().nextLong(1_000_000_000L, 2_000_000_000L);
+        List<Long> others = List.of(base + 1, base + 2, base + 3);
+        settledIds.addAll(others);
+        settledMatches.addAll(List.of(base, base + 10));
+        redis.opsForZSet().add(RedisKey.RANK_UNIV_HIDDEN.of(), String.valueOf(hiddenUnivId), 100);
+        others.forEach(id -> redis.opsForZSet().add(RedisKey.RANK_UNIV.of(), String.valueOf(id), 50));
+
+        // 패배: 숨김 학교 -30, base+1 -20 → 승리 두 학교에 25씩
+        assertThat(settlementService.settleOnce(base, hiddenUnivId, base + 1, base + 2, base + 3, 30, 20)).isTrue();
+        assertThat(hiddenScore()).isEqualTo(70.0);
+        assertThat(publicScore(base + 2)).isEqualTo(75.0);
+        assertThat(publicScore(base + 3)).isEqualTo(75.0);
+
+        // 승리: base+1(30)과 base+2(75)에서 10씩 → 숨김 학교와 base+3에 10씩
+        assertThat(settlementService.settleOnce(base + 10, base + 1, base + 2, hiddenUnivId, base + 3, 10, 10))
+                .isTrue();
+        assertThat(hiddenScore()).isEqualTo(80.0);
+        assertThat(publicScore(base + 3)).isEqualTo(85.0);
         assertThat(redis.opsForZSet().score(RedisKey.RANK_UNIV.of(), String.valueOf(hiddenUnivId))).isNull();
     }
 
@@ -189,13 +254,33 @@ class HiddenUniversityIntegrationTest {
                         {"submissionId":"%s","clickCount":%d}""".formatted(submissionId, clickCount)));
     }
 
-    private ResultActions target(String path, String submissionId, long targetId) throws Exception {
+    private ResultActions target(String path, String submissionId, long targetId, int clickCount) throws Exception {
         return mockMvc.perform(post(path)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + publicToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"submissionId":"%s","targetUniversityId":%d,"clickCount":3}"""
-                        .formatted(submissionId, targetId)));
+                        {"submissionId":"%s","targetUniversityId":%d,"clickCount":%d}"""
+                        .formatted(submissionId, targetId, clickCount)));
+    }
+
+    /** 숨김 학교와 공개 테스트 학교를 같은 연합에 넣는다 */
+    private void joinAlliance() {
+        allianceId = jdbcTemplate.queryForObject("""
+                INSERT INTO alliance (name, duration_hours, expired_at)
+                VALUES ('숨김테스트연합', 24, now() + INTERVAL '24 hours') RETURNING id""", Long.class);
+        for (long univId : List.of(hiddenUnivId, publicUnivId)) {
+            jdbcTemplate.update("""
+                    INSERT INTO alliance_university (alliance_id, university_id, applicant_user_id, approver_user_id, status)
+                    VALUES (?, ?, ?, ?, 'ACCEPTED')""", allianceId, univId, userIds.get(1), userIds.get(1));
+        }
+    }
+
+    private Double hiddenScore() {
+        return redis.opsForZSet().score(RedisKey.RANK_UNIV_HIDDEN.of(), String.valueOf(hiddenUnivId));
+    }
+
+    private Double publicScore(long universityId) {
+        return redis.opsForZSet().score(RedisKey.RANK_UNIV.of(), String.valueOf(universityId));
     }
 
     private ResultActions search(String keyword) throws Exception {

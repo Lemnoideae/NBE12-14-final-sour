@@ -40,10 +40,6 @@ public class AttackService {
         }
 
         String targetName = universityCache.getName(targetUniversityId);
-        // 숨김 학교는 순위·지도·검색에 없으므로 대상이 될 수 없다 (SCRUM-236)
-        if (universityCache.isHidden(targetUniversityId)) {
-            throw new BusinessException(ErrorCode.UNIV_NOT_FOUND);
-        }
         // 대상 검증 시점의 소속을 사용한다. 거절된 공격은 제출 ID·요청 한도를 소비하지 않는다.
         if (allianceAllyChecker.areAllies(universityId, targetUniversityId)) {
             throw new BusinessException(ErrorCode.ATTACK_ALLY_UNIVERSITY);
@@ -59,8 +55,9 @@ public class AttackService {
                 : base * 3 / 10;
 
         // Redis에 반영
+        // 숨김 학교도 일반 학교처럼 공격받지만, 점수는 공개 학교 순위에 넣지 않는다 (SCRUM-238)
         List<String> keys = List.of(
-                RedisKey.RANK_UNIV.of(),
+                RedisKey.univRank(universityCache.isHidden(targetUniversityId)),
                 RedisKey.DIRTY_UNIV.of(),
                 RedisKey.SCORE_USER_ATTACK.of()
         );

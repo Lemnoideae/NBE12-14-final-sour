@@ -160,6 +160,14 @@ public enum RedisKey {
         this.argCount = countArgs(pattern);
     }
 
+    /**
+     * 학교 점수 키. 숨김 학교(운영팀용)는 {@link #RANK_UNIV_HIDDEN}, 나머지는 {@link #RANK_UNIV} (SCRUM-236, SCRUM-238).
+     * 숨김 학교 점수는 어느 경로로 바뀌든 RANK_UNIV에 쓰지 않는다
+     */
+    public static String univRank(boolean hidden) {
+        return (hidden ? RANK_UNIV_HIDDEN : RANK_UNIV).of();
+    }
+
     public String of(Object... args) {
         if (args.length != argCount) {
             throw new IllegalArgumentException(

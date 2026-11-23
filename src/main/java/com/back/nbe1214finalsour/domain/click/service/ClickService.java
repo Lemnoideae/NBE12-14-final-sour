@@ -73,10 +73,8 @@ public class ClickService {
         // 4. Redis에 반영
         long nowSec = Instant.now().getEpochSecond();
         // 숨김 학교(운영팀용) 점수는 공개 학교 순위에 넣지 않는다. 순위·지도·어제 순위는 RANK_UNIV만 읽는다 (SCRUM-236)
-        String univRankKey = universityCache.isHidden(universityId)
-                ? RedisKey.RANK_UNIV_HIDDEN.of() : RedisKey.RANK_UNIV.of();
         List<String> keys = List.of(
-                univRankKey,
+                RedisKey.univRank(universityCache.isHidden(universityId)),
                 RedisKey.RANK_DEPT.of(universityId),
                 RedisKey.RANK_USER.of(universityId),
                 RedisKey.DIRTY_UNIV.of(),

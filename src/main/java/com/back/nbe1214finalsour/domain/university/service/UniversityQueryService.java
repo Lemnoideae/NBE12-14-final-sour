@@ -274,6 +274,13 @@ public class UniversityQueryService {
         Long totalScore = scoreRank
                 .map(UniversityScoreRank::totalScore)
                 .orElse(university.getTotalScore());
+        // 숨김 학교(운영팀용)는 공개 순위가 없어 순위는 비우고, 점수는 숨김 학교 점수 키에서 읽는다 (SCRUM-238)
+        if (university.isHidden()) {
+            var hiddenScore = universityRankingService.getHiddenUniversityScore(universityId);
+            if (hiddenScore.isPresent()) {
+                totalScore = (long) hiddenScore.getAsDouble();
+            }
+        }
 
         // 4. Redis 순위가 없으면 null
         Long rank = scoreRank
