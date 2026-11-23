@@ -36,22 +36,28 @@ test('selectByMode는 현재 모드의 구현을 고른다', () => {
   assert.equal(selectByMode(implementations), 'from-mock', '기본은 API_MODE');
 });
 
-test('npm run dev:api는 커밋된 .env.api로 API 모드 dev 서버를 띄운다', () => {
+test('npm run dev는 API 모드, dev:mock은 목업 모드 dev 서버를 커밋된 .env.<mode>로 띄운다', () => {
   const frontendDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
   const scripts = JSON.parse(readFileSync(path.join(frontendDir, 'package.json'), 'utf8')).scripts;
-  // An inline `VITE_API_MODE=api vite` fails in Windows cmd; `--mode api` loads .env.api on every OS.
-  assert.equal(scripts['dev:api'], `${scripts.dev} --mode api`);
-  // A shell value outranks env files in loadEnv, so this checks the file alone.
+  // Team decision (2026-11-23): `dev` talks to the backend. An inline `VITE_API_MODE=api vite` fails in Windows cmd;
+  // `--mode <name>` loads .env.<name> on every OS.
+  const server = 'vite --port=3000 --host=0.0.0.0';
+  assert.equal(scripts.dev, `${server} --mode api`);
+  assert.equal(scripts['dev:mock'], `${server} --mode mock`);
+  // A shell value outranks env files in loadEnv, so this checks the files alone.
   const shellValue = process.env.VITE_API_MODE;
   delete process.env.VITE_API_MODE;
   try {
     assert.equal(resolveApiMode(loadEnv('api', frontendDir)), 'api');
+    assert.equal(resolveApiMode(loadEnv('mock', frontendDir)), 'mock');
   } finally {
     if (shellValue !== undefined) process.env.VITE_API_MODE = shellValue;
   }
   if (typeof viteConfig !== 'function') throw new Error('Expected Vite config factory');
-  const config = viteConfig({ command: 'serve', mode: 'api', isPreview: false, isSsrBuild: false });
-  assert.deepEqual(config.define, { __CAMPUS_MOCK_TOOLS__: 'true', __CAMPUS_SERVICE_BUILD__: 'false' }, 'dev 서버라 테스트 도구는 그대로');
+  for (const mode of ['api', 'mock']) {
+    const config = viteConfig({ command: 'serve', mode, isPreview: false, isSsrBuild: false });
+    assert.deepEqual(config.define, { __CAMPUS_MOCK_TOOLS__: 'true', __CAMPUS_SERVICE_BUILD__: 'false' }, `${mode}: dev 서버라 테스트 도구는 그대로`);
+  }
 });
 
 test('프록시는 /api/…와 /ws(WebSocket)를 같은 백엔드로 보낸다', () => {

@@ -1,7 +1,7 @@
 """Capture PC UI measurements; --check exits 1 when a visual invariant fails.
 
-Run against a local Vite dev server with VITE_API_MODE=mock. For an API shelf
-control, pass --api-url for a second local server with VITE_API_MODE=api.
+Run against a local Vite dev server with VITE_API_MODE=mock (`npm run dev:mock`). For an API shelf
+control, pass --api-url for a second local server with VITE_API_MODE=api (`npm run dev`).
 Requires Python Playwright and Chromium; not part of npm test.
 """
 
