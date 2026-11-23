@@ -18,16 +18,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 배포 설정 파일의 개발자 계정 기본값 (SCRUM-237). 환경 변수 없이 파일만 읽어 확인한다.
- * 로컬(기본 프로필)은 켜짐·ADMIN, 운영(prod)은 꺼짐·USER이고, 비밀번호는 어디에도 기본값이 없다.
+ * 로컬(기본 프로필)은 켜짐·ADMIN, 운영(prod)은 꺼짐·USER이고, 이메일·비밀번호는 어디에도 기본값이 없다.
  */
 class DevAccountPropertiesProfileTest {
 
     @Test
-    @DisplayName("기본 프로필은 켜짐·ADMIN이고 와플대학교 운영팀 소속이며, 비밀번호 기본값이 없다")
+    @DisplayName("기본 프로필은 켜짐·ADMIN이고 와플대학교 운영팀 소속이며, 이메일·비밀번호 기본값이 없다")
     void defaultProfile() throws IOException {
         DevAccountProperties properties = bind("application.yaml");
 
         assertThat(properties.enabled()).isTrue();
+        assertThat(properties.hasEmail()).isFalse();
         assertThat(properties.role()).isEqualTo(Role.ADMIN);
         assertThat(properties.universityName()).isEqualTo("와플대학교");
         assertThat(properties.departmentName()).isEqualTo("운영팀");
@@ -35,11 +36,12 @@ class DevAccountPropertiesProfileTest {
     }
 
     @Test
-    @DisplayName("prod 프로필은 꺼짐·USER이고, 비밀번호 기본값이 없다")
+    @DisplayName("prod 프로필은 꺼짐·USER이고, 이메일·비밀번호 기본값이 없다")
     void prodProfile() throws IOException {
         DevAccountProperties properties = bind("application-prod.yaml", "application.yaml");
 
         assertThat(properties.enabled()).isFalse();
+        assertThat(properties.hasEmail()).isFalse();
         assertThat(properties.role()).isEqualTo(Role.USER);
         assertThat(properties.hasPassword()).isFalse();
     }

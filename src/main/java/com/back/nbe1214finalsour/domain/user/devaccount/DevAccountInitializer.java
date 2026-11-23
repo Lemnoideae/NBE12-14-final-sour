@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component;
  * 비밀번호도 환경마다 다르다. 소속 학교(와플대학교)는 학교 캐시보다 먼저 있어야 해서 V14 마이그레이션이 넣는다.
  *
  * <ul>
- *   <li>꺼져 있거나 비밀번호가 없으면 만들지 않는다. 배포를 막지 않는다.</li>
+ *   <li>꺼져 있거나 이메일·비밀번호가 없으면 만들지 않는다. 배포를 막지 않는다.</li>
  *   <li>같은 이메일의 계정이 있으면 아무것도 바꾸지 않는다 (비밀번호·닉네임·권한 모두 그대로).</li>
  *   <li>학교·학과가 없거나 비밀번호가 규칙에 맞지 않으면 설정 오류라 시작에 실패한다.</li>
  *   <li>서버 여러 대가 동시에 만들면 {@code uk_users_email_hash}가 하나만 남긴다. 진 쪽은 이미 만든 것으로 본다.</li>
@@ -57,6 +57,10 @@ public class DevAccountInitializer implements ApplicationRunner {
     public boolean createIfAbsent() {
         if (!properties.enabled()) {
             log.info("[DevAccount] dev-account.enabled=false라 개발자 계정을 만들지 않습니다");
+            return false;
+        }
+        if (!properties.hasEmail()) {
+            log.warn("[DevAccount] DEV_ACCOUNT_EMAIL이 없어 개발자 계정을 만들지 않습니다");
             return false;
         }
         if (!properties.hasPassword()) {

@@ -13,7 +13,8 @@ import org.springframework.validation.annotation.Validated;
  * 기본값은 application.yaml(로컬: 켜짐·ADMIN), application-prod.yaml(운영: 꺼짐·USER)에 있다.
  *
  * @param enabled        false면 아무것도 하지 않는다 ({@code DEV_ACCOUNT_ENABLED})
- * @param email          로그인 이메일. 학교 도메인 검사를 받지 않는다
+ * @param email          로그인 이메일 ({@code DEV_ACCOUNT_EMAIL}). 기본값이 없고, 비어 있으면 계정을 만들지 않는다.
+ *                       실제 주소는 저장소에 올리지 않는다. 학교 도메인 검사를 받지 않는다
  * @param password       원문 비밀번호 ({@code DEV_ACCOUNT_PASSWORD}). 기본값이 없고, 비어 있으면 계정을 만들지 않는다.
  *                       저장소·채팅에 올리지 않는다. 회원가입과 같은 비밀번호 규칙을 지켜야 한다
  * @param nickname       닉네임. 회원가입과 같은 규칙
@@ -25,12 +26,16 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties("dev-account")
 public record DevAccountProperties(
         boolean enabled,
-        @NotBlank @Email String email,
+        @Email String email,
         String password,
         @NotNull @Nickname String nickname,
         @NotBlank String universityName,
         @NotBlank String departmentName,
         @NotNull Role role) {
+
+    public boolean hasEmail() {
+        return email != null && !email.isBlank();
+    }
 
     public boolean hasPassword() {
         return password != null && !password.isBlank();

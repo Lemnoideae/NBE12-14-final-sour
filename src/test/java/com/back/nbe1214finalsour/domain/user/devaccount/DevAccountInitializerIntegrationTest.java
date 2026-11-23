@@ -112,12 +112,14 @@ class DevAccountInitializerIntegrationTest {
     }
 
     @Test
-    @DisplayName("꺼져 있거나 비밀번호가 비어 있으면 계정을 만들지 않는다")
+    @DisplayName("꺼져 있거나 이메일·비밀번호가 비어 있으면 계정을 만들지 않는다")
     void skipsWhenDisabledOrWithoutPassword() {
         assertThat(initializer(properties(false, PASSWORD, NICKNAME, "와플대학교", Role.ADMIN)).createIfAbsent())
                 .isFalse();
         assertThat(initializer(properties(true, null, NICKNAME, "와플대학교", Role.ADMIN)).createIfAbsent()).isFalse();
         assertThat(initializer(properties(true, "  ", NICKNAME, "와플대학교", Role.ADMIN)).createIfAbsent()).isFalse();
+        assertThat(initializer(new DevAccountProperties(true, "", PASSWORD, NICKNAME, "와플대학교", "운영팀", Role.ADMIN))
+                .createIfAbsent()).isFalse();
 
         assertThat(userRepository.existsByEmailHashAndDeletedAtIsNull(emailHasher.hash(NORMALIZED_EMAIL))).isFalse();
     }
