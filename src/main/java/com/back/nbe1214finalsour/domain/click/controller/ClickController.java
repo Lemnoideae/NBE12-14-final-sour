@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.click.controller;
 
+import com.back.nbe1214finalsour.domain.click.controller.docs.ClickApiDocs;
 import com.back.nbe1214finalsour.domain.click.dto.ClickRequest;
 import com.back.nbe1214finalsour.domain.click.dto.ClickResponse;
 import com.back.nbe1214finalsour.domain.click.service.ClickService;
@@ -16,10 +17,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/clicks")
-public class ClickController {
+public class ClickController implements ClickApiDocs {
 
     private final ClickService clickService;
 
+    @Override
     @PostMapping
     public ApiResponse<ClickResponse> batchClick(@AuthenticationPrincipal AuthUser user,
                                      @RequestBody @Valid ClickRequest request) {

@@ -53,6 +53,9 @@ dependencies {
     implementation("com.github.f4b6a3:ulid-creator:5.2.4")
     runtimeOnly("io.micrometer:micrometer-registry-prometheus")
     runtimeOnly("org.postgresql:postgresql")
+    // API 문서화, Swagger
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0")
+
     testAnnotationProcessor("org.projectlombok:lombok")
     testCompileOnly("org.projectlombok:lombok")
     testImplementation("org.springframework.boot:spring-boot-starter-actuator-test")
