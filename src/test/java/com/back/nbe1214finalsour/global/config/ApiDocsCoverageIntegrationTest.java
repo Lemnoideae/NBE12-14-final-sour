@@ -24,12 +24,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @IntegrationTest
 @AutoConfigureMockMvc
 class ApiDocsCoverageIntegrationTest {
-    private static final Set<String> PREFIXES = Set.of("/api/v1/auth/");
+    private static final Set<String> PREFIXES = Set.of(
+            "/api/v1/auth/", "/api/v1/users/", "/api/v1/admin/users/");
     // SecurityConfig의 목록은 다른 패키지에서 접근할 수 없다.
     private static final Set<String> PUBLIC_OPERATIONS = Set.of(
             "post /api/v1/auth/email/code", "post /api/v1/auth/email/verify",
-            "post /api/v1/auth/signup", "post /api/v1/auth/login", "post /api/v1/auth/reissue");
-    private static final Set<String> METHODS = Set.of("get", "post", "put", "patch", "delete", "head", "options", "trace");
+            "post /api/v1/auth/signup", "post /api/v1/auth/login", "post /api/v1/auth/reissue",
+            "get /api/v1/users/nickname/availability");
+    private static final Set<String> METHODS = Set.of(
+            "get", "post", "put", "patch", "delete", "head", "options", "trace");
 
     @Autowired
     private MockMvc mockMvc;
