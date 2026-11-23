@@ -150,15 +150,16 @@ test('서버 순위가 없으면 "순위 없음", 학과·기여자가 없으면
   assert.ok(screen.getByText('아직 점수를 올린 학과가 없어요'));
 });
 
-test('없는 학교(404)와 디렉터리에 없는 ID는 학교 없음으로, 그 밖의 실패는 다시 시도로 회복한다', async () => {
+test('없는 학교(404)는 학교 없음으로, 그 밖의 실패는 다시 시도로 회복한다', async () => {
   const missing = mount(SCHOOL_ID.snu, { respond: (url) => (url.pathname.endsWith(`/universities/${SCHOOL_ID.snu}`) ? fail(404, 'UNIV_NOT_FOUND', '학교를 찾을 수 없습니다.') : undefined) });
   await waitFor(() => assert.equal(visit.status, 'not-found'));
   assert.equal(missing.detailCalls().length, 1, '404는 다시 시도하지 않는다');
   cleanup();
 
-  const unknown = mount(9999 as SchoolId);
-  assert.equal(visit.status, 'not-found');
-  assert.equal(unknown.detailCalls().length, 0, '디렉터리에 없는 ID는 요청하지 않는다');
+  // #144: a school outside the directory may still exist on the server, so the server decides.
+  const unknown = mount(9999 as SchoolId, { respond: (url) => (url.pathname.endsWith('/universities/9999') ? fail(404, 'UNIV_NOT_FOUND', '학교를 찾을 수 없습니다.') : undefined) });
+  await waitFor(() => assert.equal(visit.status, 'not-found'));
+  assert.equal(unknown.detailCalls().length, 1, '디렉터리에 없는 ID도 서버에 묻고, 404면 학교 없음');
   cleanup();
 
   mount(SCHOOL_ID.pusan, { respond: (url, n) => (url.pathname.endsWith(`/universities/${SCHOOL_ID.pusan}`) && n === 1 ? fail(400, 'INVALID_INPUT', '방문 조회 조건이 올바르지 않습니다.') : undefined) });
@@ -168,12 +169,26 @@ test('없는 학교(404)와 디렉터리에 없는 ID는 학교 없음으로, �
   await waitFor(() => assert.equal(visit.status, 'ready'));
 });
 
+test('#144: 디렉터리에 없는 학교(숨김 학교)도 서버 이름·점수로 보이고, 순위는 "순위 없음"이다', async () => {
+  const WAFFLE_ID = 9001;
+  mount(WAFFLE_ID as SchoolId, { respond: (url) => (url.pathname.endsWith(`/universities/${WAFFLE_ID}`)
+    ? ok({ ...PUSAN, id: WAFFLE_ID, name: '와플대학교', totalScore: 24, rank: null, rankChange: null }) : undefined) });
+  await waitFor(() => assert.equal(visit.status, 'ready'));
+  assert.equal(visit.school?.name, '와플대학교');
+  assert.equal(visit.school?.region, '기타', '지역이 없는 학교');
+  assert.equal(screen.getByTestId('visit-score').textContent, '24점');
+  assert.equal(screen.getByTestId('visit-rank').textContent, '순위 없음');
+  assertAbsent(screen.queryByTestId('rank-change'));
+});
+
 test('서버가 내 학교라고 하면 isMyUniversity로 알린다 (화면은 내 캠퍼스로 보낸다)', async () => {
   mount(SCHOOL_ID.pusan, { respond: (url) => (url.pathname.endsWith(`/universities/${SCHOOL_ID.pusan}`) ? ok({ ...PUSAN, isMyUniversity: true }) : undefined) });
   await waitFor(() => assert.equal(visit.status, 'ready'));
   assert.equal(visit.isMyUniversity, true);
   assert.equal(visit.school?.isMySchool, true);
-  assert.equal(toVisitSchoolView({ ...PUSAN, id: 9999 }), undefined, '디렉터리에 없는 서버 학교는 행을 만들지 않는다');
+  const offList = toVisitSchoolView({ ...PUSAN, id: 9999, name: '와플대학교' });
+  assert.deepEqual([offList.name, offList.region, offList.isMySchool], ['와플대학교', '기타', false],
+    '디렉터리에 없는 서버 학교(#144)는 서버 이름과 지역 없음(기타)으로 행을 만든다');
 });
 
 test('계약 센서: 학교 상세 DTO·경로가 백엔드와 같고, 방문 화면은 모드별 훅과 내 학교 이동을 쓴다', () => {

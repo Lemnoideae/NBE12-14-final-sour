@@ -15,6 +15,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.util.List;
@@ -115,7 +116,7 @@ public class ItemPurchaseServiceTest {
         given(this.itemService.getItems()).willReturn(ITEMS);
         givenLogoUploaded();
         ItemPurchaseResult expected = new ItemPurchaseResult(7001L, ITEMS.get(2), 3900L, null, 12888L, 1100L);
-        given(this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, ITEMS.get(2), LOGO_URL)).willReturn(expected);
+        given(this.creditPurchaseService.purchase(eq(USER_ID), eq(UNIVERSITY_ID), eq(DEPARTMENT_ID), eq(ITEMS.get(2)), eq(LOGO_URL), any())).willReturn(expected);
 
         ItemPurchaseResult result = this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_IMAGE, UUID.randomUUID());
 
@@ -123,6 +124,23 @@ public class ItemPurchaseServiceTest {
         assertThat(uploadedKey()).matches("custom-logo/1/[0-9a-f-]{36}\\.png");
         verify(this.imageStorage, never()).delete(anyString());
         verifyNoInteractions(this.contributionPurchaseService);
+    }
+
+    @Test
+    @DisplayName("로고 아이템을 사면 요청의 멱등 키를 크레딧 구매에 그대로 넘긴다")
+    void purchase_creditItem_passesIdempotencyKey() {
+        // given
+        given(this.itemService.getItems()).willReturn(ITEMS);
+        givenLogoUploaded();
+        ItemPurchaseResult expected = new ItemPurchaseResult(7001L, ITEMS.get(2), 3900L, null, 12888L, 1100L);
+        given(this.creditPurchaseService.purchase(eq(USER_ID), eq(UNIVERSITY_ID), eq(DEPARTMENT_ID), eq(ITEMS.get(2)), eq(LOGO_URL), any())).willReturn(expected);
+
+        // when
+        ItemPurchaseResult result = this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_IMAGE, KEY);
+
+        // then
+        assertThat(result).isSameAs(expected);
+        then(this.creditPurchaseService).should().purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, ITEMS.get(2), LOGO_URL, KEY);
     }
 
     @Test
@@ -160,7 +178,7 @@ public class ItemPurchaseServiceTest {
     void purchase_creditItem_purchaseFails_deletesUploadedImage() {
         given(this.itemService.getItems()).willReturn(ITEMS);
         givenLogoUploaded();
-        given(this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, ITEMS.get(2), LOGO_URL))
+        given(this.creditPurchaseService.purchase(eq(USER_ID), eq(UNIVERSITY_ID), eq(DEPARTMENT_ID), eq(ITEMS.get(2)), eq(LOGO_URL), any()))
                 .willThrow(new BusinessException(ErrorCode.ITEM_NOT_ENOUGH_CREDIT));
 
         assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_IMAGE, UUID.randomUUID()))
@@ -174,11 +192,29 @@ public class ItemPurchaseServiceTest {
     }
 
     @Test
+    @DisplayName("같은 멱등 키로 제약 위반이 나면 올린 이미지를 지우고, 그 예외를 그대로 던진다")
+    void purchase_creditItem_duplicateKey_deletesUploadedImageAndRethrows() {
+        // given
+        given(this.itemService.getItems()).willReturn(ITEMS);
+        givenLogoUploaded();
+        DataIntegrityViolationException violation = new DataIntegrityViolationException("uk_credit_history_user_idempotency_key");
+        given(this.creditPurchaseService.purchase(eq(USER_ID), eq(UNIVERSITY_ID), eq(DEPARTMENT_ID), eq(ITEMS.get(2)), eq(LOGO_URL), eq(KEY)))
+                .willThrow(violation);
+
+        // when & then
+        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_IMAGE, KEY))
+                .isSameAs(violation);
+
+        String key = uploadedKey();
+        then(this.imageStorage).should().delete(key);
+    }
+
+    @Test
     @DisplayName("구매 실패 후 이미지 삭제까지 실패해도, 던지는 예외는 원래 구매 실패 예외다")
     void purchase_creditItem_deleteAlsoFails_keepsPurchaseFailure() {
         given(this.itemService.getItems()).willReturn(ITEMS);
         givenLogoUploaded();
-        given(this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, ITEMS.get(2), LOGO_URL))
+        given(this.creditPurchaseService.purchase(eq(USER_ID), eq(UNIVERSITY_ID), eq(DEPARTMENT_ID), eq(ITEMS.get(2)), eq(LOGO_URL), any()))
                 .willThrow(new BusinessException(ErrorCode.ITEM_NOT_ENOUGH_CREDIT));
         willThrow(new RuntimeException("S3 삭제 실패")).given(this.imageStorage).delete(anyString());
 

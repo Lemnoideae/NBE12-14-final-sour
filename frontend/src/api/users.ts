@@ -96,6 +96,7 @@ export function useIsAdmin(): boolean {
 export interface AccountProfile {
   userId: string;
   schoolId: number;
+  schoolName: string;
   department: string;
   nickname: string;
   email: string;
@@ -107,6 +108,7 @@ export function accountFromMyInfo(info: MyInfo): AccountProfile {
   return {
     userId: String(info.id),
     schoolId: info.university.id,
+    schoolName: info.university.name,
     department: info.department.name,
     nickname: info.nickname,
     email: info.email,
