@@ -6,6 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+# Public, non-secret settings for `npm run dev:api` (vite --mode api). Personal overrides: .env.api.local
+!.env.api
 
 # Local multi-agent workflow artifacts
 .agent-workflow/

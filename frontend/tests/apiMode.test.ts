@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { loadEnv } from 'vite';
 
 // Data-source switch and dev proxy (SCRUM-146). Plan: .agents/01-PLAN/261118-1021-frontend_prototype_migration_plan.md §5 단계 0.
 const { API_MODE, DEFAULT_API_MODE, resolveApiMode, selectByMode } = await import('../src/api/mode');
@@ -30,6 +34,24 @@ test('selectByMode는 현재 모드의 구현을 고른다', () => {
   assert.equal(selectByMode(implementations, 'api'), 'from-api');
   assert.equal(selectByMode(implementations, 'mock'), 'from-mock');
   assert.equal(selectByMode(implementations), 'from-mock', '기본은 API_MODE');
+});
+
+test('npm run dev:api는 커밋된 .env.api로 API 모드 dev 서버를 띄운다', () => {
+  const frontendDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  const scripts = JSON.parse(readFileSync(path.join(frontendDir, 'package.json'), 'utf8')).scripts;
+  // An inline `VITE_API_MODE=api vite` fails in Windows cmd; `--mode api` loads .env.api on every OS.
+  assert.equal(scripts['dev:api'], `${scripts.dev} --mode api`);
+  // A shell value outranks env files in loadEnv, so this checks the file alone.
+  const shellValue = process.env.VITE_API_MODE;
+  delete process.env.VITE_API_MODE;
+  try {
+    assert.equal(resolveApiMode(loadEnv('api', frontendDir)), 'api');
+  } finally {
+    if (shellValue !== undefined) process.env.VITE_API_MODE = shellValue;
+  }
+  if (typeof viteConfig !== 'function') throw new Error('Expected Vite config factory');
+  const config = viteConfig({ command: 'serve', mode: 'api', isPreview: false, isSsrBuild: false });
+  assert.deepEqual(config.define, { __CAMPUS_MOCK_TOOLS__: 'true', __CAMPUS_SERVICE_BUILD__: 'false' }, 'dev 서버라 테스트 도구는 그대로');
 });
 
 test('프록시는 /api/…와 /ws(WebSocket)를 같은 백엔드로 보낸다', () => {
