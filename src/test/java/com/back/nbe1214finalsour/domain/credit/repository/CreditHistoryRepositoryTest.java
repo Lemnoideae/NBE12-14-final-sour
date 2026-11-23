@@ -12,12 +12,16 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @IntegrationTest
 @Transactional
 class CreditHistoryRepositoryTest {
+
+    private static final UUID KEY = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
 
     @Autowired
     private CreditHistoryRepository creditHistoryRepository;
@@ -97,5 +101,19 @@ class CreditHistoryRepositoryTest {
         assertThatThrownBy(() -> creditHistoryRepository.saveAndFlush(
                 CreditHistory.use(otherUserId, userItemId, 3900L, 1100L, null)))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @DisplayName("같은 회원이 같은 멱등 키로 사용 내역을 두 번 저장하면 DB가 거부한다")
+    void rejectsSameIdempotencyKeyForSameUser() {
+        // given
+        Long secondUserItemId = insertLogoUserItem(userId);
+        creditHistoryRepository.saveAndFlush(CreditHistory.use(userId, userItemId, 3900L, 1100L, KEY));
+
+        // when & then
+        assertThatThrownBy(() -> creditHistoryRepository.saveAndFlush(
+                CreditHistory.use(userId, secondUserItemId, 3900L, 1100L, KEY)))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasStackTraceContaining("uk_credit_history_user_idempotency_key");
     }
 }
