@@ -38,6 +38,10 @@ public class University extends BaseTimeEntity {
     @Column(name = "logo_url", length = 500)
     private String logoUrl;
 
+    /** 운영용 숨김 학교(와플대학교)면 true. 순위·지도·검색에 보이지 않는다 (V14, SCRUM-235) */
+    @Column(name = "hidden", nullable = false)
+    private boolean hidden;
+
     public University(String name) {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("학교 이름은 비어 있을 수 없습니다.");
