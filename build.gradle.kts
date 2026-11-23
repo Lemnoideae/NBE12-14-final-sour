@@ -1,7 +1,9 @@
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import org.gradle.testing.jacoco.tasks.JacocoReport
 
 plugins {
     java
+    id("jacoco")
     id("org.springframework.boot") version "4.1.2"
     id("io.spring.dependency-management") version "1.1.7"
 }
@@ -14,6 +16,10 @@ java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
     }
+}
+
+jacoco {
+    toolVersion = "0.8.16"
 }
 
 repositories {
@@ -116,4 +122,21 @@ val integrationTest by tasks.registering(Test::class) {
 // ./gradlew build → 둘 다 실행
 tasks.check {
     dependsOn(integrationTest)
+}
+
+tasks.register<JacocoReport>("codeCoverageReport") {
+    dependsOn(tasks.named("test"), integrationTest)
+
+    executionData(
+        tasks.named<Test>("test").get(),
+        integrationTest.get()
+    )
+
+    sourceSets(sourceSets.main.get())
+
+    reports {
+        html.required.set(true)
+        xml.required.set(true)
+        csv.required.set(false)
+    }
 }
