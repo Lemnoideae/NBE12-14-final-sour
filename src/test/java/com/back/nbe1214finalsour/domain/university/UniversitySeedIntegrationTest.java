@@ -68,6 +68,7 @@ class UniversitySeedIntegrationTest {
         Long waffleId = universityRepository.findByName("와플대학교").orElseThrow().getId();
 
         assertThat(universityCache.getName(waffleId)).isEqualTo("와플대학교");
+        assertThat(universityCache.isHidden(waffleId)).isTrue();
         assertThat(universityRepository.findById(waffleId)).get().extracting(University::isHidden).isEqualTo(true);
     }
 

@@ -41,7 +41,7 @@ public class UniversityQueryService {
             int size
     ) {
         return universityRepository
-                .findByNameContainingIgnoreCaseOrderByNameAsc(
+                .findByHiddenFalseAndNameContainingIgnoreCaseOrderByNameAsc(
                         keyword,
                         PageRequest.of(0, size)
                 )

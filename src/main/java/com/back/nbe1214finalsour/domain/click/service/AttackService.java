@@ -40,6 +40,10 @@ public class AttackService {
         }
 
         String targetName = universityCache.getName(targetUniversityId);
+        // 숨김 학교는 순위·지도·검색에 없으므로 대상이 될 수 없다 (SCRUM-236)
+        if (universityCache.isHidden(targetUniversityId)) {
+            throw new BusinessException(ErrorCode.UNIV_NOT_FOUND);
+        }
         // 대상 검증 시점의 소속을 사용한다. 거절된 공격은 제출 ID·요청 한도를 소비하지 않는다.
         if (allianceAllyChecker.areAllies(universityId, targetUniversityId)) {
             throw new BusinessException(ErrorCode.ATTACK_ALLY_UNIVERSITY);

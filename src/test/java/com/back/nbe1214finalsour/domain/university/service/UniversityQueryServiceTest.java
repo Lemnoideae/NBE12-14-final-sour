@@ -69,7 +69,7 @@ class UniversityQueryServiceTest {
         given(university.getId()).willReturn(12L);
         given(university.getName()).willReturn("서울대학교");
 
-        given(universityRepository.findByNameContainingIgnoreCaseOrderByNameAsc(
+        given(universityRepository.findByHiddenFalseAndNameContainingIgnoreCaseOrderByNameAsc(
                 eq("서울"), any(Pageable.class)
         )).willReturn(List.of(university));
 
@@ -85,7 +85,7 @@ class UniversityQueryServiceTest {
                 ArgumentCaptor.forClass(Pageable.class);
 
         verify(universityRepository)
-                .findByNameContainingIgnoreCaseOrderByNameAsc(
+                .findByHiddenFalseAndNameContainingIgnoreCaseOrderByNameAsc(
                         eq("서울"), captor.capture()
                 );
 
@@ -97,7 +97,7 @@ class UniversityQueryServiceTest {
     @DisplayName("검색 결과가 없으면 빈 목록을 반환한다")
     void searchUniversities_empty() {
 
-        given(universityRepository.findByNameContainingIgnoreCaseOrderByNameAsc(
+        given(universityRepository.findByHiddenFalseAndNameContainingIgnoreCaseOrderByNameAsc(
                 eq("없는학교"), any(Pageable.class)
         )).willReturn(List.of());
 

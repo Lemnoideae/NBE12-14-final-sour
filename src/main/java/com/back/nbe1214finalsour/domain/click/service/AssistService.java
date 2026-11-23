@@ -48,6 +48,10 @@ public class AssistService {
             throw new BusinessException(ErrorCode.ASSIST_NOT_ALLY, "내 학교 지원 userId=" + userId);
         }
         String targetName = universityCache.getName(targetUniversityId);
+        // 숨김 학교 점수는 공개 학교 순위(RANK_UNIV)에 넣지 않는다 (SCRUM-236)
+        if (universityCache.isHidden(targetUniversityId)) {
+            throw new BusinessException(ErrorCode.UNIV_NOT_FOUND);
+        }
         if (!allianceAllyChecker.areAllies(universityId, targetUniversityId)) {
             throw new BusinessException(ErrorCode.ASSIST_NOT_ALLY,
                     "동맹 아님 userId=" + userId + ", target=" + targetUniversityId);

@@ -54,6 +54,11 @@ public enum RedisKey {
     // 순위 (ZSet)
     /** 학교 점수·순위. member: universityId, score: 학교 점수 */
     RANK_UNIV("rank:univ", Structure.ZSET, ValueFormat.PLAIN),
+    /**
+     * 숨김 학교(운영팀용 와플대학교)의 학교 점수. RANK_UNIV와 같은 형식 (SCRUM-236).
+     * 숨김 학교 점수를 RANK_UNIV에 넣지 않아야 순위·지도·어제 순위에 나오지 않고, 다른 학교 순위도 밀리지 않는다
+     */
+    RANK_UNIV_HIDDEN("rank:hidden:univ", Structure.ZSET, ValueFormat.PLAIN),
     /** 학과 점수·순위. member: departmentId, score: 학과 점수 */
     RANK_DEPT("rank:univ:%s:dept", Structure.ZSET, ValueFormat.PLAIN),
     /** 개인 기여도·순위. member: userId, score: 기여도 */

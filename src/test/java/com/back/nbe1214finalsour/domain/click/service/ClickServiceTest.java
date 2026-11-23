@@ -7,6 +7,7 @@ import com.back.nbe1214finalsour.domain.click.dto.ClickResponse;
 import com.back.nbe1214finalsour.domain.clicker.entity.Clicker;
 import com.back.nbe1214finalsour.domain.clicker.repository.UserClickerLevelCache;
 import com.back.nbe1214finalsour.domain.clicker.service.ClickerService;
+import com.back.nbe1214finalsour.domain.university.repository.UniversityCache;
 import com.back.nbe1214finalsour.domain.university.service.library.LibraryBonusChecker;
 import com.back.nbe1214finalsour.domain.user.entity.User;
 import com.back.nbe1214finalsour.domain.user.entity.UserStatus;
@@ -92,6 +93,8 @@ class ClickServiceTest {
     private User user;
     @Mock
     private AllianceStandingResolver allianceStandingResolver;
+    @Mock
+    private UniversityCache universityCache;
 
     private ClickService clickService;
 
@@ -102,7 +105,7 @@ class ClickServiceTest {
                 actionRateLimiter, clickCountLimiter, clickerService, abuseVerificationService,
                 userClickerLevelCache);
         clickService = new ClickService(stringRedisTemplate, userRepository, redisHandler, clickActionGuard,
-                libraryBonusChecker, allianceStandingResolver);
+                libraryBonusChecker, allianceStandingResolver, universityCache);
         lenient().when(allianceStandingResolver.resolve(UNIVERSITY_ID))
                 .thenReturn(AllianceStandingResolver.AllianceStanding.NONE);
     }
