@@ -8,6 +8,7 @@ import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "credit_history")
@@ -47,7 +48,7 @@ public class CreditHistory {
     private OffsetDateTime createdAt;
 
     // 아이템 구매로 크레딧을 쓴 기록
-    public static CreditHistory use(Long userId, Long userItemId, long amount, long balanceAfter) {
+    public static CreditHistory use(Long userId, Long userItemId, long amount, long balanceAfter, UUID idempotencyKey) {
         CreditHistory history = new CreditHistory();
         history.userId = userId;
         history.userItemId = userItemId;

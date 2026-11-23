@@ -72,7 +72,7 @@ class CreditHistoryRepositoryTest {
     void saveUseHistory() {
         // when
         CreditHistory saved = creditHistoryRepository.saveAndFlush(
-                CreditHistory.use(userId, userItemId, 3900L, 1100L));
+                CreditHistory.use(userId, userItemId, 3900L, 1100L, null));
         entityManager.clear();   // 영속성 컨텍스트를 비워 DB에서 다시 읽음
 
         // then
@@ -90,7 +90,7 @@ class CreditHistoryRepositoryTest {
     @DisplayName("다른 회원의 구매 이력에는 원장을 연결할 수 없다 (복합 FK)")
     void cannotLinkOtherUsersUserItem() {
         assertThatThrownBy(() -> creditHistoryRepository.saveAndFlush(
-                CreditHistory.use(otherUserId, userItemId, 3900L, 1100L)))
+                CreditHistory.use(otherUserId, userItemId, 3900L, 1100L, null)))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 }

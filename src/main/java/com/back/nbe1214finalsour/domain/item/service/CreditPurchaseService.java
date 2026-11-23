@@ -47,7 +47,7 @@ public class CreditPurchaseService {
 
         // 크레딧 사용 내역 저장 (구매 이력과 연결)
         this.creditHistoryRepository.save(
-                CreditHistory.use(userId, userItem.getId(), item.getPrice(), myCreditBalance));
+                CreditHistory.use(userId, userItem.getId(), item.getPrice(), myCreditBalance, null));
 
         // 로고 적용: 아이템 종류에 따라 학교·학과·개인 로고를 덮어씀 (마지막 구매 기준, 커밋 시 변경 감지로 UPDATE)
         switch (item.getType()) {
