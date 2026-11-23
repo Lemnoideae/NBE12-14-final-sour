@@ -31,6 +31,7 @@ class CreditHistoryRepositoryTest {
     private Long userId;
     private Long otherUserId;
     private Long userItemId;
+    private Long logoItemId;
 
     @BeforeEach
     void setUp() {
@@ -48,15 +49,19 @@ class CreditHistoryRepositoryTest {
                 VALUES ('원장 테스트 학교 로고', '우리 학교 로고 변경', 'LOGO_UNIVERSITY', 'CREDIT', 3900, NULL, NULL)
                 ON CONFLICT DO NOTHING
                 """);
-        Long logoItemId = jdbcTemplate.queryForObject(
+        logoItemId = jdbcTemplate.queryForObject(
                 "SELECT id FROM item WHERE type = 'LOGO_UNIVERSITY'", Long.class);
 
-        // 이 회원의 로고 구매 이력 (영구라 expired_at 없음)
-        userItemId = jdbcTemplate.queryForObject("""
+        userItemId = insertLogoUserItem(userId);
+    }
+
+    // 이 회원의 로고 구매 이력 (영구라 expired_at 없음)
+    private Long insertLogoUserItem(Long ownerId) {
+        return jdbcTemplate.queryForObject("""
                 INSERT INTO user_item (user_id, item_id, price, logo_image_url)
                 VALUES (?, ?, 3900, 'https://cdn.devcproject.cloud/custom-logo/1/abc.png')
                 RETURNING id
-                """, Long.class, userId, logoItemId);
+                """, Long.class, ownerId, logoItemId);
     }
 
     private Long insertUser(Long universityId, Long departmentId, String nickname, String email, String hashChar) {
