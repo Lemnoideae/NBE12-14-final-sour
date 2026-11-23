@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.auth.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -8,7 +9,9 @@ import jakarta.validation.constraints.Size;
  * 길이는 가입 규칙의 최대값과 같다 (그보다 긴 비밀번호로 가입한 회원은 없다).
  */
 public record LoginRequest(
+        @Schema(description = "이메일", example = "student@example.ac.kr")
         @NotBlank @Size(max = 254) String email,
+        @Schema(description = "비밀번호", example = "Passw0rd!")
         @NotBlank @Size(max = 64) String password) {
 
     /** 비밀번호가 로그에 남지 않도록 가린다 */
