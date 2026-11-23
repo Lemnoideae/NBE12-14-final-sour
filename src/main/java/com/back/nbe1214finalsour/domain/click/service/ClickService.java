@@ -4,6 +4,7 @@ import com.back.nbe1214finalsour.domain.alliance.service.AllianceStandingResolve
 import com.back.nbe1214finalsour.domain.click.dto.ClickApplyResponse;
 import com.back.nbe1214finalsour.domain.click.dto.ClickRequest;
 import com.back.nbe1214finalsour.domain.click.dto.ClickResponse;
+import com.back.nbe1214finalsour.domain.university.repository.UniversityCache;
 import com.back.nbe1214finalsour.domain.university.service.library.LibraryBonusChecker;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
@@ -31,6 +32,7 @@ public class ClickService {
     private final ClickActionGuard clickActionGuard;
     private final LibraryBonusChecker libraryBonusChecker;
     private final AllianceStandingResolver allianceStandingResolver;
+    private final UniversityCache universityCache;
 
     private static final RedisScript<List> APPLY_CLICK = RedisScript.of(new ClassPathResource("redis/apply-click.lua"), List.class);
     private static final BigDecimal LIBRARY_MULTIPLIER = new BigDecimal("1.2");
@@ -70,8 +72,9 @@ public class ClickService {
 
         // 4. Redis에 반영
         long nowSec = Instant.now().getEpochSecond();
+        // 숨김 학교(운영팀용) 점수는 공개 학교 순위에 넣지 않는다. 순위·지도·어제 순위는 RANK_UNIV만 읽는다 (SCRUM-236)
         List<String> keys = List.of(
-                RedisKey.RANK_UNIV.of(),
+                RedisKey.univRank(universityCache.isHidden(universityId)),
                 RedisKey.RANK_DEPT.of(universityId),
                 RedisKey.RANK_USER.of(universityId),
                 RedisKey.DIRTY_UNIV.of(),

@@ -8,11 +8,13 @@ import org.springframework.data.jpa.repository.Query;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface DepartmentRepository extends JpaRepository<Department, Long> {
 
     List<Department> findByUniversity_IdOrderByNameAsc(Long universityId);
     boolean existsByUniversity_IdAndName(Long universityId, String name);
+    Optional<Department> findByUniversity_IdAndName(Long universityId, String name);
     // 특정 학교에서 누적 점수가 높은 학과부터 조회
     List<Department> findByUniversity_IdOrderByTotalScoreDescIdAsc(
             Long universityId,

@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.alliance.service;
 
+import com.back.nbe1214finalsour.domain.university.repository.UniversityCache;
 import com.back.nbe1214finalsour.global.redis.RedisKey;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ClassPathResource;
@@ -22,6 +23,7 @@ public class AllianceMatchRedisSettlementService {
             );
 
     private final StringRedisTemplate redisTemplate;
+    private final UniversityCache universityCache;
 
     public boolean settleOnce(
             long matchId,
@@ -52,14 +54,20 @@ public class AllianceMatchRedisSettlementService {
                 List.of(
                         RedisKey.RANK_UNIV.of(),
                         RedisKey.DIRTY_UNIV.of(),
-                        "match:" + matchId + ":settled"
+                        "match:" + matchId + ":settled",
+                        RedisKey.RANK_UNIV_HIDDEN.of()
                 ),
                 String.valueOf(loserA),
                 String.valueOf(loserB),
                 String.valueOf(winnerA),
                 String.valueOf(winnerB),
                 String.valueOf(contributionA),
-                String.valueOf(contributionB)
+                String.valueOf(contributionB),
+                // 숨김 학교도 대결에 참여하지만, 점수는 공개 학교 순위에 넣지 않는다 (SCRUM-238)
+                hiddenFlag(loserA),
+                hiddenFlag(loserB),
+                hiddenFlag(winnerA),
+                hiddenFlag(winnerB)
         );
 
         if (result == null) {
@@ -67,5 +75,9 @@ public class AllianceMatchRedisSettlementService {
         }
 
         return result == 1L;
+    }
+
+    private String hiddenFlag(long universityId) {
+        return universityCache.isHidden(universityId) ? "1" : "0";
     }
 }

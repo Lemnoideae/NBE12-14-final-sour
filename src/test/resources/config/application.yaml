@@ -16,3 +16,8 @@ email-crypto:
 # 점수 1분 배치 스케줄링 끄기
 scheduling:
   enabled: false
+
+# 개발자 공용 계정 끄기. 셸이나 .env에 DEV_ACCOUNT_PASSWORD가 있어도 테스트 DB에 계정을 만들지 않는다.
+# 생성 로직은 DevAccountInitializerIntegrationTest가 설정을 직접 넣어 확인한다
+dev-account:
+  enabled: false
