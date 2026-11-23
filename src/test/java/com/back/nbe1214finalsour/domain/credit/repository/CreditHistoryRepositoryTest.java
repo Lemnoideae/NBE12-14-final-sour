@@ -116,4 +116,20 @@ class CreditHistoryRepositoryTest {
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasStackTraceContaining("uk_credit_history_user_idempotency_key");
     }
+
+    @Test
+    @DisplayName("다른 회원이 같은 멱등 키를 쓰면 둘 다 저장된다")
+    void allowsSameIdempotencyKeyForDifferentUsers() {
+        // given
+        Long otherUserItemId = insertLogoUserItem(otherUserId);
+
+        // when
+        creditHistoryRepository.saveAndFlush(CreditHistory.use(userId, userItemId, 3900L, 1100L, KEY));
+        creditHistoryRepository.saveAndFlush(CreditHistory.use(otherUserId, otherUserItemId, 3900L, 1100L, KEY));
+
+        // then
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM credit_history WHERE idempotency_key = ?", Long.class, KEY))
+                .isEqualTo(2L);
+    }
 }
