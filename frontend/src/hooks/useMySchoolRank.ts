@@ -4,9 +4,10 @@
 import { useMemo } from 'react';
 import { useAuthSession } from '../api/ApiProvider';
 import { selectByMode } from '../api/mode';
-import { formatRankChange, useMySchoolRanking } from '../api/rankings';
+import { formatRankChange, useMySchoolRanking, useOffListSchoolScore } from '../api/rankings';
 import { useMyInfo } from '../api/users';
 import { getSchoolRankings } from '../data/mockRankings';
+import { isListedSchool } from '../data/schoolDirectory';
 import type { SchoolId } from '../data/schoolIds';
 
 export interface MySchoolRank {
@@ -30,8 +31,22 @@ function useMockMySchoolRank(schoolScore: number, schoolId: SchoolId): MySchoolR
 // The demo score is not the server's, so the API mode ignores it.
 export function useApiMySchoolRank(_schoolScore: number, _schoolId: SchoolId): MySchoolRank {
   const signedIn = useAuthSession().status === 'signed-in';
-  const viewerId = useMyInfo().data?.id ?? null;
+  const me = useMyInfo().data;
+  const viewerId = me?.id ?? null;
+  const myUniversityId = me?.university.id ?? null;
+  const offList = myUniversityId !== null && !isListedSchool(myUniversityId);
   const ranking = useMySchoolRanking(signedIn ? viewerId : null);
+  const offListScore = useOffListSchoolScore(signedIn && offList ? viewerId : null, offList ? myUniversityId : null);
+  // The hidden operator school (#144) has a score but never a national rank.
+  if (offList) {
+    return {
+      rank: null,
+      change: null,
+      score: offListScore.data ?? null,
+      scoreStatus: offListScore.data !== undefined ? 'unranked' : offListScore.isError ? 'failed' : 'loading',
+      retry: () => { void offListScore.refetch(); },
+    };
+  }
   const mine = ranking.data;
   return {
     rank: mine?.rank ?? null,

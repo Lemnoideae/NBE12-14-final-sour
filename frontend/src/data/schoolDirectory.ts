@@ -56,13 +56,18 @@ export function getSchoolViews(schoolScore = INITIAL_SCHOOL_SCORE, mySchoolId = 
  * rankings and search on purpose, so it never joins getSchoolViews. Name and score come from the server and game
  * state; it has no region and no national rank (0).
  */
-export function offListSchoolView(schoolId: SchoolId, name: string, score: number): SchoolView {
+export function offListSchoolView(schoolId: SchoolId, name: string, score: number, isMySchool = true): SchoolView {
   return {
     id: schoolId, name, shortName: name, firstSyllable: name.slice(0, 1), badgeColor: '#6b7280',
     region: '기타', filterRegion: '기타', city: '비공개 학교',
     score, rank: 0, rankChange: '-', campusLevel: getCampusStage(score).level,
-    isMySchool: true, isTop3: false, logoStatus: schoolLogoStatus(schoolId),
+    isMySchool, isTop3: false, logoStatus: schoolLogoStatus(schoolId),
   };
+}
+
+/** False for a school outside the static list, such as the hidden operator school (#144). */
+export function isListedSchool(schoolId: SchoolId): boolean {
+  return BASE_BY_ID.has(schoolId);
 }
 
 export function getSchoolById(views: readonly SchoolView[], schoolId: SchoolId): SchoolView | undefined {

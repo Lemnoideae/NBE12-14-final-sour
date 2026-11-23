@@ -6,6 +6,7 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useApiClient } from './ApiProvider';
 import type { ApiClient } from './client';
+import { getUniversityDetail, type UniversityDetail } from './universities';
 
 /** Rows per request. The backend accepts 1–100 and defaults to 20. */
 export const RANKING_PAGE_SIZE = 20;
@@ -133,6 +134,22 @@ export function useMySchoolRanking(viewerId: number | null) {
     queryFn: ({ signal }) => getRankingPage(client, 'school', { page: 0, size: 1, signal }),
     select: (page: UniversityRankingPage) => page.myUniversity,
     enabled: viewerId !== null,
+    refetchInterval: MY_SCHOOL_RANK_REFRESH_MS,
+  });
+}
+
+/**
+ * My school's score when it is outside the static list (the hidden operator school, #144). The rankings leave hidden
+ * schools out, so `myUniversity` is null for them; GET /universities/{id} reads the hidden school's score instead.
+ * The key sits under rankingKeys.mySchool, so a click answer cancels a request in flight as it does the ranking's.
+ */
+export function useOffListSchoolScore(viewerId: number | null, universityId: number | null) {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: [...rankingKeys.mySchool(viewerId ?? 0), 'off-list', universityId ?? 0] as const,
+    queryFn: ({ signal }) => getUniversityDetail(client, universityId!, { signal }),
+    select: (detail: UniversityDetail) => detail.totalScore,
+    enabled: viewerId !== null && universityId !== null,
     refetchInterval: MY_SCHOOL_RANK_REFRESH_MS,
   });
 }
