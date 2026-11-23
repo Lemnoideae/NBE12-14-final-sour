@@ -37,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -159,17 +160,20 @@ class CreditPurchaseServiceTest {
     }
 
     @Test
-    @DisplayName("크레딧 사용 내역은 방금 저장한 구매 이력과 연결되고, 사용 금액과 차감 후 잔액을 담는다")
+    @DisplayName("크레딧 사용 내역은 방금 저장한 구매 이력과 연결되고, 사용 금액·차감 후 잔액·멱등 키를 담는다")
     void purchase_saveCreditHistory() {
+        // given
         given(this.creditWallet.tryDeduct(USER_ID, 3900L))
                 .willReturn(OptionalLong.of(1100L));
         givenUserItemSavedWithId(7001L);
         givenUniversity();
 
+        // when
         this.creditPurchaseService.purchase(USER_ID, UNIVERSITY_ID, null, UNIVERSITY_LOGO, LOGO_URL, KEY);
 
+        // then
         ArgumentCaptor<CreditHistory> captor = ArgumentCaptor.forClass(CreditHistory.class);
-        verify(this.creditHistoryRepository).save(captor.capture());
+        then(this.creditHistoryRepository).should().save(captor.capture());
 
         CreditHistory saved = captor.getValue();
         assertThat(saved.getUserId()).isEqualTo(USER_ID);
@@ -177,6 +181,7 @@ class CreditPurchaseServiceTest {
         assertThat(saved.getType()).isEqualTo(CreditHistoryType.USE);
         assertThat(saved.getAmount()).isEqualTo(3900L);
         assertThat(saved.getBalanceAfter()).isEqualTo(1100L);
+        assertThat(saved.getIdempotencyKey()).isEqualTo(KEY);
     }
 
     @Test
