@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.support.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -15,10 +16,15 @@ import org.jspecify.annotations.Nullable;
  *                       빈 문자열은 위젯을 불러오지 못했다는 뜻이라 {@code null}로 바꾸지 않는다
  */
 public record SupportCreateRequest(
+        @Schema(description = "답변 수신 이메일", example = "student@example.ac.kr")
         @NotBlank @Email @Size(max = 254) String recipientEmail,
+        @Schema(description = "제목", example = "문의 제목")
         @NotBlank @Size(max = 100) String title,
+        @Schema(description = "본문", example = "문의 내용입니다.")
         @NotBlank @Size(max = 5000) String content,
+        @Schema(description = "첨부 파일 URL", example = "https://example.com/attachment.png")
         @Nullable String attachFileUrl,
+        @Schema(description = "비회원 봇 확인 토큰", example = "example-turnstile-token")
         @Nullable @Size(max = 2048) String turnstileToken) {
 
     public SupportCreateRequest {

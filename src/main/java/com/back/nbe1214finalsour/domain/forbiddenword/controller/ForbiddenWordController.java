@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.forbiddenword.controller;
 
+import com.back.nbe1214finalsour.domain.forbiddenword.controller.docs.ForbiddenWordApiDocs;
 import com.back.nbe1214finalsour.domain.forbiddenword.dto.ForbiddenWordsResponse;
 import com.back.nbe1214finalsour.domain.forbiddenword.service.ForbiddenWordFilter;
 import com.back.nbe1214finalsour.global.response.ApiResponse;
@@ -12,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/forbidden-words")
-public class ForbiddenWordController {
+public class ForbiddenWordController implements ForbiddenWordApiDocs {
 
     private final ForbiddenWordFilter forbiddenWordFilter;
 
