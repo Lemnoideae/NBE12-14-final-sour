@@ -6,5 +6,6 @@ public record UnivCacheRow(
         Long id,
         String name,
         BigDecimal libraryLat,
-        BigDecimal libraryLng) {
+        BigDecimal libraryLng,
+        boolean hidden) {
 }

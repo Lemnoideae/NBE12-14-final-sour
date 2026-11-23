@@ -27,11 +27,15 @@ public class ScoreFlushService {
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
 
+    private static final String FLUSHING = ":flushing";
+
     public void flush() {
-        String newUserDirtyKey = RedisKey.DIRTY_USER.of() + ":flushing";
-        String newUnivDirtyKey = RedisKey.DIRTY_UNIV.of() + ":flushing";
-        String newDeptDirtyKey = RedisKey.DIRTY_DEPT.of() + ":flushing";
-        String newClickerDirtyKey = RedisKey.DIRTY_CLICKER.of() + ":flushing";
+        String newUserDirtyKey = RedisKey.DIRTY_USER.of() + FLUSHING;
+        String newUnivDirtyKey = RedisKey.DIRTY_UNIV.of() + FLUSHING;
+        String newDeptDirtyKey = RedisKey.DIRTY_DEPT.of() + FLUSHING;
+        String newClickerDirtyKey = RedisKey.DIRTY_CLICKER.of() + FLUSHING;
+        String newAllianceDirtyKey = RedisKey.DIRTY_ALLIANCE.of() + FLUSHING;
+        String newMatchDirtyKey = RedisKey.DIRTY_MATCH.of() + FLUSHING;
 
         // 개인 점수 저장
         if (detach(RedisKey.DIRTY_USER.of(), newUserDirtyKey)) {
@@ -53,8 +57,19 @@ public class ScoreFlushService {
             flushClickerLevels(newClickerDirtyKey);
         }
 
+        // 연합 점수 저장
+        if (detach(RedisKey.DIRTY_ALLIANCE.of(), newAllianceDirtyKey)) {
+            flushAlliance(newAllianceDirtyKey);
+        }
+
+        // 대결 점수 저장
+        if (detach(RedisKey.DIRTY_MATCH.of(), newMatchDirtyKey)) {
+            flushMatch(newMatchDirtyKey);
+        }
+
         // 기존 dirty 제거
-        stringRedisTemplate.delete(List.of(newUserDirtyKey, newUnivDirtyKey, newDeptDirtyKey, newClickerDirtyKey));
+        stringRedisTemplate.delete(List.of(newUserDirtyKey, newUnivDirtyKey, newDeptDirtyKey,
+                newClickerDirtyKey, newAllianceDirtyKey, newMatchDirtyKey));
     }
 
     private boolean detach(String dirtyKey, String flushingKey) {
@@ -69,6 +84,80 @@ public class ScoreFlushService {
             stringRedisTemplate.delete(incomingKey);
         }
         return hasNew || hasLeftover;
+    }
+
+    private void flushMatch(String dirtyKey) {
+        List<Long> dirtyMatches = stringRedisTemplate.opsForSet().members(dirtyKey).stream().map(Long::parseLong).toList();
+
+        List<Long> ids = new ArrayList<>();
+        List<Long> aScores = new ArrayList<>();
+        List<Long> bScores = new ArrayList<>();
+
+        for (Long matchId : dirtyMatches) {
+            Map<Object, Object> bySide = stringRedisTemplate.opsForHash().entries(RedisKey.MATCH_SCORE.of(matchId));
+            if (bySide.isEmpty()) continue;
+            ids.add(matchId);
+            aScores.add(Long.parseLong((String) bySide.getOrDefault("A", "0")));
+            bScores.add(Long.parseLong((String) bySide.getOrDefault("B", "0")));
+        }
+
+        if (ids.isEmpty()) return;
+
+        jdbcTemplate.update("""
+                update alliance_match m
+                set a_score = x.a, b_score = x.b
+                from unnest(?::bigint[], ?::bigint[], ?::bigint[]) as x(id, a, b)
+                where m.id = x.id
+                    and m.status = 'IN_PROGRESS'
+                    and (m.a_score, m.b_score) is distinct from (x.a, x.b)
+                """, ids.toArray(Long[]::new), aScores.toArray(Long[]::new), bScores.toArray(Long[]::new));
+    }
+
+    private void flushAlliance(String dirtyKey) {
+        List<Long> dirtyAlliances = stringRedisTemplate.opsForSet().members(dirtyKey).stream().map(Long::parseLong).toList();
+
+        List<Long> ids = new ArrayList<>();
+        List<Long> scores = new ArrayList<>();
+
+        List<Long> memberAllianceIds = new ArrayList<>();
+        List<Long> memberUnivIds = new ArrayList<>();
+        List<Long> memberScores = new ArrayList<>();
+
+        for (Long allianceId : dirtyAlliances) {
+            Map<Object, Object> byUniv = stringRedisTemplate.opsForHash().entries(RedisKey.ALLIANCE_SCORE.of(allianceId));
+            if (byUniv.isEmpty()) continue;
+            byUniv.forEach((univId, score) -> {
+                memberAllianceIds.add(allianceId);
+                memberUnivIds.add(Long.parseLong((String) univId));
+                memberScores.add(Long.parseLong((String) score));
+            });
+            ids.add(allianceId);
+            scores.add(byUniv.values().stream().mapToLong(v -> Long.parseLong((String) v)).sum());
+        }
+
+        if (ids.isEmpty()) return;
+
+        // AllianceUniversity totalScore 값 저장
+        jdbcTemplate.update("""
+                update alliance_university au
+                set total_score = x.score
+                from unnest(?::bigint[], ?::bigint[], ?::bigint[]) as x(alliance_id, university_id, score)
+                where au.id = (select max(id) from alliance_university sau
+                            where sau.alliance_id = x.alliance_id
+                                and sau.university_id = x.university_id
+                                and sau.status in ('ACCEPTED', 'LEFT')
+                                and sau.deleted_at is null)
+                    and au.total_score is distinct from x.score
+                """, memberAllianceIds.toArray(Long[]::new), memberUnivIds.toArray(Long[]::new), memberScores.toArray(Long[]::new));
+
+        // Alliance totalScore 저장
+        jdbcTemplate.update("""
+                update alliance a
+                set total_score = x.score
+                from unnest(?::bigint[], ?::bigint[]) as x(id, score)
+                where a.id = x.id
+                    and a.total_score is distinct from x.score
+                """, ids.toArray(Long[]::new), scores.toArray(Long[]::new));
     }
 
     private void flushDepts(String dirtyKey) {
@@ -112,11 +201,14 @@ public class ScoreFlushService {
         List<String> univIds = new ArrayList<>(dirtyUnivs);
         List<Double> values = stringRedisTemplate.opsForZSet()
                 .score(RedisKey.RANK_UNIV.of(), univIds.toArray());
+        // 숨김 학교 점수는 공개 학교 순위가 아닌 RANK_UNIV_HIDDEN에 있다 (SCRUM-238)
+        List<Double> hiddenValues = stringRedisTemplate.opsForZSet()
+                .score(RedisKey.RANK_UNIV_HIDDEN.of(), univIds.toArray());
 
         List<Long> ids = new ArrayList<>();
         List<Long> scores = new ArrayList<>();
         for (int i = 0; i < univIds.size(); i++) {
-            Double v = values.get(i);
+            Double v = values.get(i) != null ? values.get(i) : hiddenValues.get(i);
             if (v == null) continue;
             ids.add(Long.parseLong(univIds.get(i)));
             scores.add(v.longValue());

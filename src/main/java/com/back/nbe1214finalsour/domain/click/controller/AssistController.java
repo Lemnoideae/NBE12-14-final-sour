@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.click.controller;
 
+import com.back.nbe1214finalsour.domain.click.controller.docs.AssistApiDocs;
 import com.back.nbe1214finalsour.domain.click.dto.AssistRequest;
 import com.back.nbe1214finalsour.domain.click.dto.AssistResponse;
 import com.back.nbe1214finalsour.domain.click.service.AssistService;
@@ -16,10 +17,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/assists")
-public class AssistController {
+public class AssistController implements AssistApiDocs {
 
     private final AssistService assistService;
 
+    @Override
     @PostMapping
     public ApiResponse<AssistResponse> assist(@AuthenticationPrincipal AuthUser user,
                                               @RequestBody @Valid AssistRequest request) {

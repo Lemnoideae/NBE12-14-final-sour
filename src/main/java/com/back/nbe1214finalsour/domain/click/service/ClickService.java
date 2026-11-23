@@ -1,8 +1,10 @@
 package com.back.nbe1214finalsour.domain.click.service;
 
+import com.back.nbe1214finalsour.domain.alliance.service.AllianceStandingResolver;
 import com.back.nbe1214finalsour.domain.click.dto.ClickApplyResponse;
 import com.back.nbe1214finalsour.domain.click.dto.ClickRequest;
 import com.back.nbe1214finalsour.domain.click.dto.ClickResponse;
+import com.back.nbe1214finalsour.domain.university.repository.UniversityCache;
 import com.back.nbe1214finalsour.domain.university.service.library.LibraryBonusChecker;
 import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
@@ -29,6 +31,8 @@ public class ClickService {
     private final RedisHandler redisHandler;
     private final ClickActionGuard clickActionGuard;
     private final LibraryBonusChecker libraryBonusChecker;
+    private final AllianceStandingResolver allianceStandingResolver;
+    private final UniversityCache universityCache;
 
     private static final RedisScript<List> APPLY_CLICK = RedisScript.of(new ClassPathResource("redis/apply-click.lua"), List.class);
     private static final BigDecimal LIBRARY_MULTIPLIER = new BigDecimal("1.2");
@@ -63,17 +67,25 @@ public class ClickService {
         score = multiplierBigDecimal.multiply(BigDecimal.valueOf(score))
                 .setScale(0, RoundingMode.FLOOR).longValueExact();
 
+        // 연합·대결 확인
+        AllianceStandingResolver.AllianceStanding allianceStanding = allianceStandingResolver.resolve(universityId);
+
         // 4. Redis에 반영
         long nowSec = Instant.now().getEpochSecond();
+        // 숨김 학교(운영팀용) 점수는 공개 학교 순위에 넣지 않는다. 순위·지도·어제 순위는 RANK_UNIV만 읽는다 (SCRUM-236)
         List<String> keys = List.of(
-                RedisKey.RANK_UNIV.of(),
+                RedisKey.univRank(universityCache.isHidden(universityId)),
                 RedisKey.RANK_DEPT.of(universityId),
                 RedisKey.RANK_USER.of(universityId),
                 RedisKey.DIRTY_UNIV.of(),
                 RedisKey.DIRTY_DEPT.of(),
                 RedisKey.DIRTY_USER.of(),
                 RedisKey.CLICKS_UNIV_SECOND.of(universityId, nowSec),
-                RedisKey.CLICKS_UNIV_SECOND.of(universityId, nowSec - 1)
+                RedisKey.CLICKS_UNIV_SECOND.of(universityId, nowSec - 1),
+                RedisKey.ALLIANCE_SCORE.of(allianceStanding.allianceId()),
+                RedisKey.MATCH_SCORE.of(allianceStanding.matchId()),
+                RedisKey.DIRTY_ALLIANCE.of(),
+                RedisKey.DIRTY_MATCH.of()
         );
 
         List<String> r = stringRedisTemplate.execute(
@@ -83,7 +95,10 @@ public class ClickService {
                 String.valueOf(departmentId),
                 String.valueOf(userId),
                 String.valueOf(score),
-                String.valueOf(clickCount)
+                String.valueOf(clickCount),
+                String.valueOf(allianceStanding.allianceId()),
+                allianceStanding.team(),
+                String.valueOf(allianceStanding.matchId())
         );
         ClickApplyResponse clickApplyResponse = new ClickApplyResponse(
                 Long.valueOf(r.get(0)),

@@ -24,14 +24,13 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.LongStream;
 
@@ -76,7 +75,7 @@ class AttackIntegrationTest {
     private RivalChecker rivalChecker;
     @Autowired
     private UniversityCache universityCache;
-    @MockitoSpyBean
+    @Autowired
     private Clock clock;
 
     private long universityId;

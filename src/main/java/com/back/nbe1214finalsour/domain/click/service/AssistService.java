@@ -1,6 +1,7 @@
 package com.back.nbe1214finalsour.domain.click.service;
 
 import com.back.nbe1214finalsour.domain.alliance.service.AllianceAllyChecker;
+import com.back.nbe1214finalsour.domain.alliance.service.AllianceStandingResolver;
 import com.back.nbe1214finalsour.domain.click.dto.AssistRequest;
 import com.back.nbe1214finalsour.domain.click.dto.AssistResponse;
 import com.back.nbe1214finalsour.domain.university.repository.UniversityCache;
@@ -8,14 +9,15 @@ import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import com.back.nbe1214finalsour.global.redis.RedisHandler;
 import com.back.nbe1214finalsour.global.redis.RedisKey;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.List;
 
 /**
  * 연합 학교 지원 (추가 명세 §3-3, 결정 7, SCRUM-187).
@@ -35,6 +37,7 @@ public class AssistService {
     private final RedisHandler redisHandler;
     private final UniversityCache universityCache;
     private final AllianceAllyChecker allianceAllyChecker;
+    private final AllianceStandingResolver allianceStandingResolver;
 
     public AssistResponse assist(Long userId, Long universityId, AssistRequest request) {
         int clickCount = request.clickCount();
@@ -57,14 +60,23 @@ public class AssistService {
         long contribScore = itemMultiplier.multiply(BigDecimal.valueOf(base))
                 .setScale(0, RoundingMode.FLOOR).longValueExact();
 
+        // 연합·대결 확인
+        AllianceStandingResolver.AllianceStanding allianceStanding = allianceStandingResolver.resolve(targetUniversityId);
+
         List<String> r = stringRedisTemplate.execute(
                 APPLY_ASSIST,
-                List.of(RedisKey.RANK_UNIV.of(), RedisKey.RANK_USER.of(universityId),
-                        RedisKey.DIRTY_UNIV.of(), RedisKey.DIRTY_USER.of()),
+                // 숨김 학교도 연합 학교로 지원받지만, 점수는 공개 학교 순위에 넣지 않는다 (SCRUM-238)
+                List.of(RedisKey.univRank(universityCache.isHidden(targetUniversityId)), RedisKey.RANK_USER.of(universityId),
+                        RedisKey.DIRTY_UNIV.of(), RedisKey.DIRTY_USER.of(),
+                        RedisKey.ALLIANCE_SCORE.of(allianceStanding.allianceId()), RedisKey.MATCH_SCORE.of(allianceStanding.matchId()),
+                        RedisKey.DIRTY_ALLIANCE.of(), RedisKey.DIRTY_MATCH.of()),
                 String.valueOf(targetUniversityId),
                 String.valueOf(assistScore),
                 String.valueOf(userId),
-                String.valueOf(contribScore)
+                String.valueOf(contribScore),
+                String.valueOf(allianceStanding.allianceId()),
+                allianceStanding.team(),
+                String.valueOf(allianceStanding.matchId())
         );
         return new AssistResponse(
                 (long) clickCount,

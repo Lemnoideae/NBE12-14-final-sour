@@ -7,12 +7,12 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.messaging.support.ExecutorSubscribableChannel;
 import org.springframework.scheduling.TaskScheduler;
-import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
@@ -26,11 +26,13 @@ import org.springframework.web.socket.config.annotation.WebSocketTransportRegist
  *   <li>SimpleBroker heartbeat 10초 (D14, 명세서 §3-7: ALB 유휴 타임아웃 60초보다 짧게)</li>
  *   <li>전송 한도는 {@link ChatWebSocketProperties} (D23)</li>
  *   <li>같은 세션에는 발행 순서대로 보낸다 ({@code preservePublishOrder})</li>
+ *   <li>브로커 설정은 {@code @EnableWebSocketMessageBroker} 대신 {@link ChatBrokerConfiguration}을 불러온다.
+ *       거절 ERROR 프레임이 사라지지 않게 세션 데코레이터만 바꾼 것이다 (GitHub #148)</li>
  * </ul>
  * 서버 간 전달(Redis Pub/Sub)은 {@code ChatRelayConfig}.
  */
 @Configuration
-@EnableWebSocketMessageBroker
+@Import(ChatBrokerConfiguration.class)
 @EnableConfigurationProperties(ChatWebSocketProperties.class)
 public class ChatWebSocketConfig implements WebSocketMessageBrokerConfigurer {
 

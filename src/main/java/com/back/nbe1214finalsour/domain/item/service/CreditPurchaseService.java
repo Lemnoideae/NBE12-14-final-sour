@@ -16,6 +16,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 // 크레딧 아이템(로고 변경권) 구매
 // 디스패처(ItemPurchaseService)와 다른 빈이어야 프록시를 거쳐 @Transactional이 걸린다
 @Service
@@ -32,7 +34,7 @@ public class CreditPurchaseService {
 
     // DB 한 트랜잭션이라 중간에 실패하면 크레딧 차감까지 함께 롤백된다
     @Transactional
-    public ItemPurchaseResult purchase(Long userId, Long universityId, Long departmentId, Item item, String logoImageUrl) {
+    public ItemPurchaseResult purchase(Long userId, Long universityId, Long departmentId, Item item, String logoImageUrl, UUID idempotencyKey) {
         if (logoImageUrl == null || logoImageUrl.isBlank()) {
             throw new BusinessException(ErrorCode.ITEM_LOGO_IMAGE_REQUIRED);
         }
@@ -47,7 +49,7 @@ public class CreditPurchaseService {
 
         // 크레딧 사용 내역 저장 (구매 이력과 연결)
         this.creditHistoryRepository.save(
-                CreditHistory.use(userId, userItem.getId(), item.getPrice(), myCreditBalance));
+                CreditHistory.use(userId, userItem.getId(), item.getPrice(), myCreditBalance, idempotencyKey));
 
         // 로고 적용: 아이템 종류에 따라 학교·학과·개인 로고를 덮어씀 (마지막 구매 기준, 커밋 시 변경 감지로 UPDATE)
         switch (item.getType()) {

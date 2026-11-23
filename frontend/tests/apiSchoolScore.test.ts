@@ -66,11 +66,18 @@ function Probe() {
 }
 
 /** `ranking` answers GET /rankings/universities; `clicks` answers POST /clicks. Both can be held back with a deferred. */
-function mount(handlers: { ranking: () => Promise<Response> | Response; clicks?: (clickCount: number) => Promise<Response> | Response }) {
+function mount(handlers: {
+  ranking: () => Promise<Response> | Response;
+  clicks?: (clickCount: number) => Promise<Response> | Response;
+  /** #144: the signed-in member and GET /universities/{id} for a school outside the static list. */
+  me?: MyInfo;
+  detail?: () => Promise<Response> | Response;
+}) {
   const sent: number[] = [];
   const client = createApiClient({ fetch: (async (input, init) => {
     const path = String(input);
-    if (path.endsWith('/users/me')) return ok(ME);
+    if (path.endsWith('/users/me')) return ok(handlers.me ?? ME);
+    if (/\/universities\/\d+$/.test(path) && handlers.detail) return handlers.detail();
     if (path.includes('/rankings/universities')) return handlers.ranking();
     if (path.endsWith('/clicks')) {
       const { clickCount } = JSON.parse(String(init?.body)) as { clickCount: number };
@@ -150,6 +157,37 @@ test('클릭 응답보다 먼저 요청한 순위 조회가 늦게 도착해도 
   await waitFor(() => assert.equal(schoolScore(), 7_000));
   await act(async () => { late.resolve(ok(rankingPage(5_000))); await settle(); });
   assert.equal(schoolScore(), 7_000);
+});
+
+// #144: the hidden operator school is outside the static list and the rankings, so myUniversity is null for it.
+const OFF_LIST_ID = 9001;
+const OPERATOR: MyInfo = { ...ME, university: { id: OFF_LIST_ID, name: '와플대학교', logoUrl: null }, department: { id: 6697, name: '운영팀' } };
+const detail = (totalScore: number) => ok({
+  id: OFF_LIST_ID, name: '와플대학교', logoUrl: null, totalScore, rank: null, memberCount: 1,
+  topDepartments: [], topContributors: [], isMyUniversity: true, isMyAlly: false, rankChange: null,
+});
+
+test('#144: 정적 목록에 없는 내 학교(숨김 학교)는 순위 대신 학교 상세 점수를 쓴다 (0으로 되돌리지 않는다)', async () => {
+  mount({ me: OPERATOR, ranking: () => ok(rankingPage(null)), detail: () => detail(24) });
+  await waitFor(() => assert.equal(schoolScore(), 24));
+  await act(async () => { await clients[0].refetchQueries({ queryKey: rankingKeys.mySchool(ME.id) }); await settle(); });
+  assert.equal(schoolScore(), 24, '순위의 myUniversity null로 0이 되지 않는다');
+});
+
+test('#144: 클릭 응답보다 먼저 요청한 숨김 학교 점수 조회가 늦게 도착해도 더 오래된 점수로 되돌리지 않는다', async () => {
+  let detailAnswer: Promise<Response> | Response = detail(24);
+  const { sent } = mount({ me: OPERATOR, ranking: () => ok(rankingPage(null)), detail: () => detailAnswer,
+    clicks: (count) => ok({ ...clickAnswer(30, count), university: { id: OFF_LIST_ID, totalScore: 30, rank: 1, logoUrl: null } }) });
+  await waitFor(() => assert.equal(schoolScore(), 24));
+  const late = deferred<Response>();
+  detailAnswer = late.promise;
+  // Requested before the click answer; the click answer cancels it like the ranking (same key prefix).
+  void clients[0].refetchQueries({ queryKey: rankingKeys.mySchool(ME.id) });
+  click();
+  await waitFor(() => assert.equal(sent.length, 1), { timeout: 2500 });
+  await waitFor(() => assert.equal(schoolScore(), 30));
+  await act(async () => { late.resolve(detail(24)); await settle(); });
+  assert.equal(schoolScore(), 30);
 });
 
 test('연결 센서: API 모드 App은 ApiSchoolScoreSync에 미확정 점수와 전송 상태를 넘긴다', () => {

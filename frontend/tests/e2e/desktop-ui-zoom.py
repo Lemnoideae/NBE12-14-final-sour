@@ -1,6 +1,6 @@
 """Check mock PC UI at actual Chromium tab zoom and one-pixel layout boundaries.
 
-Requires Python Playwright and a local Vite server with VITE_API_MODE=mock.
+Requires Python Playwright and a local Vite server with VITE_API_MODE=mock (`npm run dev:mock`).
 """
 import argparse
 import base64

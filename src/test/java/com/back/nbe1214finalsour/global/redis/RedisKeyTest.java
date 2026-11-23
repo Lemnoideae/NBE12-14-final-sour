@@ -135,6 +135,7 @@ class RedisKeyTest {
                 "USER_EFFECT_VOIDED|user:%s:effect:voided|HASH|JSON",
                 // 순위 (ZSet)
                 "RANK_UNIV|rank:univ|ZSET|PLAIN",
+                "RANK_UNIV_HIDDEN|rank:hidden:univ|ZSET|PLAIN",
                 "RANK_DEPT|rank:univ:%s:dept|ZSET|PLAIN",
                 "RANK_USER|rank:univ:%s:user|ZSET|PLAIN",
                 "SCORE_USER_ATTACK|score:user:attack|HASH|PLAIN",
@@ -148,6 +149,8 @@ class RedisKeyTest {
                 "DIRTY_DEPT|dirty:dept|SET|PLAIN",
                 "DIRTY_USER|dirty:user|SET|PLAIN",
                 "DIRTY_CLICKER|dirty:clicker|SET|PLAIN",
+                "DIRTY_ALLIANCE|dirty:alliance|SET|PLAIN",
+                "DIRTY_MATCH|dirty:match|SET|PLAIN",
                 // 클릭 (Click)
                 "CLICKS_UNIV_SECOND|clicks:univ:%s:%s|STRING|PLAIN",
                 "ATTACKS_UNIV_SECOND|attacks:univ:%s:%s|STRING|PLAIN",
