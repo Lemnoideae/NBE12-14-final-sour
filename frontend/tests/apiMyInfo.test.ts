@@ -38,6 +38,7 @@ const { ApiLoginPhone, ApiSessionWatcher } = await import('../src/components/onb
 const { DEFAULT_PLAYER, initialSchoolScore } = await import('../src/data/gameRules');
 const { REAL_UNIVERSITIES } = await import('../src/data/universitiesData');
 const { SCHOOL_ID } = await import('../src/data/schoolIds');
+const { countByRegion, getSchoolViews } = await import('../src/data/schoolDirectory');
 type MyInfo = import('../src/api/users').MyInfo;
 
 const queryClients: Array<ReturnType<typeof createQueryClient>> = [];
@@ -83,6 +84,19 @@ const ADMIN: MyInfo = {
   totalContribScore: 50,
 };
 
+/** The developer account's school (#144): hidden on the server, so it is not in the static school list. */
+const OFF_LIST_SCHOOL_ID = 9001;
+const OPERATOR: MyInfo = {
+  ...STUDENT,
+  id: 77,
+  nickname: '와플운영팀',
+  email: 'dev-account@example.com',
+  role: 'ADMIN',
+  university: { id: OFF_LIST_SCHOOL_ID, name: '와플대학교', logoUrl: null },
+  department: { id: 6697, name: '운영팀' },
+  totalContribScore: 0,
+};
+
 // ---------------------------------------------------------------------------------------------------------------
 // API module
 // ---------------------------------------------------------------------------------------------------------------
@@ -99,10 +113,11 @@ test('내 정보는 GET /api/v1/users/me에 토큰을 붙여 받는다', async (
   assert.deepEqual(sent, [['GET', '/api/v1/users/me', 'Bearer access-1']]);
 });
 
-test('게임에 넘기는 값: 학교 ID·학과 이름·닉네임·이메일·기여도·클리커 레벨', () => {
+test('게임에 넘기는 값: 학교 ID·학교 이름·학과 이름·닉네임·이메일·기여도·클리커 레벨', () => {
   assert.deepEqual(accountFromMyInfo(STUDENT), {
     userId: '3',
     schoolId: SCHOOL_ID.kaist,
+    schoolName: 'KAIST',
     department: '전산학부',
     nickname: '카이새내기',
     email: 'student@kaist.ac.kr',
@@ -230,6 +245,27 @@ test('새로 고친 뒤 세션이 복구되면 /users/me 값으로 학교·닉�
   assert.equal((await screen.findByTestId('signed-in')).querySelector('h2')?.textContent, '카이새내기님, 로그인되어 있어요',
     '새로 고친 뒤에도 계정 화면에 닉네임을 보인다');
   assert.deepEqual(calls, ['POST /api/v1/auth/reissue', 'GET /api/v1/users/me Bearer token-1']);
+});
+
+test('#144: 정적 학교 목록에 없는 학교(숨김 학교) 회원도 멈추지 않고, 내 학교는 서버 이름·점수 0으로 보이며 지도 목록에는 넣지 않는다', async () => {
+  assert.equal(REAL_UNIVERSITIES.some((school) => school.id === OFF_LIST_SCHOOL_ID), false, '테스트 전제: 목록 밖 학교 ID');
+  mount({ restoreAs: OPERATOR });
+
+  await waitFor(() => assert.equal(probe().nickname, '와플운영팀'));
+  assert.deepEqual(probe(), {
+    school: '와플대학교',
+    nickname: '와플운영팀',
+    department: '운영팀',
+    email: 'dev-account@example.com',
+    contribution: 0,
+    clicker: 2,
+    schoolScore: 0,
+    admin: true,
+  });
+  assert.equal(initialSchoolScore(OFF_LIST_SCHOOL_ID), 0);
+  const views = getSchoolViews(0, OFF_LIST_SCHOOL_ID);
+  assert.equal(views.some((school) => school.id === OFF_LIST_SCHOOL_ID), false, '지도·검색 목록에 숨김 학교를 넣지 않는다');
+  assert.equal([...countByRegion(views).values()].reduce((sum, count) => sum + count, 0), REAL_UNIVERSITIES.length);
 });
 
 test('같은 값으로 다시 받으면 게임을 건드리지 않는다 (서버 클릭 연동 전 로컬 점수 보존)', async () => {

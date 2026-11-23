@@ -8,7 +8,7 @@ import { selectByMode } from '../api/mode';
 import { formatRankChange } from '../api/rankings';
 import { useUniversityDetail, type UniversityDetail } from '../api/universities';
 import { useMyInfo } from '../api/users';
-import type { SchoolView } from '../data/schoolDirectory';
+import { offListSchoolView, type SchoolView } from '../data/schoolDirectory';
 import type { SchoolId } from '../data/schoolIds';
 import { schoolLogoStatus } from '../data/schoolLogos';
 import { REAL_UNIVERSITIES } from '../data/universitiesData';
@@ -53,10 +53,13 @@ export function useMockVisitSchool(schoolId: SchoolId | null): VisitSchool {
   };
 }
 
-/** The directory row with the server's name, score and rank. */
-export function toVisitSchoolView(detail: UniversityDetail): VisitSchoolView | undefined {
-  const base = REAL_UNIVERSITIES.find((university) => university.id === detail.id);
-  if (!base) return undefined;
+/**
+ * The directory row with the server's name, score and rank. A school outside the directory (the hidden operator
+ * school, #144) gets a plain row from the server name: grey badge, no region.
+ */
+export function toVisitSchoolView(detail: UniversityDetail): VisitSchoolView {
+  const base = REAL_UNIVERSITIES.find((university) => university.id === detail.id)
+    ?? offListSchoolView(detail.id, detail.name, detail.totalScore, detail.isMyUniversity);
   return {
     ...base,
     name: detail.name,
@@ -75,13 +78,13 @@ export function useApiVisitSchool(schoolId: SchoolId | null): VisitSchool {
   const signedIn = useAuthSession().status === 'signed-in';
   const me = useMyInfo();
   const viewer = signedIn ? me.data : undefined;
-  // Unknown IDs never reach the server: the directory has every seeded school (tests/schoolIds.test.ts).
-  const known = schoolId !== null && REAL_UNIVERSITIES.some((university) => university.id === schoolId);
+  // The server decides: a school outside the directory may still exist (the hidden operator school, #144); else 404.
+  const known = schoolId !== null;
   // Signed in, wait for MyInfo so the first request already carries the viewer (one cache entry, no refetch).
   const query = useUniversityDetail(known ? schoolId : null, { viewerId: viewer?.id ?? null, enabled: !signedIn || !!viewer });
   const myRow = viewer && REAL_UNIVERSITIES.find((university) => university.id === viewer.university.id);
   const school = query.data ? toVisitSchoolView(query.data) : undefined;
-  const notFound = !known || (isApiError(query.error) && query.error.status === 404) || (!!query.data && !school);
+  const notFound = !known || (isApiError(query.error) && query.error.status === 404);
   const { refetch } = query;
   return {
     status: notFound ? 'not-found' : school ? 'ready' : query.isError || me.isError ? 'failed' : 'loading',

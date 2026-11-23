@@ -59,12 +59,12 @@ export const MY_SCHOOL_ID: SchoolId = SCHOOL_ID.hanyang;
 /**
  * Starting school score when a player starts over at a school (M4 D2). The default school keeps the existing
  * mock value; other schools start from their shared mock score, so the ranking does not jump on enrolment.
+ * A school outside the static list (the hidden operator school, #144) starts from 0 until the server score arrives.
  */
 export function initialSchoolScore(schoolId: SchoolId): number {
   if (schoolId === MY_SCHOOL_ID) return INITIAL_SCHOOL_SCORE;
   const school = REAL_UNIVERSITIES.find((entry) => entry.id === schoolId);
-  if (!school) throw new Error(`Unknown school: ${schoolId}`);
-  return school.score;
+  return school ? school.score : 0;
 }
 
 export interface MockPlayerInfo {
@@ -74,6 +74,8 @@ export interface MockPlayerInfo {
   nickname: string;
   department: string;
   email: string;
+  /** School name from the server (API mode). Used when the school is outside the static list (#144). */
+  schoolName?: string;
 }
 
 export interface MockDepartment {

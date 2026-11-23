@@ -183,6 +183,7 @@ function useGameController(
       department: account.department,
       nickname: account.nickname,
       email: account.email,
+      schoolName: account.schoolName,
     });
   }, [commit, setPlayer, player.schoolId]);
   const applyApiTap = useCallback((points: number) => commit({ type: 'api-tap', points }), [commit]);
