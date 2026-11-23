@@ -1,6 +1,8 @@
 package com.back.nbe1214finalsour;
 
 import com.back.nbe1214finalsour.domain.auth.mail.VerificationMailSender;
+import com.back.nbe1214finalsour.domain.chat.relay.ChatMessagePublisher;
+import com.back.nbe1214finalsour.domain.chat.repository.ChatMessageRepository;
 import com.back.nbe1214finalsour.domain.clicker.repository.UserClickerLevelStore;
 import com.back.nbe1214finalsour.domain.item.service.PotionPurchaseRecorder;
 import com.back.nbe1214finalsour.domain.support.mail.SupportAnswerMailSender;
@@ -19,6 +21,7 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import java.time.Clock;
 
 
 @Target(ElementType.TYPE)
@@ -28,7 +31,7 @@ import java.lang.annotation.Target;
 @Tag("integration")
 @AutoConfigureMockMvc
 @MockitoBean(types = {VerificationMailSender.class, SupportAnswerMailSender.class, TurnstileVerifier.class})
-@MockitoSpyBean(types = {RivalChecker.class, UserRepository.class, UserClickerLevelStore.class, PotionPurchaseRecorder.class})
+@MockitoSpyBean(types = {RivalChecker.class, UserRepository.class, UserClickerLevelStore.class, PotionPurchaseRecorder.class, Clock.class, ChatMessageRepository.class, ChatMessagePublisher.class})
 public @interface IntegrationTest {
 
     /** 실제 서버가 필요한 테스트(예: 서블릿 오류 디스패치)는 {@code RANDOM_PORT}로 바꾼다. */
