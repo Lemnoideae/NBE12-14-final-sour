@@ -43,6 +43,10 @@ public class CreditHistory {
     @Column(nullable = false, length = 20)
     private CreditHistoryType type;
 
+    // 크레딧 구매(USE) 요청의 Idempotency-Key. 충전(CHARGE)은 null
+    @Column(name = "idempotency_key")
+    private UUID idempotencyKey;
+
     @Generated(event = EventType.INSERT)
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -55,6 +59,7 @@ public class CreditHistory {
         history.amount = amount;
         history.balanceAfter = balanceAfter;
         history.type = CreditHistoryType.USE;
+        history.idempotencyKey = idempotencyKey;
         return history;
     }
 }
