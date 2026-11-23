@@ -12,7 +12,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record EmailVerifyResponse(
         @Schema(description = "가입 토큰", example = "00000000-0000-0000-0000-000000000000")
         String signupToken,
-        @Schema(description = "학교 정보", example = "{\"id\":12,\"name\":\"예시대학교\"}")
+        @Schema(description = "학교 정보")
         UniversitySummary university,
         @Schema(description = "가입 토큰 유효 시간(초)", example = "600")
         long expiresInSeconds) {

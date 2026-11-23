@@ -14,8 +14,7 @@ public record LoginResponse(
         String accessToken,
         @Schema(description = "토큰 유효 시간(초)", example = "3600")
         long expiresInSeconds,
-        @Schema(description = "로그인 회원 정보",
-                example = "{\"id\":1,\"nickname\":\"학생\",\"universityId\":12,\"role\":\"USER\"}")
+        @Schema(description = "로그인 회원 정보")
         LoginUser user) {
 
     public record LoginUser(

@@ -8,8 +8,8 @@ public record SignupResponse(
         Long userId,
         @Schema(description = "닉네임", example = "학생")
         String nickname,
-        @Schema(description = "학교 정보", example = "{\"id\":12,\"name\":\"예시대학교\"}")
+        @Schema(description = "학교 정보")
         UniversitySummary university,
-        @Schema(description = "학과 정보", example = "{\"id\":301,\"name\":\"컴퓨터공학과\"}")
+        @Schema(description = "학과 정보")
         DepartmentSummary department) {
 }

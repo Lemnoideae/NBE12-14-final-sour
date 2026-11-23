@@ -20,7 +20,7 @@ public record SupportDetailResponse(
         @Nullable String attachFileUrl,
         @Schema(description = "문의 상태", example = "ANSWERED")
         SupportStatus status,
-        @Schema(description = "문의 답변", example = "{\"title\":\"답변 제목\",\"content\":\"답변 내용입니다.\"}")
+        @Schema(description = "문의 답변")
         @Nullable Answer answer,
         @Schema(description = "등록 시각", example = "2026-11-23T12:00:00+09:00")
         OffsetDateTime createdAt) {

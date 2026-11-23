@@ -25,13 +25,11 @@ public record MyInfoResponse(
         UserStatus status,
         @Schema(description = "프로필 이미지 URL", example = "https://example.com/profile.png")
         String profileImageUrl,
-        @Schema(description = "학교 정보",
-                example = "{\"id\":12,\"name\":\"예시대학교\",\"logoUrl\":\"https://example.com/logo.png\"}")
+        @Schema(description = "학교 정보")
         UniversityInfo university,
-        @Schema(description = "학과 정보", example = "{\"id\":301,\"name\":\"컴퓨터공학과\"}")
+        @Schema(description = "학과 정보")
         DepartmentInfo department,
-        @Schema(description = "클리커 정보",
-                example = "{\"level\":1,\"clickPower\":1,\"nextLevelRequiredScore\":100}")
+        @Schema(description = "클리커 정보")
         ClickerInfo clicker,
         @Schema(description = "총 기여도", example = "100")
         long totalContribScore,

@@ -94,6 +94,40 @@ class ApiDocsCoverageIntegrationTest {
         softly.assertAll();
     }
 
+    @Test
+    @DisplayName("객체 참조 필드에 중복 example을 지정하지 않는다")
+    void referencedPropertiesDoNotDeclareExamples() throws Exception {
+        String json = mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        JsonNode schemas = JsonMapper.builder().build().readTree(json).path("components").path("schemas");
+        SoftAssertions softly = new SoftAssertions();
+        for (Map.Entry<String, JsonNode> schema : schemas.properties()) {
+            for (Map.Entry<String, JsonNode> property : schema.getValue().path("properties").properties()) {
+                if (referencesSchema(property.getValue())) {
+                    softly.assertThat(property.getValue().has("example"))
+                            .as("%s.%s: 객체 필드에는 example을 쓰지 않는다. 하위 스키마의 필드 example을 쓴다",
+                                    schema.getKey(), property.getKey())
+                            .isFalse();
+                }
+            }
+        }
+        softly.assertAll();
+    }
+
+    private static boolean referencesSchema(JsonNode schema) {
+        if (schema.has("$ref")) {
+            return true;
+        }
+        for (String keyword : Set.of("allOf", "oneOf", "anyOf")) {
+            for (JsonNode member : schema.path(keyword)) {
+                if (referencesSchema(member)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private static boolean matchesPrefix(String path) {
         return PREFIXES.stream().anyMatch(prefix -> path.startsWith(prefix)
                 || path.equals(prefix.substring(0, prefix.length() - 1)));

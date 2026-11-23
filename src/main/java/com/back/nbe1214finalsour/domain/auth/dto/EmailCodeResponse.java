@@ -9,7 +9,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * @param expiresInSeconds 코드 유효 시간(초)
  */
 public record EmailCodeResponse(
-        @Schema(description = "학교 정보", example = "{\"id\":12,\"name\":\"예시대학교\"}")
+        @Schema(description = "학교 정보")
         UniversitySummary university,
         @Schema(description = "코드 유효 시간(초)", example = "300")
         long expiresInSeconds) {
