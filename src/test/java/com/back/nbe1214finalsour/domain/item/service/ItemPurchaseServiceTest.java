@@ -126,6 +126,23 @@ public class ItemPurchaseServiceTest {
     }
 
     @Test
+    @DisplayName("로고 아이템을 사면 요청의 멱등 키를 크레딧 구매에 그대로 넘긴다")
+    void purchase_creditItem_passesIdempotencyKey() {
+        // given
+        given(this.itemService.getItems()).willReturn(ITEMS);
+        givenLogoUploaded();
+        ItemPurchaseResult expected = new ItemPurchaseResult(7001L, ITEMS.get(2), 3900L, null, 12888L, 1100L);
+        given(this.creditPurchaseService.purchase(eq(USER_ID), eq(UNIVERSITY_ID), eq(DEPARTMENT_ID), eq(ITEMS.get(2)), eq(LOGO_URL), any())).willReturn(expected);
+
+        // when
+        ItemPurchaseResult result = this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_IMAGE, KEY);
+
+        // then
+        assertThat(result).isSameAs(expected);
+        then(this.creditPurchaseService).should().purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, ITEMS.get(2), LOGO_URL, KEY);
+    }
+
+    @Test
     @DisplayName("이미지 검증에 실패하면 그 예외를 그대로 던지고, 업로드·크레딧 구매는 하지 않는다")
     void purchase_creditItem_invalidImage() {
         given(this.itemService.getItems()).willReturn(ITEMS);
