@@ -15,5 +15,14 @@ public record AbuseRankingResponse(
         @Schema(description = "다음 페이지가 있는지", example = "false")
         boolean hasNext
 ) {
-    public record AbuseRankingItem(long rank, Long userId, String nickname, long abuseCount) {}
+    public record AbuseRankingItem(
+            @Schema(description = "순위", example = "1")
+            long rank,
+            @Schema(description = "회원 ID", example = "42")
+            Long userId,
+            @Schema(description = "회원 닉네임", example = "클릭왕")
+            String nickname,
+            @Schema(description = "부정행위 감지 횟수 (1분 한도 초과 횟수)", example = "5")
+            long abuseCount
+    ) {}
 }

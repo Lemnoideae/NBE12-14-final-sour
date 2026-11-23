@@ -16,5 +16,14 @@ public record AssistResponse(
         @Schema(description = "지원 뒤 내 누적 기여도", example = "1520")
         Long myContribScore
 ) {
-    public record AssistUniversityResponse(Long id, String name, Long totalScore, Long rank) {}
+    public record AssistUniversityResponse(
+            @Schema(description = "학교 ID", example = "2")
+            Long id,
+            @Schema(description = "학교 이름", example = "고려대학교")
+            String name,
+            @Schema(description = "지원 후 학교 총 점수", example = "50_000")
+            Long totalScore,
+            @Schema(description = "지원 후 학교 순위", example = "1")
+            Long rank
+    ) {}
 }
