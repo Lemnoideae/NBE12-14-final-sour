@@ -25,8 +25,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class ApiDocsCoverageIntegrationTest {
     private static final Set<String> PREFIXES = Set.of(
-            "/api/v1/auth/", "/api/v1/users/", "/api/v1/admin/users/");
+            "/api/v1/auth/", "/api/v1/users/", "/api/v1/admin/users/",
+            "/api/v1/supports/", "/api/v1/admin/supports/");
     // SecurityConfig의 목록은 다른 패키지에서 접근할 수 없다.
+    // 인증 선택인 post /api/v1/supports는 넣지 않는다. bearerAuth를 상속해야 Swagger UI가 회원 토큰도 보낸다.
     private static final Set<String> PUBLIC_OPERATIONS = Set.of(
             "post /api/v1/auth/email/code", "post /api/v1/auth/email/verify",
             "post /api/v1/auth/signup", "post /api/v1/auth/login", "post /api/v1/auth/reissue",
@@ -49,7 +51,7 @@ class ApiDocsCoverageIntegrationTest {
         Iterator<Map.Entry<String, JsonNode>> pathFields = paths.properties().iterator();
         while (pathFields.hasNext()) {
             Map.Entry<String, JsonNode> path = pathFields.next();
-            if (PREFIXES.stream().noneMatch(path.getKey()::startsWith)) {
+            if (!matchesPrefix(path.getKey())) {
                 continue;
             }
             for (Map.Entry<String, JsonNode> entry : path.getValue().properties()) {
@@ -88,5 +90,10 @@ class ApiDocsCoverageIntegrationTest {
             softly.assertThat(foundPublicOperations).as("%s: 공개 API가 문서에 없음", operation).contains(operation);
         }
         softly.assertAll();
+    }
+
+    private static boolean matchesPrefix(String path) {
+        return PREFIXES.stream().anyMatch(prefix -> path.startsWith(prefix)
+                || path.equals(prefix.substring(0, prefix.length() - 1)));
     }
 }
