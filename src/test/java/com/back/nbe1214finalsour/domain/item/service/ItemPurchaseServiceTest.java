@@ -15,6 +15,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.util.List;
@@ -188,6 +189,24 @@ public class ItemPurchaseServiceTest {
         // 올린 경로와 같은 경로를 지움 (verify 안에서 또 verify를 부르면 안 되므로 먼저 꺼냄)
         String key = uploadedKey();
         verify(this.imageStorage).delete(key);
+    }
+
+    @Test
+    @DisplayName("같은 멱등 키로 제약 위반이 나면 올린 이미지를 지우고, 그 예외를 그대로 던진다")
+    void purchase_creditItem_duplicateKey_deletesUploadedImageAndRethrows() {
+        // given
+        given(this.itemService.getItems()).willReturn(ITEMS);
+        givenLogoUploaded();
+        DataIntegrityViolationException violation = new DataIntegrityViolationException("uk_credit_history_user_idempotency_key");
+        given(this.creditPurchaseService.purchase(eq(USER_ID), eq(UNIVERSITY_ID), eq(DEPARTMENT_ID), eq(ITEMS.get(2)), eq(LOGO_URL), eq(KEY)))
+                .willThrow(violation);
+
+        // when & then
+        assertThatThrownBy(() -> this.itemPurchaseService.purchase(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, 3L, LOGO_IMAGE, KEY))
+                .isSameAs(violation);
+
+        String key = uploadedKey();
+        then(this.imageStorage).should().delete(key);
     }
 
     @Test
