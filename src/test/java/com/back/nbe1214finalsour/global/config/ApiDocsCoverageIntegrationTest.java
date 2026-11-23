@@ -27,7 +27,7 @@ class ApiDocsCoverageIntegrationTest {
     private static final Set<String> PREFIXES = Set.of(
             "/api/v1/auth/", "/api/v1/users/", "/api/v1/admin/users/",
             "/api/v1/supports/", "/api/v1/admin/supports/",
-            "/api/v1/chat/", "/api/v1/forbidden-words/");
+            "/api/v1/chat/", "/api/v1/forbidden-words/", "/api/v1/abuse/");
     // SecurityConfig의 목록은 다른 패키지에서 접근할 수 없다.
     // 인증 선택인 post /api/v1/supports는 넣지 않는다. bearerAuth를 상속해야 Swagger UI가 회원 토큰도 보낸다.
     private static final Set<String> PUBLIC_OPERATIONS = Set.of(
@@ -49,6 +49,7 @@ class ApiDocsCoverageIntegrationTest {
         int count = 0;
         Set<String> foundPublicOperations = new HashSet<>();
         SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(paths.has("/error")).as("/error는 API 문서에 없어야 한다").isFalse();
         Iterator<Map.Entry<String, JsonNode>> pathFields = paths.properties().iterator();
         while (pathFields.hasNext()) {
             Map.Entry<String, JsonNode> path = pathFields.next();
