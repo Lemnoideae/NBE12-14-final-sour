@@ -44,7 +44,7 @@ public class ItemPurchaseService {
 
         // 크레딧 아이템(로고 변경권)
         if (item.getPayType() == PayType.CREDIT) {
-            return purchaseLogo(userId, universityId, departmentId, item, logoImage);
+            return purchaseLogo(userId, universityId, departmentId, item, logoImage, idempotencyKey);
         }
 
         // 기여도 아이템(물약)
@@ -52,14 +52,14 @@ public class ItemPurchaseService {
     }
 
     // 검증 → 업로드 → 크레딧 구매(트랜잭션). 구매가 실패하면(커밋 실패 포함) 올린 이미지를 지운다
-    private ItemPurchaseResult purchaseLogo(Long userId, Long universityId, Long departmentId, Item item, MultipartFile logoImage) {
+    private ItemPurchaseResult purchaseLogo(Long userId, Long universityId, Long departmentId, Item item, MultipartFile logoImage, UUID idempotencyKey) {
         ImageType type = this.logoImageValidator.validate(logoImage);
 
         String key = LOGO_KEY_PREFIX + userId + "/" + UUID.randomUUID() + "." + type.getExtension();
         String logoImageUrl = this.imageStorage.upload(key, logoImage, type);
 
         try {
-            return this.creditPurchaseService.purchase(userId, universityId, departmentId, item, logoImageUrl);
+            return this.creditPurchaseService.purchase(userId, universityId, departmentId, item, logoImageUrl, idempotencyKey);
         } catch (RuntimeException e) {
             // S3는 DB 롤백에 묶이지 않으므로 직접 되돌린다
             deleteUploadedLogo(key, e);

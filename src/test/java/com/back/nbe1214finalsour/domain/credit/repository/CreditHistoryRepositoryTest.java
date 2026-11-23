@@ -12,12 +12,16 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @IntegrationTest
 @Transactional
 class CreditHistoryRepositoryTest {
+
+    private static final UUID KEY = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
 
     @Autowired
     private CreditHistoryRepository creditHistoryRepository;
@@ -31,6 +35,7 @@ class CreditHistoryRepositoryTest {
     private Long userId;
     private Long otherUserId;
     private Long userItemId;
+    private Long logoItemId;
 
     @BeforeEach
     void setUp() {
@@ -48,15 +53,19 @@ class CreditHistoryRepositoryTest {
                 VALUES ('원장 테스트 학교 로고', '우리 학교 로고 변경', 'LOGO_UNIVERSITY', 'CREDIT', 3900, NULL, NULL)
                 ON CONFLICT DO NOTHING
                 """);
-        Long logoItemId = jdbcTemplate.queryForObject(
+        logoItemId = jdbcTemplate.queryForObject(
                 "SELECT id FROM item WHERE type = 'LOGO_UNIVERSITY'", Long.class);
 
-        // 이 회원의 로고 구매 이력 (영구라 expired_at 없음)
-        userItemId = jdbcTemplate.queryForObject("""
+        userItemId = insertLogoUserItem(userId);
+    }
+
+    // 이 회원의 로고 구매 이력 (영구라 expired_at 없음)
+    private Long insertLogoUserItem(Long ownerId) {
+        return jdbcTemplate.queryForObject("""
                 INSERT INTO user_item (user_id, item_id, price, logo_image_url)
                 VALUES (?, ?, 3900, 'https://cdn.devcproject.cloud/custom-logo/1/abc.png')
                 RETURNING id
-                """, Long.class, userId, logoItemId);
+                """, Long.class, ownerId, logoItemId);
     }
 
     private Long insertUser(Long universityId, Long departmentId, String nickname, String email, String hashChar) {
@@ -72,7 +81,7 @@ class CreditHistoryRepositoryTest {
     void saveUseHistory() {
         // when
         CreditHistory saved = creditHistoryRepository.saveAndFlush(
-                CreditHistory.use(userId, userItemId, 3900L, 1100L));
+                CreditHistory.use(userId, userItemId, 3900L, 1100L, null));
         entityManager.clear();   // 영속성 컨텍스트를 비워 DB에서 다시 읽음
 
         // then
@@ -90,7 +99,54 @@ class CreditHistoryRepositoryTest {
     @DisplayName("다른 회원의 구매 이력에는 원장을 연결할 수 없다 (복합 FK)")
     void cannotLinkOtherUsersUserItem() {
         assertThatThrownBy(() -> creditHistoryRepository.saveAndFlush(
-                CreditHistory.use(otherUserId, userItemId, 3900L, 1100L)))
+                CreditHistory.use(otherUserId, userItemId, 3900L, 1100L, null)))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @DisplayName("같은 회원이 같은 멱등 키로 사용 내역을 두 번 저장하면 DB가 거부한다")
+    void rejectsSameIdempotencyKeyForSameUser() {
+        // given
+        Long secondUserItemId = insertLogoUserItem(userId);
+        creditHistoryRepository.saveAndFlush(CreditHistory.use(userId, userItemId, 3900L, 1100L, KEY));
+
+        // when & then
+        assertThatThrownBy(() -> creditHistoryRepository.saveAndFlush(
+                CreditHistory.use(userId, secondUserItemId, 3900L, 1100L, KEY)))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasStackTraceContaining("uk_credit_history_user_idempotency_key");
+    }
+
+    @Test
+    @DisplayName("다른 회원이 같은 멱등 키를 쓰면 둘 다 저장된다")
+    void allowsSameIdempotencyKeyForDifferentUsers() {
+        // given
+        Long otherUserItemId = insertLogoUserItem(otherUserId);
+
+        // when
+        creditHistoryRepository.saveAndFlush(CreditHistory.use(userId, userItemId, 3900L, 1100L, KEY));
+        creditHistoryRepository.saveAndFlush(CreditHistory.use(otherUserId, otherUserItemId, 3900L, 1100L, KEY));
+
+        // then
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM credit_history WHERE idempotency_key = ?", Long.class, KEY))
+                .isEqualTo(2L);
+    }
+
+    @Test
+    @DisplayName("멱등 키가 없는 사용 내역은 같은 회원이라도 여러 건 저장된다")
+    void allowsMultipleNullIdempotencyKeys() {
+        // given
+        Long secondUserItemId = insertLogoUserItem(userId);
+
+        // when
+        creditHistoryRepository.saveAndFlush(CreditHistory.use(userId, userItemId, 3900L, 1100L, null));
+        creditHistoryRepository.saveAndFlush(CreditHistory.use(userId, secondUserItemId, 3900L, 1100L, null));
+
+        // then
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM credit_history WHERE user_id = ? AND idempotency_key IS NULL",
+                Long.class, userId))
+                .isEqualTo(2L);
     }
 }

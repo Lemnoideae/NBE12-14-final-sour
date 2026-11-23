@@ -8,6 +8,7 @@ import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "credit_history")
@@ -42,18 +43,23 @@ public class CreditHistory {
     @Column(nullable = false, length = 20)
     private CreditHistoryType type;
 
+    // 크레딧 구매(USE) 요청의 Idempotency-Key. 충전(CHARGE)은 null
+    @Column(name = "idempotency_key")
+    private UUID idempotencyKey;
+
     @Generated(event = EventType.INSERT)
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
     // 아이템 구매로 크레딧을 쓴 기록
-    public static CreditHistory use(Long userId, Long userItemId, long amount, long balanceAfter) {
+    public static CreditHistory use(Long userId, Long userItemId, long amount, long balanceAfter, UUID idempotencyKey) {
         CreditHistory history = new CreditHistory();
         history.userId = userId;
         history.userItemId = userItemId;
         history.amount = amount;
         history.balanceAfter = balanceAfter;
         history.type = CreditHistoryType.USE;
+        history.idempotencyKey = idempotencyKey;
         return history;
     }
 }
