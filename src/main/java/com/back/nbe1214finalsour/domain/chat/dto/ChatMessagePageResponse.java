@@ -1,6 +1,7 @@
 package com.back.nbe1214finalsour.domain.chat.dto;
 
 import com.back.nbe1214finalsour.domain.chat.repository.ChatMessageSlice;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 
@@ -11,7 +12,13 @@ import org.jspecify.annotations.Nullable;
  * @param items      최신순
  * @param nextCursor 다음 요청의 {@code cursor}. 다음 페이지가 없으면 null
  */
-public record ChatMessagePageResponse(List<ChatMessageResponse> items, @Nullable String nextCursor, boolean hasNext) {
+public record ChatMessagePageResponse(
+        @Schema(description = "최신순 채팅 메시지 목록")
+        List<ChatMessageResponse> items,
+        @Schema(description = "다음 요청에 사용할 ULID 커서. 다음 페이지가 없으면 null", example = "01ARZ3NDEKTSV4RRFFQ69G5FAV")
+        @Nullable String nextCursor,
+        @Schema(description = "다음 페이지 여부", example = "true")
+        boolean hasNext) {
 
     public static ChatMessagePageResponse from(ChatMessageSlice slice) {
         return new ChatMessagePageResponse(slice.items().stream().map(ChatMessageResponse::from).toList(),

@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.user.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -8,7 +9,9 @@ import jakarta.validation.constraints.Size;
  *
  * @param password 확인만 하므로 로그인과 같이 길이만 본다
  */
-public record WithdrawalRequest(@NotBlank @Size(max = 64) String password) {
+public record WithdrawalRequest(
+        @Schema(description = "현재 비밀번호", example = "Passw0rd!")
+        @NotBlank @Size(max = 64) String password) {
 
     /** 로그에 비밀번호가 남지 않도록 가린다 */
     @Override

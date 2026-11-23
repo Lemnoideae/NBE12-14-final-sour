@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.abuse.controller;
 
+import com.back.nbe1214finalsour.domain.abuse.controller.docs.AbuseVerificationApiDocs;
 import com.back.nbe1214finalsour.domain.abuse.dto.AbuseVerificationRequest;
 import com.back.nbe1214finalsour.domain.abuse.service.AbuseVerificationService;
 import com.back.nbe1214finalsour.global.security.AuthUser;
@@ -16,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/abuse")
-public class AbuseVerificationController {
+public class AbuseVerificationController implements AbuseVerificationApiDocs {
 
     private final AbuseVerificationService abuseVerificationService;
 

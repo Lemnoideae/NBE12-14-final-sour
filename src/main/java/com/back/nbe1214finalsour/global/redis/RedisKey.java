@@ -87,8 +87,6 @@ public enum RedisKey {
     // 클릭 (Click)
     /** 클릭 직전 1초 클릭 수. of(universityId, epochSec), INCR */
     CLICKS_UNIV_SECOND("clicks:univ:%s:%s", Structure.STRING, ValueFormat.PLAIN),
-    /** 공격 직전 1초 클릭 수. of(universityId, epochSec), INCR */
-    ATTACKS_UNIV_SECOND("attacks:univ:%s:%s", Structure.STRING, ValueFormat.PLAIN),
     /** 중복 제출 방지. of(userId, submissionId), SET NX + TTL */
     SUBMIT_DEDUPE("submit:%s:%s", Structure.STRING, ValueFormat.PLAIN),
 
@@ -116,8 +114,6 @@ public enum RedisKey {
     ABUSE_VERIFY_USER("abuse:verify:user:%s", Structure.STRING, ValueFormat.PLAIN),
 
     // 학교 (University)
-    /** 커스텀 로고 이미지 URL */
-    UNIV_CUSTOM_LOGO("univ:%s:custom-logo", Structure.STRING, ValueFormat.PLAIN),
     /** 소속 연합. allianceId */
     UNIV_ALLIANCE("univ:%s:alliance", Structure.STRING, ValueFormat.PLAIN),
     /** 진행 중 대결. {matchId}:{A|B} */
