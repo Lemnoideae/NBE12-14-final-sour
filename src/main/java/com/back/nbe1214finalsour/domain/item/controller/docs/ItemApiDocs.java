@@ -9,6 +9,8 @@ import com.back.nbe1214finalsour.global.security.AuthUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -46,7 +48,7 @@ public interface ItemApiDocs {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401",
                     description = ItemErrorDocs.UNAUTHORIZED)
     })
-    ApiResponse<PurchaseHistoryResponse> getItemHistory(AuthUser user, int page, int size);
+    ApiResponse<PurchaseHistoryResponse> getItemHistory(AuthUser user, @Min(0) int page, @Min(1) @Max(100) int size);
 
     @Operation(
             summary = "아이템 구매",
