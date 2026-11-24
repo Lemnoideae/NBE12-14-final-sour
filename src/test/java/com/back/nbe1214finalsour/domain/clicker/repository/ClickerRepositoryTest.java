@@ -21,19 +21,20 @@ public class ClickerRepositoryTest {
     @Test
     @DisplayName("클리커 레벨표 조회시 레벨 기준 오름차순으로 조회")
     void findAllByOrderByIdAsc(){
-        // given: V1에 있는 레벨 1 말고도 추가 레벨을 순서 없이 저장
+        // given: 시드 레벨과 겹치지 않는 레벨을 순서 없이 저장
         this.clickerRepository.saveAll(
                 List.of(
-                        new Clicker(3L, 30, 900L),
-                        new Clicker(2L, 20, 300L)
+                        new Clicker(102L, 30, 900L),
+                        new Clicker(101L, 20, 300L)
                 )
         );
 
         // when: 조회 시
         List<Clicker> result = this.clickerRepository.findAllByOrderByIdAsc();
 
-        // then: 레벨 기준 오름차순 정렬
+        // then: 레벨 기준 오름차순 정렬 (시드가 있어도 이 테스트가 넣은 것만 확인)
         assertThat(result).extracting(Clicker::getId)
-                .containsExactly(1L, 2L, 3L);
+                .filteredOn(id -> id >= 101L)
+                .containsExactly(101L, 102L);
     }
 }
