@@ -807,4 +807,123 @@ class AllianceMatchServiceScenarioTest {
         verifyNoInteractions(allianceUniversityRepository);
     }
 
+    // ===== JaCoCo 소스 화면에 남은 8개 분기만 정확히 보완 =====
+
+    @Test
+    void requestMatch_rejectsInvalidUserIdBeforeRepositoryAccess() {
+        assertError(ErrorCode.COMMON_INVALID_INPUT,
+                () -> service.requestMatch(null, A, B, 6));
+        assertError(ErrorCode.COMMON_INVALID_INPUT,
+                () -> service.requestMatch(0L, A, B, 6));
+        assertError(ErrorCode.COMMON_INVALID_INPUT,
+                () -> service.requestMatch(-1L, A, B, 6));
+
+        verifyNoInteractions(userRepository, allianceRepository,
+                allianceUniversityRepository, allianceMatchRepository);
+    }
+
+    @Test
+    void startScheduledMatch_skipsSoftDeletedScheduledMatch() {
+        AllianceMatch match = mock(AllianceMatch.class);
+        when(match.getAllianceAId()).thenReturn(A);
+        when(match.getAllianceBId()).thenReturn(B);
+        when(match.getDeletedAt()).thenReturn(OffsetDateTime.now().minusMinutes(1));
+        pairLookup();
+        lockAlliances(alliance("연합A"), alliance("연합B"));
+        when(allianceMatchRepository.findByIdForUpdate(MATCH))
+                .thenReturn(Optional.of(match));
+
+        service.startScheduledMatch(MATCH);
+
+        verifyNoInteractions(allianceUniversityRepository);
+        verify(match, never()).cancelScheduled();
+        verify(match, never()).startWithRoster(any(), anyLong(), anyLong(), anyLong(), anyLong());
+    }
+
+    @Test
+    void cancelMatch_rejectsSoftDeletedRequestedMatch() {
+        User user = mock(User.class);
+        when(user.getStatus()).thenReturn(UserStatus.ACTIVE);
+        when(userRepository.findById(USER)).thenReturn(Optional.of(user));
+        AllianceMatch match = mock(AllianceMatch.class);
+        when(match.getAllianceAId()).thenReturn(A);
+        when(match.getAllianceBId()).thenReturn(B);
+        when(match.getStatus()).thenReturn(AllianceMatchStatus.REQUESTED);
+        when(match.getDeletedAt()).thenReturn(OffsetDateTime.now().minusMinutes(1));
+        pairLookup();
+        lockAlliances(alliance("연합A"), alliance("연합B"));
+        when(allianceMatchRepository.findByIdForUpdate(MATCH))
+                .thenReturn(Optional.of(match));
+
+        assertError(ErrorCode.MATCH_NOT_PENDING, () -> service.cancelMatch(USER, MATCH));
+
+        verifyNoInteractions(allianceUniversityRepository);
+        verify(match, never()).cancelRequested();
+    }
+
+    @Test
+    void cancelExpiredRequest_ignoresSoftDeletedRequestedMatch() {
+        AllianceMatch match = mock(AllianceMatch.class);
+        when(match.getAllianceAId()).thenReturn(A);
+        when(match.getAllianceBId()).thenReturn(B);
+        when(match.getStatus()).thenReturn(AllianceMatchStatus.REQUESTED);
+        when(match.getDeletedAt()).thenReturn(OffsetDateTime.now().minusMinutes(1));
+        pairAndLockedMatch(match);
+
+        service.cancelExpiredRequest(MATCH);
+
+        verify(match, never()).cancelRequested();
+        verify(match, never()).getRequestExpiredAt();
+    }
+
+    @Test
+    void cancelExpiredRequest_ignoresRequestedMatchWithoutDeadline() {
+        AllianceMatch match = mock(AllianceMatch.class);
+        when(match.getAllianceAId()).thenReturn(A);
+        when(match.getAllianceBId()).thenReturn(B);
+        when(match.getStatus()).thenReturn(AllianceMatchStatus.REQUESTED);
+        // getRequestExpiredAt()은 mock 기본값인 null을 반환한다.
+        pairAndLockedMatch(match);
+
+        service.cancelExpiredRequest(MATCH);
+
+        verify(match).getRequestExpiredAt();
+        verify(match, never()).cancelRequested();
+    }
+
+    @Test
+    void cancelRequestedForAllianceExpiry_ignoresSoftDeletedMatch() {
+        AllianceMatch match = mock(AllianceMatch.class);
+        when(match.getDeletedAt()).thenReturn(OffsetDateTime.now().minusMinutes(1));
+        pairLookup();
+        lockAlliances(Alliance.create("연합A", 6, OffsetDateTime.now().minusHours(7)),
+                alliance("연합B"));
+        when(allianceMatchRepository.findByIdForUpdate(MATCH))
+                .thenReturn(Optional.of(match));
+
+        service.cancelRequestedForAllianceExpiry(MATCH, A);
+
+        verify(match, never()).cancelRequested();
+        verify(match, never()).getStatus();
+    }
+
+    @Test
+    void requestMatch_rejectsIncompleteMemberCountOnFirstAlliance() {
+        User user = mock(User.class);
+        when(user.getStatus()).thenReturn(UserStatus.ACTIVE);
+        when(userRepository.findById(USER)).thenReturn(Optional.of(user));
+        lockAlliances(alliance("연합A"), alliance("연합B"));
+        when(allianceUniversityRepository.findByAllianceIdAndStatusAndDeletedAtIsNullOrderByIdAsc(
+                A, AllianceUniversityStatus.ACCEPTED))
+                .thenReturn(List.of(aMembers().get(0)));
+        when(allianceUniversityRepository.findByAllianceIdAndStatusAndDeletedAtIsNullOrderByIdAsc(
+                B, AllianceUniversityStatus.ACCEPTED))
+                .thenReturn(bMembers());
+
+        assertError(ErrorCode.MATCH_MEMBERS_INCOMPLETE,
+                () -> service.requestMatch(USER, A, B, 6));
+
+        verify(allianceMatchRepository, never()).save(any());
+    }
+
 }
