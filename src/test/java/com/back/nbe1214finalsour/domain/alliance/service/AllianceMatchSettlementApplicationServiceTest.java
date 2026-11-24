@@ -67,4 +67,80 @@ class AllianceMatchSettlementApplicationServiceTest {
         verifyNoInteractions(redisService);
         assertThat(draw.getStatus()).isEqualTo(AllianceMatchSettlementStatus.APPLIED);
     }
+
+    @Test
+    @DisplayName("대결 ID가 null이면 조회 없이 거부")
+    void applyPending_rejectsNullMatchId() {
+        assertThatThrownBy(() -> service.applyPending(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("대결 ID가 올바르지 않습니다.");
+
+        verifyNoInteractions(repository, redisService);
+    }
+
+    @Test
+    @DisplayName("대결 ID가 0 이하이면 조회 없이 거부")
+    void applyPending_rejectsNonPositiveMatchIds() {
+        for (long invalidMatchId : new long[] {0L, -1L}) {
+            assertThatThrownBy(() -> service.applyPending(invalidMatchId))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("대결 ID가 올바르지 않습니다.");
+        }
+
+        verifyNoInteractions(repository, redisService);
+    }
+
+    @Test
+    @DisplayName("정산 이력이 없으면 예외 발생 및 Redis 호출 안 함")
+    void applyPending_failsWhenSettlementNotFound() {
+        when(repository.findByIdForUpdate(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.applyPending(99L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("정산 이력을 찾을 수 없습니다.");
+
+        verifyNoInteractions(redisService);
+    }
+
+    @Test
+    @DisplayName("이미 APPLIED인 정산은 다시 Redis에 반영하지 않음")
+    void applyPending_skipsAlreadyAppliedSettlement() {
+        record.markApplied();
+        when(repository.findByIdForUpdate(99L)).thenReturn(Optional.of(record));
+
+        service.applyPending(99L);
+
+        assertThat(record.getStatus()).isEqualTo(AllianceMatchSettlementStatus.APPLIED);
+        verifyNoInteractions(redisService);
+    }
+
+    @Test
+    @DisplayName("이미 COMPLETED인 정산은 다시 Redis에 반영하지 않음")
+    void applyPending_skipsCompletedSettlement() {
+        record.markApplied();
+        record.markCompleted();
+        when(repository.findByIdForUpdate(99L)).thenReturn(Optional.of(record));
+
+        service.applyPending(99L);
+
+        assertThat(record.getStatus()).isEqualTo(AllianceMatchSettlementStatus.COMPLETED);
+        verifyNoInteractions(redisService);
+    }
+
+    @Test
+    @DisplayName("B연합 승리면 A연합 학교별 기여도를 차감")
+    void applyPending_allianceBWins() {
+        AllianceMatchSettlement bWins = AllianceMatchSettlement.prepare(
+                99L, 180L, 300L,
+                11L, 12L, 21L, 22L,
+                70L, 110L, 150L, 150L);
+        when(repository.findByIdForUpdate(99L)).thenReturn(Optional.of(bWins));
+        when(redisService.settleOnce(99L, 11L, 12L, 21L, 22L, 70L, 110L))
+                .thenReturn(true);
+
+        service.applyPending(99L);
+
+        verify(redisService).settleOnce(99L, 11L, 12L, 21L, 22L, 70L, 110L);
+        assertThat(bWins.getStatus()).isEqualTo(AllianceMatchSettlementStatus.APPLIED);
+    }
 }
