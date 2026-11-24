@@ -99,8 +99,13 @@ class ApiDocsCoverageIntegrationTest {
     @Test
     @DisplayName("채팅 태그에 이력 조회 요약과 별도 STOMP 명세 링크가 있다")
     void chatTagSummarizesHistoryAndLinksStompGuide() throws Exception {
-        mockMvc.perform(get("/v3/api-docs"))
-                .andExpect(status().isOk())
+        // given: 별도 준비 데이터 없음
+
+        // when
+        var result = mockMvc.perform(get("/v3/api-docs"));
+
+        // then
+        result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.tags[?(@.name == '채팅')].description",
                         contains("학교·연합 채팅 이전 메시지 조회")))
                 .andExpect(jsonPath("$.tags[?(@.name == '채팅')].externalDocs.url", contains(
