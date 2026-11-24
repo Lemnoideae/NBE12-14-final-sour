@@ -5,6 +5,7 @@ import com.back.nbe1214finalsour.domain.chat.dto.ChatMessagePageResponse;
 import com.back.nbe1214finalsour.domain.chat.service.ChatHistoryService;
 import com.back.nbe1214finalsour.global.response.ApiResponse;
 import com.back.nbe1214finalsour.global.security.AuthUser;
+import io.swagger.v3.oas.annotations.ExternalDocumentation;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -26,19 +27,9 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>파라미터 제약이 있어 인터페이스로 분리하면 Hibernate Validator에서 HV000151이 발생한다.
  */
-@Tag(name = "채팅", description = """
-        STOMP는 SockJS 없이 WebSocket `/ws`로 연결한다. CONNECT 헤더는 `Authorization: Bearer <access 토큰>`이다.
-        자기 학교 `/topic/chat/universities/{universityId}`, 현재 소속 연합 `/topic/chat/alliances/{allianceId}`를 구독한다.
-        `/app/chat/university` 또는 `/app/chat/alliance`로 JSON `{"content":"메시지"}`를 보낸다.
-        content는 앞뒤 공백 제거 후 1~200 코드 포인트이며 방은 서버가 정한다.
-        프레임 인증·권한 오류는 ERROR 프레임 뒤 연결이 끊긴다. 본문은 `{"code","message"}`다.
-        `COMMON_UNAUTHORIZED` 인증 필요, `COMMON_INVALID_TOKEN` 토큰 오류, `COMMON_EXPIRED_TOKEN` 만료는 재발급 후 재연결,
-        `AUTH_SESSION_REPLACED`는 로그인 화면, `CHAT_NOT_MEMBER`는 방 소속 아님, `COMMON_FORBIDDEN`은 허용되지 않은 목적지다.
-        메시지 처리 오류는 연결을 유지하고 `/user/queue/errors`로 보낸다: `CHAT_INVALID_CONTENT` 본문 오류,
-        `CHAT_TOO_FREQUENT` 전송 제한, `USER_SUSPENDED` 이용 제한, `USER_NOT_FOUND` 회원 없음,
-        `CHAT_NOT_MEMBER` 연합 소속 없음, `COMMON_INVALID_INPUT` 본문 형식 오류, `COMMON_INTERNAL_ERROR` 서버 오류.
-        이전 메시지는 아래 REST API에서 커서로 조회한다.
-        """)
+@Tag(name = "채팅", description = "학교·연합 채팅 이전 메시지 조회",
+        externalDocs = @ExternalDocumentation(description = "STOMP 실시간 채팅 명세",
+                url = "https://github.com/prgrms-be-devcourse/NBE12-14-final-sour/blob/dev/docs/chat-stomp.md"))
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/chat")
