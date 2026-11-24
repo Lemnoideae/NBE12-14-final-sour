@@ -8,7 +8,7 @@ on:
       - ".github/workflows/deploy-frontend.yaml"
   # Actions 화면의 "Run workflow" 버튼
   # - release를 비우면: 지금 main을 새로 빌드·배포
-  # - release를 넣으면(예: 커밋 SHA 앞 12자리): 빌드 없이 S3에 있는 그 버전으로 다시 배포 (롤백, 운영 시간 밖에 실패한 배포 재시도)
+  # - release를 넣으면(예: 커밋 SHA 앞 12자리): 빌드 없이 S3에 있는 그 버전으로 다시 배포 (롤백, 실패한 배포 재시도)
   workflow_dispatch:
     inputs:
       release:
@@ -129,7 +129,7 @@ jobs:
             --query Command.CommandId --output text)
           echo "SSM 명령: $CMD_ID"
 
-          # 최대 3분 기다린다. 30초가 지나도 대상이 없으면 WAS가 꺼져 있는 것이다 (평일 09:00~18:00 밖)
+          # 최대 3분 기다린다. 30초가 지나도 대상이 없으면 WAS가 꺼져 있거나 SSM 에이전트가 연결되지 않은 것이다
           for i in $(seq 1 36); do
             STATUS=$(aws ssm list-command-invocations --command-id "$CMD_ID" \
               --query 'CommandInvocations[0].Status' --output text)
@@ -142,7 +142,7 @@ jobs:
                 exit 1 ;;
               None|"")
                 if [ "$i" -ge 6 ]; then
-                  echo "배포 대상 WAS가 없다. 운영 시간(평일 09:00~18:00 KST)에 Run workflow로 release=$RELEASE 를 넣어 다시 배포한다"
+                  echo "배포 대상 WAS가 없다 (꺼져 있거나 SSM 미연결). WAS 상태를 확인한 뒤 Run workflow로 release=$RELEASE 를 넣어 다시 배포한다"
                   exit 1
                 fi ;;
             esac
