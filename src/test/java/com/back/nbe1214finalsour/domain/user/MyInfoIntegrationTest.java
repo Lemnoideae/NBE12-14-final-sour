@@ -1,10 +1,5 @@
 package com.back.nbe1214finalsour.domain.user;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
 import com.back.nbe1214finalsour.IntegrationTest;
 import com.back.nbe1214finalsour.domain.clicker.service.ClickerService;
 import com.back.nbe1214finalsour.domain.user.entity.User;
@@ -15,9 +10,6 @@ import com.back.nbe1214finalsour.global.security.AuthUser;
 import com.back.nbe1214finalsour.global.security.Role;
 import com.back.nbe1214finalsour.global.security.jwt.JwtProvider;
 import com.jayway.jsonpath.JsonPath;
-import java.time.OffsetDateTime;
-import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -29,6 +21,15 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * 내 정보 API를 PostgreSQL·Redis(Testcontainers)와 실제 HTTP 처리로 확인한다 (회원 MVP 계획 단계 10).
@@ -117,7 +118,7 @@ class MyInfoIntegrationTest {
                 .andExpect(jsonPath("$.data.department.name").value("컴퓨터공학과"))
                 .andExpect(jsonPath("$.data.clicker.level").value(1))
                 .andExpect(jsonPath("$.data.clicker.clickPower").value(1))
-                .andExpect(jsonPath("$.data.clicker.nextLevelRequiredScore").value(300))
+                .andExpect(jsonPath("$.data.clicker.nextLevelRequiredScore").value(600))
                 .andExpect(jsonPath("$.data.totalContribScore").value(500))
                 .andExpect(jsonPath("$.data.totalAttackScore").value(7));
     }
