@@ -557,4 +557,254 @@ class AllianceMatchServiceScenarioTest {
 
         verifyNoInteractions(allianceUniversityRepository);
     }
+
+    // ===== JaCoCo 분기 보완: 만료 검사, 예약 시작, 잠금 후 상태 변경 =====
+
+    @Test
+    void acceptMatch_rejectsRequestWithoutExpiration() {
+        User user = mock(User.class);
+        when(user.getStatus()).thenReturn(UserStatus.ACTIVE);
+        when(userRepository.findById(USER)).thenReturn(Optional.of(user));
+        AllianceMatch match = mock(AllianceMatch.class);
+        when(match.getAllianceAId()).thenReturn(A);
+        when(match.getAllianceBId()).thenReturn(B);
+        when(match.getStatus()).thenReturn(AllianceMatchStatus.REQUESTED);
+        pairLookup();
+        lockAlliances(alliance("연합A"), alliance("연합B"));
+        when(allianceMatchRepository.findByIdForUpdate(MATCH)).thenReturn(Optional.of(match));
+
+        assertError(ErrorCode.MATCH_REQUEST_EXPIRED, () -> service.acceptMatch(USER, MATCH));
+        verifyNoInteractions(allianceUniversityRepository);
+    }
+
+    @Test
+    void acceptMatch_rejectsSoftDeletedRequestedMatch() {
+        User user = mock(User.class);
+        when(user.getStatus()).thenReturn(UserStatus.ACTIVE);
+        when(userRepository.findById(USER)).thenReturn(Optional.of(user));
+        AllianceMatch match = mock(AllianceMatch.class);
+        when(match.getAllianceAId()).thenReturn(A);
+        when(match.getAllianceBId()).thenReturn(B);
+        when(match.getDeletedAt()).thenReturn(OffsetDateTime.now().minusMinutes(1));
+        pairLookup();
+        lockAlliances(alliance("연합A"), alliance("연합B"));
+        when(allianceMatchRepository.findByIdForUpdate(MATCH)).thenReturn(Optional.of(match));
+
+        assertError(ErrorCode.MATCH_NOT_PENDING, () -> service.acceptMatch(USER, MATCH));
+        verifyNoInteractions(allianceUniversityRepository);
+    }
+
+    @Test
+    void requestMatch_rejectsSecondAllianceWithMissingExpiration() {
+        User user = mock(User.class);
+        when(user.getStatus()).thenReturn(UserStatus.ACTIVE);
+        when(userRepository.findById(USER)).thenReturn(Optional.of(user));
+        Alliance b = mock(Alliance.class);
+        when(b.getStatus()).thenReturn(AllianceStatus.ACTIVE);
+        lockAlliances(alliance("연합A"), b);
+
+        assertError(ErrorCode.ALLY_NOT_ACTIVE, () -> service.requestMatch(USER, A, B, 6));
+        verifyNoInteractions(allianceUniversityRepository);
+    }
+
+    @Test
+    void requestMatch_rejectsDeletedSecondAlliance() {
+        User user = mock(User.class);
+        when(user.getStatus()).thenReturn(UserStatus.ACTIVE);
+        when(userRepository.findById(USER)).thenReturn(Optional.of(user));
+        Alliance b = mock(Alliance.class);
+        when(b.getStatus()).thenReturn(AllianceStatus.ACTIVE);
+        when(b.getDeletedAt()).thenReturn(OffsetDateTime.now().minusMinutes(1));
+        lockAlliances(alliance("연합A"), b);
+
+        assertError(ErrorCode.ALLY_NOT_ACTIVE, () -> service.requestMatch(USER, A, B, 6));
+        verifyNoInteractions(allianceUniversityRepository);
+    }
+
+    @Test
+    void startScheduledMatch_skipsMatchThatIsStillRequested() {
+        AllianceMatch match = requested();
+        pairAndLockedMatch(match);
+
+        service.startScheduledMatch(MATCH);
+
+        assertThat(match.getStatus()).isEqualTo(AllianceMatchStatus.REQUESTED);
+        verifyNoInteractions(allianceUniversityRepository);
+    }
+
+    @Test
+    void startScheduledMatch_skipsScheduledMatchWithoutStartTime() {
+        AllianceMatch match = mock(AllianceMatch.class);
+        when(match.getAllianceAId()).thenReturn(A);
+        when(match.getAllianceBId()).thenReturn(B);
+        when(match.getStatus()).thenReturn(AllianceMatchStatus.SCHEDULED);
+        pairLookup();
+        lockAlliances(alliance("연합A"), alliance("연합B"));
+        when(allianceMatchRepository.findByIdForUpdate(MATCH)).thenReturn(Optional.of(match));
+
+        service.startScheduledMatch(MATCH);
+
+        verifyNoInteractions(allianceUniversityRepository);
+    }
+
+    @Test
+    void startScheduledMatch_cancelsWhenSecondAllianceIsNotActive() {
+        Alliance a = mock(Alliance.class);
+        Alliance b = mock(Alliance.class);
+        when(a.getStatus()).thenReturn(AllianceStatus.ACTIVE);
+        when(b.getStatus()).thenReturn(AllianceStatus.IN_MATCH);
+        AllianceMatch match = scheduledDue();
+        loadScheduled(match, a, b);
+
+        service.startScheduledMatch(MATCH);
+
+        assertThat(match.getStatus()).isEqualTo(AllianceMatchStatus.CANCELED);
+        verifyNoInteractions(allianceUniversityRepository);
+    }
+
+    @Test
+    void startScheduledMatch_cancelsWhenSecondAllianceIsDeleted() {
+        Alliance a = mock(Alliance.class);
+        Alliance b = mock(Alliance.class);
+        when(a.getStatus()).thenReturn(AllianceStatus.ACTIVE);
+        when(b.getStatus()).thenReturn(AllianceStatus.ACTIVE);
+        when(b.getDeletedAt()).thenReturn(OffsetDateTime.now().minusMinutes(1));
+        AllianceMatch match = scheduledDue();
+        loadScheduled(match, a, b);
+
+        service.startScheduledMatch(MATCH);
+
+        assertThat(match.getStatus()).isEqualTo(AllianceMatchStatus.CANCELED);
+        verifyNoInteractions(allianceUniversityRepository);
+    }
+
+    @Test
+    void startScheduledMatch_cancelsWhenSecondAllianceHasNoExpiry() {
+        Alliance a = mock(Alliance.class);
+        Alliance b = mock(Alliance.class);
+        when(a.getStatus()).thenReturn(AllianceStatus.ACTIVE);
+        when(b.getStatus()).thenReturn(AllianceStatus.ACTIVE);
+        when(a.getExpiredAt()).thenReturn(OffsetDateTime.now().plusHours(20));
+        AllianceMatch match = scheduledDue();
+        loadScheduled(match, a, b);
+
+        service.startScheduledMatch(MATCH);
+
+        assertThat(match.getStatus()).isEqualTo(AllianceMatchStatus.CANCELED);
+        verifyNoInteractions(allianceUniversityRepository);
+    }
+
+    @Test
+    void startScheduledMatch_cancelsWhenRemainingTimeIsShorterThanMatch() {
+        AllianceMatch match = scheduledDue();
+        Alliance a = Alliance.create("연합A", 6, OffsetDateTime.now().minusHours(2));
+        loadScheduled(match, a, alliance("연합B"));
+
+        service.startScheduledMatch(MATCH);
+
+        assertThat(match.getStatus()).isEqualTo(AllianceMatchStatus.CANCELED);
+        verifyNoInteractions(allianceUniversityRepository);
+    }
+
+    @Test
+    void cancelExpiredRequest_ignoresMissingPair() {
+        when(allianceMatchRepository.findPairById(MATCH)).thenReturn(Optional.empty());
+
+        service.cancelExpiredRequest(MATCH);
+
+        verifyNoInteractions(allianceRepository, allianceUniversityRepository);
+    }
+
+    @Test
+    void cancelExpiredRequest_ignoresMissingMatchAfterLock() {
+        pairLookup();
+        lockAlliances(alliance("연합A"), alliance("연합B"));
+        when(allianceMatchRepository.findByIdForUpdate(MATCH)).thenReturn(Optional.empty());
+
+        service.cancelExpiredRequest(MATCH);
+
+        verifyNoInteractions(allianceUniversityRepository);
+    }
+
+    @Test
+    void cancelExpiredRequest_cancelsRequestAfterDeadline() {
+        AllianceMatch match = AllianceMatch.request(A, B, 6,
+                OffsetDateTime.now().minusMinutes(1));
+        pairAndLockedMatch(match);
+
+        service.cancelExpiredRequest(MATCH);
+
+        assertThat(match.getStatus()).isEqualTo(AllianceMatchStatus.CANCELED);
+    }
+
+    @Test
+    void cancelExpiredRequest_doesNotCancelPreviouslyCanceledMatch() {
+        AllianceMatch match = requested();
+        match.cancelRequested();
+        pairAndLockedMatch(match);
+
+        service.cancelExpiredRequest(MATCH);
+
+        assertThat(match.getStatus()).isEqualTo(AllianceMatchStatus.CANCELED);
+    }
+
+    @Test
+    void cancelRequestedForAllianceExpiry_skipsMissingMatchAfterLock() {
+        pairLookup();
+        lockAlliances(Alliance.create("연합A", 6, OffsetDateTime.now().minusHours(7)),
+                alliance("연합B"));
+        when(allianceMatchRepository.findByIdForUpdate(MATCH)).thenReturn(Optional.empty());
+
+        service.cancelRequestedForAllianceExpiry(MATCH, A);
+
+        verifyNoInteractions(allianceUniversityRepository);
+    }
+
+    @Test
+    void cancelRequestedForAllianceExpiry_skipsAllianceWithoutExpiration() {
+        pairLookup();
+        Alliance a = mock(Alliance.class);
+        lockAlliances(a, alliance("연합B"));
+
+        service.cancelRequestedForAllianceExpiry(MATCH, A);
+
+        verify(allianceMatchRepository, never()).findByIdForUpdate(anyLong());
+    }
+
+    @Test
+    void cancelMatch_rejectsMissingOrNonpositiveIdBeforeAccessingRepositories() {
+        assertError(ErrorCode.COMMON_INVALID_INPUT, () -> service.cancelMatch(USER, null));
+        assertError(ErrorCode.COMMON_INVALID_INPUT, () -> service.cancelMatch(USER, 0L));
+        verifyNoInteractions(allianceRepository, allianceMatchRepository, userRepository);
+    }
+
+    @Test
+    void cancelMatch_allowsMemberOfAllianceAWithoutCheckingB() {
+        AllianceMatch match = requested();
+        activeUser(100L);
+        pairAndLockedMatch(match);
+        when(allianceUniversityRepository.findByAllianceIdAndStatusAndDeletedAtIsNullOrderByIdAsc(
+                A, AllianceUniversityStatus.ACCEPTED)).thenReturn(aMembers());
+
+        service.cancelMatch(USER, MATCH);
+
+        assertThat(match.getStatus()).isEqualTo(AllianceMatchStatus.CANCELED);
+        verify(allianceUniversityRepository, never()).findByAllianceIdAndStatusAndDeletedAtIsNullOrderByIdAsc(
+                B, AllianceUniversityStatus.ACCEPTED);
+    }
+
+    @Test
+    void startScheduledMatch_rejectsMismatchedFirstAllianceUnderLock() {
+        pairLookup();
+        lockAlliances(activeAlliance("연합A"), activeAlliance("연합B"));
+        AllianceMatch differentPair = AllianceMatch.request(999L, B, 6,
+                OffsetDateTime.now().plusHours(10));
+        when(allianceMatchRepository.findByIdForUpdate(MATCH))
+                .thenReturn(Optional.of(differentPair));
+
+        assertError(ErrorCode.COMMON_INVALID_INPUT, () -> service.startScheduledMatch(MATCH));
+
+        verifyNoInteractions(allianceUniversityRepository);
+    }
+
 }
