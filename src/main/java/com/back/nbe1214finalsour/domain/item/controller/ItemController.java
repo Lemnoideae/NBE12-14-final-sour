@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.item.controller;
 
+import com.back.nbe1214finalsour.domain.item.controller.docs.ItemApiDocs;
 import com.back.nbe1214finalsour.domain.item.dto.ActiveEffectResponse;
 import com.back.nbe1214finalsour.domain.item.dto.ItemPurchaseResponse;
 import com.back.nbe1214finalsour.domain.item.dto.ItemResponse;
@@ -21,7 +22,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/items")
 @RequiredArgsConstructor
-public class ItemController {
+public class ItemController implements ItemApiDocs {
 
     private final ItemService itemService;
     private final ItemPurchaseService itemPurchaseService;
