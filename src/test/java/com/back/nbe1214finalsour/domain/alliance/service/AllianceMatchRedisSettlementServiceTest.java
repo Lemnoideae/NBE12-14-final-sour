@@ -39,7 +39,7 @@ class AllianceMatchRedisSettlementServiceTest {
     private AllianceMatchRedisSettlementService service;
 
     @Test
-    @DisplayName("Redis 정산이 처음 적용되면 true를 반환하고 Lua에 학교·기여도·숨김 여부를 전달")
+    @DisplayName("Redis 정산이 처음 적용되면 true를 반환하고 Lua에 학교·기여도·숨김 여부를 전달한다")
     void settleOnce_returnsTrueAndPassesExpectedArguments() {
         // given
         stubRedisResult(1L);
@@ -63,7 +63,7 @@ class AllianceMatchRedisSettlementServiceTest {
     }
 
     @Test
-    @DisplayName("이미 정산된 대결에 대해 Redis가 0을 반환하면 false")
+    @DisplayName("이미 정산된 대결에 대해 Redis가 0을 반환하면 false를 반환한다")
     void settleOnce_returnsFalseWhenAlreadySettled() {
         stubRedisResult(0L);
 
@@ -72,7 +72,7 @@ class AllianceMatchRedisSettlementServiceTest {
     }
 
     @Test
-    @DisplayName("Redis가 정산 결과를 반환하지 않으면 예외")
+    @DisplayName("Redis가 정산 결과를 반환하지 않으면 예외를 발생시킨다")
     void settleOnce_rejectsMissingRedisResult() {
         // RedisTemplate의 미설정 반환값은 null
         assertThatThrownBy(() -> service.settleOnce(99L, 11L, 12L, 21L, 22L, 30L, 40L))
@@ -81,7 +81,7 @@ class AllianceMatchRedisSettlementServiceTest {
     }
 
     @Test
-    @DisplayName("숨김 학교는 Lua 정산 스크립트에 숨김 플래그 1로 전달")
+    @DisplayName("숨김 학교는 Lua 정산 스크립트에 숨김 플래그 1로 전달한다")
     void settleOnce_passesHiddenUniversityFlags() {
         // given: 패배 학교 하나와 승리 학교 하나가 숨김 상태
         doReturn(true).when(universityCache).isHidden(11L);
@@ -159,7 +159,7 @@ class AllianceMatchRedisSettlementServiceTest {
     }
 
     @Test
-    @DisplayName("기여도가 0이면 유효한 정산 요청으로 Lua를 실행")
+    @DisplayName("기여도가 0이면 유효한 정산 요청으로 Lua를 실행한다")
     void settleOnce_acceptsZeroContributions() {
         stubRedisResult(1L);
 

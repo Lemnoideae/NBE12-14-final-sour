@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Optional;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.BDDMockito.then;
 
 @ExtendWith(MockitoExtension.class)
 class AllianceMatchSettlementApplicationServiceTest {
@@ -64,7 +65,7 @@ class AllianceMatchSettlementApplicationServiceTest {
                 11L,12L,21L,22L,100L,100L,100L,100L);
         when(repository.findByIdForUpdate(99L)).thenReturn(Optional.of(draw));
         service.applyPending(99L);
-        verifyNoInteractions(redisService);
+        then(redisService).shouldHaveNoInteractions();
         assertThat(draw.getStatus()).isEqualTo(AllianceMatchSettlementStatus.APPLIED);
     }
 
@@ -75,7 +76,8 @@ class AllianceMatchSettlementApplicationServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("대결 ID가 올바르지 않습니다.");
 
-        verifyNoInteractions(repository, redisService);
+        then(repository).shouldHaveNoInteractions();
+        then(redisService).shouldHaveNoInteractions();
     }
 
     @Test
@@ -87,7 +89,8 @@ class AllianceMatchSettlementApplicationServiceTest {
                     .hasMessage("대결 ID가 올바르지 않습니다.");
         }
 
-        verifyNoInteractions(repository, redisService);
+        then(repository).shouldHaveNoInteractions();
+        then(redisService).shouldHaveNoInteractions();
     }
 
     @Test
@@ -99,7 +102,7 @@ class AllianceMatchSettlementApplicationServiceTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("정산 이력을 찾을 수 없습니다.");
 
-        verifyNoInteractions(redisService);
+        then(redisService).shouldHaveNoInteractions();
     }
 
     @Test
@@ -111,7 +114,7 @@ class AllianceMatchSettlementApplicationServiceTest {
         service.applyPending(99L);
 
         assertThat(record.getStatus()).isEqualTo(AllianceMatchSettlementStatus.APPLIED);
-        verifyNoInteractions(redisService);
+        then(redisService).shouldHaveNoInteractions();
     }
 
     @Test
@@ -124,7 +127,7 @@ class AllianceMatchSettlementApplicationServiceTest {
         service.applyPending(99L);
 
         assertThat(record.getStatus()).isEqualTo(AllianceMatchSettlementStatus.COMPLETED);
-        verifyNoInteractions(redisService);
+        then(redisService).shouldHaveNoInteractions();
     }
 
     @Test
