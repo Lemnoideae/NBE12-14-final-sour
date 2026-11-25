@@ -1,5 +1,6 @@
 package com.back.nbe1214finalsour.domain.payment.controller;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -84,5 +85,25 @@ class PaymentControllerTest {
                 .andExpect(jsonPath("$.data.orderName").value("크레딧 5,000"))
                 .andExpect(jsonPath("$.data.amount").value(5000));
         then(paymentService).should().createOrder(1L, ChargeAmount.KRW_5000);
+    }
+
+    @Test
+    @DisplayName("허용되지 않은 금액으로 주문하면 400 PAY_INVALID_AMOUNT를 응답하고 주문을 만들지 않는다")
+    void createOrderRejectsDisallowedAmount() throws Exception {
+        // given: 30,000원은 명세 예시에는 있지만 허용 금액(2,500·5,000·10,000)이 아니다
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/v1/payments")
+                .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"amount": 30000}
+                        """));
+
+        // then
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PAY_INVALID_AMOUNT"))
+                .andExpect(jsonPath("$.data").value(nullValue()));
+        then(paymentService).shouldHaveNoInteractions();
     }
 }
