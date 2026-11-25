@@ -13,6 +13,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class PaymentStatusTest {
 
@@ -40,6 +42,27 @@ class PaymentStatusTest {
         assertThat(statuses)
                 .withFailMessage("PaymentStatus %s와 ck_payment_status %s가 다릅니다. 둘을 함께 고치세요.", statuses, allowed)
                 .containsExactlyInAnyOrderElementsOf(allowed);
+    }
+
+    @ParameterizedTest(name = "{0} → {1}")
+    @CsvSource({
+        "READY, IN_PROGRESS",
+        "READY, ABORTED",
+        "READY, EXPIRED",
+        "IN_PROGRESS, DONE",
+        "IN_PROGRESS, ABORTED",
+        "IN_PROGRESS, EXPIRED",
+        "DONE, CANCELED"
+    })
+    @DisplayName("허용된 전이면 canTransitionTo는 true를 돌려준다")
+    void allowsDefinedTransitions(PaymentStatus current, PaymentStatus next) {
+        // given: current, next (CsvSource)
+
+        // when
+        boolean result = current.canTransitionTo(next);
+
+        // then
+        assertThat(result).isTrue();
     }
 
     private static String readMigrations() throws IOException {

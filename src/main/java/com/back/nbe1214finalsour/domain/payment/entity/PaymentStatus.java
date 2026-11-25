@@ -12,5 +12,9 @@ public enum PaymentStatus {
     /** 시간 안에 끝나지 않아 스케줄러가 만료 처리함 */
     EXPIRED,
     /** 승인 후 취소(환불)됨. 환불 기능은 이번 범위 밖 */
-    CANCELED
+    CANCELED;
+
+    public boolean canTransitionTo(PaymentStatus next) {
+        return false; // 3단계 RED용 껍데기
+    }
 }
