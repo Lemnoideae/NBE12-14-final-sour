@@ -21,4 +21,8 @@ public enum ChargeAmount {
                 .findFirst()
                 .orElseThrow(() -> new BusinessException(ErrorCode.PAY_INVALID_AMOUNT));
     }
+
+    public String orderName() {
+        return null; // 11단계 RED용 껍데기
+    }
 }
