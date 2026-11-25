@@ -35,6 +35,6 @@ public class PaymentController implements PaymentApiDocs {
     ) {
         ChargeAmount chargeAmount = ChargeAmount.from(request.amount());
         Payment payment = paymentService.createOrder(user.userId(), chargeAmount);
-        return ApiResponse.ok(PaymentOrderResponse.from(payment));
+        return ApiResponse.ok(new PaymentOrderResponse(payment));
     }
 }
