@@ -15,6 +15,11 @@ public enum PaymentStatus {
     CANCELED;
 
     public boolean canTransitionTo(PaymentStatus next) {
-        return false; // 3단계 RED용 껍데기
+        return switch (this) {
+            case READY -> next == IN_PROGRESS || next == ABORTED || next == EXPIRED;
+            case IN_PROGRESS -> next == DONE || next == ABORTED || next == EXPIRED;
+            case DONE -> next == CANCELED;
+            case ABORTED, EXPIRED, CANCELED -> false; // 종료 상태
+        };
     }
 }
