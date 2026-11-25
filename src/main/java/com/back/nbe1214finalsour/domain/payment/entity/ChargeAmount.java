@@ -1,5 +1,7 @@
 package com.back.nbe1214finalsour.domain.payment.entity;
 
+import com.back.nbe1214finalsour.global.exception.BusinessException;
+import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import java.util.Arrays;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +19,6 @@ public enum ChargeAmount {
         return Arrays.stream(values())
                 .filter(chargeAmount -> chargeAmount.amount == amount)
                 .findFirst()
-                .orElseThrow();
+                .orElseThrow(() -> new BusinessException(ErrorCode.PAY_INVALID_AMOUNT));
     }
 }
