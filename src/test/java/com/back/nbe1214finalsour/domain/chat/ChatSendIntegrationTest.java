@@ -23,11 +23,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
-import software.amazon.awssdk.core.exception.SdkClientException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -278,7 +278,7 @@ class ChatSendIntegrationTest {
     @Test
     @DisplayName("저장에 실패하면 보낸 사람에게만 COMMON_INTERNAL_ERROR이고 발행하지 않는다")
     void saveFails() throws Exception {
-        doThrow(SdkClientException.create("DynamoDB 연결 실패")).when(this.chatMessageRepository).save(any());
+        doThrow(new DataAccessResourceFailureException("메시지 저장소 연결 실패")).when(this.chatMessageRepository).save(any());
 
         sendContent("저장 실패");
 
