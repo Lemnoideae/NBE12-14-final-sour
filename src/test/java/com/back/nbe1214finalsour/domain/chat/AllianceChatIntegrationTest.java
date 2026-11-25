@@ -112,6 +112,7 @@ class AllianceChatIntegrationTest {
             client.close();
         }
         this.jdbcTemplate.update("DELETE FROM alliance_university WHERE alliance_id = ?", this.allianceId);
+        this.jdbcTemplate.update("DELETE FROM alliance_chat_room WHERE alliance_id = ?", this.allianceId);
         this.jdbcTemplate.update("DELETE FROM alliance WHERE id = ?", this.allianceId);
         for (Member member : List.of(this.a, this.b, this.c)) {
             this.redis.delete(RedisKey.RATELIMIT_CHAT.of(member.user().getId()));
