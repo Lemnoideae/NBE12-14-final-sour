@@ -3,6 +3,7 @@ package com.back.nbe1214finalsour.domain.payment.entity;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import java.util.Arrays;
+import java.util.Locale;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
@@ -23,6 +24,7 @@ public enum ChargeAmount {
     }
 
     public String orderName() {
-        return null; // 11단계 RED용 껍데기
+        // 서버 기본 로케일과 무관하게 천 단위 구분자를 쉼표로 고정한다
+        return String.format(Locale.ROOT, "크레딧 %,d", amount);
     }
 }
