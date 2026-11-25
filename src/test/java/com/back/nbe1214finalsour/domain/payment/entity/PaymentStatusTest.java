@@ -1,5 +1,11 @@
 package com.back.nbe1214finalsour.domain.payment.entity;
 
+import static com.back.nbe1214finalsour.domain.payment.entity.PaymentStatus.ABORTED;
+import static com.back.nbe1214finalsour.domain.payment.entity.PaymentStatus.CANCELED;
+import static com.back.nbe1214finalsour.domain.payment.entity.PaymentStatus.DONE;
+import static com.back.nbe1214finalsour.domain.payment.entity.PaymentStatus.EXPIRED;
+import static com.back.nbe1214finalsour.domain.payment.entity.PaymentStatus.IN_PROGRESS;
+import static com.back.nbe1214finalsour.domain.payment.entity.PaymentStatus.READY;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
@@ -7,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -14,7 +21,9 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class PaymentStatusTest {
 
@@ -63,6 +72,32 @@ class PaymentStatusTest {
 
         // then
         assertThat(result).isTrue();
+    }
+
+    // 결정한 허용 전이 7쌍. 운영 코드의 switch와 따로 적어, 둘이 어긋나면 테스트가 깨진다
+    private static final Set<List<PaymentStatus>> ALLOWED = Set.of(
+            List.of(READY, IN_PROGRESS), List.of(READY, ABORTED), List.of(READY, EXPIRED),
+            List.of(IN_PROGRESS, DONE), List.of(IN_PROGRESS, ABORTED), List.of(IN_PROGRESS, EXPIRED),
+            List.of(DONE, CANCELED));
+
+    static Stream<Arguments> undefinedTransitions() {
+        return Arrays.stream(PaymentStatus.values())
+                .flatMap(current -> Arrays.stream(PaymentStatus.values())
+                        .filter(next -> !ALLOWED.contains(List.of(current, next)))
+                        .map(next -> Arguments.of(current, next)));
+    }
+
+    @ParameterizedTest(name = "{0} → {1}")
+    @MethodSource("undefinedTransitions")
+    @DisplayName("허용되지 않은 전이면 canTransitionTo는 false를 돌려준다")
+    void rejectsUndefinedTransitions(PaymentStatus current, PaymentStatus next) {
+        // given: current, next (허용 7쌍을 뺀 나머지 29쌍)
+
+        // when
+        boolean result = current.canTransitionTo(next);
+
+        // then
+        assertThat(result).isFalse();
     }
 
     private static String readMigrations() throws IOException {
