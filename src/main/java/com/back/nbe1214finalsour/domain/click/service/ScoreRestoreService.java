@@ -3,6 +3,9 @@ package com.back.nbe1214finalsour.domain.click.service;
 import com.back.nbe1214finalsour.global.redis.RedisKey;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
+import org.springframework.data.redis.core.RedisOperations;
+import org.springframework.data.redis.core.SessionCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -10,10 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 @Slf4j
 @Service
@@ -84,6 +84,7 @@ public class ScoreRestoreService {
         }
 
         // 연합 점수
+        Map<Long, Map<String, String>> allianceScores = new HashMap<>();
         jdbcTemplate.query("""
                 select au.alliance_id, au.university_id, au.total_score 
                 from alliance_university au join alliance a on a.id = au.alliance_id
@@ -92,10 +93,11 @@ public class ScoreRestoreService {
                     and au.status = 'ACCEPTED'
                     and au.deleted_at is null
                 """, row -> {
-            stringRedisTemplate.opsForHash().put(RedisKey.ALLIANCE_SCORE.of(row.getLong("alliance_id")),
-                    row.getString("university_id"),
-                    String.valueOf(row.getLong("total_score")));
+            allianceScores.computeIfAbsent(row.getLong("alliance_id"), k -> new HashMap<>())
+                            .put(row.getString("university_id"), String.valueOf(row.getLong("total_score")));
         });
+        allianceScores.forEach((allianceId, byUniv) ->
+                stringRedisTemplate.opsForHash().putAll(RedisKey.ALLIANCE_SCORE.of(allianceId), byUniv));
 
         // 대결 점수
         jdbcTemplate.query("select id, a_score, b_score from alliance_match where status = 'IN_PROGRESS' and deleted_at is null", row -> {
@@ -105,24 +107,39 @@ public class ScoreRestoreService {
         });
 
         // 물약 효과
-        jdbcTemplate.query("""
+        List<Effect> effects = jdbcTemplate.query("""
                 select distinct on (ui.user_id) ui.id, ui.user_id, ui.item_id, i.multiplier, ui.expired_at
                 from user_item ui join item i on i.id = ui.item_id
                 where i.type = 'MULTIPLIER' and ui.expired_at > now()
                 order by ui.user_id, ui.id desc
-                """, row -> {
-            String key = RedisKey.USER_EFFECT.of(row.getLong("user_id"));
-            long expiredAt = row.getTimestamp("expired_at").getTime();
-            stringRedisTemplate.opsForHash().putAll(key,
-                    Map.of(
-                            "itemId", row.getString("item_id"),
-                            "multiplier", String.valueOf(row.getDouble("multiplier")),
-                            "expiredAt", String.valueOf(expiredAt),
-                            "purchaseId", row.getString("id")
-                    ));
-            stringRedisTemplate.expireAt(key, Instant.ofEpochMilli(expiredAt));
+                """, (row, n) -> new Effect(
+                row.getLong("user_id"),
+                row.getString("item_id"),
+                row.getDouble("multiplier"),
+                row.getObject("expired_at", OffsetDateTime.class).toInstant().toEpochMilli(),
+                row.getString("id")));
+
+        stringRedisTemplate.executePipelined(new SessionCallback<Object>()
+            {
+                @Override
+                public Object execute(RedisOperations operations) throws DataAccessException {
+                    for (Effect effect : effects) {
+                        String key = RedisKey.USER_EFFECT.of(effect.userId);
+                        operations.opsForHash().putAll(key,
+                                Map.of(
+                                        "itemId", effect.itemId,
+                                        "multiplier", String.valueOf(effect.multiplier),
+                                        "expiredAt", String.valueOf(effect.expiredAt),
+                                        "purchaseId", effect.purchaseId
+                                ));
+                        operations.expireAt(key, Instant.ofEpochMilli(effect.expiredAt));
+                    }
+                    return null;
+                }
         });
     }
+
+    record Effect(long userId, String itemId, double multiplier, long expiredAt, String purchaseId) {}
 
     private void zadd(String key, Set<ZSetOperations.TypedTuple<String>> tuples) {
         if (tuples != null && !tuples.isEmpty()) {
