@@ -129,6 +129,7 @@ class AttackIntegrationTest {
 
         if (allianceId != null) {
             jdbcTemplate.update("DELETE FROM alliance_university WHERE alliance_id = ?", allianceId);
+            jdbcTemplate.update("DELETE FROM alliance_chat_room WHERE alliance_id = ?", allianceId);
             jdbcTemplate.update("DELETE FROM alliance WHERE id = ?", allianceId);
         }
         redis.delete(RedisKey.SUBMIT_DEDUPE.of(user.getId(), "ally-attack"));
