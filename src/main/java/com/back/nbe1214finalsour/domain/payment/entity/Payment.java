@@ -9,6 +9,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -43,6 +44,12 @@ public class Payment extends BaseTimeEntity {
     private PaymentStatus status;
 
     public static Payment ready(Long userId, ChargeAmount chargeAmount) {
-        return new Payment(); // 13단계 RED용 껍데기
+        Payment payment = new Payment();
+        payment.orderId = UUID.randomUUID().toString();
+        payment.orderName = chargeAmount.orderName();
+        payment.userId = userId;
+        payment.amount = chargeAmount.getAmount();
+        payment.status = PaymentStatus.READY;
+        return payment;
     }
 }
