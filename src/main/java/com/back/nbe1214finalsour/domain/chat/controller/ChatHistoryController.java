@@ -12,7 +12,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -35,9 +35,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/chat")
 public class ChatHistoryController {
 
-    /** ULID 26자 (Crockford Base32, 대문자). 저장된 messageId와 같은 형식만 받는다 */
-    private static final String ULID_PATTERN = "^[0-9A-HJKMNP-TV-Z]{26}$";
-
     private final ChatHistoryService chatHistoryService;
 
     /**
@@ -46,8 +43,8 @@ public class ChatHistoryController {
      */
     @Operation(summary = "학교 채팅 이전 메시지 조회",
             description = "소속 학교의 메시지를 최신순으로 조회한다. cursor를 생략하면 최신부터 조회하며, "
-                    + "응답의 nextCursor를 다음 요청의 cursor로 전달한다. cursor는 대문자 ULID 26자다.")
-    @Parameter(name = "cursor", description = "대문자 ULID 26자. 생략하면 최신부터, 이후 응답의 nextCursor 사용")
+                    + "이전 응답의 nextCursor(양의 정수)를 다음 요청에 전달한다.")
+    @Parameter(name = "cursor", description = "이전 응답의 nextCursor(양의 정수)")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
@@ -60,7 +57,7 @@ public class ChatHistoryController {
     @GetMapping("/universities/{universityId}/messages")
     public ApiResponse<ChatMessagePageResponse> getUniversityMessages(
             @PathVariable long universityId,
-            @RequestParam(required = false) @Pattern(regexp = ULID_PATTERN) @Nullable String cursor,
+            @RequestParam(required = false) @Positive @Nullable Long cursor,
             @RequestParam(defaultValue = "20") @Min(1) @Max(ChatHistoryService.MAX_PAGE_SIZE) int size,
             @AuthenticationPrincipal AuthUser authUser
     ) {
@@ -70,8 +67,8 @@ public class ChatHistoryController {
     /** 연합 채팅방의 메시지. 규칙은 학교 방과 같고, 지금 그 연합에 속한 학교의 회원만 읽는다 (SCRUM-182) */
     @Operation(summary = "연합 채팅 이전 메시지 조회",
             description = "현재 소속 연합의 메시지를 최신순으로 조회한다. cursor를 생략하면 최신부터 조회하며, "
-                    + "응답의 nextCursor를 다음 요청의 cursor로 전달한다. cursor는 대문자 ULID 26자다.")
-    @Parameter(name = "cursor", description = "대문자 ULID 26자. 생략하면 최신부터, 이후 응답의 nextCursor 사용")
+                    + "이전 응답의 nextCursor(양의 정수)를 다음 요청에 전달한다.")
+    @Parameter(name = "cursor", description = "이전 응답의 nextCursor(양의 정수)")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
@@ -84,7 +81,7 @@ public class ChatHistoryController {
     @GetMapping("/alliances/{allianceId}/messages")
     public ApiResponse<ChatMessagePageResponse> getAllianceMessages(
             @PathVariable long allianceId,
-            @RequestParam(required = false) @Pattern(regexp = ULID_PATTERN) @Nullable String cursor,
+            @RequestParam(required = false) @Positive @Nullable Long cursor,
             @RequestParam(defaultValue = "20") @Min(1) @Max(ChatHistoryService.MAX_PAGE_SIZE) int size,
             @AuthenticationPrincipal AuthUser authUser
     ) {
