@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/images/daedaedae-logo.svg" width="360" alt="대대대" />
+<img src="docs/images/daedaedae-logo-final.png" width="360" alt="대대대" />
 
 **대학교 대 대학교, 클릭으로 겨루는 실시간 캠퍼스 대항전**
 
