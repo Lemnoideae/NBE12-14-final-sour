@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs';
 const swagger = new Set(['Schema', 'Parameter', 'ArraySchema', 'Content', 'ExampleObject', 'ApiResponse', 'ApiResponses', 'Operation', 'Tag', 'Tags', 'Parameters', 'SecurityRequirement', 'SecurityRequirements', 'Extension', 'ExtensionProperty', 'ExternalDocumentation', 'Link', 'LinkParameter']);
 
 export function stripSwagger(source: string): string {
+  // Sticky (y) matches at lastIndex without copying the rest of the source on every character.
+  const annotation = /@([A-Za-z_$][\w$]*)\b/y;
   let output = '';
   let i = 0;
   while (i < source.length) {
@@ -27,7 +29,8 @@ export function stripSwagger(source: string): string {
       i = next;
       continue;
     }
-    const match = source.slice(i).match(/^@([A-Za-z_$][\w$]*)\b/);
+    annotation.lastIndex = i;
+    const match = source[i] === '@' ? annotation.exec(source) : null;
     if (!match || !swagger.has(match[1])) { output += source[i++]; continue; }
     i += match[0].length;
     while (/\s/.test(source[i] ?? '') && i < source.length) i++;
