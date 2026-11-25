@@ -8,6 +8,7 @@ import com.back.nbe1214finalsour.domain.payment.entity.Payment;
 import com.back.nbe1214finalsour.domain.payment.service.PaymentService;
 import com.back.nbe1214finalsour.global.response.ApiResponse;
 import com.back.nbe1214finalsour.global.security.AuthUser;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -30,7 +31,7 @@ public class PaymentController implements PaymentApiDocs {
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<PaymentOrderResponse> createOrder(
             @AuthenticationPrincipal AuthUser user,
-            @RequestBody PaymentOrderRequest request
+            @Valid @RequestBody PaymentOrderRequest request
     ) {
         ChargeAmount chargeAmount = ChargeAmount.from(request.amount());
         Payment payment = paymentService.createOrder(user.userId(), chargeAmount);
