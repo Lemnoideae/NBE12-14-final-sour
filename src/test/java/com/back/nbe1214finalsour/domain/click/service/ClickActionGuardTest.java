@@ -58,6 +58,9 @@ class ClickActionGuardTest {
     @Mock
     private UserClickerLevelCache userClickerLevelCache;
 
+    @Mock
+    private ScoreRestoreService scoreRestoreService;
+
     @InjectMocks
     private ClickActionGuard clickActionGuard;
 
@@ -70,6 +73,7 @@ class ClickActionGuardTest {
         given(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(true);
         given(userClickerLevelCache.loadIfAbsent(USER_ID)).willReturn(2L);
         given(clickerService.getClickerById(2L)).willReturn(new Clicker(2L, 20, 300L));
+        given(scoreRestoreService.isReady()).willReturn(true);
 
         // when
         long score = clickActionGuard.verifyAndGetBaseScore(USER_ID, "sub-1", 5);
