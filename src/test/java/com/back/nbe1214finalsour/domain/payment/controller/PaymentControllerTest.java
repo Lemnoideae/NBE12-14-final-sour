@@ -106,4 +106,23 @@ class PaymentControllerTest {
                 .andExpect(jsonPath("$.data").value(nullValue()));
         then(paymentService).shouldHaveNoInteractions();
     }
+
+    @Test
+    @DisplayName("금액 없이 주문하면 400 COMMON_INVALID_INPUT과 amount 필드 오류를 응답하고 주문을 만들지 않는다")
+    void createOrderRejectsMissingAmount() throws Exception {
+        // given: 본문에 amount가 없다
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/v1/payments")
+                .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"));
+
+        // then
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("COMMON_INVALID_INPUT"))
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].field").value("amount"));
+        then(paymentService).shouldHaveNoInteractions();
+    }
 }
