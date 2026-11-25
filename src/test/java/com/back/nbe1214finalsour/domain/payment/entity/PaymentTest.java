@@ -30,4 +30,19 @@ class PaymentTest {
         assertThat(payment.getOrderId()).matches(UUID_V4);
         assertThat(payment.getOrderId()).matches(ORDER_ID_RULE);
     }
+
+    @Test
+    @DisplayName("같은 회원·금액으로 두 번 만들면 orderId가 서로 다르다")
+    void readyGeneratesDifferentOrderIdEachTime() {
+        // given
+        Long userId = 1L;
+        ChargeAmount chargeAmount = ChargeAmount.KRW_5000;
+
+        // when
+        Payment first = Payment.ready(userId, chargeAmount);
+        Payment second = Payment.ready(userId, chargeAmount);
+
+        // then
+        assertThat(first.getOrderId()).isNotEqualTo(second.getOrderId());
+    }
 }
