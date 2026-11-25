@@ -27,7 +27,8 @@ test('Vite config는 process.env의 Vercel 배포 설정을 검사한다', () =>
   const vercel = process.env.VERCEL;
   const origin = process.env.VITE_API_ORIGIN;
   process.env.VERCEL = '1';
-  delete process.env.VITE_API_ORIGIN;
+  // loadEnv는 process.env에 존재하는 키만 파일 값을 덮어쓰므로 빈 값으로 로컬 .env*를 무시한다.
+  process.env.VITE_API_ORIGIN = '';
   try {
     if (typeof viteConfig !== 'function') throw new Error('Expected Vite config factory');
     assert.throws(() => viteConfig({ command: 'build', mode: 'production', isPreview: false, isSsrBuild: false }), /VITE_API_ORIGIN/);
