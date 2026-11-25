@@ -117,6 +117,7 @@ cors:
 scheduling:
   enabled: true
   score-flush-delay: 60s
+  chat-retention-delay: 10m
 
 # 라이벌
 rivals:
