@@ -172,7 +172,7 @@ class AttackIntegrationTest {
         assertThat(redis.opsForZSet().score(RedisKey.RANK_UNIV.of(), String.valueOf(universityId))).isNull();
         assertThat(redis.hasKey(RedisKey.RANK_DEPT.of(universityId))).isFalse();
         assertThat(redis.hasKey(RedisKey.RANK_USER.of(universityId))).isFalse();
-        assertThat(redis.opsForSet().isMember(RedisKey.DIRTY_USER.of(), String.valueOf(user.getId()))).isFalse();
+        assertThat(redis.opsForSet().isMember(RedisKey.DIRTY_USER.of(), String.valueOf(user.getId()))).isTrue();
     }
 
     @Test

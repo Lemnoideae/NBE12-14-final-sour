@@ -257,7 +257,8 @@ class AttackServiceTest {
         assertThat(keysCaptor.getValue()).containsExactly(
                 "rank:univ",            // KEYS[1]
                 "dirty:univ",           // KEYS[2]
-                "score:user:attack"     // KEYS[3]
+                "score:user:attack",     // KEYS[3]
+                "dirty:user"            // KEYS[4]
         );
         // ARGV: targetUniversityId, requestedDamage, userId
         assertThat(argsCaptor.getAllValues()).containsExactly("9", "12", "1");
