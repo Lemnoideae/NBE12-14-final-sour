@@ -19,6 +19,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -109,6 +111,27 @@ class PaymentServiceTest {
                     .isInstanceOf(BusinessException.class)
                     .extracting("errorCode")
                     .isEqualTo(ErrorCode.PAY_ORDER_NOT_FOUND);
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @EnumSource(
+                value = PaymentStatus.class,
+                names = {"IN_PROGRESS", "DONE", "EXPIRED", "CANCELED"})
+        @DisplayName("본인 주문이 READY도 ABORTED도 아니면 PAY_ALREADY_PROCESSED 예외를 던진다")
+        void throwsAlreadyProcessedWhenNotReady(PaymentStatus status) {
+            // given
+            given(paymentRepository.abortIfReady(ORDER_ID, USER_ID, CODE, MESSAGE)).willReturn(0);
+            Payment payment = mock(Payment.class);
+            given(payment.getUserId()).willReturn(USER_ID);
+            given(payment.getStatus()).willReturn(status);
+            given(paymentRepository.findByOrderId(ORDER_ID)).willReturn(Optional.of(payment));
+
+            // when & then
+            // 람다 안의 호출이 던진 예외를 검사한다. extracting("errorCode")는 예외의 errorCode 필드를 이름으로 꺼낸다
+            assertThatThrownBy(() -> paymentService.recordFail(USER_ID, ORDER_ID, CODE, MESSAGE))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(ErrorCode.PAY_ALREADY_PROCESSED);
         }
     }
 }
