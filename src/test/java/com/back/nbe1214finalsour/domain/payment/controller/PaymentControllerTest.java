@@ -191,6 +191,35 @@ class PaymentControllerTest {
                 arguments("message 256자", failBody(ORDER_ID, CODE, "가".repeat(256)), "message"));
     }
 
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("acceptedFailRequests")
+    @DisplayName("메시지가 없거나 비었거나 길이가 컬럼 한도와 같으면 200을 응답하고 값을 그대로 서비스에 넘긴다")
+    void recordFailAcceptsBoundaryInput(String caseName, String orderId, String code, String message)
+            throws Exception {
+        // given: 스텁이 없다
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/v1/payments/fail")
+                .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(failBody(orderId, code, message)));
+
+        // then
+        result.andExpect(status().isOk());
+        then(paymentService).should().recordFail(1L, orderId, code, message);
+    }
+
+    // 받아 줘야 하는 경계 입력. 길이는 각 컬럼 길이와 같다 (order_id 64, fail_code 100, fail_message 255)
+    // Stream.of는 케이스들을 JUnit에 넘길 묶음으로 만들기만 한다 (변환·필터 없음). 팀의 @MethodSource 관례(Stream<Arguments>)를 따른다
+    static Stream<Arguments> acceptedFailRequests() {
+        return Stream.of(
+                arguments("message 없음", ORDER_ID, CODE, null),
+                arguments("message 빈 문자열", ORDER_ID, CODE, ""),
+                arguments("orderId 64자", "a".repeat(64), CODE, MESSAGE),
+                arguments("code 100자", ORDER_ID, "C".repeat(100), MESSAGE),
+                arguments("message 255자", ORDER_ID, CODE, "가".repeat(255)));
+    }
+
     // 실패 기록 요청 본문. 값이 null이면 JSON null로 넣는다 (필드를 빼는 것과 검증 결과가 같다)
     private static String failBody(String orderId, String code, String message) {
         return "{\"orderId\":" + jsonString(orderId)
