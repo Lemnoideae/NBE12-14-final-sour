@@ -89,6 +89,12 @@ public enum RedisKey {
     CLICKS_UNIV_SECOND("clicks:univ:%s:%s", Structure.STRING, ValueFormat.PLAIN),
     /** 중복 제출 방지. of(userId, submissionId), SET NX + TTL */
     SUBMIT_DEDUPE("submit:%s:%s", Structure.STRING, ValueFormat.PLAIN),
+    /** 클릭 크리티컬 인덱스. of(userId), SET TTL */
+    CLICKS_CRITICAL("clicks:user:%s", Structure.STRING, ValueFormat.PLAIN),
+    /** 공격 크리티컬 인덱스. of(userId), SET TTL */
+    ATTACKS_CRITICAL("attacks:user:%s", Structure.STRING, ValueFormat.PLAIN),
+    /** 지원 크리티컬 인덱스. of(userId), SET TTL */
+    ASSISTS_CRITICAL("assists:user:%s", Structure.STRING, ValueFormat.PLAIN),
 
     // 요청 한도 (RateLimit)
     /** 행동 요청 한도. INCR */

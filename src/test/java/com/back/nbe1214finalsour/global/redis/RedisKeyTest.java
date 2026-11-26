@@ -153,6 +153,9 @@ class RedisKeyTest {
                 // 클릭 (Click)
                 "CLICKS_UNIV_SECOND|clicks:univ:%s:%s|STRING|PLAIN",
                 "SUBMIT_DEDUPE|submit:%s:%s|STRING|PLAIN",
+                "CLICKS_CRITICAL|clicks:user:%s|STRING|PLAIN",
+                "ATTACKS_CRITICAL|attacks:user:%s|STRING|PLAIN",
+                "ASSISTS_CRITICAL|assists:user:%s|STRING|PLAIN",
                 // 요청 한도 (RateLimit)
                 "RATELIMIT_ACTION|ratelimit:action:%s|STRING|PLAIN",
                 "RATELIMIT_CLICK|ratelimit:click:%s|STRING|PLAIN",

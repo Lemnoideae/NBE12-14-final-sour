@@ -9,6 +9,7 @@ import com.back.nbe1214finalsour.domain.user.repository.UserRepository;
 import com.back.nbe1214finalsour.domain.user.repository.UserStatusCache;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
+import com.back.nbe1214finalsour.global.redis.RedisKey;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 import java.util.Optional;
@@ -64,6 +66,9 @@ class ClickActionGuardTest {
     @Mock
     private ScoreRestoreService scoreRestoreService;
 
+    @Mock
+    private ObjectMapper objectMapper;
+
     @InjectMocks
     private ClickActionGuard clickActionGuard;
 
@@ -77,12 +82,13 @@ class ClickActionGuardTest {
         given(userClickerLevelCache.loadIfAbsent(USER_ID)).willReturn(2L);
         given(clickerService.getClickerById(2L)).willReturn(new Clicker(2L, 20, 600L));
         given(scoreRestoreService.isReady()).willReturn(true);
+        given(objectMapper.writeValueAsString(any())).willReturn("temp");
 
         // when
-        long score = clickActionGuard.verifyAndGetBaseScore(USER_ID, "sub-1", 5);
+        ClickActionGuard.Score scoreVo = clickActionGuard.verifyAndGetBaseScore(USER_ID, "sub-1", 5, RedisKey.CLICKS_CRITICAL.of(2L));
 
         // then
-        assertThat(score).isEqualTo(100L);
+        assertThat(scoreVo.score()).isEqualTo(100L);
         then(valueOperations).should(never()).set(anyString(), anyString());
     }
 
@@ -93,7 +99,7 @@ class ClickActionGuardTest {
         given(scoreRestoreService.isReady()).willReturn(false);
 
         // when & then
-        assertThatThrownBy(() -> clickActionGuard.verifyAndGetBaseScore(USER_ID, "sub-1", 5))
+        assertThatThrownBy(() -> clickActionGuard.verifyAndGetBaseScore(USER_ID, "sub-1", 5, RedisKey.CLICKS_CRITICAL.of(1L)))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.RESTORE_SCORE_RESTORING);

@@ -21,3 +21,7 @@ scheduling:
 # 생성 로직은 DevAccountInitializerIntegrationTest가 설정을 직접 넣어 확인한다
 dev-account:
   enabled: false
+
+# 크리티컬 확률, 테스트는 0%
+click:
+  critical-rate: 0
