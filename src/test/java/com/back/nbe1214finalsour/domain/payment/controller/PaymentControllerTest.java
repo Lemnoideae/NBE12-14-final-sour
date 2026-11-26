@@ -5,6 +5,7 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -12,6 +13,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.back.nbe1214finalsour.domain.payment.entity.ChargeAmount;
 import com.back.nbe1214finalsour.domain.payment.entity.Payment;
 import com.back.nbe1214finalsour.domain.payment.service.PaymentService;
+import com.back.nbe1214finalsour.global.exception.BusinessException;
+import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import com.back.nbe1214finalsour.global.exception.GlobalExceptionHandler;
 import com.back.nbe1214finalsour.global.security.ApiAccessDeniedHandler;
 import com.back.nbe1214finalsour.global.security.ApiAuthenticationEntryPoint;
@@ -207,6 +210,25 @@ class PaymentControllerTest {
         // then
         result.andExpect(status().isOk());
         then(paymentService).should().recordFail(1L, orderId, code, message);
+    }
+
+    @Test
+    @DisplayName("주문이 없거나 남의 주문이면 404 PAY_ORDER_NOT_FOUND를 응답한다")
+    void recordFailReturns404WhenNotFound() throws Exception {
+        // given: 서비스가 주문을 찾지 못했다 (주문이 없거나 남의 주문. 서비스는 둘을 같은 예외로 던진다)
+        willThrow(new BusinessException(ErrorCode.PAY_ORDER_NOT_FOUND))
+                .given(paymentService).recordFail(1L, ORDER_ID, CODE, MESSAGE);
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/v1/payments/fail")
+                .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(failBody(ORDER_ID, CODE, MESSAGE)));
+
+        // then
+        result.andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PAY_ORDER_NOT_FOUND"))
+                .andExpect(jsonPath("$.data").value(nullValue()));
     }
 
     // 받아 줘야 하는 경계 입력. 길이는 각 컬럼 길이와 같다 (order_id 64, fail_code 100, fail_message 255)
