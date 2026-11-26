@@ -30,6 +30,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.LongStream;
 
@@ -124,7 +125,8 @@ class ClickIntegrationTest {
                 RedisKey.USER_EFFECT.of(user.getId()),
                 RedisKey.RATELIMIT_ACTION.of(user.getId()),
                 RedisKey.RATELIMIT_CLICK.of(user.getId()),
-                RedisKey.CLICKS_CRITICAL.of(user.getId())));
+                RedisKey.CLICKS_CRITICAL.of(user.getId()),
+                RedisKey.CLICKS_DAMAGE_RATE.of(user.getId())));
 
         long nowSec = Instant.now().getEpochSecond();
         redis.delete(LongStream.rangeClosed(nowSec - 8, nowSec + 2)
@@ -441,6 +443,77 @@ class ClickIntegrationTest {
         click("sub-1", 3).andExpect(status().isConflict());
 
         assertThat(redis.opsForValue().get(RedisKey.CLICKS_CRITICAL.of(user.getId()))).isEqualTo("[1]");
+    }
+
+    // --- 데미지 배율 (70~130%) ---
+    // 테스트 설정은 min·max-damage-rate가 100이라 새로 정하는 배율은 항상 100이다. 이번 배치의 배율은 Redis에 직접 넣는다
+
+    @Test
+    @DisplayName("직전 응답에서 정한 클릭별 배율을 곱하고, 크리티컬은 그 위에 2배를 한다")
+    void damageRatesApplyPerClick() throws Exception {
+        redis.opsForValue().set(RedisKey.CLICKS_DAMAGE_RATE.of(user.getId()), "[87,130,70]");
+        redis.opsForValue().set(RedisKey.CLICKS_CRITICAL.of(user.getId()), "[1]");
+
+        click("sub-1", 3)
+                .andExpect(status().isOk())
+                // (10*87 + 10*130*2 + 10*70) / 100 = 41.7 → 41
+                .andExpect(jsonPath("$.data.earnedScore").value(41))
+                .andExpect(jsonPath("$.data.university.totalScore").value(41));
+    }
+
+    @Test
+    @DisplayName("배율은 합친 뒤 한 번만 버린다 (클릭마다 버리지 않는다)")
+    void damageRatesAreFlooredOnceAfterSum() throws Exception {
+        redis.opsForValue().set(RedisKey.CLICKS_DAMAGE_RATE.of(user.getId()), "[89,89,89]");
+
+        click("sub-1", 3)
+                .andExpect(status().isOk())
+                // 2670 / 100 = 26.7 → 26. 클릭마다 버리면 8 * 3 = 24
+                .andExpect(jsonPath("$.data.earnedScore").value(26));
+    }
+
+    @Test
+    @DisplayName("배율이 클릭 수보다 적게 저장돼 있으면 남은 클릭은 100%로 계산한다")
+    void missingDamageRateDefaultsToHundred() throws Exception {
+        redis.opsForValue().set(RedisKey.CLICKS_DAMAGE_RATE.of(user.getId()), "[130]");
+
+        click("sub-1", 3)
+                .andExpect(status().isOk())
+                // (1300 + 1000 + 1000) / 100
+                .andExpect(jsonPath("$.data.earnedScore").value(33));
+    }
+
+    @Test
+    @DisplayName("아이템 배율은 데미지 배율 합을 버린 뒤에 곱한다")
+    void itemMultiplierAppliesAfterDamageRates() throws Exception {
+        redis.opsForValue().set(RedisKey.CLICKS_DAMAGE_RATE.of(user.getId()), "[89,89,89]");
+        redisHandler.setHash(RedisKey.USER_EFFECT.of(user.getId()), "multiplier", 1.5);
+
+        click("sub-1", 3)
+                .andExpect(status().isOk())
+                // 2670 / 100 = 26 → 26 * 1.5 = 39 (한 번에 버리면 26.7 * 1.5 = 40)
+                .andExpect(jsonPath("$.data.earnedScore").value(39));
+    }
+
+    @Test
+    @DisplayName("다음 배치의 배율 20개를 새로 정해 응답에 담고, Redis에 30초 동안 둔다")
+    void nextDamageRatesAreStoredAndReturned() throws Exception {
+        redis.opsForValue().set(RedisKey.CLICKS_DAMAGE_RATE.of(user.getId()), "[130,130,130]");
+
+        click("sub-1", 3)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.earnedScore").value(39))
+                .andExpect(jsonPath("$.data.damageRateIndex.length()").value(20))
+                .andExpect(jsonPath("$.data.damageRateIndex[*]", Matchers.everyItem(Matchers.is(100))));
+
+        assertThat(redis.opsForValue().get(RedisKey.CLICKS_DAMAGE_RATE.of(user.getId())))
+                .isEqualTo("[" + String.join(",", Collections.nCopies(20, "100")) + "]");
+        assertThat(redis.getExpire(RedisKey.CLICKS_DAMAGE_RATE.of(user.getId()))).isBetween(1L, 30L);
+
+        // 한 번 쓴 배율은 다음 배치에 다시 쓰지 않는다
+        click("sub-2", 3)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.earnedScore").value(30));
     }
 
     @Test
