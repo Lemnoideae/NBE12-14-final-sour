@@ -4,6 +4,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { BUBBLE_POP_CLIPS } from '../src/data/sfxClips';
 
 const SFX_DIR = join(import.meta.dirname, '..', 'src', 'assets', 'sfx');
 /** A processed clip is mono 96 kbps and at most 0.6 s, about 8 KB. Raw downloads in use were 23–34 KB. */
@@ -46,4 +48,10 @@ test('every sound-effect clip is a processed file, not a raw download', () => {
     assert.ok(bytes > 0 && bytes <= MAX_CLIP_BYTES,
       `${path} is ${bytes} bytes; run scripts/sfx/normalize-sfx.sh on the raw download and commit its output.`);
   }
+});
+
+test('BUBBLE_POP_CLIPS lists exactly the files in src/assets/sfx/bubblepop', () => {
+  const listed = BUBBLE_POP_CLIPS.map((url) => fileURLToPath(url).split(/[\\/]src[\\/]assets[\\/]sfx[\\/]/)[1].replace(/\\/g, '/'));
+  assert.deepEqual([...listed].sort(), clipPaths().filter((path) => path.startsWith('bubblepop/')),
+    'Add or remove the clip in src/data/sfxClips.ts to match the folder.');
 });
