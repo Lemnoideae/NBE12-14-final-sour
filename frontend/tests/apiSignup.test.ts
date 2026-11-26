@@ -126,6 +126,64 @@ async function fillProfile(nickname: string) {
 
 const alertText = async () => (await screen.findByRole('alert')).textContent ?? '';
 
+const codeInputs = () => Array.from({ length: 6 }, (_, i) => screen.getByLabelText(`인증 코드 ${i + 1}번째 자리`) as HTMLInputElement);
+const pasteCode = (index: number, text: string) => fireEvent.paste(codeInputs()[index], { clipboardData: { getData: () => text } });
+const values = () => codeInputs().map((input) => input.value);
+
+for (const [name, text] of [['① 첫 칸 6자리', '123456'], ['② 메일 문구 속 코드', '인증 코드: 123456']] as const) {
+  test(`${name} 붙여넣기로 여섯 칸을 채운다`, async () => {
+    mount(); await requestCode(); await screen.findByTestId('code-step');
+    pasteCode(0, text);
+    assert.deepEqual(values(), ['1', '2', '3', '4', '5', '6']);
+  });
+}
+
+test('③ 세 번째 칸에 일부를 붙여넣으면 해당 칸부터 채운다', async () => {
+  mount(); await requestCode(); await screen.findByTestId('code-step');
+  pasteCode(2, '789');
+  assert.deepEqual(values(), ['', '', '7', '8', '9', '']);
+});
+
+test('④ 숫자 없는 붙여넣기는 입력값을 유지한다', async () => {
+  mount(); await requestCode(); await screen.findByTestId('code-step');
+  fireEvent.change(codeInputs()[0], { target: { value: '1' } });
+  pasteCode(0, '문자만');
+  assert.deepEqual(values(), ['1', '', '', '', '', '']);
+});
+
+test('⑤ 붙여넣기만으로 verify 요청을 보내지 않는다', async () => {
+  const f = mount(); await requestCode(); await screen.findByTestId('code-step');
+  pasteCode(0, '123456');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(f.routes().filter((route) => route.endsWith('/verify')).length, 0);
+});
+
+test('⑥ 여섯 칸을 채우면 확인 버튼에 포커스한다', async () => {
+  mount(); await requestCode(); await screen.findByTestId('code-step');
+  pasteCode(0, '123456');
+  assert.ok(document.activeElement === screen.getByRole('button', { name: '코드 확인' }));
+});
+
+test('⑦ 한 글자 입력과 Backspace 이동, 제출 값은 유지한다', async () => {
+  const f = mount(); await requestCode(); await screen.findByTestId('code-step');
+  fireEvent.change(codeInputs()[0], { target: { value: '1' } });
+  assert.ok(document.activeElement === codeInputs()[1]);
+  fireEvent.keyDown(codeInputs()[1], { key: 'Backspace' });
+  assert.ok(document.activeElement === codeInputs()[0]);
+  for (let i = 1; i < 6; i++) fireEvent.change(codeInputs()[i], { target: { value: '123456'[i] } });
+  fireEvent.click(screen.getByRole('button', { name: '코드 확인' }));
+  await screen.findByTestId('password-step');
+  assert.equal(f.calls.find((call) => call.route.endsWith('/verify'))?.body.code, '123456');
+});
+
+test('자동 채우기 여러 글자 입력도 여섯 칸에 나누어 입력한다', async () => {
+  mount(); await requestCode(); await screen.findByTestId('code-step');
+  fireEvent.change(codeInputs()[0], { target: { value: '123456' } });
+  assert.deepEqual(values(), ['1', '2', '3', '4', '5', '6']);
+  assert.equal(codeInputs()[0].autocomplete, 'one-time-code');
+  assert.ok(codeInputs().slice(1).every((input) => input.autocomplete === 'off'));
+});
+
 test('가입 성공: 이메일 → 코드 → 비밀번호 → 닉네임·학과 → 가입 → 같은 계정으로 자동 로그인', async () => {
   const { client, calls, routes, goneToCampus } = mount();
   assertAbsent(screen.queryByLabelText('목업 샘플 이메일'), 'API 모드는 목업 샘플 도메인을 보이지 않는다');
