@@ -10,7 +10,9 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
-            UPDATE payment SET status = status WHERE false
+            UPDATE payment
+               SET status = 'ABORTED', fail_code = :failCode, fail_message = :failMessage
+             WHERE order_id = :orderId
             """, nativeQuery = true)
     int abortIfReady(@Param("orderId") String orderId, @Param("userId") Long userId,
                      @Param("failCode") String failCode, @Param("failMessage") String failMessage);
