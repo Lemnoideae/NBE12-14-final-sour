@@ -36,7 +36,12 @@ public class PaymentService {
     // 실패 기록 UPDATE가 0행일 때 이유를 가려 알맞은 예외를 던진다
     private void checkWhyNotAborted(Long userId, String orderId) {
         // 주문이 없으면 404 (람다는 값이 없을 때만 실행되어 예외를 만든다)
-        paymentRepository.findByOrderId(orderId)
+        Payment payment = paymentRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PAY_ORDER_NOT_FOUND));
+        // 남의 주문도 존재를 숨기고 같은 404. 상태보다 먼저 확인해야 남의 ABORTED 주문에 200을 주지 않는다
+        // userId는 Long이라 == 대신 equals로 값을 비교한다
+        if (!payment.getUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.PAY_ORDER_NOT_FOUND);
+        }
     }
 }
