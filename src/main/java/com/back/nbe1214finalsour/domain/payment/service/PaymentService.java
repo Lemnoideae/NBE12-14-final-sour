@@ -2,6 +2,7 @@ package com.back.nbe1214finalsour.domain.payment.service;
 
 import com.back.nbe1214finalsour.domain.payment.entity.ChargeAmount;
 import com.back.nbe1214finalsour.domain.payment.entity.Payment;
+import com.back.nbe1214finalsour.domain.payment.entity.PaymentStatus;
 import com.back.nbe1214finalsour.domain.payment.repository.PaymentRepository;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
@@ -43,5 +44,12 @@ public class PaymentService {
         if (!payment.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.PAY_ORDER_NOT_FOUND);
         }
+        // 이미 ABORTED면 앞선 실패 기록이 반영된 것이다 (failUrl 새로고침 등). 멱등하게 성공으로 끝낸다 (결정 1)
+        // 첫 기록의 code·message는 UPDATE가 0행이라 그대로 남는다
+        if (payment.getStatus() == PaymentStatus.ABORTED) {
+            return;
+        }
+        // 그 외(IN_PROGRESS·DONE·EXPIRED·CANCELED)는 이미 다른 결과가 난 주문이다
+        throw new BusinessException(ErrorCode.PAY_ALREADY_PROCESSED);
     }
 }
