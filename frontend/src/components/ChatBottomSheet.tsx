@@ -38,6 +38,14 @@ export const ChatBottomSheet: React.FC<ChatBottomSheetProps> = ({
   const sampleInput = { schools, mySchoolId: player.schoolId, myNickname, myDepartment };
   const [schoolMessages, setSchoolMessages] = useState<ChatMessage[]>(() => getSchoolChatSamples(sampleInput));
   const [unionMessages, setUnionMessages] = useState<ChatMessage[] | null>(() => getUnionChatSamples(sampleInput, currentAlliance?.schoolIds ?? null));
+  const allianceId = currentAlliance?.id ?? null;
+  const previousAllianceId = useRef(allianceId);
+  useEffect(() => {
+    if (previousAllianceId.current === allianceId) return;
+    previousAllianceId.current = allianceId;
+    // Snapshot the current inputs only when the alliance changes, not on unrelated renders.
+    setUnionMessages(getUnionChatSamples(sampleInput, currentAlliance?.schoolIds ?? null));
+  }, [allianceId]);
   const noAlliance = activeTab === 'union' && unionMessages === null;
 
   const currentMessages = activeTab === 'school' ? schoolMessages : unionMessages ?? [];
