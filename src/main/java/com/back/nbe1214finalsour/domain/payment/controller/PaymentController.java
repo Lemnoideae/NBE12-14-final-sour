@@ -46,7 +46,7 @@ public class PaymentController implements PaymentApiDocs {
     @PostMapping("/fail")
     public ApiResponse<PaymentFailResponse> recordFail(
             @AuthenticationPrincipal AuthUser user,
-            @RequestBody PaymentFailRequest request
+            @Valid @RequestBody PaymentFailRequest request
     ) {
         paymentService.recordFail(user.userId(), request.orderId(), request.code(), request.message());
         return ApiResponse.ok(new PaymentFailResponse(request.orderId(), PaymentStatus.ABORTED));
