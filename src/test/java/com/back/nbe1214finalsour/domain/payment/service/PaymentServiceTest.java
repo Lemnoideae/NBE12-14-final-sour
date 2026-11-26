@@ -152,5 +152,23 @@ class PaymentServiceTest {
             then(paymentRepository).should().findByOrderId(ORDER_ID);
             then(paymentRepository).shouldHaveNoMoreInteractions();
         }
+
+        @Test
+        @DisplayName("본인 주문이 READY인데 UPDATE가 0행이면 IllegalStateException을 던진다")
+        void throwsIllegalStateWhenStillReady() {
+            // given
+            given(paymentRepository.abortIfReady(ORDER_ID, USER_ID, CODE, MESSAGE)).willReturn(0);
+            // 실제 DB에서는 쿼리를 일부러 틀리지 않는 한 재현할 수 없어 목으로 만든다
+            Payment payment = mock(Payment.class);
+            given(payment.getUserId()).willReturn(USER_ID);
+            given(payment.getStatus()).willReturn(PaymentStatus.READY);
+            given(paymentRepository.findByOrderId(ORDER_ID)).willReturn(Optional.of(payment));
+
+            // when & then
+            // 람다 안의 호출이 던진 예외를 검사한다
+            assertThatThrownBy(() -> paymentService.recordFail(USER_ID, ORDER_ID, CODE, MESSAGE))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining(ORDER_ID);
+        }
     }
 }
