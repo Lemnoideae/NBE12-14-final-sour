@@ -133,5 +133,24 @@ class PaymentServiceTest {
                     .extracting("errorCode")
                     .isEqualTo(ErrorCode.PAY_ALREADY_PROCESSED);
         }
+
+        @Test
+        @DisplayName("본인 주문이 이미 ABORTED면 예외 없이 끝나고 기록을 다시 쓰지 않는다")
+        void endsNormallyWhenAlreadyAborted() {
+            // given
+            given(paymentRepository.abortIfReady(ORDER_ID, USER_ID, CODE, MESSAGE)).willReturn(0);
+            Payment payment = mock(Payment.class);
+            given(payment.getUserId()).willReturn(USER_ID);
+            given(payment.getStatus()).willReturn(PaymentStatus.ABORTED);
+            given(paymentRepository.findByOrderId(ORDER_ID)).willReturn(Optional.of(payment));
+
+            // when
+            paymentService.recordFail(USER_ID, ORDER_ID, CODE, MESSAGE);
+
+            // then
+            then(paymentRepository).should().abortIfReady(ORDER_ID, USER_ID, CODE, MESSAGE);
+            then(paymentRepository).should().findByOrderId(ORDER_ID);
+            then(paymentRepository).shouldHaveNoMoreInteractions();
+        }
     }
 }
