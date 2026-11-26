@@ -133,6 +133,9 @@ public enum ErrorCode {
     CHAT_TOO_FREQUENT(HttpStatus.TOO_MANY_REQUESTS, "CHAT_TOO_FREQUENT", "메시지를 너무 빨리 보내고 있습니다."),
     /** 본문이 비었거나 200자를 넘음 (계획 D13, SCRUM-130) */
     CHAT_INVALID_CONTENT(HttpStatus.BAD_REQUEST, "CHAT_INVALID_CONTENT", "메시지는 1~200자로 입력해주세요."),
+
+    // ===== RESTORE (복구) =====
+    RESTORE_SCORE_RESTORING(HttpStatus.SERVICE_UNAVAILABLE, "RESTORE_SCORE_RESTORING", "Redis 재시작으로 점수를 복구하는 중입니다."),
     ;
 
     private final HttpStatus status;
