@@ -6,6 +6,7 @@ import { errorMessage, isApiError } from '../api/errors';
 import { selectByMode } from '../api/mode';
 import { userKeys, useMyInfo, type MyInfo } from '../api/users';
 import type { ClickUpgradeGate } from './useCampusClicks';
+import { createUuid } from '../utils/uuid';
 
 type Phase = 'idle' | 'buying' | 'uncertain' | 'checking';
 interface Attempt { userId: number; itemId: number; idempotencyKey: string; previousExpiry: string | null; abort: AbortController; release: () => void }
@@ -97,9 +98,10 @@ export function useApiItemShopController(gate: ClickUpgradeGate): ItemShopView {
     if (!baseline || effects.isError || effects.isFetching) return;
     if (!item || item.payType !== 'CONTRIBUTION' || item.type !== 'MULTIPLIER' || !profile || profile.id !== userId) return;
     if (profile.totalContribScore < item.price) { setError('아이템 구매에 필요한 기여도가 부족합니다.'); return; }
+    const idempotencyKey = createUuid();
     const release = gate.beginUpgrade();
     if (!release) { setError('미확정 클릭 또는 구매·강화가 끝난 뒤 구매할 수 있습니다.'); return; }
-    const work: Attempt = { userId: profile.id, itemId, idempotencyKey: crypto.randomUUID(), previousExpiry: baseline.effect?.expiredAt ?? null, abort: new AbortController(), release };
+    const work: Attempt = { userId: profile.id, itemId, idempotencyKey, previousExpiry: baseline.effect?.expiredAt ?? null, abort: new AbortController(), release };
     attempt.current = work; changePhase('buying'); setError(null); setStatus(null); setReceipt(null);
     try {
       await Promise.all([queryClient.cancelQueries({ queryKey: userKeys.me, exact: true }), queryClient.cancelQueries({ queryKey: activeKey, exact: true })]);
