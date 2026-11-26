@@ -49,6 +49,30 @@ function fixture(send: (request: ClickRequest) => Promise<ClickResponse> = async
   return { controller, sent, accepted, snapshots, advance, tasks, suspend: (ms: number) => { time += ms; } };
 }
 
+test('randomUUID 없는 환경의 기본 제출 ID는 UUID v4다', async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis.crypto, 'randomUUID');
+  let callback: (() => void) | undefined;
+  const sent: ClickRequest[] = [];
+  const controller = createClickBatcher({
+    schedule: (run) => { callback = run; return () => {}; },
+    send: async (request) => { sent.push(request); return response; },
+    onAccepted: () => {}, onChange: () => {},
+  });
+  try {
+    Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, value: undefined });
+    controller.enqueue(1);
+    assert.ok(callback);
+    callback();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(sent.length, 1);
+    assert.match(sent[0].submissionId, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  } finally {
+    controller.dispose();
+    if (descriptor) Object.defineProperty(globalThis.crypto, 'randomUUID', descriptor);
+    else Reflect.deleteProperty(globalThis.crypto, 'randomUUID');
+  }
+});
+
 const restoringError = () => new ApiError({ kind: 'http', status: 503, code: 'RESTORE_SCORE_RESTORING' });
 
 test('복구 503: 대기 후 같은 배치와 ID로 성공하고 뒤의 대기분도 전송한다', async () => {

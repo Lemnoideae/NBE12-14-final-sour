@@ -1,6 +1,7 @@
 import { CLICK_BATCH_WINDOW_MS, MAX_CLICK_BATCH_SIZE, type ClickCoordinates, type ClickRequest, type ClickResponse } from '../api/clicks';
 import { isApiError } from '../api/errors';
 import { isClickLimitError, isScoreRestoring, requiresClickVerification } from '../api/abuse';
+import { createUuid } from './uuid';
 
 const RESTORE_DELAYS = [2000, 4000, 8000, 16000, 30000] as const;
 
@@ -31,7 +32,7 @@ export interface ClickBatcherOptions<TResponse = ClickResponse> {
 /** One serial queue per signed-in member; network retries never make a new submission ID. */
 export function createClickBatcher<TResponse = ClickResponse>(options: ClickBatcherOptions<TResponse>) {
   const now = options.now ?? Date.now;
-  const createId = options.createId ?? (() => crypto.randomUUID());
+  const createId = options.createId ?? (() => createUuid());
   const schedule = options.schedule ?? ((callback, delay) => {
     const timer = setTimeout(callback, delay);
     return () => clearTimeout(timer);
