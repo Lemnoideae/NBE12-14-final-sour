@@ -13,6 +13,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
             UPDATE payment
                SET status = 'ABORTED', fail_code = :failCode, fail_message = :failMessage
              WHERE order_id = :orderId
+               AND user_id = :userId
             """, nativeQuery = true)
     int abortIfReady(@Param("orderId") String orderId, @Param("userId") Long userId,
                      @Param("failCode") String failCode, @Param("failMessage") String failMessage);
