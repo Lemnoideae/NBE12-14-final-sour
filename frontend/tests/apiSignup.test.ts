@@ -25,7 +25,7 @@ for (const [key, value] of Object.entries({
   IS_REACT_ACT_ENVIRONMENT: true,
 })) Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
 
-const { render, screen, fireEvent, cleanup, within } = await import('@testing-library/react');
+const { render, screen, fireEvent, cleanup, within, act, waitFor } = await import('@testing-library/react');
 const { ApiProvider } = await import('../src/api/ApiProvider');
 const { createApiClient } = await import('../src/api/client');
 const { createApiFaults } = await import('../src/api/faults');
@@ -57,7 +57,7 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 const ok = (data: unknown, status = 200) => json(status, { code: 'SUCCESS', message: '요청이 성공했습니다.', data });
 const fail = (status: number, code: string, message: string) => json(status, { code, message, data: null });
 
-type Handler = (body: Record<string, unknown>, url: URL) => Response;
+type Handler = (body: Record<string, unknown>, url: URL) => Response | Promise<Response>;
 
 /** A backend that answers like the real one for the calls the screen makes; tests override single routes. */
 function mount(overrides: Record<string, Handler> = {}) {
@@ -182,6 +182,76 @@ test('자동 채우기 여러 글자 입력도 여섯 칸에 나누어 입력한
   assert.deepEqual(values(), ['1', '2', '3', '4', '5', '6']);
   assert.equal(codeInputs()[0].autocomplete, 'one-time-code');
   assert.ok(codeInputs().slice(1).every((input) => input.autocomplete === 'off'));
+});
+
+async function advanceClock(ms: number, setTime: (value: number) => void, start: number) {
+  setTime(start + ms);
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 350)); });
+}
+
+for (const scenario of ['경고 경계와 두 단계', '만료 시 가입 요청 차단', '실패 뒤 만료 시각 유지', '가입 요청 중 만료는 응답 대기'] as const) {
+  test(`가입 토큰: ${scenario}`, async () => {
+    const originalNow = Date.now;
+    const start = originalNow();
+    let time = start;
+    Date.now = () => time;
+    let resolveSignup!: (response: Response) => void;
+    try {
+      const f = mount(scenario === '실패 뒤 만료 시각 유지' ? {
+        'POST /api/v1/auth/signup': () => json(400, { code: 'COMMON_INVALID_INPUT', message: '입력 오류', data: [{ field: 'password', reason: '비밀번호 오류' }] }),
+      } : scenario === '가입 요청 중 만료는 응답 대기' ? {
+        'POST /api/v1/auth/signup': () => new Promise<Response>((resolve) => { resolveSignup = resolve; }),
+      } : {});
+      await requestCode(); await enterCode(RIGHT_CODE); await screen.findByTestId('password-step');
+      const setTime = (value: number) => { time = value; };
+      if (scenario === '경고 경계와 두 단계') {
+        await advanceClock(1499000, setTime, start);
+        assertAbsent(screen.queryByText(/가입 가능 시간이 .*남았/));
+        await advanceClock(1500000, setTime, start);
+        assert.ok(screen.getByText(/가입 가능 시간이 .*남았/));
+        await setPassword();
+        assert.ok(screen.getByText(/가입 가능 시간이 .*남았/));
+      } else if (scenario === '만료 시 가입 요청 차단') {
+        await advanceClock(1800000, setTime, start);
+        await screen.findByLabelText('학교 이메일 주소');
+        assert.match(await alertText(), /가입 가능 시간.*지났/);
+        assert.equal(f.routes().filter((route) => route.endsWith('/signup')).length, 0);
+      } else {
+        await setPassword(); await fillProfile('새내기');
+        fireEvent.click(screen.getByRole('button', { name: /입학하기/ }));
+        await waitFor(() => assert.equal(f.routes().filter((route) => route.endsWith('/signup')).length, 1));
+        if (scenario === '실패 뒤 만료 시각 유지') {
+          await screen.findByTestId('password-step');
+          await advanceClock(1800000, setTime, start);
+          await screen.findByLabelText('학교 이메일 주소');
+          assert.match(await alertText(), /가입 가능 시간.*지났/);
+        } else {
+          await advanceClock(1800000, setTime, start);
+          assert.ok(screen.getByRole('group', { name: '소속 학과' }));
+          await act(async () => resolveSignup(ok({ userId: 1, nickname: '새내기', university: HANYANG, department: DEPARTMENTS[1] }, 201)));
+          await screen.findByText('한양대학교 입학을 환영합니다!');
+        }
+      }
+    } finally { Date.now = originalNow; }
+  });
+}
+
+test('가입 토큰 만료 기준은 verify 응답이 아닌 요청 직전 시각이다', async () => {
+  const originalNow = Date.now;
+  const start = originalNow();
+  let time = start;
+  Date.now = () => time;
+  let resolveVerify!: (response: Response) => void;
+  try {
+    mount({ 'POST /api/v1/auth/email/verify': () => new Promise<Response>((resolve) => { resolveVerify = resolve; }) });
+    await requestCode(); await enterCode(RIGHT_CODE);
+    await waitFor(() => assert.equal(typeof resolveVerify, 'function'));
+    time = start + 30000;
+    await act(async () => resolveVerify(ok({ signupToken: 'signup-token', university: HANYANG, expiresInSeconds: 1800 })));
+    await screen.findByTestId('password-step');
+    await advanceClock(1500000, (value) => { time = value; }, start);
+    assert.ok(screen.getByText(/가입 가능 시간이 .*남았/));
+  } finally { Date.now = originalNow; }
 });
 
 test('가입 성공: 이메일 → 코드 → 비밀번호 → 닉네임·학과 → 가입 → 같은 계정으로 자동 로그인', async () => {
