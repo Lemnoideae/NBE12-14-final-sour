@@ -19,6 +19,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class PaymentServiceTest {
 
+    private static final Long USER_ID = 1L;
+    private static final String ORDER_ID = "b6f1e2d3-8a7c-4b5e-9f0a-1c2d3e4f5a6b";
+    private static final String CODE = "PAY_PROCESS_CANCELED";
+    private static final String MESSAGE = "사용자에 의해 결제가 취소되었습니다.";
+
     @Mock
     private PaymentRepository paymentRepository;
 
@@ -41,5 +46,19 @@ class PaymentServiceTest {
         assertThat(captor.getValue().getUserId()).isEqualTo(1L);
         assertThat(captor.getValue().getAmount()).isEqualTo(5_000L);
         assertThat(result).isSameAs(stored);
+    }
+
+    @Test
+    @DisplayName("실패 기록 UPDATE가 1행이면 주문을 조회하지 않고 끝난다")
+    void recordFailEndsWithoutLookupWhenUpdated() {
+        // given
+        given(paymentRepository.abortIfReady(ORDER_ID, USER_ID, CODE, MESSAGE)).willReturn(1);
+
+        // when
+        paymentService.recordFail(USER_ID, ORDER_ID, CODE, MESSAGE);
+
+        // then
+        then(paymentRepository).should().abortIfReady(ORDER_ID, USER_ID, CODE, MESSAGE);
+        then(paymentRepository).shouldHaveNoMoreInteractions();
     }
 }

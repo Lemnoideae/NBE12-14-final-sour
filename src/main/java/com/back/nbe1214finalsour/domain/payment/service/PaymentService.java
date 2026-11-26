@@ -18,4 +18,6 @@ public class PaymentService {
     public Payment createOrder(Long userId, ChargeAmount chargeAmount) {
         return paymentRepository.save(Payment.ready(userId, chargeAmount));
     }
+
+    public void recordFail(Long userId, String orderId, String code, String message) {}
 }
