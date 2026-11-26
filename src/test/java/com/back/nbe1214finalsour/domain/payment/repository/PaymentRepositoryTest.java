@@ -134,6 +134,23 @@ class PaymentRepositoryTest {
         assertThat(found.getFailCode()).isNull();
     }
 
+    @Test
+    @DisplayName("메시지 없이 실패를 기록하면 코드만 저장하고 메시지는 NULL로 둔다")
+    void abortIfReadySavesNullMessage() {
+        // given
+        Payment payment = paymentRepository.saveAndFlush(Payment.ready(userId, ChargeAmount.KRW_5000));
+
+        // when
+        int updated = paymentRepository.abortIfReady(payment.getOrderId(), userId, "PAY_PROCESS_CANCELED", null);
+        entityManager.clear(); // 영속성 컨텍스트를 비워 DB에서 다시 읽음
+
+        // then
+        Payment found = paymentRepository.findById(payment.getId()).orElseThrow();
+        assertThat(updated).isEqualTo(1);
+        assertThat(found.getFailMessage()).isNull();
+        assertThat(found.getFailCode()).isEqualTo("PAY_PROCESS_CANCELED");
+    }
+
     // READY가 아닌 상태로 바꾼다. DB 제약이 요구하는 컬럼을 같이 채운다
     // DONE: ck_payment_done (payment_key, approved_at) / CANCELED: 여기에 ck_payment_canceled (canceled_at)까지
     private void forceStatus(Long paymentId, PaymentStatus status) {
