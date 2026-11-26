@@ -5,9 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.withSettings;
 
 import com.back.nbe1214finalsour.domain.payment.entity.ChargeAmount;
 import com.back.nbe1214finalsour.domain.payment.entity.Payment;
+import com.back.nbe1214finalsour.domain.payment.entity.PaymentStatus;
 import com.back.nbe1214finalsour.domain.payment.repository.PaymentRepository;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
@@ -20,11 +23,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.quality.Strictness;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentServiceTest {
 
     private static final Long USER_ID = 1L;
+    private static final Long OTHER_USER_ID = 2L;
     private static final String ORDER_ID = "b6f1e2d3-8a7c-4b5e-9f0a-1c2d3e4f5a6b";
     private static final String CODE = "PAY_PROCESS_CANCELED";
     private static final String MESSAGE = "사용자에 의해 결제가 취소되었습니다.";
@@ -77,6 +82,26 @@ class PaymentServiceTest {
             // given
             given(paymentRepository.abortIfReady(ORDER_ID, USER_ID, CODE, MESSAGE)).willReturn(0);
             given(paymentRepository.findByOrderId(ORDER_ID)).willReturn(Optional.empty());
+
+            // when & then
+            // 람다 안의 호출이 던진 예외를 검사한다. extracting("errorCode")는 예외의 errorCode 필드를 이름으로 꺼낸다
+            assertThatThrownBy(() -> paymentService.recordFail(USER_ID, ORDER_ID, CODE, MESSAGE))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(ErrorCode.PAY_ORDER_NOT_FOUND);
+        }
+
+        @Test
+        @DisplayName("남의 주문이면 이미 ABORTED여도 PAY_ORDER_NOT_FOUND 예외를 던진다")
+        void throwsNotFoundWhenOthersOrder() {
+            // given
+            given(paymentRepository.abortIfReady(ORDER_ID, USER_ID, CODE, MESSAGE)).willReturn(0);
+            // 남의 주문인데 이미 ABORTED: 본인 확인보다 ABORTED 확인이 먼저면 200이 나가는 상황을 만든다
+            // 올바른 코드는 상태를 읽지 않으므로, 이 목만 사용되지 않은 스텁을 허용(LENIENT)한다
+            Payment othersAborted = mock(Payment.class, withSettings().strictness(Strictness.LENIENT));
+            given(othersAborted.getUserId()).willReturn(OTHER_USER_ID);
+            given(othersAborted.getStatus()).willReturn(PaymentStatus.ABORTED);
+            given(paymentRepository.findByOrderId(ORDER_ID)).willReturn(Optional.of(othersAborted));
 
             // when & then
             // 람다 안의 호출이 던진 예외를 검사한다. extracting("errorCode")는 예외의 errorCode 필드를 이름으로 꺼낸다
