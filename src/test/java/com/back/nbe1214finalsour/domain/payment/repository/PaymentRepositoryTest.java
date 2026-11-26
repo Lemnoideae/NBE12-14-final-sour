@@ -64,4 +64,23 @@ class PaymentRepositoryTest {
         assertThat(found.getCreatedAt()).isNotNull();
         assertThat(found.getUpdatedAt()).isNotNull();
     }
+
+    @Test
+    @DisplayName("본인의 READY 주문이면 ABORTED로 바꾸고 실패 코드·메시지를 남긴다")
+    void abortIfReadyAbortsOwnReadyOrder() {
+        // given
+        Payment payment = paymentRepository.saveAndFlush(Payment.ready(userId, ChargeAmount.KRW_5000));
+
+        // when
+        int updated = paymentRepository.abortIfReady(
+                payment.getOrderId(), userId, "PAY_PROCESS_CANCELED", "사용자에 의해 결제가 취소되었습니다.");
+        entityManager.clear(); // 영속성 컨텍스트를 비워 DB에서 다시 읽음
+
+        // then
+        Payment found = paymentRepository.findById(payment.getId()).orElseThrow();
+        assertThat(updated).isEqualTo(1);
+        assertThat(found.getStatus()).isEqualTo(PaymentStatus.ABORTED);
+        assertThat(found.getFailCode()).isEqualTo("PAY_PROCESS_CANCELED");
+        assertThat(found.getFailMessage()).isEqualTo("사용자에 의해 결제가 취소되었습니다.");
+    }
 }
