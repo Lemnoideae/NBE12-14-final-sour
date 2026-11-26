@@ -499,7 +499,8 @@ test('2:2 고정 불변식: 대결 시드는 양측 2개교·기간 1~24h이고,
 
   cleanup();
   const initialAllianceState = createInitialAllianceState();
-  const allianceState = { ...initialAllianceState, alliances: [...initialAllianceState.alliances, { id: 'alliance-hanyang-pusan', name: '한양대·부산대 연합', schoolIds: [SCHOOL_ID.hanyang, SCHOOL_ID.pusan], createdAt: 1000, durationHours: 72, expiresAt: Date.now() + 72 * 3600_000 }] };
+  const now = Date.now();
+  const allianceState = { ...initialAllianceState, alliances: [...initialAllianceState.alliances, { id: 'alliance-hanyang-pusan', name: '한양대·부산대 연합', schoolIds: [SCHOOL_ID.hanyang, SCHOOL_ID.pusan], createdAt: now, durationHours: 72, expiresAt: now + 72 * 3600_000 }] };
   let battleValue: ReturnType<typeof useBattle>;
   function Probe() { battleValue = useBattle(); return null; }
   render(React.createElement(MockGameProvider, null, React.createElement(AllianceProvider, { initialState: allianceState } as any, React.createElement(BattleProvider, null, React.createElement(Probe), React.createElement(BattleApplyScreenPhone)))));
