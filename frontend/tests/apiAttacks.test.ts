@@ -333,6 +333,13 @@ test('연합 학교는 지원 버튼으로 바뀌어 /assists로 보내고, 서�
   assert.equal(f.locked(), false);
 });
 
+test('공격 점수 복구 중에는 자동 재전송과 미확정 횟수를 안내한다', async () => {
+  mount({ respond: () => fail(503, 'RESTORE_SCORE_RESTORING') });
+  await waitFor(() => assert.ok(attackButton()));
+  fireEvent.click(attackButton());
+  await waitFor(() => assert.match(screen.getByRole('alert').textContent ?? '', /점수 복구 중.*자동.*미확정.*1회/), { timeout: 2500 });
+});
+
 test('연합 해제 뒤 첫 지원 거절은 대기분을 취소하고 잠금을 풀어 새 입력을 받는다', async () => {
   const allies = [SCHOOL_ID.pusan];
   let detailReads = 0;

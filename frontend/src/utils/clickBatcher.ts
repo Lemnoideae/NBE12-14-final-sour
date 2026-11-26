@@ -1,6 +1,8 @@
 import { CLICK_BATCH_WINDOW_MS, MAX_CLICK_BATCH_SIZE, type ClickCoordinates, type ClickRequest, type ClickResponse } from '../api/clicks';
 import { isApiError } from '../api/errors';
-import { isClickLimitError, requiresClickVerification } from '../api/abuse';
+import { isClickLimitError, isScoreRestoring, requiresClickVerification } from '../api/abuse';
+
+const RESTORE_DELAYS = [2000, 4000, 8000, 16000, 30000] as const;
 
 export interface ClickBatchSnapshot {
   pendingClicks: number;
@@ -8,6 +10,7 @@ export interface ClickBatchSnapshot {
   sending: boolean;
   error: unknown | null;
   recoverable: boolean;
+  restoring: boolean;
   locked: boolean;
 }
 
@@ -41,11 +44,14 @@ export function createClickBatcher<TResponse = ClickResponse>(options: ClickBatc
   let error: unknown | null = null;
   let nextSendAt = 0;
   let locked = false;
+  let restoring = false;
+  let restoreAttempts = 0;
 
   const getSnapshot = (): ClickBatchSnapshot => ({
     pendingClicks: queue.length + (batch?.points.length ?? 0),
     pendingScore: [...queue, ...(batch?.points ?? [])].reduce((sum, points) => sum + points, 0),
     sending,
+    restoring,
     locked,
     error,
     recoverable: batch !== null && !batch.retried && (isClickLimitError(error) || requiresClickVerification(error)),
@@ -71,10 +77,12 @@ export function createClickBatcher<TResponse = ClickResponse>(options: ClickBatc
     // The backend's dedupe key expires after 10s and does not replay the original response. Never retry a late
     // ambiguous submission: a new application after that TTL could award the score twice.
     if (submitted.retried && now() - submitted.startedAt >= 8000) {
+      restoring = false;
       error = new Error('제출 확인 시간이 지나 재전송을 중단했습니다.');
       publish();
       return;
     }
+    if (restoring && !submitted.retried) submitted.startedAt = now();
     sending = true;
     const sentAt = now();
     nextSendAt = sentAt + CLICK_BATCH_WINDOW_MS;
@@ -84,12 +92,24 @@ export function createClickBatcher<TResponse = ClickResponse>(options: ClickBatc
       if (disposed) return;
       batch = null;
       sending = false;
+      restoring = false;
+      restoreAttempts = 0;
       options.onAccepted(response, getSnapshot().pendingScore, { request: submitted.request, sentAt });
       publish();
       arm();
     } catch (caught) {
       if (disposed) return;
       sending = false;
+      if (isScoreRestoring(caught)) {
+        restoring = true;
+        const delay = RESTORE_DELAYS[Math.min(restoreAttempts++, RESTORE_DELAYS.length - 1)];
+        nextSendAt = now() + delay;
+        publish();
+        arm();
+        return;
+      }
+      restoring = false;
+      restoreAttempts = 0;
       const retryable = isApiError(caught) && (caught.kind === 'network' || caught.kind === 'injected');
       if (retryable && !submitted.retried && now() - submitted.startedAt < 7000) {
         submitted.retried = true;
@@ -150,7 +170,7 @@ export function createClickBatcher<TResponse = ClickResponse>(options: ClickBatc
       return rejected;
     },
     enqueue(points: number): boolean {
-      if (disposed || error || locked) return false;
+      if (disposed || error || locked || restoring) return false;
       queue.push(points);
       publish();
       arm();
