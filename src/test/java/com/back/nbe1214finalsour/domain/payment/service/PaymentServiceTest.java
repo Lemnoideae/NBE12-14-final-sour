@@ -1,6 +1,7 @@
 package com.back.nbe1214finalsour.domain.payment.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -8,7 +9,11 @@ import static org.mockito.BDDMockito.then;
 import com.back.nbe1214finalsour.domain.payment.entity.ChargeAmount;
 import com.back.nbe1214finalsour.domain.payment.entity.Payment;
 import com.back.nbe1214finalsour.domain.payment.repository.PaymentRepository;
+import com.back.nbe1214finalsour.global.exception.BusinessException;
+import com.back.nbe1214finalsour.global.exception.ErrorCode;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -60,5 +65,25 @@ class PaymentServiceTest {
         // then
         then(paymentRepository).should().abortIfReady(ORDER_ID, USER_ID, CODE, MESSAGE);
         then(paymentRepository).shouldHaveNoMoreInteractions();
+    }
+
+    @Nested
+    @DisplayName("실패 기록 UPDATE가 0행일 때")
+    class WhenNotUpdated {
+
+        @Test
+        @DisplayName("주문이 없으면 PAY_ORDER_NOT_FOUND 예외를 던진다")
+        void throwsNotFoundWhenOrderMissing() {
+            // given
+            given(paymentRepository.abortIfReady(ORDER_ID, USER_ID, CODE, MESSAGE)).willReturn(0);
+            given(paymentRepository.findByOrderId(ORDER_ID)).willReturn(Optional.empty());
+
+            // when & then
+            // 람다 안의 호출이 던진 예외를 검사한다. extracting("errorCode")는 예외의 errorCode 필드를 이름으로 꺼낸다
+            assertThatThrownBy(() -> paymentService.recordFail(USER_ID, ORDER_ID, CODE, MESSAGE))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(ErrorCode.PAY_ORDER_NOT_FOUND);
+        }
     }
 }
