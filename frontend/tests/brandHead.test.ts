@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { test } from 'node:test';
 import { JSDOM } from 'jsdom';
 
@@ -24,6 +24,19 @@ test('시작 화면은 정의된 메이플 픽셀 글꼴 변수를 사용한다'
   assert.match(css, /--pixel-font:\s*'Maplestory'/, 'frontend/src/index.css의 글꼴 정의를 확인하세요');
   assert.match(css, /\.guest-entry\s*\{\s*font-family:\s*var\(--pixel-font\)/, 'frontend/src/index.css의 시작 화면 글꼴 변수를 수정하세요');
 });
+test('favicon과 apple touch icon 링크가 public의 산출물에 연결되고 SVG는 20KB 이하다', () => {
+  const icons = [
+    ['link[rel="icon"][type="image/svg+xml"]', '/favicon.svg'],
+    ['link[rel="icon"][sizes="32x32"][type="image/png"]', '/favicon-32.png'],
+    ['link[rel="apple-touch-icon"]', '/apple-touch-icon.png'],
+  ];
+  for (const [selector, path] of icons) {
+    assert.equal(doc.querySelector(selector)?.getAttribute('href'), path, `frontend/index.html에 ${path} 링크를 추가하세요`);
+    assert.ok(existsSync(new URL(`../public${path}`, import.meta.url)), `frontend/public${path}를 생성하세요`);
+  }
+  assert.ok(statSync(new URL('../public/favicon.svg', import.meta.url)).size <= 20 * 1024, 'frontend/public/favicon.svg를 20KB 이하로 줄이세요');
+});
+
 test('서비스 OG 이름과 한국어 locale을 지정한다', () => {
   assert.equal(content('meta[property="og:site_name"]'), '대대대', 'frontend/index.html og:site_name을 추가하세요');
   assert.equal(content('meta[property="og:locale"]'), 'ko_KR', 'frontend/index.html og:locale을 추가하세요');
