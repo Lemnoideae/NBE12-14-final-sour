@@ -1,6 +1,7 @@
 package com.back.nbe1214finalsour.domain.payment.controller;
 
 import static org.hamcrest.Matchers.nullValue;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -22,7 +23,11 @@ import com.back.nbe1214finalsour.global.security.Role;
 import com.back.nbe1214finalsour.global.security.SecurityConfig;
 import com.back.nbe1214finalsour.global.security.jwt.JwtProvider;
 import org.junit.jupiter.api.DisplayName;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -45,6 +50,9 @@ import org.springframework.test.web.servlet.ResultActions;
 class PaymentControllerTest {
     // 토큰의 회원: userId 1, universityId 7, departmentId 34
     private static final AuthUser USER = new AuthUser(1L, 7L, 34L, Role.USER);
+    private static final String ORDER_ID = "b6f1e2d3-8a7c-4b5e-9f0a-1c2d3e4f5a6b";
+    private static final String CODE = "PAY_PROCESS_CANCELED";
+    private static final String MESSAGE = "사용자에 의해 결제가 취소되었습니다.";
 
     @Autowired
     private MockMvc mockMvc;
@@ -148,5 +156,52 @@ class PaymentControllerTest {
                 .andExpect(jsonPath("$.data.status").value("ABORTED"));
         then(paymentService).should().recordFail(
                 1L, "b6f1e2d3-8a7c-4b5e-9f0a-1c2d3e4f5a6b", "PAY_PROCESS_CANCELED", "사용자에 의해 결제가 취소되었습니다.");
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("invalidFailRequests")
+    @DisplayName("필수 값이 없거나 길이를 넘으면 400 COMMON_INVALID_INPUT과 그 필드 오류를 응답하고 실패를 기록하지 않는다")
+    void recordFailRejectsInvalidInput(String caseName, String body, String expectedField) throws Exception {
+        // given: 스텁이 없다
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/v1/payments/fail")
+                .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body));
+
+        // then
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("COMMON_INVALID_INPUT"))
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].field").value(expectedField));
+        then(paymentService).shouldHaveNoInteractions();
+    }
+
+    // 잘못된 요청 본문과 오류가 나야 하는 필드. 길이 초과는 각 컬럼 길이 + 1자
+    // Stream.of는 케이스들을 JUnit에 넘길 묶음으로 만들기만 한다 (변환·필터 없음). 팀의 @MethodSource 관례(Stream<Arguments>)를 따른다
+    static Stream<Arguments> invalidFailRequests() {
+        return Stream.of(
+                arguments("orderId 없음", failBody(null, CODE, MESSAGE), "orderId"),
+                arguments("orderId 공백", failBody("   ", CODE, MESSAGE), "orderId"),
+                arguments("orderId 65자", failBody("a".repeat(65), CODE, MESSAGE), "orderId"),
+                arguments("code 없음", failBody(ORDER_ID, null, MESSAGE), "code"),
+                arguments("code 공백", failBody(ORDER_ID, "   ", MESSAGE), "code"),
+                arguments("code 101자", failBody(ORDER_ID, "C".repeat(101), MESSAGE), "code"),
+                arguments("message 256자", failBody(ORDER_ID, CODE, "가".repeat(256)), "message"));
+    }
+
+    // 실패 기록 요청 본문. 값이 null이면 JSON null로 넣는다 (필드를 빼는 것과 검증 결과가 같다)
+    private static String failBody(String orderId, String code, String message) {
+        return "{\"orderId\":" + jsonString(orderId)
+                + ",\"code\":" + jsonString(code)
+                + ",\"message\":" + jsonString(message) + "}";
+    }
+
+    private static String jsonString(String value) {
+        if (value == null) {
+            return "null";
+        }
+        return "\"" + value + "\"";
     }
 }
