@@ -83,4 +83,29 @@ class PaymentRepositoryTest {
         assertThat(found.getFailCode()).isEqualTo("PAY_PROCESS_CANCELED");
         assertThat(found.getFailMessage()).isEqualTo("사용자에 의해 결제가 취소되었습니다.");
     }
+
+    @Test
+    @DisplayName("남의 READY 주문이면 바꾸지 않고 0을 돌려준다")
+    void abortIfReadyIgnoresOthersOrder() {
+        // given
+        Payment payment = paymentRepository.saveAndFlush(Payment.ready(userId, ChargeAmount.KRW_5000));
+        // 다른 회원: 첫 회원과 같은 대학·학과로 만든다. 닉네임·이메일 해시는 유니크라 다른 테스트가 쓰지 않는 값을 쓴다
+        Long otherUserId = jdbcTemplate.queryForObject("""
+                INSERT INTO users (university_id, department_id, nickname, email, email_hash, password, approved_at)
+                SELECT university_id, department_id, '결제타인', 'payment-other@test.com', ?, 'password', now()
+                  FROM users WHERE id = ?
+                RETURNING id
+                """, Long.class, "1".repeat(64), userId);
+
+        // when
+        int updated = paymentRepository.abortIfReady(
+                payment.getOrderId(), otherUserId, "PAY_PROCESS_CANCELED", "사용자에 의해 결제가 취소되었습니다.");
+        entityManager.clear(); // 영속성 컨텍스트를 비워 DB에서 다시 읽음
+
+        // then
+        Payment found = paymentRepository.findById(payment.getId()).orElseThrow();
+        assertThat(updated).isZero();
+        assertThat(found.getStatus()).isEqualTo(PaymentStatus.READY);
+        assertThat(found.getFailCode()).isNull();
+    }
 }
