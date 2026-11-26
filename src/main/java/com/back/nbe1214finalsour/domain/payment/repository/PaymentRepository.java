@@ -1,6 +1,7 @@
 package com.back.nbe1214finalsour.domain.payment.repository;
 
 import com.back.nbe1214finalsour.domain.payment.entity.Payment;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -25,4 +26,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
             """, nativeQuery = true)
     int abortIfReady(@Param("orderId") String orderId, @Param("userId") Long userId,
                      @Param("failCode") String failCode, @Param("failMessage") String failMessage);
+
+    // 실패 기록 UPDATE가 0행일 때 이유를 가리려고 주문을 찾는다 (uk_payment_order_id로 한 행)
+    Optional<Payment> findByOrderId(String orderId);
 }
