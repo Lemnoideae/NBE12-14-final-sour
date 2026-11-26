@@ -19,5 +19,10 @@ public class PaymentService {
         return paymentRepository.save(Payment.ready(userId, chargeAmount));
     }
 
-    public void recordFail(Long userId, String orderId, String code, String message) {}
+    // 결제창 실패를 기록한다. READY인 본인 주문만 ABORTED로 바뀐다 (조건은 abortIfReady 쿼리에 있다)
+    // @Modifying 쿼리는 트랜잭션이 필요하다. 리포지토리가 열어 주지 않으므로 여기서 연다
+    @Transactional
+    public void recordFail(Long userId, String orderId, String code, String message) {
+        paymentRepository.abortIfReady(orderId, userId, code, message);
+    }
 }
