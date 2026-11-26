@@ -11,6 +11,7 @@ import com.back.nbe1214finalsour.global.redis.RedisKey;
 import com.back.nbe1214finalsour.global.security.AuthUser;
 import com.back.nbe1214finalsour.global.security.Role;
 import com.back.nbe1214finalsour.global.security.jwt.JwtProvider;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -108,6 +109,9 @@ class AssistIntegrationTest {
                 RedisKey.USER_EFFECT.of(user.getId()),
                 RedisKey.RATELIMIT_ACTION.of(user.getId()),
                 RedisKey.RATELIMIT_CLICK.of(user.getId()),
+                RedisKey.ASSISTS_CRITICAL.of(user.getId()),
+                RedisKey.CLICKS_CRITICAL.of(user.getId()),
+                RedisKey.ATTACKS_CRITICAL.of(user.getId()),
                 RedisKey.SUBMIT_DEDUPE.of(user.getId(), "sub-1"),
                 RedisKey.SUBMIT_DEDUPE.of(user.getId(), "sub-2"),
                 RedisKey.UNIV_ALLIANCE.of(universityId), RedisKey.UNIV_ALLIANCE.of(allyId),
@@ -173,6 +177,28 @@ class AssistIntegrationTest {
                 // floor(9 * 0.3) = 2, floor(9 * 1.5) = 13
                 .andExpect(jsonPath("$.data.assistScore").value(27))
                 .andExpect(jsonPath("$.data.myContribScore").value(135));
+    }
+
+    @Test
+    @DisplayName("지원은 지원용 크리티컬 위치만 2배로 계산하고, 대상 학교 점수와 내 기여도에 모두 반영한다")
+    void criticalAppliesToAssistScoreAndContribution() throws Exception {
+        givenScore(allyId, 100);
+        redisHandler.setHash(RedisKey.USER_EFFECT.of(user.getId()), "multiplier", 1.5);
+        redis.opsForValue().set(RedisKey.ASSISTS_CRITICAL.of(user.getId()), "[0]");
+        redis.opsForValue().set(RedisKey.CLICKS_CRITICAL.of(user.getId()), "[0,1,2,3]");
+        redis.opsForValue().set(RedisKey.ATTACKS_CRITICAL.of(user.getId()), "[0,1,2,3]");
+
+        assist("sub-1", allyId, 4)
+                .andExpect(status().isOk())
+                // 기본 점수 20 + 10 + 10 + 10 = 50. 대상 학교 50 * 0.3 = 15, 내 기여도 50 * 1.5 = 75
+                .andExpect(jsonPath("$.data.assistScore").value(15))
+                .andExpect(jsonPath("$.data.targetUniversity.totalScore").value(115))
+                .andExpect(jsonPath("$.data.myContribScore").value(75))
+                .andExpect(jsonPath("$.data.criticalIndex", Matchers.empty()));
+
+        assertThat(redis.opsForValue().get(RedisKey.ASSISTS_CRITICAL.of(user.getId()))).isEqualTo("[]");
+        assertThat(redis.opsForValue().get(RedisKey.CLICKS_CRITICAL.of(user.getId()))).isEqualTo("[0,1,2,3]");
+        assertThat(redis.opsForValue().get(RedisKey.ATTACKS_CRITICAL.of(user.getId()))).isEqualTo("[0,1,2,3]");
     }
 
     @Test

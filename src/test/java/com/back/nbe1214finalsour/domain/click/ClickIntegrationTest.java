@@ -123,7 +123,8 @@ class ClickIntegrationTest {
                 RedisKey.USER_CLICKER.of(user.getId()),
                 RedisKey.USER_EFFECT.of(user.getId()),
                 RedisKey.RATELIMIT_ACTION.of(user.getId()),
-                RedisKey.RATELIMIT_CLICK.of(user.getId())));
+                RedisKey.RATELIMIT_CLICK.of(user.getId()),
+                RedisKey.CLICKS_CRITICAL.of(user.getId())));
 
         long nowSec = Instant.now().getEpochSecond();
         redis.delete(LongStream.rangeClosed(nowSec - 8, nowSec + 2)
@@ -369,6 +370,77 @@ class ClickIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.multiplier").value(2.0))
                 .andExpect(jsonPath("$.data.earnedScore").value(60));
+    }
+
+    // --- 크리티컬 ---
+    // 테스트 설정은 critical-rate: 0이라 새로 정하는 위치는 항상 비어 있다. 이번 배치의 위치는 직전 응답이 정해 둔 값을 Redis에 직접 넣는다
+
+    @Test
+    @DisplayName("직전 응답에서 정한 크리티컬 위치의 클릭은 2배로 계산한다")
+    void criticalClicksAreDoubled() throws Exception {
+        redis.opsForValue().set(RedisKey.CLICKS_CRITICAL.of(user.getId()), "[0,2]");
+
+        click("sub-1", 3)
+                .andExpect(status().isOk())
+                // 20 + 10 + 20
+                .andExpect(jsonPath("$.data.earnedScore").value(50))
+                .andExpect(jsonPath("$.data.myContribScore").value(50))
+                .andExpect(jsonPath("$.data.university.totalScore").value(50));
+
+        assertThat(redis.opsForZSet().score(RedisKey.RANK_USER.of(universityId), String.valueOf(user.getId())))
+                .isEqualTo(50.0);
+    }
+
+    @Test
+    @DisplayName("이번 클릭 수를 넘는 크리티컬 위치는 무시한다")
+    void criticalIndexBeyondClickCountIsIgnored() throws Exception {
+        redis.opsForValue().set(RedisKey.CLICKS_CRITICAL.of(user.getId()), "[3,19]");
+
+        click("sub-1", 3)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.earnedScore").value(30));
+    }
+
+    @Test
+    @DisplayName("아이템 배율은 크리티컬이 반영된 점수에 곱한다")
+    void itemMultiplierAppliesAfterCritical() throws Exception {
+        redis.opsForValue().set(RedisKey.CLICKS_CRITICAL.of(user.getId()), "[0]");
+        redisHandler.setHash(RedisKey.USER_EFFECT.of(user.getId()), "multiplier", 1.5);
+
+        click("sub-1", 3)
+                .andExpect(status().isOk())
+                // (20 + 10 + 10) * 1.5
+                .andExpect(jsonPath("$.data.earnedScore").value(60));
+    }
+
+    @Test
+    @DisplayName("다음 배치의 크리티컬 위치를 새로 정해 응답에 담고, Redis에 30초 동안 둔다")
+    void nextCriticalIndexIsStoredAndReturned() throws Exception {
+        redis.opsForValue().set(RedisKey.CLICKS_CRITICAL.of(user.getId()), "[0,2]");
+
+        click("sub-1", 3)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.criticalIndex", Matchers.empty()));
+
+        assertThat(redis.opsForValue().get(RedisKey.CLICKS_CRITICAL.of(user.getId()))).isEqualTo("[]");
+        assertThat(redis.getExpire(RedisKey.CLICKS_CRITICAL.of(user.getId()))).isBetween(1L, 30L);
+
+        // 한 번 쓴 위치는 다음 배치에 다시 쓰지 않는다
+        click("sub-2", 3)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.earnedScore").value(30));
+    }
+
+    @Test
+    @DisplayName("거절된 요청은 크리티컬 위치를 쓰지 않는다")
+    void rejectedRequestKeepsCriticalIndex() throws Exception {
+        redis.opsForValue().set(RedisKey.CLICKS_CRITICAL.of(user.getId()), "[0,2]");
+        click("sub-1", 3).andExpect(status().isOk());
+        redis.opsForValue().set(RedisKey.CLICKS_CRITICAL.of(user.getId()), "[1]");
+
+        click("sub-1", 3).andExpect(status().isConflict());
+
+        assertThat(redis.opsForValue().get(RedisKey.CLICKS_CRITICAL.of(user.getId()))).isEqualTo("[1]");
     }
 
     @Test
