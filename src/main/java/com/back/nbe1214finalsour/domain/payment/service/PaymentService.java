@@ -49,6 +49,10 @@ public class PaymentService {
         if (payment.getStatus() == PaymentStatus.ABORTED) {
             return;
         }
+        // 0행인데 본인 READY 주문이면 UPDATE 쿼리 자체가 잘못된 것이다 (예: WHERE의 상태 문자열 오타). 숨기지 않고 500으로 드러낸다
+        if (payment.getStatus() == PaymentStatus.READY) {
+            throw new IllegalStateException("READY 주문인데 실패 기록 UPDATE가 0행: orderId=" + orderId);
+        }
         // 그 외(IN_PROGRESS·DONE·EXPIRED·CANCELED)는 이미 다른 결과가 난 주문이다
         throw new BusinessException(ErrorCode.PAY_ALREADY_PROCESSED);
     }
