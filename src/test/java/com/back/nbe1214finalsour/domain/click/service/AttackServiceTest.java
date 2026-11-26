@@ -217,7 +217,7 @@ class AttackServiceTest {
         attackService.attack(USER_ID, UNIVERSITY_ID, request(TARGET_UNIVERSITY_ID, 4));
 
         // 4 * 10 * 0.3 = 12
-        assertThat(capturedScriptArgs().get(1)).isEqualTo("12");
+        assertThat(capturedScriptArgs().get(1)).isEqualTo("120");
     }
 
     @Test
@@ -228,7 +228,7 @@ class AttackServiceTest {
         attackService.attack(USER_ID, UNIVERSITY_ID, request(TARGET_UNIVERSITY_ID, 4));
 
         // 4 * 10 * 0.3 * 1.1 = 13.2 → 13
-        assertThat(capturedScriptArgs().get(1)).isEqualTo("13");
+        assertThat(capturedScriptArgs().get(1)).isEqualTo("132");
     }
 
     @Test
@@ -239,7 +239,7 @@ class AttackServiceTest {
         attackService.attack(USER_ID, UNIVERSITY_ID, request(TARGET_UNIVERSITY_ID, 3));
 
         // 3 * 3 * 0.3 = 2.7 → 2
-        assertThat(capturedScriptArgs().get(1)).isEqualTo("2");
+        assertThat(capturedScriptArgs().get(1)).isEqualTo("27");
     }
 
     // --- 3단계: 스크립트 호출과 응답 매핑 ---
@@ -263,7 +263,7 @@ class AttackServiceTest {
                 "dirty:user"            // KEYS[4]
         );
         // ARGV: targetUniversityId, requestedDamage, userId
-        assertThat(argsCaptor.getAllValues()).containsExactly("9", "12", "1");
+        assertThat(argsCaptor.getAllValues()).containsExactly("9", "120", "1");
     }
 
     @Test

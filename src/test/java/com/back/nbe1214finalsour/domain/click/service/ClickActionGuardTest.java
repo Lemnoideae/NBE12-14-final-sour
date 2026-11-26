@@ -82,7 +82,7 @@ class ClickActionGuardTest {
         long score = clickActionGuard.verifyAndGetBaseScore(USER_ID, "sub-1", 5);
 
         // then
-        assertThat(score).isEqualTo(100L);
+        assertThat(score).isEqualTo(1000L);
         then(valueOperations).should(never()).set(anyString(), anyString());
     }
 

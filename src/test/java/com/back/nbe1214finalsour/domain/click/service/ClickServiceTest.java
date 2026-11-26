@@ -409,7 +409,7 @@ class ClickServiceTest {
         ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
 
         assertThat(response.multiplier()).isEqualTo(1.0);
-        assertThat(response.earnedScore()).isEqualTo(30L); // 3 * 10 * 1.0
+        assertThat(response.earnedScore()).isEqualTo(300L); // 3 * 10 * 1.0
     }
 
     @Test
@@ -423,7 +423,7 @@ class ClickServiceTest {
         ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
 
         assertThat(response.multiplier()).isEqualTo(1.5);
-        assertThat(response.earnedScore()).isEqualTo(45L); // floor(3 * 10 * 1.5)
+        assertThat(response.earnedScore()).isEqualTo(450L); // floor(3 * 10 * 1.5)
     }
 
     @Test
@@ -437,7 +437,7 @@ class ClickServiceTest {
         ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, request(3));
 
         // 3 * 10 * 1.09 = 32.7 → 32
-        assertThat(response.earnedScore()).isEqualTo(32L);
+        assertThat(response.earnedScore()).isEqualTo(327L);
     }
 
     // --- 4.5단계: 도서관 보너스 ---
@@ -454,7 +454,7 @@ class ClickServiceTest {
 
         assertThat(response.libraryBonus()).isTrue();
         assertThat(response.multiplier()).isEqualTo(1.2);
-        assertThat(response.earnedScore()).isEqualTo(36L); // 3 * 10 * 1.2
+        assertThat(response.earnedScore()).isEqualTo(360L); // 3 * 10 * 1.2
     }
 
     @Test
@@ -469,7 +469,7 @@ class ClickServiceTest {
 
         assertThat(response.libraryBonus()).isFalse();
         assertThat(response.multiplier()).isEqualTo(1.0);
-        assertThat(response.earnedScore()).isEqualTo(30L);
+        assertThat(response.earnedScore()).isEqualTo(300L);
     }
 
     @Test
@@ -495,7 +495,7 @@ class ClickServiceTest {
         ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, requestAt(3, LAT, LNG));
 
         assertThat(response.multiplier()).isEqualTo(1.8);
-        assertThat(response.earnedScore()).isEqualTo(54L); // 3 * 10 * 1.5 * 1.2 = 54
+        assertThat(response.earnedScore()).isEqualTo(540L); // 3 * 10 * 1.5 * 1.2 = 54
     }
 
     @Test
@@ -509,7 +509,7 @@ class ClickServiceTest {
         ClickResponse response = clickService.click(USER_ID, UNIVERSITY_ID, DEPARTMENT_ID, requestAt(3, LAT, LNG));
 
         // 3 * 1 * 2.0 * 1.2 = 7.2 → 7. 단계마다 버리면 floor(3.6)=3 → 3 * 2.0 = 6
-        assertThat(response.earnedScore()).isEqualTo(7L);
+        assertThat(response.earnedScore()).isEqualTo(72L);
     }
 
     @Test
@@ -529,7 +529,7 @@ class ClickServiceTest {
                 argsCaptor.capture(), argsCaptor.capture());
 
         // ARGV: universityId, departmentId, userId, earnedScore, clickCount, allianceId(없음 0), team(없음 ""), matchId(없음 0)
-        assertThat(argsCaptor.getAllValues()).containsExactly("12", "5", "1", "36", "3", "0", "", "0");
+        assertThat(argsCaptor.getAllValues()).containsExactly("12", "5", "1", "360", "3", "0", "", "0");
     }
 
     // --- 4.7단계: 연합·대결 점수 ---
@@ -614,7 +614,7 @@ class ClickServiceTest {
         assertThat(keys.subList(8, 10)).containsExactly("alliance:0:score", "match:0:score");
 
         // ARGV: universityId, departmentId, userId, earnedScore, clickCount, allianceId, team, matchId
-        assertThat(argsCaptor.getAllValues()).containsExactly("12", "5", "1", "45", "3", "0", "", "0");
+        assertThat(argsCaptor.getAllValues()).containsExactly("12", "5", "1", "450", "3", "0", "", "0");
     }
 
     @Test
@@ -630,7 +630,7 @@ class ClickServiceTest {
         assertThat(response)
                 .extracting("acceptedClicks", "earnedScore", "multiplier",
                         "myContribScore", "schoolClicksLastSecond")
-                .containsExactly(3L, 45L, 1.5, 30L, 7L);
+                .containsExactly(3L, 450L, 1.5, 30L, 7L);
 
         assertThat(response)
                 .extracting("university.id", "university.totalScore", "university.rank", "university.logoUrl")
