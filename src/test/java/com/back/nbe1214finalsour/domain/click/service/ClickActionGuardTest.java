@@ -10,6 +10,7 @@ import com.back.nbe1214finalsour.domain.user.repository.UserStatusCache;
 import com.back.nbe1214finalsour.global.exception.BusinessException;
 import com.back.nbe1214finalsour.global.exception.ErrorCode;
 import com.back.nbe1214finalsour.global.redis.RedisKey;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -74,6 +75,12 @@ class ClickActionGuardTest {
     @InjectMocks
     private ClickActionGuard clickActionGuard;
 
+    @BeforeEach
+    void setUpRates() {
+        ReflectionTestUtils.setField(clickActionGuard, "minDamageRate", 100);
+        ReflectionTestUtils.setField(clickActionGuard, "maxDamageRate", 100);
+    }
+
     @Test
     @DisplayName("클릭 점수를 계산하면 loadIfAbsent가 반환한 레벨의 clickPower에 클릭 수를 곱한다")
     void verifyAndGetBaseScore_usesLoadedLevel() {
@@ -87,7 +94,7 @@ class ClickActionGuardTest {
         given(objectMapper.writeValueAsString(any())).willReturn("temp");
 
         // when
-        ClickActionGuard.Score scoreVo = clickActionGuard.verifyAndGetBaseScore(USER_ID, "sub-1", 5, RedisKey.CLICKS_CRITICAL.of(2L));
+        ClickActionGuard.Score scoreVo = clickActionGuard.verifyAndGetBaseScore(USER_ID, "sub-1", 5, ClickActionGuard.ClickType.CLICK);
 
         // then
         assertThat(scoreVo.score()).isEqualTo(100L);
@@ -108,7 +115,7 @@ class ClickActionGuardTest {
         given(objectMapper.writeValueAsString(any())).willReturn("[]");
 
         // when
-        ClickActionGuard.Score scoreVo = clickActionGuard.verifyAndGetBaseScore(USER_ID, "sub-1", 3, RedisKey.CLICKS_CRITICAL.of(USER_ID));
+        ClickActionGuard.Score scoreVo = clickActionGuard.verifyAndGetBaseScore(USER_ID, "sub-1", 3, ClickActionGuard.ClickType.CLICK);
 
         // then: 이번 배치는 저장된 위치가 없어 크리티컬 없이 계산한다
         assertThat(scoreVo.score()).isEqualTo(30L);
@@ -122,7 +129,7 @@ class ClickActionGuardTest {
         given(scoreRestoreService.isReady()).willReturn(false);
 
         // when & then
-        assertThatThrownBy(() -> clickActionGuard.verifyAndGetBaseScore(USER_ID, "sub-1", 5, RedisKey.CLICKS_CRITICAL.of(1L)))
+        assertThatThrownBy(() -> clickActionGuard.verifyAndGetBaseScore(USER_ID, "sub-1", 5, ClickActionGuard.ClickType.CLICK))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.RESTORE_SCORE_RESTORING);

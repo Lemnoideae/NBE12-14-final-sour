@@ -53,7 +53,7 @@ public class AssistService {
                     "동맹 아님 userId=" + userId + ", target=" + targetUniversityId);
         }
 
-        ClickActionGuard.Score scoreVo = clickActionGuard.verifyAndGetBaseScore(userId, request.submissionId(), clickCount, RedisKey.ASSISTS_CRITICAL.of(userId));
+        ClickActionGuard.Score scoreVo = clickActionGuard.verifyAndGetBaseScore(userId, request.submissionId(), clickCount, ClickActionGuard.ClickType.ASSIST);
         long assistScore = scoreVo.score() * 3 / 10;
         BigDecimal itemMultiplier = BigDecimal.valueOf(redisHandler.getHash(RedisKey.USER_EFFECT.of(userId), "multiplier", Double.class)
                 .orElse(1.0));
@@ -83,6 +83,6 @@ public class AssistService {
                 assistScore,
                 new AssistResponse.AssistUniversityResponse(targetUniversityId, targetName,
                         Long.valueOf(r.get(0)), Long.valueOf(r.get(1))),
-                Long.valueOf(r.get(2)), scoreVo.criticalIndex());
+                Long.valueOf(r.get(2)), scoreVo.criticalIndex(), scoreVo.damageRateIndex());
     }
 }

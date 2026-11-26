@@ -23,6 +23,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
@@ -94,6 +95,8 @@ class AttackServiceTest {
                 actionRateLimiter, clickCountLimiter, clickerService, abuseVerificationService,
                 userClickerLevelCache, scoreRestoreService, objectMapper);
         attackService = new AttackService(clickActionGuard, stringRedisTemplate, rivalChecker, universityCache, allianceAllyChecker);
+        ReflectionTestUtils.setField(clickActionGuard, "minDamageRate", 100);
+        ReflectionTestUtils.setField(clickActionGuard, "maxDamageRate", 100);
 
         lenient().when(scoreRestoreService.isReady()).thenReturn(true);
     }

@@ -47,7 +47,7 @@ public class ClickService {
         Double lat = request.latitude();
         Double lng = request.longitude();
 
-        ClickActionGuard.Score scoreVo = clickActionGuard.verifyAndGetBaseScore(userId, submissionId, clickCount, RedisKey.CLICKS_CRITICAL.of(userId));
+        ClickActionGuard.Score scoreVo = clickActionGuard.verifyAndGetBaseScore(userId, submissionId, clickCount, ClickActionGuard.ClickType.CLICK);
 
         if (departmentId == null) {
             departmentId = userRepository.findById(userId)
@@ -107,6 +107,9 @@ public class ClickService {
                 Long.valueOf(r.get(3)),
                 Long.valueOf(r.get(4)));
 
-        return ClickResponse.from(clickApplyResponse, clickCount, score, multiplierBigDecimal.doubleValue(), universityId, departmentId, isInLibrary, scoreVo.criticalIndex());
+        return ClickResponse.from(
+                clickApplyResponse, clickCount, score,
+                multiplierBigDecimal.doubleValue(), universityId, departmentId,
+                isInLibrary, scoreVo.criticalIndex(), scoreVo.damageRateIndex());
     }
 }

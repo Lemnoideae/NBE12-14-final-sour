@@ -46,7 +46,7 @@ public class AttackService {
         }
 
         // 점수 구하기
-        ClickActionGuard.Score scoreVo = clickActionGuard.verifyAndGetBaseScore(userId, submissionId, clickCount, RedisKey.ATTACKS_CRITICAL.of(userId));
+        ClickActionGuard.Score scoreVo = clickActionGuard.verifyAndGetBaseScore(userId, submissionId, clickCount, ClickActionGuard.ClickType.ATTACK);
 
         // 경쟁 학교 인지 계산 + 최종 점수 계산(* 0.3)
         // TODO: 경쟁 학교 계산, 기본값 1.0
@@ -76,6 +76,8 @@ public class AttackService {
                 Long.valueOf(r.get(2)),
                 Long.valueOf(r.get(3)));
 
-        return AttackResponse.from(attackApplyResponse, clickCount, isRival, targetUniversityId, targetName, scoreVo.criticalIndex());
+        return AttackResponse.from(
+                attackApplyResponse, clickCount, isRival, targetUniversityId,
+                targetName, scoreVo.criticalIndex(), scoreVo.damageRateIndex());
     }
 }

@@ -22,6 +22,9 @@ scheduling:
 dev-account:
   enabled: false
 
-# 크리티컬 확률, 테스트는 0%
 click:
+  # 크리티컬 확률, 테스트는 0%
   critical-rate: 0
+  # 최대, 최소 데미지 비율, 테스트는 100%
+  min-damage-rate: 100
+  max-damage-rate: 100
