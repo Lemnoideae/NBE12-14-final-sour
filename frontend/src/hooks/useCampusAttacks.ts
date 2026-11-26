@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useApiClient, useAuthSession } from '../api/ApiProvider';
 import { submitAttack, type AttackResponse } from '../api/attacks';
 import { submitAssist, type AssistResponse } from '../api/assists';
+import { allianceKeys } from '../api/alliances';
 import { isClickLimitError, requiresClickVerification } from '../api/abuse';
 import { errorMessage, isApiError } from '../api/errors';
 import { selectByMode } from '../api/mode';
@@ -34,6 +35,8 @@ const EMPTY: ClickBatchSnapshot = { pendingClicks: 0, pendingScore: 0, sending: 
 type AttackBatcher = ReturnType<typeof createClickBatcher<CampusActionResult>>;
 const isAllyAttackRejection = (error: unknown) => isApiError(error) && error.kind === 'http'
   && error.status === 400 && error.code === 'ATTACK_ALLY_UNIVERSITY';
+const isNonAllyAssistRejection = (error: unknown) => isApiError(error) && error.kind === 'http'
+  && error.status === 400 && error.code === 'ASSIST_NOT_ALLY';
 
 /**
  * App-root lifetime: navigation does not discard attacks or change a queued batch's target. No optimistic damage.
@@ -78,6 +81,13 @@ export function useApiCampusAttacks(beginAction: ClickUpgradeGate['beginUpgrade'
         }
       },
       onRejected(error, rejectedClicks) {
+        if (kind.current === 'assist' && isNonAllyAssistRejection(error)) {
+          if (target.current !== null) void queryClient.invalidateQueries({ queryKey: universityKeys.detail(target.current, userId), exact: true });
+          void queryClient.invalidateQueries({ queryKey: allianceKeys.mine(userId), exact: true });
+          setResult(null);
+          setNotice(`${errorMessage(error)} 거절된 지원 ${rejectedClicks}회는 취소했어요. 연합 정보를 다시 확인해 주세요.`);
+          return true;
+        }
         if (kind.current !== 'attack' || !isAllyAttackRejection(error)) return false;
         setResult(null);
         setNotice(`${errorMessage(error)} 거절된 공격 ${rejectedClicks}회는 취소했어요. 학교 정보를 다시 확인한 뒤 지원을 눌러 주세요.`);
