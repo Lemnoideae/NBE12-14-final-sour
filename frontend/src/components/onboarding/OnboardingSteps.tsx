@@ -267,7 +267,7 @@ export const CodeStep: React.FC<CodeStepProps> = ({
               inputMode="numeric"
               autoComplete={idx === 0 ? 'one-time-code' : 'off'}
               type="text"
-              maxLength={1}
+              maxLength={idx === 0 ? 6 : 1}
               value={digit}
               onChange={(e) => change(idx, e.target.value)}
               onPaste={(event) => { event.preventDefault(); distribute(idx, event.clipboardData.getData('text')); }}

@@ -184,6 +184,15 @@ test('자동 채우기 여러 글자 입력도 여섯 칸에 나누어 입력한
   assert.ok(codeInputs().slice(1).every((input) => input.autocomplete === 'off'));
 });
 
+test('첫 인증 칸만 여섯 글자 허용하고 한 글자 이동과 연속 입력을 유지한다', async () => {
+  mount(); await requestCode(); await screen.findByTestId('code-step');
+  assert.deepEqual(codeInputs().map((input) => input.maxLength), [6, 1, 1, 1, 1, 1]);
+  fireEvent.change(codeInputs()[0], { target: { value: '1' } });
+  assert.ok(document.activeElement === codeInputs()[1]);
+  fireEvent.change(codeInputs()[0], { target: { value: '17' } });
+  assert.deepEqual(values(), ['1', '7', '', '', '', '']);
+});
+
 async function advanceClock(ms: number, setTime: (value: number) => void, start: number) {
   setTime(start + ms);
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 350)); });
