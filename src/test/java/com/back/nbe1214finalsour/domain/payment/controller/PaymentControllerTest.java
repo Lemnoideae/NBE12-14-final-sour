@@ -125,4 +125,28 @@ class PaymentControllerTest {
                 .andExpect(jsonPath("$.data[0].field").value("amount"));
         then(paymentService).shouldHaveNoInteractions();
     }
+
+    @Test
+    @DisplayName("실패를 기록하면 200과 orderId·ABORTED 상태를 응답한다")
+    void recordFailReturns200WithAborted() throws Exception {
+        // given: 서비스는 void라 스텁이 없다
+
+        // when
+        ResultActions result = mockMvc.perform(post("/api/v1/payments/fail")
+                .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"orderId": "b6f1e2d3-8a7c-4b5e-9f0a-1c2d3e4f5a6b",
+                         "code": "PAY_PROCESS_CANCELED",
+                         "message": "사용자에 의해 결제가 취소되었습니다."}
+                        """));
+
+        // then
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.orderId").value("b6f1e2d3-8a7c-4b5e-9f0a-1c2d3e4f5a6b"))
+                .andExpect(jsonPath("$.data.status").value("ABORTED"));
+        then(paymentService).should().recordFail(
+                1L, "b6f1e2d3-8a7c-4b5e-9f0a-1c2d3e4f5a6b", "PAY_PROCESS_CANCELED", "사용자에 의해 결제가 취소되었습니다.");
+    }
 }
