@@ -88,8 +88,7 @@ class AllianceMatchSettlementRecordIntegrationTest {
 
         // then
         assertThat(result)
-                .containsSubsequence(pending.getMatchId(), applied.getMatchId())
-                .doesNotContain(completed.getMatchId());
+                .containsExactly(pending.getMatchId(), applied.getMatchId());
     }
 
     private AllianceMatchSettlement createSettlement() {

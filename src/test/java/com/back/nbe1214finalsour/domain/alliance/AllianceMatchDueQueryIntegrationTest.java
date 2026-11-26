@@ -80,8 +80,7 @@ class AllianceMatchDueQueryIntegrationTest {
 
         // then
         assertThat(result)
-                .containsSubsequence(expired.getId(), atDeadline.getId())
-                .doesNotContain(waiting.getId(), canceled.getId(), ongoing.getId());
+                .containsExactly(expired.getId(), atDeadline.getId());
     }
 
     private AllianceMatch createMatch(
