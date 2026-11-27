@@ -498,3 +498,31 @@ test('지원 탭은 + 데미지를 띄우고, 공격으로 받은 칸은 지원�
   fireEvent.click(assistButton());
   assert.deepEqual(tapNumbers().slice(-2), ['+13', '+14!'], '지원 응답이 정한 칸');
 });
+
+test('공격·지원 탭은 클릭처럼 학교 건물만 흔들고, 거절된 탭은 흔들지 않는다', async () => {
+  const proto = dom.window.Element.prototype as unknown as { animate?: unknown };
+  const animated: Element[] = [];
+  proto.animate = function (this: Element) { animated.push(this); return { cancel() {} }; };
+  try {
+    const f = mount({ allies: [SCHOOL_ID.snu] });
+    await waitFor(() => assert.ok(attackButton()));
+    fireEvent.click(attackButton());
+    const wobbling = animated.length;
+    assert.ok(wobbling > 0, '공격 탭에 건물이 흔들린다');
+    assert.ok(animated.every((el) => el.matches('[data-wobble], [data-wobble-lights]') && el.closest('[data-campus-stage]')));
+    await waitFor(() => assert.equal(attacks.pendingClicks, 0), { timeout: 2500 });
+
+    f.navigate(SCHOOL_ID.snu);
+    await waitFor(() => assert.ok(assistButton()));
+    fireEvent.click(assistButton());
+    assert.ok(animated.length > wobbling, '지원 탭에도 흔들린다');
+
+    const before = animated.length;
+    f.setBusy(true);
+    act(() => { f.navigate(SCHOOL_ID.pusan); });
+    await waitFor(() => assert.ok(attackButton()));
+    await waitFor(() => assert.equal(attacks.pendingClicks, 0), { timeout: 2500 });
+    fireEvent.click(attackButton());
+    assert.equal(animated.length, before, '내 학교 큐가 바빠 거절된 탭은 흔들지 않는다');
+  } finally { delete proto.animate; }
+});
