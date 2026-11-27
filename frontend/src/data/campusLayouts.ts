@@ -277,15 +277,19 @@ export const CAMPUS_LAYOUTS: Readonly<Partial<Record<number, CampusLayout>>> = {
       at('tree-oak-1', P(234, 234)), at('tree-oak-2', P(102, 222), { flip: true }), at('tree-oak-1', P(272, 206)), at('tree-oak-1', P(162, 250)),
       at('hedge', iso(faceMid(lv3Hall, 'left'), -18, 0), { flip: true }), at('hedge', iso(faceMid(lv3Hall, 'left'), 18, 0), { flip: true }),
       at('sapling', P(150, 216)), at('sapling', P(256, 182), { flip: true }),
-      // Wooden lanterns, log benches and a notice board line the dirt paths (plan D4: no iron lamps yet).
-      at('notice-board', lv3At(-14, 14)),
+      // The Lv.2 school signboard moves up to stand in front of the extended hall, where a flower patch was
+      // (user request 2026-11-27).
+      // Signs face the way the school does: the board runs along U, parallel to the door face, so it is flipped.
+      // Wooden lanterns and log benches line the dirt paths (plan D4: no iron lamps yet).
+      at('signboard', lv3At(-30, -8), { flip: true, depth: lv3Hall.y + 1 }),
       at('lantern-post', lv3At(14, 30)), at('lantern-post', lv3At(24, 14)), at('lantern-post', lv3At(54, 46)),
-      at('log-bench', lv3At(-30, 16)), at('log-bench', lv3At(28, 58), { flip: true }),
+      at('log-bench', lv3At(-30, 16), { flip: true }), at('log-bench', lv3At(28, 58), { flip: true }),
       at('student-sit-1', lv3At(-30, 18), { shadow: false }),
       // Woods life: a birdhouse, a stump, a picnic and a bicycle.
-      at('birdhouse', P(200, 232)), at('stump', P(252, 222)), at('picnic-mat', lv3At(72, 30)), at('student-sit-2', lv3At(74, 31), { shadow: false }),
+      at('birdhouse', P(200, 232)), at('stump', P(252, 222)), at('picnic-mat', lv3At(72, 30)),
+      // She sits on the mat, drawn over it (user request 2026-11-27).
+      at('student-sit-2', lv3At(70, 26), { shadow: false, depth: lv3At(72, 30)[1] + 1 }),
       at('bicycle', lv3At(64, 14)),
-      at('flowers-1', iso(faceMid(lv3Hall, 'left'), -30, 4)),
       ...[lv3At(0, 40), lv3At(2, 82), lv3At(-60, 2), lv3At(-44, 0), lv3At(40, 30), lv3At(38, 62), lv3At(30, 0)]
         .map((p, i) => at(WALKERS[i % 4], p, { flip: i % 2 === 1, shadow: false })),
       ...scatter([P(70, 170), P(196, 222), P(150, 226), P(250, 160), P(212, 112)], 2),

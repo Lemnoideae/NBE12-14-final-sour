@@ -455,7 +455,12 @@ test('Lv.3: lanterns, log benches and a notice board line the dirt paths', () =>
   const layout = CAMPUS_LAYOUTS[3]!;
   assert.ok(layout.items.filter((i) => i.asset === 'lantern-post').length >= 3, 'Lv.3 lantern posts');
   assert.ok(layout.items.filter((i) => i.asset === 'log-bench').length >= 2, 'Lv.3 log benches');
-  for (const asset of ['notice-board', 'birdhouse', 'bicycle', 'picnic-mat'] as const) assert.ok(layout.items.some((i) => i.asset === asset), `Lv.3 has ${asset}`);
+  for (const asset of ['signboard', 'birdhouse', 'bicycle', 'picnic-mat'] as const) assert.ok(layout.items.some((i) => i.asset === asset), `Lv.3 has ${asset}`);
+  // One school sign per level: Lv.3 keeps the Lv.2 signboard, standing in front of the hall and drawn over it.
+  const signs = layout.items.filter((i) => i.asset === 'signboard' || i.asset === 'notice-board');
+  assert.deepEqual(signs.map((i) => i.asset), ['signboard'], 'Lv.3 has exactly one sign, the Lv.2 signboard');
+  assert.ok((signs[0].depth ?? signs[0].y) > layout.items[0].y, 'the signboard is drawn in front of the hall');
+  assert.equal(signs[0].flip, true, 'signs face the way the school does: the board runs parallel to the door face');
   assert.ok(layout.items.filter((i) => i.asset.startsWith('student-')).length >= 6, 'Lv.3 has more students than Lv.2');
   // Every lantern stands within reach of a path, so it reads as path lighting.
   const paths = layout.terrain.filter((t) => t.texture === 'tex-dirt');
