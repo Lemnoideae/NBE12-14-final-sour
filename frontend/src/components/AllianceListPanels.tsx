@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ALLIANCE_MAX_SCHOOLS, ALLIANCE_STATUS_LABEL, MATCH_STATUS_LABEL, type AllianceApplicationStatus } from '../api/alliances';
 import { useAllianceApplications, useAllianceDirectory, useAllianceMatches, useAllianceSchools, type AllianceSummary } from '../api/allianceLists';
 import { errorMessage, isApiError } from '../api/errors';
@@ -110,21 +110,14 @@ export function AllianceMatchList({ userId, allianceId, history = false, selecte
 export function AllianceHistory({ userId, detail }: {
   userId: number; detail: (alliance: AllianceSummary, id: number, close: () => void) => ReactNode;
 }) {
-  const id = useId();
-  const [open, setOpen] = useState(false);
   const [alliance, setAlliance] = useState<AllianceSummary | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
-  return <section className={PANEL}>
-    <button type="button" className={`${BUTTON} self-start`} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>이전 연합 대결 이력</button>
-    <div id={id} hidden={!open}>
-      {open && <>
-        <AllianceDirectory userId={userId} mode="history" onSelect={(item) => { setAlliance(item); setSelected(null); }} />
-        {alliance && <>
-          <p className="font-bold mt-2 break-words">{alliance.name} 대결 이력</p>
-          <AllianceMatchList userId={userId} allianceId={alliance.id} history selected={selected} onSelect={setSelected} />
-          {selected !== null && detail(alliance, selected, () => setSelected(null))}
-        </>}
-      </>}
-    </div>
-  </section>;
+  return <div className="flex flex-col gap-3 text-xs">
+    <AllianceDirectory userId={userId} mode="history" onSelect={(item) => { setAlliance(item); setSelected(null); }} />
+    {alliance && <>
+      <p className="font-bold break-words">{alliance.name} 대결 이력</p>
+      <AllianceMatchList userId={userId} allianceId={alliance.id} history selected={selected} onSelect={setSelected} />
+      {selected !== null && detail(alliance, selected, () => setSelected(null))}
+    </>}
+  </div>;
 }
