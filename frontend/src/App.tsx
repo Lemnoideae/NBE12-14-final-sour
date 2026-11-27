@@ -241,9 +241,9 @@ function AppContent() {
 
   const handleCampusTap = useCallback(
     (_x: number, _y: number, isCrit: boolean, _gainedPoints: number) => {
-      const gainedPoints = campusClicks.tap(isCrit);
+      const outcome = campusClicks.tap(isCrit);
       // A refused click (M5-A) adds nothing, not even to the fever gauge.
-      if (gainedPoints === null) return null;
+      if (outcome === null) return null;
 
       if (!isFever) {
         setFeverGauge((prev) => {
@@ -256,7 +256,7 @@ function AppContent() {
           return next;
         });
       }
-      return gainedPoints;
+      return outcome;
     },
     [campusClicks.tap, isFever]
   );

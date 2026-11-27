@@ -49,9 +49,9 @@ const ME: MyInfo = {
 const DETAIL: UniversityDetail = { id: SCHOOL_ID.pusan, name: '부산대학교', logoUrl: null, totalScore: 1000, rank: 2, memberCount: 42,
   topDepartments: [], topContributors: [], isMyUniversity: false, isMyAlly: false, rankChange: null };
 const ANSWER: AttackResponse = { acceptedClicks: 4, damage: 12, multiplier: 1, isRival: false,
-  targetUniversity: { id: DETAIL.id, name: DETAIL.name, totalScore: 988, rank: 3 }, myAttackScore: 12 };
+  targetUniversity: { id: DETAIL.id, name: DETAIL.name, totalScore: 988, rank: 3 }, myAttackScore: 12, criticalIndex: [], damageRateIndex: [] };
 const ASSIST: AssistResponse = { acceptedClicks: 4, assistScore: 12, targetUniversity: { id: DETAIL.id, name: DETAIL.name, totalScore: 1012, rank: 1 },
-  myContribScore: 140 };
+  myContribScore: 140, criticalIndex: [], damageRateIndex: [] };
 const ok = (data: unknown) => new Response(JSON.stringify({ code: 'SUCCESS', message: '성공', data }), { status: 200 });
 const fail = (status: number, code: string) => new Response(JSON.stringify({ code, message: code, data: null }), { status });
 let attacks: ReturnType<typeof useApiCampusAttacks>;
