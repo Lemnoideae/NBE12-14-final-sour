@@ -3,7 +3,8 @@
 import { afterEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MAX_VOICES, PITCH_JITTER, SampleBank, jitterRate, pickSampleIndex, type SampleContext } from '../src/utils/sfxSamples';
-import { RetroSoundManager } from '../src/utils/sound';
+import { ATTACK_CRIT_PUNCH_GAIN, ATTACK_PUNCH_GAIN, RetroSoundManager } from '../src/utils/sound';
+import { SAMPLE_GAIN } from '../src/utils/sfxSamples';
 
 class FakeParam {
   value = 1;
@@ -154,7 +155,9 @@ test('a SampleBank stops the oldest clip once MAX_VOICES ring at once', async ()
 function managerOnFakeWindow() {
   (globalThis as { window?: unknown }).window = { AudioContext: FakeAudioContext };
   const bank = new SampleBank(['a.mp3', 'b.mp3'], { fetch: fakeFetch().fetch });
-  return { manager: new RetroSoundManager(bank), bank };
+  const punch = new SampleBank(['punch.mp3'], { fetch: fakeFetch().fetch, gain: ATTACK_PUNCH_GAIN });
+  const critPunch = new SampleBank(['heavy.mp3'], { fetch: fakeFetch().fetch, gain: ATTACK_CRIT_PUNCH_GAIN });
+  return { manager: new RetroSoundManager(bank, punch, critPunch), bank, punch, critPunch };
 }
 
 test('playPopSound plays the synthesized blip until the clips are decoded', () => {
@@ -198,19 +201,28 @@ test('playTapSound keeps its synthesized blip and chime for other UI sounds', ()
   assert.deepEqual(ctx.oscillators.map((osc) => osc.type), ['square', 'triangle']);
 });
 
-test('playAttackSound is a small blast: a falling thump under a noise burst, and a critical hit adds the chime', () => {
+test('playAttackSound plays the synthesized blast until the punch clips are decoded', () => {
   const { manager } = managerOnFakeWindow();
   manager.playAttackSound(false);
   const [ctx] = FakeAudioContext.instances;
   assert.deepEqual(ctx.oscillators.map((osc) => osc.type), ['sine']);
-  assert.equal(ctx.sources.length, 1);
-  assert.equal(ctx.sources[0].buffer, ctx.buffers[0], 'the burst plays the noise buffer');
-  assert.equal(ctx.sources[0].started, true);
+  assert.ok(ctx.sources.length > 0 && ctx.sources.every((source) => source.buffer === ctx.buffers[0]), 'noise only, no clip yet');
+});
 
+test('playAttackSound plays the punch clip, and a critical hit plays the heavy punch instead, 3 dB lower', async () => {
+  const { manager, punch, critPunch } = managerOnFakeWindow();
+  manager.playAttackSound(false); // creates the context and starts decoding
+  const [ctx] = FakeAudioContext.instances;
+  await Promise.all([punch.load(asContext(ctx)), critPunch.load(asContext(ctx))]);
+  ctx.sources = [];
+  ctx.oscillators = [];
+
+  manager.playAttackSound(false);
   manager.playAttackSound(true);
-  assert.deepEqual(ctx.oscillators.map((osc) => osc.type), ['sine', 'sine', 'triangle']);
-  assert.equal(ctx.sources.length, 2);
-  assert.equal(ctx.buffers.length, 1, 'the noise buffer is made once per context');
+  assert.deepEqual(ctx.sources.map((source) => source.buffer), [{ name: 'punch.mp3' }, { name: 'heavy.mp3' }]);
+  assert.equal(ctx.oscillators.length, 0, 'no synthesized blast or chime once the clips play');
+  assert.equal(ATTACK_PUNCH_GAIN, SAMPLE_GAIN);
+  assert.ok(Math.abs(20 * Math.log10(ATTACK_CRIT_PUNCH_GAIN / ATTACK_PUNCH_GAIN) + 3) < 1e-9, 'the heavy punch is 3 dB below the punch');
 });
 
 test('playAssistSound is a rising four-note heal, and a critical assist adds the chime', () => {
