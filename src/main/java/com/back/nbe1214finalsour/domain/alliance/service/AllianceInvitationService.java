@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -27,6 +28,7 @@ public class AllianceInvitationService {
     private final AllianceUniversityRepository memberships;
     private final UserRepository users;
     private final UniversityRepository universities;
+    private final Clock clock;
 
     @Transactional
     public AllianceUniversity invite(Long userId, Long allianceId, Long universityId) {
@@ -83,7 +85,9 @@ public class AllianceInvitationService {
         invitation.approve(userId);
         if (memberCount + 1 >= Alliance.MAX_SCHOOLS) {
             for (AllianceUniversity pending : memberships.findByAllianceIdAndStatusAndDeletedAtIsNullOrderByIdAsc(allianceId, AllianceUniversityStatus.PENDING)) {
-                if (pending != invitation && pending.getStatus() == AllianceUniversityStatus.PENDING) pending.reject();
+                if (!invitationId.equals(pending.getId()) && pending.getStatus() == AllianceUniversityStatus.PENDING) {
+                    pending.reject();
+                }
             }
         }
         return invitation;
@@ -100,7 +104,7 @@ public class AllianceInvitationService {
     }
 
     private void activeAlliance(Alliance alliance) {
-        if (alliance.getDeletedAt() != null || alliance.getStatus() != AllianceStatus.ACTIVE || !alliance.getExpiredAt().isAfter(OffsetDateTime.now())) {
+        if (alliance.getDeletedAt() != null || alliance.getStatus() != AllianceStatus.ACTIVE || !alliance.getExpiredAt().isAfter(OffsetDateTime.now(clock))) {
             throw new BusinessException(ErrorCode.ALLY_NOT_ACTIVE);
         }
     }
