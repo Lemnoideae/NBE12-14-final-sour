@@ -16,7 +16,7 @@ import { CAMPUS_ACTION_LABEL, type CampusActionKind, type CampusAttacks } from '
 import { VisitAttackBar } from './VisitAttackBar';
 import { TapFloatingNumbers, useTapFloatingNumbers } from './TapFloatingNumbers';
 import { useReducedMotion } from './CampusAmbience';
-import { wobbleBuildings } from '../utils/campusWobble';
+import { wobbleCampusAttack } from '../utils/campusWobble';
 
 interface VisitingScreen1PhoneProps {
   /** Visited school ID from the map (M2). Mock rows, or the server's school detail in API mode (SCRUM-163). */
@@ -90,8 +90,8 @@ export function VisitCampusScreen({
     if (actionKind === 'assist') soundManager.playAssistSound(outcome.isCrit);
     else soundManager.playAttackSound(outcome.isCrit);
     if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(outcome.isCrit ? 25 : 12);
-    // The buildings wobble as on a campus click (T6); the tap area itself stays still.
-    wobbleBuildings(event.currentTarget.closest('[data-campus-stage]'), reducedMotion);
+    // Attack only: the buildings shake left and right and the surroundings the opposite way. Assists stay still.
+    if (actionKind === 'attack') wobbleCampusAttack(event.currentTarget.closest('[data-campus-stage]'), reducedMotion);
     const rect = event.currentTarget.getBoundingClientRect();
     // A keyboard press has no pointer position (detail 0): show it in the middle.
     const x = event.detail === 0 ? rect.width / 2 : event.clientX - rect.left;

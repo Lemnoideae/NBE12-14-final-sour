@@ -226,7 +226,8 @@ export function CampusLayoutScene({ layout, label, className = '', level, phase:
         const asset = CAMPUS_ASSETS[item.asset];
         const shadowRx = Math.max(3, Math.round(asset.width * 0.38));
         return (
-          <g key={i}>
+          // Non-building items (with their shadow) wobble opposite to the buildings on an attack (utils/campusWobble).
+          <g key={i} {...(isBuilding(asset) ? {} : { 'data-wobble-back': item.asset, style: WOBBLE_STYLE })}>
             {(item.shadow ?? (asset.width <= SHADOW_MAX_WIDTH && !asset.footprint)) && (
               <ellipse cx={item.x} cy={item.y - 1} rx={shadowRx} ry={Math.max(1, Math.round(shadowRx * 0.32))} fill="#10240c" opacity={0.22} />
             )}
