@@ -372,15 +372,19 @@ export const CAMPUS_LAYOUTS: Readonly<Partial<Record<number, CampusLayout>>> = {
       lv6Lecture, lv6Main,
       ...[P(80, 118), P(122, 112), P(164, 118), P(206, 112), P(240, 120)].map((p, i) => at((['tree-maple-orange', 'tree-cherry-1', 'tree-oak-2', 'tree-pine', 'tree-cherry-2'] as const)[i], p, { flip: i % 2 === 1 })),
       // One lamp per spot: two at the plaza corners, then a row down the south path (F5).
-      at('lamp', iso(lv6Plaza, 30, -26)), at('lamp', iso(lv6Plaza, -30, 26)),
+      // The lamp by the main hall stands in front of it, never hidden behind it (user request 2026-11-27).
+      at('lamp', iso(lv6Plaza, 18, -28), { depth: lv6Main.y + 1 }), at('lamp', iso(lv6Plaza, -32, 18)),
       ...along(iso(lv6Plaza, 0, 50), iso(lv6Plaza, 0, 110), 3).map((p) => at('lamp', iso(p, 14))),
-      at('flowerbed-1', iso(lv6Plaza, 44, 44)), at('flowerbed-2', iso(lv6Plaza, -42, 42)), at('flowerbed-1', iso(lv6Plaza, 34, -40)),
-      at('bench', iso(lv6Plaza, 40, 18)), at('bush-2', P(214, 264)), at('tree-cherry-1', P(70, 250)), at('tree-maple-red', P(276, 276)),
+      at('flowerbed-1', iso(lv6Plaza, 30, 44)), at('flowerbed-2', iso(lv6Plaza, -40, 42)), at('flowerbed-1', iso(lv6Plaza, 49, -12), { flip: true }),
+      at('bush-2', P(214, 264)), at('tree-cherry-1', P(70, 250)), at('tree-maple-red', P(276, 276)),
       ...crowd(lv6Plaza, 24, 20, 6, 3), ...crowd(iso(lv6Plaza, 0, 60), 6, 30, 3, 4),
       ...scatter([P(110, 280), P(310, 236), P(60, 200)], 5),
+      // The school signboard stands on the lawn between the main hall and the lecture hall, turned toward the
+      // lecture hall and drawn over the main hall, as on Lv.5 (user request 2026-11-27).
+      at('signboard', iso(faceMid(lv6Main, 'left'), -50, 22), { depth: lv6Main.y + 1 }),
       // Garden fill (F11, UF): low hedges edge the plaza walks, planters line the hall front.
-      ...[66, 94].map((u) => at('hedge-low', iso(lv6Plaza, u, 27), { flip: true })),
-      ...[64, 92].map((v) => at('hedge-low', iso(lv6Plaza, -15, v))),
+      ...[53, 80].map((u) => at('hedge-low', iso(lv6Plaza, u, 27), { flip: true })),
+      ...[48, 74].map((v) => at('hedge-low', iso(lv6Plaza, -8, v))),
       ...[-26, 26].map((u) => at('planter-strip', iso(faceMid(lv6Main, 'left'), u, 6), { flip: true, depth: lv6Main.y + 1 })),
     ],
     features: { '제2강의동': 'lecture-2-r', '빈티지 가로등': 'lamp', '화단': 'flowerbed-1' },

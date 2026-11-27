@@ -472,9 +472,9 @@ test('Lv.3: lanterns, log benches and a notice board line the dirt paths', () =>
   }
 });
 
-test('Lv.4·5도 Lv.3처럼 학교 표지판 하나가 정해진 방향으로 서고 본관보다 앞에 그려진다', () => {
+test('Lv.4·5·6도 Lv.3처럼 학교 표지판 하나가 정해진 방향으로 서고 본관보다 앞에 그려진다', () => {
   // Lv.5's sign stands on the lawn toward the library, turned 90 degrees from Lv.4's (user request 2026-11-27).
-  for (const [level, flip] of [[4, true], [5, undefined]] as const) {
+  for (const [level, flip] of [[4, true], [5, undefined], [6, undefined]] as const) {
     const layout = CAMPUS_LAYOUTS[level]!;
     const hall = layout.items.find((i) => i.asset === 'main-clocktower')!;
     const signs = layout.items.filter((i) => i.asset === 'signboard' || i.asset === 'notice-board');
