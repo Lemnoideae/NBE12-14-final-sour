@@ -438,23 +438,25 @@ export const CAMPUS_LAYOUTS: Readonly<Partial<Record<number, CampusLayout>>> = {
     ],
     items: [
       lv8Main, lv8Hall,
-      at('fountain', lv8Plaza),
+      at('fountain', iso(lv8Plaza, 10, 15)),
       ...[[-30, -26], [30, -26], [-30, 26], [30, 26]].map(([u, v]) => at('lamp-banner', iso(lv8Plaza, u, v))),
       // Banner lamps and benches down both sides of the south walk (growth sheet).
       ...along(iso(lv8Plaza, 0, 56), iso(lv8Plaza, 0, 112), 3).flatMap((p) => [at('lamp-banner', iso(p, -16)), at('lamp-banner', iso(p, 16))]),
-      at('bench', iso(lv8Plaza, -20, 84), { flip: true }), at('bench', iso(lv8Plaza, 20, 70)),
+      at('bench', iso(lv8Plaza, -15, 70)),
       // One goal on the near end line (the sprite opens toward +U only; user request 2026-11-09); the
       // bleacher's rows run along the court's long side, facing it.
       at('goal-post', iso(lv8Court, -35), { shadow: false }),
-      at('bleacher', iso(lv8Court, -34, -30), { flip: true }),
+      at('bleacher', iso(lv8Court, -34, -35), { flip: true }),
       // Garden fill (F11): planters at the square's corners and along the hall's entrance wall, low
       // hedges along the walk to the track.
-      ...[[-44, -40], [44, 40]].map(([u, v]) => at('planter-square', iso(lv8Plaza, u, v))),
-      at('hedge-low', iso(lv8Plaza, -6, -32)),
-      ...[-24, 24].map((v) => at('planter-strip', iso(lv8Door, 6, v), { depth: lv8Main.y + 1 })),
+      ...[[-44, -70], [20, 40]].map(([u, v]) => at('planter-square', iso(lv8Plaza, u, v))),
+      ...[35].map((v) => at('planter-strip', iso(lv8Door, 20, v), { depth: lv8Main.y + 1 })),
+      // The school signboard stands at the right end of the main hall's entrance wall, facing the way the hall does
+      // (door on the right face, so unflipped) and drawn over it, as on Lv.7 (user request 2026-11-27).
+      at('signboard', iso(lv8Door, 12, -18), { depth: lv8Main.y + 1 }),
       ...[P(60, 112), P(196, 110), P(232, 104), P(306, 104)].map((p, i) => at((['tree-oak-2', 'tree-cherry-1', 'tree-pine', 'tree-oak-1'] as const)[i], p, { flip: i % 2 === 0 })),
-      at('tree-cherry-2', P(56, 250)), at('tree-pine', P(306, 196)), at('bench', iso(lv8Plaza, 58, 30), { flip: true }),
-      ...crowd(lv8Plaza, 30, 26, 8, 5), ...crowd(iso(lv8Plaza, 0, 80), 6, 40, 3, 6),
+      at('tree-cherry-2', P(56, 250)), at('tree-pine', P(306, 196)),
+      ...crowd(lv8Plaza, 60, -50, 2, 4), ...crowd(iso(lv8Plaza, 0, 80), 6, 40, 3, 6),
       ...scatter([P(150, 292), P(240, 296), P(90, 160)], 7),
     ],
     features: { '분수광장': 'fountain', '스포츠 코트': 'tex-court', '학교 배너': 'lamp-banner' },

@@ -484,14 +484,16 @@ test('Lv.4·5·6도 Lv.3처럼 학교 표지판 하나가 정해진 방향으로
   }
 });
 
-test('Lv.7 학교 표지판은 강의동 입구 옆에서 강의동과 같은 방향을 보고 강의동보다 앞에 그려진다', () => {
-  const layout = CAMPUS_LAYOUTS[7]!;
-  const hall = layout.items.find((i) => i.asset === 'lecture-2-r')!;
-  const signs = layout.items.filter((i) => i.asset === 'signboard' || i.asset === 'notice-board');
-  assert.deepEqual(signs.map((i) => i.asset), ['signboard'], 'Lv.7 has exactly one sign, the signboard');
-  // The lecture hall's door is on its right face, so the board runs along V, unflipped.
-  assert.equal(signs[0].flip, undefined);
-  assert.ok((signs[0].depth ?? signs[0].y) > hall.y, 'the signboard is drawn in front of the lecture hall');
+test('Lv.7·8 학교 표지판은 입구가 오른쪽 면인 학교 건물 앞에서 같은 방향을 보고 그 건물보다 앞에 그려진다', () => {
+  for (const [level, building] of [[7, 'lecture-2-r'], [8, 'main-clocktower']] as const) {
+    const layout = CAMPUS_LAYOUTS[level]!;
+    const hall = layout.items.find((i) => i.asset === building)!;
+    const signs = layout.items.filter((i) => i.asset === 'signboard' || i.asset === 'notice-board');
+    assert.deepEqual(signs.map((i) => i.asset), ['signboard'], `Lv.${level} has exactly one sign, the signboard`);
+    // The door is on the right face, so the board runs along V, unflipped.
+    assert.equal(signs[0].flip, undefined, `Lv.${level}: the board runs parallel to the door face`);
+    assert.ok((signs[0].depth ?? signs[0].y) > hall.y, `Lv.${level}: the signboard is drawn in front of ${building}`);
+  }
 });
 
 test('visiting screens show the visited school scene at its score-derived level', async () => {
