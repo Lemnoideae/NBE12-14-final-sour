@@ -298,11 +298,14 @@ test('placements draw back to front by anchor y, then x, then input order', () =
 
 test('the Lv.4 hedge by the main hall draws in front of the hall (user request 2026-11-09)', () => {
   const order = sortPlacements(CAMPUS_LAYOUTS[4]!.items).map((i) => i.asset);
-  assert.equal(order.filter((a) => a === 'hedge').length, 3); // left wing, right of the entrance, lower-right wall
+  // Right of the entrance and lower-right wall; the left-wing hedge gave way to the school signboard (2026-11-27).
+  assert.equal(order.filter((a) => a === 'hedge').length, 2);
   assert.ok(order.indexOf('hedge') > order.indexOf('main-clocktower'), JSON.stringify(order));
-  // At night the window lights sit above the scene, so the hedge must mask them (lights bled over it).
+  assert.ok(order.indexOf('signboard') > order.indexOf('main-clocktower'), JSON.stringify(order));
+  // At night the window lights sit above the scene, so the hedges and the sign must mask them (lights bled over it).
   const hall = lightOccluders(CAMPUS_LAYOUTS[4]!.items).find((l) => l.item.asset === 'main-clocktower')!;
-  assert.equal(hall.occluders.filter((o) => o.asset === 'hedge').length, 3);
+  assert.equal(hall.occluders.filter((o) => o.asset === 'hedge').length, 2);
+  assert.equal(hall.occluders.filter((o) => o.asset === 'signboard').length, 1, 'window lights do not shine through the sign');
   render(React.createElement(CampusSceneLights, { level: 4, opacity: 1, twinkle: false }));
   const lights = document.querySelector('[data-lights="main-clocktower"]')!;
   const maskId = lights.closest('[mask]')!.getAttribute('mask')!.match(/url\(#(.+)\)/)![1];
@@ -466,6 +469,18 @@ test('Lv.3: lanterns, log benches and a notice board line the dirt paths', () =>
   const paths = layout.terrain.filter((t) => t.texture === 'tex-dirt');
   for (const post of layout.items.filter((i) => i.asset === 'lantern-post')) {
     assert.ok(paths.some((t) => polygonDistance([post.x, post.y], t.points) <= 8), `lantern at ${post.x},${post.y} is far from the paths`);
+  }
+});
+
+test('Lv.4·5도 Lv.3처럼 학교 표지판 하나가 정해진 방향으로 서고 본관보다 앞에 그려진다', () => {
+  // Lv.5's sign stands on the lawn toward the library, turned 90 degrees from Lv.4's (user request 2026-11-27).
+  for (const [level, flip] of [[4, true], [5, undefined]] as const) {
+    const layout = CAMPUS_LAYOUTS[level]!;
+    const hall = layout.items.find((i) => i.asset === 'main-clocktower')!;
+    const signs = layout.items.filter((i) => i.asset === 'signboard' || i.asset === 'notice-board');
+    assert.deepEqual(signs.map((i) => i.asset), ['signboard'], `Lv.${level} has exactly one sign, the signboard`);
+    assert.equal(signs[0].flip, flip, `Lv.${level}: the board's direction`);
+    assert.ok((signs[0].depth ?? signs[0].y) > hall.y, `Lv.${level}: the signboard is drawn in front of the main hall`);
   }
 });
 
