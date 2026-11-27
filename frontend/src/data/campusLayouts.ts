@@ -473,12 +473,12 @@ export const CAMPUS_LAYOUTS: Readonly<Partial<Record<number, CampusLayout>>> = {
     items: [
       lv9Main, lv9DormB, lv9DormA,
       // Flowerbeds ring the square; planters line the hall front (growth sheet, F11).
-      at('flowerbed-1', iso(lv9Plaza, -40, 30)), at('flowerbed-2', iso(lv9Plaza, 40, 30)),
+      at('flowerbed-1', iso(lv9Plaza, -40, 30)), at('flowerbed-2', iso(lv9Plaza, 55, 33)),
       ...[-24, 24].map((u) => at('flower-border', iso(lv9Plaza, u, 34), { flip: true })),
-      ...[-26, 26].map((u) => at('planter-strip', iso(lv9MainDoor, u, 6), { flip: true, depth: lv9Main.y + 1 })),
+      ...[35].map((u) => at('planter-strip', iso(lv9MainDoor, u, 13), { flip: true, depth: lv9Main.y + 1 })),
       // Lamps and benches along the street.
-      ...along(iso(lv9Plaza, 44), iso(lv9Plaza, 110), 3).map((p) => at('lamp', iso(p, 0, -16))),
-      at('bench', iso(lv9Plaza, 70, 18)), at('bench', iso(lv9Plaza, 104, 20), { flip: true }),
+      ...along(iso(lv9Plaza, 30), iso(lv9Plaza, 100), 3).map((p) => at('lamp', iso(p, 0, -16))),
+      at('bench', iso(lv9Plaza, 50, -13), { flip: true }), at('bench', iso(lv9Plaza, 85, -13), { flip: true }),
       // The lawn below the street: picnics, pets and students.
       at('picnic-mat', iso(lv9Plaza, 30, 60), { shadow: false }), at('picnic-mat', iso(lv9Plaza, 96, 50), { shadow: false }),
       at('dog', iso(lv9Plaza, 10, 70), { shadow: false }), at('cat', iso(lv9Plaza, 110, 42), { shadow: false }),
@@ -489,6 +489,7 @@ export const CAMPUS_LAYOUTS: Readonly<Partial<Record<number, CampusLayout>>> = {
       ...[87, 120].map((u) => at('trash-bin', iso(lv9Plaza, u, 19))),
       at('student-sit-1', iso(lv9Plaza, 70, 17), { shadow: false }), at('student-sit-2', iso(lv9Plaza, 28, 58), { shadow: false }),
       at('student-sit-1', iso(lv9Plaza, 34, 62), { shadow: false }), at('student-sit-2', iso(lv9Plaza, 98, 48), { shadow: false }),
+      at('signboard', iso(lv8Door, -30, -30), { flip: true, depth: lv8Main.y + 1 }),
       // Planters on the lawn between the hall and the big dorm; flowers on the lower lawn.
       ...[P(214, 196), P(232, 206)].map((p) => at('planter-square', p)),
       ...scatter([iso(lv9Plaza, 70, 76), iso(lv9Plaza, 92, 80)], 1),
