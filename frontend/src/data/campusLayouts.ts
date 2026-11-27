@@ -381,11 +381,11 @@ export const CAMPUS_LAYOUTS: Readonly<Partial<Record<number, CampusLayout>>> = {
       ...scatter([P(110, 280), P(310, 236), P(60, 200)], 5),
       // The school signboard stands on the lawn between the main hall and the lecture hall, turned toward the
       // lecture hall and drawn over the main hall, as on Lv.5 (user request 2026-11-27).
-      at('signboard', iso(faceMid(lv6Main, 'left'), -50, 22), { depth: lv6Main.y + 1 }),
+      at('signboard', iso(faceMid(lv6Main, 'left'), -50, 30), { depth: lv6Main.y + 1 }),
       // Garden fill (F11, UF): low hedges edge the plaza walks, planters line the hall front.
       ...[53, 80].map((u) => at('hedge-low', iso(lv6Plaza, u, 27), { flip: true })),
       ...[48, 74].map((v) => at('hedge-low', iso(lv6Plaza, -8, v))),
-      ...[-26, 26].map((u) => at('planter-strip', iso(faceMid(lv6Main, 'left'), u, 6), { flip: true, depth: lv6Main.y + 1 })),
+      ...[-20, 37].map((u) => at('planter-strip', iso(faceMid(lv6Main, 'left'), u, 13), { flip: true, depth: lv6Main.y + 1 })),
     ],
     features: { '제2강의동': 'lecture-2-r', '빈티지 가로등': 'lamp', '화단': 'flowerbed-1' },
   },
