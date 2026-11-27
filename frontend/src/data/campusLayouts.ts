@@ -528,9 +528,9 @@ export const CAMPUS_LAYOUTS: Readonly<Partial<Record<number, CampusLayout>>> = {
       ...[iso(lv10Plaza, 78, -44), iso(lv10Plaza, 94, 26)].map((p, i) => at(i ? 'tree-maple-red' : 'tree-cherry-1', p, { flip: true })),
       at('tree-oak-1', iso(lv10Plaza, 84, 84)),
       at('flag', iso(lv10Plaza, 56, 38)), at('flag', iso(lv10Plaza, 38, 56)),
-      at('flowerbed-1', iso(lv10Plaza, 66, -38)), at('flowerbed-2', iso(lv10Plaza, -38, 66)),
+      at('signboard', iso(lv8Door, 10, 0), { depth: lv8Main.y + 1 }),
       // The crowd fills the square around the fountain.
-      ...crowd(lv10Plaza, 42, 42, 48, 9).filter((s) => !lv10FountainCores.some((c) => pointInPolygon([s.x, s.y], c))),
+      ...crowd(lv10Plaza, 42, 42, 40, 13).filter((s) => !lv10FountainCores.some((c) => pointInPolygon([s.x, s.y], c))),
     ],
     effects: [
       { kind: 'festival-glow', x: lv10Plaza[0], y: lv10Plaza[1], rx: 92, ry: 46 },
