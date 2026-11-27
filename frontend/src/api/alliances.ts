@@ -83,6 +83,7 @@ export const MATCH_REFRESH_MS = 15_000;
 
 /** Alliance.MAX_SCHOOLS: the founder plus one approved school. */
 export const ALLIANCE_MAX_SCHOOLS = 2;
+export const ALLIANCE_INVITATIONS_ENABLED = import.meta.env?.VITE_ALLIANCE_INVITATIONS === 'true';
 export const ALLIANCE_LIMITS = { nameMax: 50, minHours: 6, maxHours: 72, defaultHours: 24 } as const;
 export const ALLIANCE_DURATION_PRESETS = [6, 12, 24, 48, 72] as const;
 
@@ -122,6 +123,38 @@ export async function getMyAlliance(client: ApiClient, signal?: AbortSignal): Pr
     return alliance as Alliance;
   }
   throw new ApiError({ kind: 'invalid-response', status: null, code: CLIENT_ERROR_CODES.invalidResponse });
+}
+
+export type UniversityAlliance = Pick<Alliance, 'id' | 'name' | 'status'> & { joinable: boolean };
+
+async function getUniversityAlliance(client: ApiClient, schoolId: number, signal: AbortSignal): Promise<UniversityAlliance | null> {
+  const value = await client.get<Partial<UniversityAlliance> | null>(`/universities/${schoolId}/alliance`, { signal });
+  if (value === null) return null;
+  if (value && positiveId(value.id) && typeof value.name === 'string' && typeof value.joinable === 'boolean'
+    && (value.status === 'ACTIVE' || value.status === 'IN_MATCH' || value.status === 'EXPIRED')) {
+    return { id: value.id, name: value.name, status: value.status, joinable: value.joinable };
+  }
+  throw new ApiError({ kind: 'invalid-response', status: null, code: CLIENT_ERROR_CODES.invalidResponse });
+}
+
+export function useUniversityAlliance(userId: number, schoolId: number) {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: [...allianceKeys.lists(userId), 'university-alliance', schoolId],
+    queryFn: ({ signal }) => getUniversityAlliance(client, schoolId, signal),
+    refetchOnMount: 'always',
+  });
+}
+
+export function useInviteUniversity(userId: number) {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ allianceId, universityId }: { allianceId: number; universityId: number }) =>
+      client.request<AllianceApplication>(`/alliances/${allianceId}/invitations`, { method: 'POST', body: { universityId } }),
+    retry: false,
+    onSettled: () => refreshLists(queryClient, userId),
+  });
 }
 
 export function applyToAlliance(client: ApiClient, allianceId: number): Promise<AllianceApplication> {

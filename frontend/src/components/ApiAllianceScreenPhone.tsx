@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactNode, type SubmitEvent } 
 import { ChevronLeft, RefreshCw } from 'lucide-react';
 import { useAuthSession } from '../api/ApiProvider';
 import {
-  ALLIANCE_DURATION_PRESETS, ALLIANCE_ERROR_CODES, ALLIANCE_LIMITS, ALLIANCE_MAX_SCHOOLS, ALLIANCE_STATUS_LABEL,
+  ALLIANCE_DURATION_PRESETS, ALLIANCE_ERROR_CODES, ALLIANCE_INVITATIONS_ENABLED, ALLIANCE_LIMITS, ALLIANCE_MAX_SCHOOLS, ALLIANCE_STATUS_LABEL,
   createMatchMemory, createSentApplicationMemory, MATCH_DURATION_PRESETS, MATCH_ERROR_CODES, MATCH_LIMITS, MATCH_STATUS_LABEL,
   parseAllianceId, parseApplicationId, parseMatchId, useAllianceDetail, useAllianceMatch, useApplyToAlliance, useCreateAlliance,
   useDecideApplication, useDecideMatch, useMyAlliance, useRequestMatch, useUniversityName, validateAllianceName, type Alliance,
@@ -76,7 +76,7 @@ interface ApiAllianceScreenPhoneProps {
 
 export function ApiAllianceScreenPhone({
   embedded = false, onBack, onGoToLogin, onNavigateTab, applications = defaultApplications, matches = defaultMatches, now = Date.now,
-  invitationsEnabled = import.meta.env?.VITE_ALLIANCE_INVITATIONS === 'true',
+  invitationsEnabled = ALLIANCE_INVITATIONS_ENABLED,
 }: ApiAllianceScreenPhoneProps) {
   const signedIn = useAuthSession().status === 'signed-in';
   const me = useMyInfo();
