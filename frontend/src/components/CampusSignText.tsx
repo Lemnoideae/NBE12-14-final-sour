@@ -64,6 +64,8 @@ export function splitSignName(name: string): string[] {
   return [chars.slice(0, best).join('').trim(), chars.slice(best).join('').trim()];
 }
 
+export const NO_RANK = '순위 없음';
+
 export function formatSignScore(score: number): string {
   return `${formatContribution(score)}점`;
 }
@@ -75,6 +77,10 @@ export function signTextLayout(item: Pick<CampusPlacement, 'asset' | 'x' | 'y' |
   const x = item.flip ? item.x - dx : item.x + dx;
   const y = item.y - ay + BOARD_CENTER[1];
   const skew = item.flip ? BOARD_SKEW_DEG : -BOARD_SKEW_DEG;
+  // A school whose first department has no score yet shows "순위 없음" alone (user request 2026-11-27).
+  if (info.score <= 0) {
+    return { x, y, skew, name: { text: NO_RANK, size: fitFontSize(NO_RANK, NAME_SIZE), lines: [{ text: NO_RANK, dy: 0 }] }, score: null };
+  }
   const score = formatSignScore(info.score);
   const shown = signDisplayName(info.name);
   const lines = splitSignName(shown);
@@ -100,11 +106,11 @@ export function CampusSignText({ item, info }: { item: CampusPlacement; info: Ca
   const t = signTextLayout(item, info);
   return (
     <g data-sign-text transform={`translate(${t.x} ${t.y}) skewY(${t.skew})`} className="font-pixel" pointerEvents="none" opacity={item.opacity}>
-      <title>{`학과 1위 ${t.name.text} ${t.score.text}`}</title>
+      <title>{t.score ? `학과 1위 ${t.name.text} ${t.score.text}` : `학과 ${NO_RANK}`}</title>
       <text data-sign-name fontSize={t.name.size} textAnchor="middle" dominantBaseline="central" fill="#3b2414" fontWeight="bold">
         {t.name.lines.map((line) => <tspan key={line.dy} data-sign-name-line x={0} y={line.dy}>{line.text}</tspan>)}
       </text>
-      <text data-sign-score y={t.score.dy} fontSize={t.score.size} textAnchor="middle" dominantBaseline="central" fill="#5c3a22">{t.score.text}</text>
+      {t.score && <text data-sign-score y={t.score.dy} fontSize={t.score.size} textAnchor="middle" dominantBaseline="central" fill="#5c3a22">{t.score.text}</text>}
     </g>
   );
 }

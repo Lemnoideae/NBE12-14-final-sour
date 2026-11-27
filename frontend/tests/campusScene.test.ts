@@ -686,7 +686,7 @@ test('표지판 학과명이 한 줄로 너무 작아지면 두 줄로 나누고
   const layout = signTextLayout({ asset: 'signboard', x: 0, y: 0 }, { name: long, score: 5 });
   assert.equal(layout.name.lines.length, 2);
   assert.ok(layout.name.size > fitFontSize(long, 3.4), 'two lines are larger than one');
-  assert.ok(layout.name.lines[0].dy < layout.name.lines[1].dy && layout.name.lines[1].dy < layout.score.dy, 'name lines above the score');
+  assert.ok(layout.name.lines[0].dy < layout.name.lines[1].dy && layout.name.lines[1].dy < layout.score!.dy, 'name lines above the score');
   const { container } = render(React.createElement(CampusScene, { level: 3, sign: { name: long, score: 5 } }));
   assert.deepEqual([...container.querySelectorAll('[data-sign-name-line]')].map((n) => n.textContent), lines);
 });
@@ -700,4 +700,11 @@ test('괄호가 있는 긴 학과명은 괄호 앞만 표지판에 쓰고, 전�
   const { container } = render(React.createElement(CampusScene, { level: 3, sign: { name: long, score: 12345 } }));
   assert.deepEqual([...container.querySelectorAll('[data-sign-name-line]')].map((n) => n.textContent), ['음악학과']);
   assert.match(container.querySelector('[data-sign-text] title')?.textContent ?? '', /성악전공/);
+});
+
+test('1위 학과가 0점이면 표지판에 학과명·점수 대신 "순위 없음"만 쓴다', () => {
+  const { container } = render(React.createElement(CampusScene, { level: 3, sign: { name: '환경안전공학과', score: 0 } }));
+  assert.deepEqual([...container.querySelectorAll('[data-sign-name-line]')].map((n) => n.textContent), ['순위 없음']);
+  assert.equal(container.querySelectorAll('[data-sign-score]').length, 0, 'no score line');
+  assert.equal(container.querySelector('[data-sign-text] title')?.textContent, '학과 순위 없음');
 });
