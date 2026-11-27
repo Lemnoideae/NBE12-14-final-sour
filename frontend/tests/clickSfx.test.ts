@@ -38,7 +38,9 @@ class FakeAudioContext {
   static instances: FakeAudioContext[] = [];
   state = 'running';
   currentTime = 0;
+  sampleRate = 8000;
   destination = new FakeNode();
+  buffers: Array<{ length: number }> = [];
   sources: FakeSource[] = [];
   oscillators: FakeOscillator[] = [];
   decoded: string[] = [];
@@ -48,6 +50,13 @@ class FakeAudioContext {
   createBufferSource() { const source = new FakeSource(); this.sources.push(source); return source; }
   createOscillator() { const osc = new FakeOscillator(); this.oscillators.push(osc); return osc; }
   createGain() { return Object.assign(new FakeNode(), { gain: new FakeParam() }); }
+  createBiquadFilter() { return Object.assign(new FakeNode(), { type: 'lowpass', frequency: new FakeParam() }); }
+  createBuffer(_channels: number, length: number) {
+    const data = new Float32Array(length);
+    const buffer = { length, getChannelData: () => data };
+    this.buffers.push(buffer);
+    return buffer;
+  }
   decodeAudioData(data: ArrayBuffer) {
     const name = new TextDecoder().decode(data);
     if (this.failDecode.has(name)) return Promise.reject(new Error(`cannot decode ${name}`));
@@ -187,4 +196,38 @@ test('playTapSound keeps its synthesized blip and chime for other UI sounds', ()
   const [ctx] = FakeAudioContext.instances;
   assert.equal(ctx.sources.length, 0);
   assert.deepEqual(ctx.oscillators.map((osc) => osc.type), ['square', 'triangle']);
+});
+
+test('playAttackSound is a small blast: a falling thump under a noise burst, and a critical hit adds the chime', () => {
+  const { manager } = managerOnFakeWindow();
+  manager.playAttackSound(false);
+  const [ctx] = FakeAudioContext.instances;
+  assert.deepEqual(ctx.oscillators.map((osc) => osc.type), ['sine']);
+  assert.equal(ctx.sources.length, 1);
+  assert.equal(ctx.sources[0].buffer, ctx.buffers[0], 'the burst plays the noise buffer');
+  assert.equal(ctx.sources[0].started, true);
+
+  manager.playAttackSound(true);
+  assert.deepEqual(ctx.oscillators.map((osc) => osc.type), ['sine', 'sine', 'triangle']);
+  assert.equal(ctx.sources.length, 2);
+  assert.equal(ctx.buffers.length, 1, 'the noise buffer is made once per context');
+});
+
+test('playAssistSound is a rising four-note heal, and a critical assist adds the chime', () => {
+  const { manager } = managerOnFakeWindow();
+  manager.playAssistSound(false);
+  const [ctx] = FakeAudioContext.instances;
+  assert.equal(ctx.sources.length, 0);
+  assert.deepEqual(ctx.oscillators.map((osc) => osc.type), ['triangle', 'triangle', 'triangle', 'triangle']);
+
+  manager.playAssistSound(true);
+  assert.equal(ctx.oscillators.length, 9);
+});
+
+test('playAttackSound and playAssistSound are silent while sound is off', () => {
+  const { manager } = managerOnFakeWindow();
+  manager.enabled = false;
+  manager.playAttackSound(true);
+  manager.playAssistSound(true);
+  assert.equal(FakeAudioContext.instances.length, 0);
 });

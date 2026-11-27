@@ -51,6 +51,96 @@ export class RetroSoundManager {
     }
   }
 
+  /** Attack tap on another school: a small bomb going off. A critical hit is a bigger blast plus the crit chime. */
+  public playAttackSound(isCrit: boolean = false) {
+    if (!this.enabled) return;
+    try {
+      this.initContext();
+      if (!this.ctx) return;
+      this.playBlast(this.ctx, isCrit ? 1.6 : 1);
+      if (isCrit) this.playCritChime(this.ctx);
+    } catch {
+      // Audio playback might be prevented by browser policy
+    }
+  }
+
+  /** Assist tap on an ally school: a game heal, rising sparkle notes. A critical assist adds the crit chime. */
+  public playAssistSound(isCrit: boolean = false) {
+    if (!this.enabled) return;
+    try {
+      this.initContext();
+      if (!this.ctx) return;
+      this.playHeal(this.ctx);
+      if (isCrit) this.playCritChime(this.ctx);
+    } catch {
+      // Audio playback might be prevented by browser policy
+    }
+  }
+
+  private noise: { ctx: AudioContext; buffer: AudioBuffer } | null = null;
+
+  /** Half a second of white noise, made once per context: the body of the blast. */
+  private noiseBuffer(ctx: AudioContext): AudioBuffer {
+    if (this.noise?.ctx === ctx) return this.noise.buffer;
+    const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.5), ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    this.noise = { ctx, buffer };
+    return buffer;
+  }
+
+  /** Low thump falling in pitch under a noise burst whose low-pass closes: a short, muffled boom. */
+  private playBlast(ctx: AudioContext, size: number) {
+    const now = ctx.currentTime;
+    const length = 0.22 * size;
+
+    const thump = ctx.createOscillator();
+    const thumpGain = ctx.createGain();
+    thump.type = 'sine';
+    thump.frequency.setValueAtTime(160 / size, now);
+    thump.frequency.exponentialRampToValueAtTime(40, now + length * 0.8);
+    thumpGain.gain.setValueAtTime(0.35, now);
+    thumpGain.gain.exponentialRampToValueAtTime(0.001, now + length * 0.8);
+    thump.connect(thumpGain);
+    thumpGain.connect(ctx.destination);
+    thump.start(now);
+    thump.stop(now + length * 0.8);
+
+    const burst = ctx.createBufferSource();
+    burst.buffer = this.noiseBuffer(ctx);
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(2400, now);
+    filter.frequency.exponentialRampToValueAtTime(180, now + length);
+    const burstGain = ctx.createGain();
+    burstGain.gain.setValueAtTime(0.3, now);
+    burstGain.gain.exponentialRampToValueAtTime(0.001, now + length);
+    burst.connect(filter);
+    filter.connect(burstGain);
+    burstGain.connect(ctx.destination);
+    burst.start(now);
+    burst.stop(now + length);
+  }
+
+  /** C5-E5-G5-C6 arpeggio, each note a soft triangle that overlaps the next. */
+  private playHeal(ctx: AudioContext) {
+    const now = ctx.currentTime;
+    [523.25, 659.25, 783.99, 1046.5].forEach((frequency, index) => {
+      const start = now + index * 0.045;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(frequency, start);
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.setValueAtTime(0.1, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.16);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.16);
+    });
+  }
+
   /** Satisfying short 8-bit blip. */
   private playTapBlip(ctx: AudioContext) {
     const osc = ctx.createOscillator();

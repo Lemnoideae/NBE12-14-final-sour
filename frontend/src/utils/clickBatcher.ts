@@ -226,6 +226,11 @@ export function createClickBatcher<TResponse = ClickResponse>(options: ClickBatc
       arm();
       return true;
     },
+    /** Forget the held slots, e.g. when the next batch goes to a different server action with its own slots. */
+    clearSlots() {
+      slots = null;
+      reestimateQueue();
+    },
     /** Enqueue one click of `power` and return what to show for it, using the slots the server already decided. */
     enqueueTap(power: number): TapEstimate | null {
       if (disposed || error || locked || restoring) return null;
