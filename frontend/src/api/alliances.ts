@@ -81,7 +81,7 @@ export const MATCH_ERROR_CODES = {
 /** While a match can still change by itself (accepted, expired, ended), its card reads it again this often. */
 export const MATCH_REFRESH_MS = 15_000;
 
-/** AllianceService.MAX_ALLIANCE_SIZE: the founder plus one approved school. */
+/** Alliance.MAX_SCHOOLS: the founder plus one approved school. */
 export const ALLIANCE_MAX_SCHOOLS = 2;
 export const ALLIANCE_LIMITS = { nameMax: 50, minHours: 6, maxHours: 72, defaultHours: 24 } as const;
 export const ALLIANCE_DURATION_PRESETS = [6, 12, 24, 48, 72] as const;
@@ -355,6 +355,20 @@ export function useDecideApplication(userId: number) {
       void queryClient.invalidateQueries({ queryKey: allianceKeys.mine(userId), exact: true });
     },
     onSettled: () => refreshLists(queryClient, userId),
+  });
+}
+
+export function useDecideInvitation(userId: number) {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ invitationId, decision }: { invitationId: number; decision: ApplicationDecision }) =>
+      client.request<AllianceApplication>(`/alliances/invitations/${invitationId}/${decision}`, { method: 'PATCH' }),
+    retry: false,
+    onSettled: (_data, _error, { decision }) => {
+      refreshLists(queryClient, userId);
+      if (decision === 'approve') void queryClient.invalidateQueries({ queryKey: allianceKeys.mine(userId), exact: true });
+    },
   });
 }
 
