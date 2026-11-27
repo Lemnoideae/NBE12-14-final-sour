@@ -154,8 +154,9 @@ function AllianceHome({ userId, universityName, applications, matches, now }: {
     </>;
   }
 
-  const renderTab = (active: AllianceTab, openAndFocus: (next: AllianceTab) => void) => {
-    switch (active) {
+  const renderTab = (panel: AllianceTab, openAndFocus: (next: AllianceTab) => void) => {
+    const visible = panel === tab;
+    switch (panel) {
       case 'overview': return <>
         <h2 className="text-sm font-black">우리 연합</h2>
         {notice && <p role="status" className={`${BOX} text-xs`}>{notice}</p>}
@@ -163,24 +164,25 @@ function AllianceHome({ userId, universityName, applications, matches, now }: {
       </>;
       case 'applications': return <>
         <h2 className="text-sm font-black">가입 신청</h2>
-        {mine && <ApplicationDecisionForm key={mine.id} userId={userId} allianceId={mine.id} />}
-        <AllianceApplicationList userId={userId} />
+        {mine && <ApplicationDecisionForm key={mine.id} userId={userId} allianceId={mine.id} visible={visible} />}
+        <AllianceApplicationList userId={userId} visible={visible} />
       </>;
       case 'matches': return mine
-        ? <AllianceMatches key={mine.id} userId={userId} alliance={mine} memory={matches} now={now} />
+        ? <AllianceMatches key={mine.id} userId={userId} alliance={mine} visible={visible} memory={matches} now={now} />
         : <MatchMembershipNotice unjoined={mine === null} openAndFocus={openAndFocus} />;
       case 'search': return <AllianceSearch userId={userId} now={now} mine={mine} onSent={rememberSent} />;
       case 'history': return <>
         <h2 className="text-sm font-black">이전 연합 대결 이력</h2>
-        <AllianceHistory userId={userId} detail={(alliance, matchId, close) =>
-          <MatchCard key={matchId} userId={userId} alliance={alliance} matchId={matchId} now={now} history onMissing={close} onForget={close} />} />
+        <AllianceHistory userId={userId} visible={visible} detail={(alliance, matchId, close) =>
+          <MatchCard key={matchId} userId={userId} alliance={alliance} matchId={matchId} visible={visible}
+            now={now} history onMissing={close} onForget={close} />} />
       </>;
     }
   };
 
   return <div className="flex flex-1 min-h-0 min-w-0 flex-col font-pixel text-[#261608]">
     <GamePanelTabs label="연합 메뉴" compact keepVisitedMounted tabs={ALLIANCE_TABS} selected={tab} onSelect={setTab}>
-      {(active, openAndFocus) => <div className="flex flex-col gap-3 p-3">{renderTab(active, openAndFocus)}</div>}
+      {(panel, openAndFocus) => <div className="flex flex-col gap-3 p-3">{renderTab(panel, openAndFocus)}</div>}
     </GamePanelTabs>
   </div>;
 }
@@ -241,7 +243,7 @@ function ApplyButton({ userId, allianceId, onSent }: { userId: number; allianceI
   </>;
 }
 
-function ApplicationDecisionForm({ userId, allianceId }: { userId: number; allianceId: number }) {
+function ApplicationDecisionForm({ userId, allianceId, visible }: { userId: number; allianceId: number; visible: boolean }) {
   const id = useId();
   const [input, setInput] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
@@ -277,7 +279,7 @@ function ApplicationDecisionForm({ userId, allianceId }: { userId: number; allia
   return (
     <form noValidate onSubmit={(event) => { event.preventDefault(); ask('approve'); }} aria-label="가입 신청 처리" className={`${BOX} text-xs`}>
       <h3 className="text-sm font-black">가입 신청 처리</h3>
-      <AllianceApplicationList userId={userId} allianceId={allianceId} busy={decide.isPending}
+      <AllianceApplicationList userId={userId} allianceId={allianceId} visible={visible} busy={decide.isPending}
         onDecide={(applicationId, decision) => { setProblem(null); setConfirming({ applicationId, decision }); }} />
       <label htmlFor={`${id}-id`} className="font-bold">신청 번호</label>
       <input id={`${id}-id`} inputMode="numeric" autoComplete="off" value={input} disabled={decide.isPending} aria-invalid={problem !== null}
@@ -316,7 +318,9 @@ function ApplicationDecisionForm({ userId, allianceId }: { userId: number; allia
   );
 }
 
-function AllianceMatches({ userId, alliance, memory, now }: { userId: number; alliance: Alliance; memory: MatchMemory; now: () => number }) {
+function AllianceMatches({ userId, alliance, visible, memory, now }: {
+  userId: number; alliance: Alliance; visible: boolean; memory: MatchMemory; now: () => number;
+}) {
   const [matchId, setMatchId] = useState(() => memory.get(userId));
   const [notice, setNotice] = useState<string | null>(null);
   const show = (id: number, message: string | null) => {
@@ -332,10 +336,10 @@ function AllianceMatches({ userId, alliance, memory, now }: { userId: number; al
   return (
     <section aria-labelledby="alliance-matches" className="flex flex-col gap-2">
       <h2 id="alliance-matches" className="text-sm font-black">연합 대결</h2>
-      <AllianceMatchList userId={userId} allianceId={alliance.id} selected={matchId} onSelect={(id) => show(id, null)} />
+      <AllianceMatchList userId={userId} allianceId={alliance.id} visible={visible} selected={matchId} onSelect={(id) => show(id, null)} />
       {notice && <p role="status" className={`${BOX} text-xs`}>{notice}</p>}
       {matchId !== null ? (
-        <MatchCard key={matchId} userId={userId} matchId={matchId} alliance={alliance} now={now}
+        <MatchCard key={matchId} userId={userId} matchId={matchId} alliance={alliance} visible={visible} now={now}
           onMissing={() => forget(`기억해 둔 대결 #${matchId}을(를) 찾을 수 없어 지웠어요.`)} onForget={() => forget(null)} />
       ) : null}
       <MatchRequestForm userId={userId} allianceId={alliance.id} expiredAt={alliance.expiredAt}
@@ -489,11 +493,12 @@ function AllianceName({ userId, allianceId, mine }: { userId: number; allianceId
   return <>{name} #{allianceId}{isMine && <strong> (우리)</strong>}</>;
 }
 
-function MatchCard({ userId, matchId, alliance, now, history = false, onMissing, onForget }: {
-  userId: number; matchId: number; alliance: Pick<Alliance, 'id' | 'name'>; now: () => number; history?: boolean; onMissing: () => void; onForget: () => void;
+function MatchCard({ userId, matchId, alliance, visible, now, history = false, onMissing, onForget }: {
+  userId: number; matchId: number; alliance: Pick<Alliance, 'id' | 'name'>; visible: boolean;
+  now: () => number; history?: boolean; onMissing: () => void; onForget: () => void;
 }) {
   const allianceId = alliance.id;
-  const query = useAllianceMatch(userId, matchId);
+  const query = useAllianceMatch(userId, matchId, visible);
   const missing = isApiError(query.error) && query.error.code === MATCH_ERROR_CODES.notFound;
   // Runs once when the 404 arrives; the parent passes a new callback on every render, so it is not a dependency.
   useEffect(() => { if (missing) onMissing(); }, [missing]);

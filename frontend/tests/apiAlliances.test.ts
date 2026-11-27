@@ -1,7 +1,7 @@
 // The server identifies our current alliance. Lookup, sent application numbers, and match numbers are separate workflows.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { after, afterEach, test } from 'node:test';
+import { after, afterEach, test, type TestContext } from 'node:test';
 import { registerHooks } from 'node:module';
 import React from 'react';
 import { JSDOM } from 'jsdom';
@@ -19,6 +19,7 @@ for (const [key, value] of Object.entries({ window: dom.window, document: dom.wi
 })) Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
 
 const { render, screen, fireEvent, cleanup, waitFor, within, act } = await import('@testing-library/react');
+const { timeoutManager } = await import('@tanstack/react-query');
 const { ApiProvider } = await import('../src/api/ApiProvider');
 const { createApiClient } = await import('../src/api/client');
 const { createQueryClient } = await import('../src/api/queryClient');
@@ -50,6 +51,29 @@ afterEach(async () => {
   }
 });
 after(() => { assets.deregister(); dom.window.close(); });
+
+function mockQueryPolling(t: TestContext) {
+  // Mock only query intervals: replacing global interval functions can strand JSDOM's native rendering timer.
+  let nextId = 0;
+  const intervals = new Map<number, { callback: () => void; delay: number; remaining: number }>();
+  t.mock.method(timeoutManager, 'setInterval', (callback: () => void, delay: number) => {
+    const id = ++nextId;
+    intervals.set(id, { callback, delay, remaining: delay });
+    return id;
+  });
+  t.mock.method(timeoutManager, 'clearInterval', (id: number | undefined) => {
+    if (id !== undefined) intervals.delete(id);
+  });
+  return (elapsed: number) => {
+    for (const [id, interval] of [...intervals]) {
+      interval.remaining -= elapsed;
+      while (interval.remaining <= 0 && intervals.has(id)) {
+        interval.remaining += interval.delay;
+        interval.callback();
+      }
+    }
+  };
+}
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
 const ok = (data: unknown, status = 200) => json(status, { code: 'SUCCESS', message: '요청이 성공했습니다.', data });
@@ -213,6 +237,41 @@ test('연합 상단 탭은 한 패널만 표시하고, 키보드로 탭에 포�
   assert.deepEqual(f.routes('POST /api/v1/alliances/'), [], '대결 탭을 여는 동작은 대결 신청을 보내지 않는다');
   assertAbsent(screen.queryByRole('form', { name: '가입 신청 처리' }));
   assert.equal((within(await openApplicationDecision()).getByLabelText('신청 번호') as HTMLInputElement).value, '31');
+});
+
+test('가입 신청과 대결은 선택된 탭만 폴링하고, 다시 열면 상태를 유지한 채 즉시 조회한다', async (t) => {
+  const advance = mockQueryPolling(t);
+  let current = matchOf(50);
+  const f = mount({ mine: () => ok(alliance(7)), match: () => ok(current), store: fakeStorage({ 'sour.alliance.match.v1:5': '50' }) });
+  const reads = () => ['/7/applications', '/applications/me', '/7/matches', '/matches/50']
+    .map((path) => f.routes(`GET /api/v1/alliances${path}`).length);
+  const tick = () => act(async () => { advance(15_000); });
+
+  const applications = await openAllianceTab('가입 신청');
+  await within(applications).findAllByText('가입 신청이 없어요.');
+  await waitFor(() => assert.deepEqual(reads(), [1, 1, 0, 0]));
+  await tick();
+  assert.deepEqual(reads(), [2, 2, 0, 0], '열린 가입 신청 탭은 받은 신청과 보낸 신청을 폴링한다');
+
+  const matches = await openAllianceTab('대결');
+  await within(matches).findByText('표시할 대결이 없어요.');
+  const card = await within(matches).findByRole('article', { name: '대결 #50' });
+  const status = await within(card).findByTestId('match-status');
+  assert.equal(status.textContent, '수락 대기');
+  await openAllianceTab('우리 연합');
+  current = { ...current, status: 'IN_PROGRESS' };
+  await tick();
+  assert.deepEqual(reads(), [2, 2, 1, 1], '숨겨진 탭에서는 신청 목록, 대결 목록, 대결 상세를 폴링하지 않는다');
+
+  const reopened = await openAllianceTab('대결');
+  assertSameNode(within(reopened).getByRole('article', { name: '대결 #50' }), card);
+  await waitFor(() => assert.equal(status.textContent, '진행 중'));
+  assert.deepEqual(reads(), [2, 2, 2, 2], '대결 탭을 다시 열면 목록과 상세를 즉시 갱신한다');
+  await tick();
+  assert.deepEqual(reads(), [2, 2, 3, 3], '대결 탭이 열려 있는 동안에는 목록과 상세 폴링을 재개한다');
+
+  await openAllianceTab('가입 신청');
+  await waitFor(() => assert.deepEqual(reads(), [3, 3, 3, 3], '가입 신청을 다시 열면 두 목록을 즉시 갱신한다'));
 });
 
 test('현재 소속이 없어도 이력 탭에서 과거 소속의 종료 대결만 조회하고 탭 전환 후 상세를 유지한다', async () => {
@@ -408,7 +467,7 @@ test('로그인하지 않았으면 로그인 안내만 보이고 서버를 부�
 });
 
 test('브라우저 탭이 숨겨지면 폴링하지 않고 복귀할 때 최신 소속을 조회한다', async (t) => {
-  t.mock.timers.enable({ apis: ['setInterval'] });
+  const advance = mockQueryPolling(t);
   t.mock.getter(document, 'visibilityState', () => visibility);
   let visibility: DocumentVisibilityState = 'visible';
   let current: Alliance | null = alliance(7);
@@ -416,7 +475,7 @@ test('브라우저 탭이 숨겨지면 폴링하지 않고 복귀할 때 최신 
   await screen.findByRole('article', { name: '연합 #7' });
   current = null;
   visibility = 'hidden';
-  await act(async () => { fireEvent(document, new dom.window.Event('visibilitychange', { bubbles: true })); t.mock.timers.tick(30_000); });
+  await act(async () => { fireEvent(document, new dom.window.Event('visibilitychange', { bubbles: true })); advance(30_000); });
   assert.equal(f.membershipReads(), 1);
   visibility = 'visible';
   await act(async () => { fireEvent(document, new dom.window.Event('visibilitychange', { bubbles: true })); });
@@ -458,7 +517,7 @@ const lookup = async (id: number) => {
 };
 
 test('가입 신청 번호는 보조로 기억하고, 외부 승인 뒤 서버 소속 갱신으로만 관리 화면을 연다', async (t) => {
-  t.mock.timers.enable({ apis: ['setInterval'] });
+  const advance = mockQueryPolling(t);
   let current: Alliance | null = null;
   const f = mount({ mine: () => ok(current) });
   await screen.findByRole('form', { name: '연합 만들기' });
@@ -474,7 +533,7 @@ test('가입 신청 번호는 보조로 기억하고, 외부 승인 뒤 서버 �
   assertAbsent(within(card).queryByRole('button', { name: '우리 연합으로 기억' }));
   assertAbsent(screen.queryByRole('form', { name: '가입 신청 처리' }));
   current = alliance(9);
-  await act(async () => { t.mock.timers.tick(15_000); });
+  await act(async () => { advance(15_000); });
   await screen.findByRole('article', { name: '연합 #9' });
   assert.equal(f.membershipReads(), 2);
   assertAbsent(screen.queryByTestId('sent-application'));
@@ -740,21 +799,21 @@ test('예약 신청 수락은 즉시 시작한다고 안내하지 않고, 수락
 });
 
 test('예약은 15초마다 서버를 읽어 진행 중으로 바뀌고 연합 상세도 갱신하며, 종료되면 폴링을 멈춘다', async (t) => {
-  t.mock.timers.enable({ apis: ['setInterval'] });
+  const advance = mockQueryPolling(t);
   let current = matchOf(50, { status: 'SCHEDULED', scheduledStartAt: '2026-11-19T13:30:00+09:00' });
   const f = mount({ mine: () => ok(alliance(7)), store: fakeStorage({ 'sour.alliance.match.v1:5': '50' }), match: () => ok(current) });
   const card = await matchCard();
   await waitFor(() => assert.equal(within(card).getByTestId('match-status').textContent, '예약됨'));
   const before = f.details().length;
   current = { ...current, status: 'IN_PROGRESS', startedAt: '2026-11-19T13:30:05+09:00', endedAt: '2026-11-19T16:30:05+09:00' };
-  await act(async () => { t.mock.timers.tick(15_000); await new Promise((resolve) => setTimeout(resolve, 10)); });
+  await act(async () => { advance(15_000); });
   await waitFor(() => assert.equal(within(card).getByTestId('match-status').textContent, '진행 중'));
   await waitFor(() => assert.ok(f.details().length > before, '서버 예약 시작 후 연합 상세도 다시 읽는다'));
   current = { ...current, status: 'FINISHED', aScore: 12, bScore: 10, winnerAllianceId: 7 };
-  await act(async () => { t.mock.timers.tick(15_000); await new Promise((resolve) => setTimeout(resolve, 10)); });
+  await act(async () => { advance(15_000); });
   await waitFor(() => assert.equal(within(card).getByTestId('match-status').textContent, '종료'));
   const count = f.routes('GET /api/v1/alliances/matches/').length;
-  await act(async () => { t.mock.timers.tick(30_000); await new Promise((resolve) => setTimeout(resolve, 10)); });
+  await act(async () => { advance(30_000); });
   assert.equal(f.routes('GET /api/v1/alliances/matches/').length, count);
 });
 
