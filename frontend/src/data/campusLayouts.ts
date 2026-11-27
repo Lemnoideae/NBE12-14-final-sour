@@ -375,7 +375,7 @@ export const CAMPUS_LAYOUTS: Readonly<Partial<Record<number, CampusLayout>>> = {
       // The lamp by the main hall stands in front of it, never hidden behind it (user request 2026-11-27).
       at('lamp', iso(lv6Plaza, 18, -28), { depth: lv6Main.y + 1 }), at('lamp', iso(lv6Plaza, -32, 18)),
       ...along(iso(lv6Plaza, 0, 50), iso(lv6Plaza, 0, 110), 3).map((p) => at('lamp', iso(p, 14))),
-      at('flowerbed-1', iso(lv6Plaza, 30, 44)), at('flowerbed-2', iso(lv6Plaza, -40, 42)), at('flowerbed-1', iso(lv6Plaza, 49, -12), { flip: true }),
+      at('flowerbed-1', iso(lv6Plaza, 30, 44)), at('flowerbed-2', iso(lv6Plaza, -40, 42)), at('flowerbed-1', iso(lv6Plaza, 49, -13), { flip: true }),
       at('bush-2', P(214, 264)), at('tree-cherry-1', P(70, 250)), at('tree-maple-red', P(276, 276)),
       ...crowd(lv6Plaza, 24, 20, 6, 3), ...crowd(iso(lv6Plaza, 0, 60), 6, 30, 3, 4),
       ...scatter([P(110, 280), P(310, 236), P(60, 200)], 5),
@@ -384,7 +384,7 @@ export const CAMPUS_LAYOUTS: Readonly<Partial<Record<number, CampusLayout>>> = {
       at('signboard', iso(faceMid(lv6Main, 'left'), -50, 30), { depth: lv6Main.y + 1 }),
       // Garden fill (F11, UF): low hedges edge the plaza walks, planters line the hall front.
       ...[53, 80].map((u) => at('hedge-low', iso(lv6Plaza, u, 27), { flip: true })),
-      ...[48, 74].map((v) => at('hedge-low', iso(lv6Plaza, -8, v))),
+      ...[48, 74].map((v) => at('hedge-low', iso(lv6Plaza, -13, v))),
       ...[-20, 37].map((u) => at('planter-strip', iso(faceMid(lv6Main, 'left'), u, 13), { flip: true, depth: lv6Main.y + 1 })),
     ],
     features: { '제2강의동': 'lecture-2-r', '빈티지 가로등': 'lamp', '화단': 'flowerbed-1' },
@@ -416,9 +416,9 @@ export const CAMPUS_LAYOUTS: Readonly<Partial<Record<number, CampusLayout>>> = {
       // door is on the right face, so the board runs along V unflipped (user request 2026-11-27).
       at('signboard', iso(faceMid(lv7Lecture, 'right'), 10, -40), { depth: lv7Lecture.y + 1 }),
       // Garden fill (F11). Long props run along V unflipped and along U flipped.
-      ...[74, 115].map((u) => at('fence-iron', iso(lv7Plaza, u, -8), { flip: true })),
-      ...[122, 150].map((v) => at('hedge-low', iso(lv7Gate, -10, v))),
-      ...[40, 66].map((u) => at('flower-border', iso(lv7South, u, -10), { flip: true })),
+      ...[74, 115].map((u) => at('fence-iron', iso(lv7Plaza, u, -13), { flip: true })),
+      ...[122, 150].map((v) => at('hedge-low', iso(lv7Gate, -15, v))),
+      ...[40, 66].map((u) => at('flower-border', iso(lv7South, u, -14), { flip: true })),
     ],
     features: { '종합 경기장': 'stadium', '가로수길': 'tree-cherry-2', '캠퍼스 광장': 'tex-paving' },
   },

@@ -188,7 +188,8 @@ test('Lv.10: flags stand off the paving and banner lamps ring the square (F9)', 
     assert.ok(paving.every((t) => polygonDistance([flag.x, flag.y], t.points) > 0), `Lv.10 flag at ${flag.x},${flag.y} stands on the paving`);
   }
   assert.ok(layout.items.filter((i) => i.asset === 'lamp-banner').length >= 6, 'Lv.10 banner lamps');
-  assert.ok(layout.items.filter((i) => /^(flowerbed-|flower-border)/.test(i.asset)).length >= 6, 'Lv.10 flowerbeds frame the square');  // User request (2026-11-10): from Lv.10 the campus is one L-shaped grand hall, not separate buildings.
+  // Four flower borders trim the open sides; the two corner flowerbeds were taken out (user, 2026-11-27).
+  assert.ok(layout.items.filter((i) => /^(flowerbed-|flower-border)/.test(i.asset)).length >= 4, 'Lv.10 flower borders frame the square');  // User request (2026-11-10): from Lv.10 the campus is one L-shaped grand hall, not separate buildings.
   const buildings = layout.items.filter((i) => footprintOf(i) && i.asset !== 'fountain').map((i) => i.asset);
   assert.deepEqual(buildings, ['grand-hall']);
   // User request (2026-11-10): a fountain, trees, and walks out to the lower left and lower right.
