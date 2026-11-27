@@ -14,7 +14,7 @@ export interface CampusSignInfo {
  * sign mirrors the face, so the skew turns the other way while the text itself stays unmirrored.
  */
 const BOARD_CENTER: readonly [number, number] = [11.5, 13.5];
-const BOARD_WIDTH = 25;
+const BOARD_WIDTH = 22;
 const BOARD_SKEW_DEG = (Math.atan(1 / 2) * 180) / Math.PI;
 const NAME_SIZE = 3.4;
 const SCORE_SIZE = 2.6;

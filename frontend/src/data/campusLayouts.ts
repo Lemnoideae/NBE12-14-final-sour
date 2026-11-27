@@ -318,13 +318,13 @@ export const CAMPUS_LAYOUTS: Readonly<Partial<Record<number, CampusLayout>>> = {
       // school does and drawn over the hall, as on Lv.3 (user request 2026-11-27).
       at('signboard', iso(faceMid(lv4Main, 'left'), -30, 10), { flip: true, depth: lv4Main.y + 1 }),
       // In front of the main hall's right wing, not under it (user request 2026-11-09).
-      at('hedge', iso(faceMid(lv4Main, 'left'), 36, 8), { flip: true, depth: lv4Main.y + 1 }),
-      at('hedge', iso(faceMid(lv4Main, 'right'), 8, 0), { depth: lv4Main.y + 1 }), at('bush-1', P(250, 212)), at('bush-2', P(232, 230)),
+      at('hedge', iso(faceMid(lv4Main, 'left'), 50, 12), { flip: true, depth: lv4Main.y + 1 }),
+      at('hedge', iso(faceMid(lv4Main, 'right'), 15, 18), { depth: lv4Main.y + 1 }), at('bush-1', P(250, 212)), at('bush-2', P(232, 230)),
       ...scatter([P(80, 196), P(110, 248), P(286, 220), P(74, 150), P(214, 266)], 3),
       // Garden fill (F11, UF): a white picket fence closes the pond lawn off the cross path, and a
       // flower border lines the entrance path. Long props run along V unflipped and along U flipped.
       ...[44, 70].map((u) => at('fence-picket', iso(lv4Door, u, 52), { flip: true })),
-      ...[56, 80].map((v) => at('flower-border', iso(lv4Door, 27, v))),
+      ...[64, 88].map((v) => at('flower-border', iso(lv4Door, 27, v))),
     ],
     features: { '본관 시계탑': 'main-clocktower', '돌 보도블록': 'tex-paving', '자연 연못': 'tex-water' },
   },
