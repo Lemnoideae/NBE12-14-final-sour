@@ -79,14 +79,14 @@ public class AllianceListReader {
                                           @Nullable Long cursor, int size) {
         var args = page(cursor, size).addValue("alliance", allianceId, Types.BIGINT).addValue("school", school, Types.BIGINT)
                 .addValue("status", name(status), Types.VARCHAR);
-        // Founding membership is recorded as already approved by its own applicant, never as a join request.
+        // 가입 신청만 표시한다. 창립 및 연합 초대는 별도 경로다.
         var rows = jdbc.query("""
                 SELECT au.id, au.status, au.created_at, a.id AS alliance_id, a.name AS alliance_name,
                        u.id AS school_id, u.name AS school_name, u.logo_url
                 FROM alliance_university au JOIN alliance a ON a.id = au.alliance_id
                 JOIN university u ON u.id = au.university_id
                 WHERE a.deleted_at IS NULL AND au.deleted_at IS NULL
-                  AND au.approver_user_id IS DISTINCT FROM au.applicant_user_id
+                  AND au.origin = 'APPLICATION'
                   AND %s
                   AND (:status IS NULL OR au.status = :status)
                   AND (:cursor IS NULL OR au.id < :cursor)

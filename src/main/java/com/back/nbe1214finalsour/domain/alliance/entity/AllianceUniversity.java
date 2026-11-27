@@ -98,6 +98,13 @@ public class AllianceUniversity extends BaseTimeEntity {
         return application;
     }
 
+    /** 초대를 보낸 회원과 초대받은 학교를 기록한다. */
+    public static AllianceUniversity createInvitation(Long allianceId, Long universityId, Long inviterUserId) {
+        AllianceUniversity invitation = createApplication(allianceId, universityId, inviterUserId);
+        invitation.origin = AllianceMembershipOrigin.INVITATION;
+        return invitation;
+    }
+
     public void approve(Long approverUserId) {
 
         // 1. 승인자 ID 검증
