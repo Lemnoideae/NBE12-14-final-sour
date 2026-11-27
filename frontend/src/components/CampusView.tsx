@@ -8,6 +8,7 @@ import { MOCK_REALTIME_CONFIG, type MockRealtimeConfig, type OtherClicksSource }
 import { useMockGame } from '../hooks/useMockGame';
 import { useMySchool } from '../hooks/useSchoolViews';
 import { FloatingNumber, Sparkle, type TapOutcome } from '../types';
+import type { CampusSignInfo } from './CampusSignText';
 import { soundManager } from '../utils/sound';
 import { INITIAL_KEY_GATE, keyPressDown, keyPressUp, CLICK_KEYS } from '../utils/clickGuard';
 import { formatContribution } from '../utils/formatContribution';
@@ -37,6 +38,8 @@ export interface CampusViewProps {
   otherClicksSource?: OtherClicksSource;
   realtimeConfig?: MockRealtimeConfig;
   realtimeScheduler?: OtherClickScheduler;
+  /** The school's first-ranked department for the signboard (App); without it the board stays blank. */
+  sign?: CampusSignInfo | null;
 }
 
 export const CampusView: React.FC<CampusViewProps> = ({
@@ -54,6 +57,7 @@ export const CampusView: React.FC<CampusViewProps> = ({
   otherClicksSource,
   realtimeConfig,
   realtimeScheduler,
+  sign,
 }) => {
   const { campus, clickNotice, state: { contribution: myContribution } } = useMockGame();
   // Keyboard clicks count on a full press and release only; held-key repeats never count (2026-11-08 지시).
@@ -218,6 +222,7 @@ export const CampusView: React.FC<CampusViewProps> = ({
   // Frame, ticker, scene and corner labels come from CampusStage, shared with the visit screen (V1).
   return (
     <CampusStage
+      sign={sign}
       level={campus.level}
       bubble={bubbleMessage}
       fill={fill}

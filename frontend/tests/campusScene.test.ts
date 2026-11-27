@@ -28,6 +28,7 @@ const { CAMPUS_LAYOUTS, FEATURE_MIN_VISIBLE, LAMP_GAP, lampGlows, lightOccluders
 const { CAMPUS_TALL_ASPECT, CAMPUS_UI_OVERLAYS, campusView, doorPoints, faceMid, footprintCores, footprintPolygon, polygonDistance, polygonGap, footprintOf, iso, isoRect, isoStrip, mid, pointInPolygon, spriteBox, visibleFraction } = await import('../src/data/campusGeometry');
 const { CAMPUS_STAGES } = await import('../src/data/gameRules');
 const { CampusScene, CampusSceneLights } = await import('../src/components/CampusScene');
+const { MIN_NAME_SIZE, fitFontSize, signDisplayName, signTextLayout, splitSignName } = await import('../src/components/CampusSignText');
 type CampusLayout = import('../src/data/campusLayouts').CampusLayout;
 
 after(() => { assetHooks.deregister(); dom.window.close(); });
@@ -647,4 +648,56 @@ test('an HD file that fails to load falls back to the 1x file with one warning',
   assert.equal(mask().getAttribute('href'), asset.lightsUrl);
   assert.equal(warn.mock.callCount(), 2);
   assert.match(String(warn.mock.calls[0].arguments[0]), /campus-hd\/6\/.+ showing the 1x file/);
+});
+
+// The school signboard shows the school's first-ranked department and its score (user request 2026-11-27).
+test('표지판에 학교 1위 학과명과 점수를 쓰고, 정보가 없으면 판을 비워 둔다', () => {
+  const { container } = render(React.createElement(CampusScene, { level: 3, sign: { name: '국악과', score: 1234567 } }));
+  const texts = container.querySelectorAll('[data-sign-text]');
+  assert.equal(texts.length, 1, 'one sign, one text');
+  assert.equal(container.querySelector('[data-sign-name]')?.textContent, '국악과');
+  assert.equal(container.querySelector('[data-sign-score]')?.textContent, '1.2M점');
+  assert.ok(texts[0].parentElement?.querySelector('[data-asset="signboard"]'), 'drawn with the sign so it keeps its draw order');
+  cleanup();
+  const blank = render(React.createElement(CampusScene, { level: 3 }));
+  assert.equal(blank.container.querySelectorAll('[data-sign-text]').length, 0);
+});
+
+test('표지판 글자는 판 기울기를 따르고, 뒤집힌 표지판에서도 거울글자가 되지 않으며, 긴 학과명일수록 작아진다', () => {
+  const info = { name: '국악과', score: 10 };
+  const plain = signTextLayout({ asset: 'signboard', x: 100, y: 200 }, info);
+  const flipped = signTextLayout({ asset: 'signboard', x: 100, y: 200, flip: true }, info);
+  assert.ok(plain.skew < 0 && flipped.skew === -plain.skew, 'the face rises to the right unflipped and falls flipped');
+  assert.equal(plain.x - 100, 100 - flipped.x, 'the text sits on the mirrored board face');
+  assert.equal(plain.y, flipped.y);
+  assert.ok(fitFontSize('컴퓨터소프트웨어학부', 3.4) < fitFontSize('국악과', 3.4), 'a longer name gets a smaller font');
+  assert.equal(fitFontSize('국악과', 3.4), 3.4, 'a short name keeps the largest size');
+});
+
+test('표지판 학과명이 한 줄로 너무 작아지면 두 줄로 나누고, 짧은 이름은 한 줄로 둔다', () => {
+  assert.deepEqual(splitSignName('국악과'), ['국악과']);
+  const long = '전기전자컴퓨터공학부소프트웨어전공';
+  assert.ok(fitFontSize(long, 3.4) < MIN_NAME_SIZE, 'one line would be too small');
+  const lines = splitSignName(long);
+  assert.equal(lines.length, 2);
+  assert.equal(lines.join(''), long);
+  assert.ok(Math.abs([...lines[0]].length - [...lines[1]].length) <= 1, 'halves of about equal width');
+  assert.ok(splitSignName('Global Business Administration Department Office').every((line) => !line.startsWith(' ') && !line.endsWith(' ')), 'breaks at a space without dangling spaces');
+  const layout = signTextLayout({ asset: 'signboard', x: 0, y: 0 }, { name: long, score: 5 });
+  assert.equal(layout.name.lines.length, 2);
+  assert.ok(layout.name.size > fitFontSize(long, 3.4), 'two lines are larger than one');
+  assert.ok(layout.name.lines[0].dy < layout.name.lines[1].dy && layout.name.lines[1].dy < layout.score.dy, 'name lines above the score');
+  const { container } = render(React.createElement(CampusScene, { level: 3, sign: { name: long, score: 5 } }));
+  assert.deepEqual([...container.querySelectorAll('[data-sign-name-line]')].map((n) => n.textContent), lines);
+});
+
+test('괄호가 있는 긴 학과명은 괄호 앞만 표지판에 쓰고, 전체 이름은 접근성 제목에 남긴다', () => {
+  const long = '음악학과(성악전공, 피아노전공, 작곡전공, 관현악전공, 이론전공)';
+  assert.equal(signDisplayName(long), '음악학과');
+  assert.equal(signDisplayName('Culture & Technology융합대학[통합모집]'), 'Culture & Technology융합대학');
+  assert.equal(signDisplayName('경영학과(야간)'), '경영학과(야간)', 'a short name keeps its brackets');
+  assert.equal(signDisplayName('(가칭)신설학부'), '(가칭)신설학부', 'nothing in front of the bracket: keep the whole name');
+  const { container } = render(React.createElement(CampusScene, { level: 3, sign: { name: long, score: 12345 } }));
+  assert.deepEqual([...container.querySelectorAll('[data-sign-name-line]')].map((n) => n.textContent), ['음악학과']);
+  assert.match(container.querySelector('[data-sign-text] title')?.textContent ?? '', /성악전공/);
 });

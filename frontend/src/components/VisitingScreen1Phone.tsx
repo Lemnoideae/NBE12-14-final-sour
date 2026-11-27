@@ -68,6 +68,9 @@ export function VisitCampusScreen({
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [localSound, setLocalSound] = useState(() => soundManager.enabled);
   const tapNumbers = useTapFloatingNumbers();
+  // The visited school's first-ranked department on its signboard (server detail; mock visits have none).
+  const top = visit.extras?.topDepartments.find((row) => row.rank === 1) ?? visit.extras?.topDepartments[0];
+  const visitSign = top ? { name: top.name, score: top.totalScore } : null;
   const reducedMotion = useReducedMotion();
   const { school, isMyUniversity } = visit;
   const attackMode = !!attacks?.ready && !!school && !isMyUniversity && attacks.myUniversityId !== school.id;
@@ -186,6 +189,7 @@ export function VisitCampusScreen({
     >
       <CampusStage
         level={school.campusLevel}
+        sign={visitSign}
         fill
         bubble={attackMode ? <span>{CAMPUS_ACTION_LABEL[actionKind]} 모드 · 서버 응답으로 점수 반영</span> : <LiveClicksEmpty />}
         bubbleDot="#0284c7"
