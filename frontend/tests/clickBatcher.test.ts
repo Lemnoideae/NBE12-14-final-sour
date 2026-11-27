@@ -563,3 +563,15 @@ test('크리티컬·배율: 칸 필드가 없는 응답이면 모든 탭을 기�
   await f.advance(CLICK_BATCH_WINDOW_MS);
   assert.deepEqual(f.controller.enqueueTap(10), { points: 10, isCrit: false, known: false });
 });
+
+test('크리티컬·배율: 공격처럼 비율을 넘긴 탭은 응답 뒤 다시 계산할 때도 그 비율을 쓴다', async () => {
+  let release: (data: ClickResponse) => void = () => {};
+  const f = fixture(() => new Promise<ClickResponse>((resolve) => { release = resolve; }), undefined, slotsOf);
+  const attackPoints = (scaled: number) => Math.floor((scaled * 3) / 1000);
+  f.controller.enqueueTap(10, attackPoints);
+  await f.advance(CLICK_BATCH_WINDOW_MS);
+  assert.deepEqual(f.controller.enqueueTap(10, attackPoints), { points: 3, isCrit: false, known: false });
+  release(withSlots([0]));
+  await f.advance(0);
+  assert.equal(f.controller.getSnapshot().pendingScore, 7, '0번 칸 130% × 2배 × 0.3 = 7.8');
+});

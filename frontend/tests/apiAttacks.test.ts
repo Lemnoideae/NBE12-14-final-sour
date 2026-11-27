@@ -471,11 +471,11 @@ test('공격 탭은 응답이 정한 크리티컬·배율로 클릭처럼 데미
   const f = mount({ respond: () => ok({ ...ANSWER, criticalIndex: [0], damageRateIndex: SLOT_RATES }) });
   await waitFor(() => assert.ok(attackButton()));
   fireEvent.click(attackButton());
-  assert.deepEqual(tapNumbers(), ['-10'], '첫 응답 전에는 기본 파워');
+  assert.deepEqual(tapNumbers(), ['-3'], '첫 응답 전에는 기본 파워 10 × 0.3');
   await settle();
   fireEvent.click(attackButton());
   fireEvent.click(attackButton());
-  assert.deepEqual(tapNumbers().slice(-2), ['-26!', '-7'], '0번 칸 130% × 2배, 1번 칸 70%');
+  assert.deepEqual(tapNumbers().slice(-2), ['-7!', '-2'], '0번 칸 10 × 130% × 2배 × 0.3 = 7.8, 1번 칸 10 × 70% × 0.3 = 2.1');
   assert.equal(screen.getByTestId('visit-score').textContent, '988점', '탭 데미지는 표시만 하고 학교 점수는 응답으로만 바꾼다');
   assert.equal(f.calls.length, 1);
 });
@@ -491,12 +491,12 @@ test('지원 탭은 + 데미지를 띄우고, 공격으로 받은 칸은 지원�
   f.navigate(SCHOOL_ID.snu);
   await waitFor(() => assert.ok(assistButton()));
   fireEvent.click(assistButton());
-  assert.deepEqual(tapNumbers().slice(-1), ['+10'], '공격 응답의 0번 크리티컬을 지원에 쓰지 않는다');
+  assert.deepEqual(tapNumbers().slice(-1), ['+3'], '공격 응답의 0번 크리티컬을 지원에 쓰지 않는다');
   await waitFor(() => assert.equal(f.assistCalls.length, 1), { timeout: 2500 });
   await waitFor(() => assert.equal(attacks.pendingClicks, 0), { timeout: 2500 });
   fireEvent.click(assistButton());
   fireEvent.click(assistButton());
-  assert.deepEqual(tapNumbers().slice(-2), ['+13', '+14!'], '지원 응답이 정한 칸');
+  assert.deepEqual(tapNumbers().slice(-2), ['+3', '+4!'], '지원 응답이 정한 칸: 10 × 130% × 0.3 = 3.9, 10 × 70% × 2배 × 0.3 = 4.2');
 });
 
 test('공격·지원 탭은 클릭처럼 학교 건물만 흔들고, 거절된 탭은 흔들지 않는다', async () => {
@@ -525,4 +525,14 @@ test('공격·지원 탭은 클릭처럼 학교 건물만 흔들고, 거절된 �
     fireEvent.click(attackButton());
     assert.equal(animated.length, before, '내 학교 큐가 바빠 거절된 탭은 흔들지 않는다');
   } finally { delete proto.animate; }
+});
+
+test('경쟁 학교 공격은 응답의 isRival을 받은 뒤부터 0.33배로 띄운다', async () => {
+  mount({ respond: () => ok({ ...ANSWER, isRival: true, multiplier: 0.33, criticalIndex: [0, 1], damageRateIndex: [130, 130, ...Array<number>(18).fill(100)] }) });
+  await waitFor(() => assert.ok(attackButton()));
+  fireEvent.click(attackButton());
+  assert.deepEqual(tapNumbers(), ['-3'], '경쟁 학교인지 모르는 첫 탭은 0.3배');
+  await settle();
+  fireEvent.click(attackButton());
+  assert.deepEqual(tapNumbers().slice(-1), ['-8!'], '10 × 130% × 2배 × 0.33 = 8.58 (0.3배면 7)');
 });

@@ -20,12 +20,19 @@ export interface TapEstimate {
   known: boolean;
 }
 
+/**
+ * Turns `clickPower × rate(%) × crit(2|1)` (still ×100) into the points shown for one tap. The default is a campus
+ * click's base score; attacks and assists pass their own server ratio (ClickActionGuard, AttackService, AssistService).
+ */
+export type TapPoints = (scaled: number) => number;
+export const clickTapPoints: TapPoints = (scaled) => Math.floor(scaled / 100);
+
 /** Per-click display value; the server sums the batch before flooring, so the confirmed total can differ slightly. */
-export function estimateTap(power: number, slots: DamageSlots | null, index: number): TapEstimate {
-  if (!slots || index >= MAX_CLICK_BATCH_SIZE) return { points: power, isCrit: false, known: false };
+export function estimateTap(power: number, slots: DamageSlots | null, index: number, toPoints: TapPoints = clickTapPoints): TapEstimate {
+  if (!slots || index >= MAX_CLICK_BATCH_SIZE) return { points: toPoints(power * 100), isCrit: false, known: false };
   const rate = slots.damageRateIndex[index] ?? 100;
   const isCrit = slots.criticalIndex.includes(index);
-  return { points: Math.floor((power * rate * (isCrit ? 2 : 1)) / 100), isCrit, known: true };
+  return { points: toPoints(power * rate * (isCrit ? 2 : 1)), isCrit, known: true };
 }
 
 export interface ClickBatchSnapshot {
@@ -63,7 +70,7 @@ export function createClickBatcher<TResponse = ClickResponse>(options: ClickBatc
     return () => clearTimeout(timer);
   });
   // `power` is set for taps enqueued via enqueueTap so their points can be recomputed once the slots arrive.
-  const queue: Array<{ points: number; power: number | null }> = [];
+  const queue: Array<{ points: number; power: number | null; toPoints?: TapPoints }> = [];
   type HeldSlots = { value: DamageSlots; receivedAt: number };
   let batch: { request: ClickRequest; points: number[]; slots: HeldSlots | null; startedAt: number; retried: boolean } | null = null;
   // Slots for the next batch to be cut from the queue. A batch takes them; only its acceptance brings new ones.
@@ -89,9 +96,9 @@ export function createClickBatcher<TResponse = ClickResponse>(options: ClickBatc
   const publish = () => { if (!disposed) options.onChange(getSnapshot()); };
   const freshSlots = () => (slots && now() - slots.receivedAt < DAMAGE_SLOT_FRESH_MS ? slots.value : null);
   // Only the next batch has known slots, and only while no batch is ahead of it.
-  const estimateAt = (power: number, index: number) => estimateTap(power, batch ? null : freshSlots(), index);
+  const estimateAt = (power: number, index: number, toPoints?: TapPoints) => estimateTap(power, batch ? null : freshSlots(), index, toPoints);
   function reestimateQueue() {
-    queue.forEach((item, index) => { if (item.power !== null) item.points = estimateAt(item.power, index).points; });
+    queue.forEach((item, index) => { if (item.power !== null) item.points = estimateAt(item.power, index, item.toPoints).points; });
   }
   /** A batch the server rejected before reading its slots gives them back to the next batch. */
   function returnSlots(rejected: { slots: HeldSlots | null }) {
@@ -232,10 +239,10 @@ export function createClickBatcher<TResponse = ClickResponse>(options: ClickBatc
       reestimateQueue();
     },
     /** Enqueue one click of `power` and return what to show for it, using the slots the server already decided. */
-    enqueueTap(power: number): TapEstimate | null {
+    enqueueTap(power: number, toPoints?: TapPoints): TapEstimate | null {
       if (disposed || error || locked || restoring) return null;
-      const estimate = estimateAt(power, queue.length);
-      queue.push({ points: estimate.points, power });
+      const estimate = estimateAt(power, queue.length, toPoints);
+      queue.push({ points: estimate.points, power, toPoints });
       publish();
       arm();
       return estimate;

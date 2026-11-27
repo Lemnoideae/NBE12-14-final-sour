@@ -9,7 +9,7 @@ import { errorMessage, isApiError } from '../api/errors';
 import { selectByMode } from '../api/mode';
 import { universityKeys, type UniversityDetail } from '../api/universities';
 import { userKeys, useMyInfo, type MyInfo } from '../api/users';
-import { createClickBatcher, type ClickBatchSnapshot } from '../utils/clickBatcher';
+import { createClickBatcher, type ClickBatchSnapshot, type TapPoints } from '../utils/clickBatcher';
 import type { TapOutcome } from '../types';
 import type { ClickUpgradeGate } from './useCampusClicks';
 
@@ -26,7 +26,7 @@ export interface CampusAttacks {
   pendingKind: CampusActionKind | null;
   pendingClicks: number;
   blocked: boolean;
-  /** What to show for the tap (server-decided crit and damage rate, like a campus click), or null when refused. */
+  /** The tap's damage as the server applies it (crit, rate, ×0.3 or ×0.33 for a rival), or null when refused. */
   tap: (targetId: number, kind?: CampusActionKind) => TapOutcome | null;
   result: CampusActionResult | null;
   notice: string | null;
@@ -37,6 +37,9 @@ const EMPTY: ClickBatchSnapshot = { pendingClicks: 0, pendingScore: 0, sending: 
 type AttackBatcher = ReturnType<typeof createClickBatcher<CampusActionResult>>;
 const isAllyAttackRejection = (error: unknown) => isApiError(error) && error.kind === 'http'
   && error.status === 400 && error.code === 'ATTACK_ALLY_UNIVERSITY';
+/** Server ratios on the base score (×100 here): AttackService 3/10 or 33/100 for a rival, AssistService 3/10 to the ally. */
+const actionTapPoints = (kind: CampusActionKind, rival: boolean): TapPoints => (scaled) =>
+  (kind === 'attack' && rival ? Math.floor((scaled * 33) / 10000) : Math.floor((scaled * 3) / 1000));
 const isNonAllyAssistRejection = (error: unknown) => isApiError(error) && error.kind === 'http'
   && error.status === 400 && error.code === 'ASSIST_NOT_ALLY';
 
@@ -55,6 +58,8 @@ export function useApiCampusAttacks(beginAction: ClickUpgradeGate['beginUpgrade'
   const target = useRef<number | null>(null);
   const kind = useRef<CampusActionKind>('attack');
   const release = useRef<(() => void) | null>(null);
+  // Rival groups are server config (RivalChecker): learn them from attack answers, 3/10 until one arrives.
+  const rivals = useRef(new Map<number, boolean>());
   const [snapshot, setSnapshot] = useState(EMPTY);
   const [pendingTargetId, setPendingTargetId] = useState<number | null>(null);
   const [pendingKind, setPendingKind] = useState<CampusActionKind | null>(null);
@@ -110,6 +115,7 @@ export function useApiCampusAttacks(beginAction: ClickUpgradeGate['beginUpgrade'
           queryClient.cancelQueries({ queryKey: userKeys.me, exact: true }),
         ]);
         if (queue.current !== controller || client.session.getState().status !== 'signed-in') return;
+        if (response.kind === 'attack') rivals.current.set(response.targetUniversity.id, response.isRival);
         queryClient.setQueryData<UniversityDetail>(key, (current) => current
           ? { ...current, totalScore: response.targetUniversity.totalScore, rank: response.targetUniversity.rank }
           : current);
@@ -121,6 +127,8 @@ export function useApiCampusAttacks(beginAction: ClickUpgradeGate['beginUpgrade'
       },
     });
     queue.current = controller;
+    // Rivals depend on the member's own school: never carry them over to another account.
+    rivals.current.clear();
     setSnapshot(EMPTY);
     setResult(null);
     setNotice(null);
@@ -180,7 +188,7 @@ export function useApiCampusAttacks(beginAction: ClickUpgradeGate['beginUpgrade'
     setPendingTargetId(targetId);
     setPendingKind(nextKind);
     // Scores still change only on the server's answer: the queue adds no optimistic points to any total.
-    const estimate = queue.current.enqueueTap(current.clicker.clickPower);
+    const estimate = queue.current.enqueueTap(current.clicker.clickPower, actionTapPoints(nextKind, rivals.current.get(targetId) ?? false));
     if (!estimate) return null;
     setNotice(null);
     return { points: estimate.points, isCrit: estimate.isCrit };
