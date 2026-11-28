@@ -173,7 +173,8 @@ class ClickIntegrationTest {
                 .andExpect(jsonPath("$.data.university.totalScore").value(30))
                 .andExpect(jsonPath("$.data.department.id").value(departmentId))
                 .andExpect(jsonPath("$.data.department.totalScore").value(30))
-                .andExpect(jsonPath("$.data.schoolClicksLastSecond").value(0));
+                .andExpect(jsonPath("$.data.schoolClicksLastSecond").value(0))
+                .andExpect(jsonPath("$.data.schoolAttackLastSecond").value(0));
 
         assertThat(redis.opsForZSet().score(RedisKey.RANK_UNIV.of(), String.valueOf(universityId)))
                 .isEqualTo(30.0);

@@ -14,6 +14,7 @@ import org.springframework.data.redis.core.script.RedisScript;
 import java.time.Instant;
 import java.util.List;
 import java.util.stream.LongStream;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -52,10 +53,13 @@ class ApplyClickScriptTest {
 
         // 초별 클릭 키는 TTL 5초라 같은 초에 돌아간 다른 테스트의 값이 남는다. 창을 넉넉히 지운다
         long nowSec = Instant.now().getEpochSecond();
-        List<String> clickKeys = LongStream.rangeClosed(nowSec - 8, nowSec + 2)
-                .mapToObj(sec -> RedisKey.CLICKS_UNIV_SECOND.of(UNIVERSITY_ID, sec))
+        List<String> secondKeys = LongStream.rangeClosed(nowSec - 8, nowSec + 2)
+                .boxed()
+                .flatMap(sec -> Stream.of(
+                        RedisKey.CLICKS_UNIV_SECOND.of(UNIVERSITY_ID, sec),
+                        RedisKey.ATTACKS_UNIV_SECOND.of(UNIVERSITY_ID, sec)))
                 .toList();
-        redis.delete(clickKeys);
+        redis.delete(secondKeys);
     }
 
     @Test
@@ -147,6 +151,32 @@ class ApplyClickScriptTest {
         redis.opsForValue().set(previousSecondKey, "7");
         assertThat(apply(nowSec, 45, 3).get(4)).isEqualTo("7");
 
+    }
+
+    @Test
+    @DisplayName("직전 1초 학교 공격 수를 6번째로 반환하고, 값이 없으면 0을 반환한다 (클릭 수와 섞이지 않는다)")
+    void returnsPreviousSecondAttacks() {
+        long nowSec = Instant.now().getEpochSecond();
+
+        // 직전 초에 공격 기록이 없을 때
+        assertThat(apply(nowSec, 45, 3).get(5)).isEqualTo("0");
+
+        // 직전 초에 공격 9회, 클릭 7회가 기록되어 있을 때
+        redis.opsForValue().set(RedisKey.ATTACKS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec - 1), "9");
+        redis.opsForValue().set(RedisKey.CLICKS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec - 1), "7");
+        List<String> result = apply(nowSec, 45, 3);
+
+        assertThat(result.subList(4, 6)).containsExactly("7", "9");
+    }
+
+    @Test
+    @DisplayName("클릭은 공격 수를 올리지 않는다")
+    void clickDoesNotCountAsAttack() {
+        long nowSec = Instant.now().getEpochSecond();
+
+        apply(nowSec, 45, 3);
+
+        assertThat(redis.hasKey(RedisKey.ATTACKS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec))).isFalse();
     }
 
     @SuppressWarnings("unchecked")

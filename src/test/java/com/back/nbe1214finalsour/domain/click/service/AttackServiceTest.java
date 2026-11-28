@@ -54,8 +54,8 @@ class AttackServiceTest {
 
     private static final Clicker CLICKER_LV3 = new Clicker(3L, 30, 2400L);
 
-    /** apply-attack.lua 반환: damage(실제 깎인 양), univTotal, univRank, myAttackScore */
-    private static final List<String> SCRIPT_RESULT = List.of("7", "93", "2", "150", "0", "0");
+    /** apply-attack.lua 반환: damage(실제 깎인 양), univTotal, univRank, myAttackScore, 직전 1초 학교 공격 수, 직전 1초 학교 클릭 수 */
+    private static final List<String> SCRIPT_RESULT = List.of("7", "93", "2", "150", "5", "8");
 
     @Mock
     private StringRedisTemplate stringRedisTemplate;
@@ -272,8 +272,28 @@ class AttackServiceTest {
         assertThat(keys.get(4)).containsPattern("attacks:univ:12:\\d+");
         assertThat(keys.get(5)).containsPattern("attacks:univ:12:\\d+");
         assertThat(keys.get(6)).containsPattern("clicks:univ:12:\\d+");
-        // ARGV: targetUniversityId, requestedDamage, userId
+        // ARGV: targetUniversityId, requestedDamage, userId, clickCount
         assertThat(argsCaptor.getAllValues()).containsExactly("9", "36", "1", "4");
+    }
+
+    @Test
+    @DisplayName("공격 수 키는 이번 초에 올리고, 공격·클릭 수는 같은 직전 1초에서 읽는다 (모두 내 학교 기준)")
+    void attack_secondKeysUseCurrentAndPreviousSecondOfMyUniversity() {
+        givenHappyPathBeforeScript(CLICKER_LV3, false);
+
+        attackService.attack(USER_ID, UNIVERSITY_ID, request(TARGET_UNIVERSITY_ID, 4));
+
+        ArgumentCaptor<List<String>> keysCaptor = ArgumentCaptor.captor();
+        verify(stringRedisTemplate).execute(any(), keysCaptor.capture(), any(), any(), any(), any());
+        List<String> keys = keysCaptor.getValue();
+
+        assertThat(keys).hasSize(7);
+        // KEYS[5] 이번 초 공격, KEYS[6] 직전 초 공격, KEYS[7] 직전 초 클릭 (현재 시각이라 값은 고정할 수 없다)
+        assertThat(keys.get(4)).matches("attacks:univ:12:\\d+");
+        assertThat(keys.get(5)).matches("attacks:univ:12:\\d+");
+        assertThat(keys.get(6)).matches("clicks:univ:12:\\d+");
+        assertThat(epochSecond(keys.get(4)) - epochSecond(keys.get(5))).isEqualTo(1L);
+        assertThat(epochSecond(keys.get(6))).isEqualTo(epochSecond(keys.get(5)));
     }
 
     @Test
@@ -292,6 +312,11 @@ class AttackServiceTest {
                 .extracting("targetUniversity.id", "targetUniversity.name",
                         "targetUniversity.totalScore", "targetUniversity.rank")
                 .containsExactly(TARGET_UNIVERSITY_ID, TARGET_NAME, 93L, 2L);
+
+        // 공격 파티클 연출용: 스크립트의 5번째(공격)·6번째(클릭) 값을 그대로 담는다
+        assertThat(response)
+                .extracting("schoolAttackLastSecond", "schoolClicksLastSecond")
+                .containsExactly(5L, 8L);
     }
 
     @Test
@@ -304,5 +329,9 @@ class AttackServiceTest {
         assertThat(response)
                 .extracting("isRival", "multiplier")
                 .containsExactly(true, 1.1);
+    }
+
+    private static long epochSecond(String secondKey) {
+        return Long.parseLong(secondKey.substring(secondKey.lastIndexOf(':') + 1));
     }
 }
