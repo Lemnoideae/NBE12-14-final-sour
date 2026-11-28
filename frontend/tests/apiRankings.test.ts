@@ -27,7 +27,7 @@ const { ApiProvider } = await import('../src/api/ApiProvider');
 const { createApiClient } = await import('../src/api/client');
 const { createQueryClient } = await import('../src/api/queryClient');
 const { userKeys } = await import('../src/api/users');
-const { RANKING_PAGE_SIZE, formatRankChange } = await import('../src/api/rankings');
+const { RANKING_PAGE_SIZE, formatRankChange, getRankingPage } = await import('../src/api/rankings');
 const { useApiMySchoolRank } = await import('../src/hooks/useMySchoolRank');
 const { MockGameProvider } = await import('../src/hooks/useMockGame');
 const { useApiRankingBoard, toApiRows, toApiMine } = await import('../src/hooks/useRankingBoard');
@@ -135,6 +135,31 @@ function mountSchoolMenu({ own, target, signedIn = true, enabled = true, isMine 
   }) }));
   return { reads, writes, visits };
 }
+
+test('학교 순위 점수가 누락되거나 숫자가 아니면 0점으로 바꾸지 않고 응답 오류로 처리한다', async () => {
+  let response: unknown = SCHOOL_PAGES[0];
+  const client = createApiClient({ fetch: (async () => ok(response)) as typeof fetch });
+  for (const value of [undefined, null, '0', {}]) {
+    response = { ...SCHOOL_PAGES[0], items: [{ ...SCHOOL_PAGES[0].items[0], totalScore: value }] };
+    await assert.rejects(getRankingPage(client, 'school', { page: 0 }), { code: 'CLIENT_INVALID_RESPONSE' });
+    response = { ...SCHOOL_PAGES[0], myUniversity: { ...SCHOOL_PAGES[0].myUniversity, totalScore: value } };
+    await assert.rejects(getRankingPage(client, 'school', { page: 0 }), { code: 'CLIENT_INVALID_RESPONSE' });
+  }
+  response = { ...SCHOOL_PAGES[0], items: [{ ...SCHOOL_PAGES[0].items[0], totalScore: 0 }], myUniversity: null };
+  assert.equal((await getRankingPage(client, 'school', { page: 0 })).items[0].totalScore, 0);
+});
+
+test('점수 계약이 깨진 학교 순위는 오류와 재시도를 제공하고 정상 응답을 복구한다', async () => {
+  let invalid = true;
+  mount('school', { respond: url => url.pathname.endsWith('/rankings/universities')
+    ? ok(invalid ? { ...SCHOOL_PAGES[0], items: [{ ...SCHOOL_PAGES[0].items[0], totalScore: null }] } : SCHOOL_PAGES[0]) : undefined });
+  await screen.findByText(/서버 응답을 읽지 못했습니다/, {}, { timeout: 8000 });
+  assert.equal(board.status, 'failed');
+  invalid = false;
+  fireEvent.click(screen.getByRole('button', { name: /다시/ }));
+  await screen.findByText(/서버1등대/);
+  assert.equal(board.status, 'ready');
+});
 
 const JOINABLE = { id: 20, name: '테스트 연합', status: 'ACTIVE', joinable: true };
 
