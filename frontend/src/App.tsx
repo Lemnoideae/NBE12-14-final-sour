@@ -12,6 +12,7 @@ import { GameWorkspace, WorkspaceShortcut } from './components/GameWorkspace';
 import { GameSchoolPanel, LazyApiChat, type SchoolPanelTab } from './components/GameSchoolPanel';
 import { GameCompetitionPanel, type CompetitionTab } from './components/GameCompetitionPanel';
 import { GameAllianceFlow, type AllianceScreen } from './components/GameAllianceFlow';
+import type { AllianceEntry } from './components/ApiAllianceScreenPhone';
 import { GameProfileBar } from './components/GameProfileBar';
 import { AllianceNavProvider, BottomNav, NavTab, type AllianceNavValue } from './components/BottomNav';
 import { RankingsView } from './components/RankingsView';
@@ -80,7 +81,7 @@ type OtherView = AllianceScreen | 'ranking_screens' | 'our_guestbook_screens' | 
   | 'support_guest' | 'my_info' | 'purchase_history' | 'member_support' | 'admin';
 type GameView = ({ mode: 'visiting'; schoolId: SchoolId }
   | { mode: 'shop'; schoolId: SchoolId | null } // Retain the campus under the shop, irrespective of viewport.
-  | { mode: OtherView; schoolId: null }) & { focusCenter?: boolean };
+  | { mode: OtherView; schoolId: null }) & { focusCenter?: boolean; allianceEntry?: AllianceEntry };
 
 const useActivitySource = selectByMode<(myUniversityId: number | null) => UniversityActivitySource | null>({
   api: useApiUniversityActivitySource,
@@ -97,7 +98,8 @@ function AppContent() {
   const [isOurGuestbookSheetOpen, setIsOurGuestbookSheetOpen] = useState<boolean>(false);
   const [isStatsSheetOpen, setIsStatsSheetOpen] = useState<boolean>(false);
   const [schoolPanelTab, setSchoolPanelTab] = useState<SchoolPanelTab>('detail');
-  const [competitionTab, setCompetitionTab] = useState<CompetitionTab>('map');
+  const [competition, setCompetition] = useState<{ tab: CompetitionTab; allianceEntry?: AllianceEntry }>({ tab: 'map' });
+  const setCompetitionTab = useCallback((tab: CompetitionTab) => setCompetition({ tab }), []);
   const [purchaseConfirming, setPurchaseConfirming] = useState(false);
   const [isMockMenuOpen, setIsMockMenuOpen] = useState<boolean>(false);
   const [mapContext, setMapContext] = useState<MapContext>(INITIAL_MAP_CONTEXT);
@@ -162,6 +164,13 @@ function AppContent() {
     setIsVisitGuestbookOpen(false);
     setActiveTab('campus');
     setView({ mode: 'gameplay', schoolId: null, focusCenter: true });
+  };
+  const openAllianceFromChat = (allianceEntry: AllianceEntry) => {
+    if (wideCampus) setCompetition({ tab: 'alliance', allianceEntry });
+    else {
+      setIsChatSheetOpen(false);
+      setView({ mode: 'current_alliance', schoolId: null, allianceEntry });
+    }
   };
   const goToMap = () => {
     if (wideCampus) { setCompetitionTab('map'); return; }
@@ -285,7 +294,7 @@ function AppContent() {
       if (wideCampus) setCompetitionTab('alliance');
       else setViewMode('current_alliance');
     }, hasAlert: hasAllianceAlert }),
-    [wideCampus, hasAllianceAlert, setViewMode],
+    [wideCampus, hasAllianceAlert, setViewMode, setCompetitionTab],
   );
 
   const hasAffordableShopItem = (itemShop
@@ -625,8 +634,9 @@ function AppContent() {
         <div className="contents" data-touch-area={SERVICE_VIEW_MODES.has(viewMode) ? '44' : undefined}>
         <GameWorkspace wide={wideCampus}
           left={<GameSchoolPanel tab={schoolPanelTab} onTabChange={setSchoolPanelTab} mySchool={mySchool} ranking={schoolRanking}
-            visit={visitSchoolId === null ? null : visit} onGoToMap={goToMap} onGoToShop={openShop} />}
-          right={<GameCompetitionPanel tab={competitionTab} onTabChange={setCompetitionTab}
+            visit={visitSchoolId === null ? null : visit} onGoToMap={goToMap} onGoToShop={openShop} onOpenAlliance={openAllianceFromChat} />}
+          right={<GameCompetitionPanel tab={competition.tab} onTabChange={setCompetitionTab}
+            allianceNavigation={competition.allianceEntry && { entry: competition.allianceEntry, onArrive: () => setCompetitionTab('alliance') }}
             mapContext={mapContext} onMapContextChange={setMapContext} schoolScore={schoolScore} visitBlocked={visitBlocked}
             onVisit={openSchool} onGoToLogin={() => setViewMode('login')} />}
         >
@@ -786,6 +796,7 @@ function AppContent() {
         ) : viewMode === 'alliance_apply' || viewMode === 'current_alliance' || viewMode === 'battle_apply' || viewMode === 'battle_status' ? (
           <div className={viewWrap}>
             <GameAllianceFlow screen={viewMode} onScreenChange={setViewMode} onNavigateTab={navigateTab}
+              navigation={view.allianceEntry && { entry: view.allianceEntry, onArrive: () => setViewMode(viewMode) }}
               onBack={() => setViewMode('gameplay')} onGoToLogin={() => setViewMode('login')} />
           </div>
         ) : viewMode === 'support_guest' ? (
@@ -883,6 +894,7 @@ function AppContent() {
                     }}>
                       {API_MODE === 'api' ? <React.Suspense fallback={<p role="status" className="p-3 font-pixel text-sm">채팅 화면을 여는 중이에요.</p>}>
                         <LazyApiChat
+                          onOpenAlliance={openAllianceFromChat}
                           onClose={() => { setIsChatSheetOpen(false); soundManager.playTabSound(); }}
                           onGoToLogin={() => { setIsChatSheetOpen(false); setViewMode('login'); }} />
                       </React.Suspense> : <ChatBottomSheet
