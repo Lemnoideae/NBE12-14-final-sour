@@ -10,6 +10,7 @@ import { selectByMode } from '../api/mode';
 import { universityKeys, type UniversityDetail } from '../api/universities';
 import { userKeys, useMyInfo, type MyInfo } from '../api/users';
 import { createClickBatcher, type ClickBatchSnapshot, type TapPoints } from '../utils/clickBatcher';
+import { activityCount, createFeed, createOtherClicksEstimator, type Feed, type TargetActivity } from '../utils/otherClicksFeed';
 import type { TapOutcome } from '../types';
 import type { ClickUpgradeGate } from './useCampusClicks';
 
@@ -32,6 +33,8 @@ export interface CampusAttacks {
   notice: string | null;
   retryLimited: (() => void) | null;
   botCheck: { open: boolean; onOpen: () => void; onClose: () => void; onVerified: () => void } | null;
+  /** Each accepted answer's previous-second activity at its target school, my own attacks and assists taken out. */
+  activityFeed: Feed<TargetActivity>;
 }
 const EMPTY: ClickBatchSnapshot = { pendingClicks: 0, pendingScore: 0, sending: false, error: null, recoverable: false, restoring: false, locked: false };
 type AttackBatcher = ReturnType<typeof createClickBatcher<CampusActionResult>>;
@@ -67,6 +70,9 @@ export function useApiCampusAttacks(beginAction: ClickUpgradeGate['beginUpgrade'
   const [notice, setNotice] = useState<string | null>(null);
   const [botOpen, setBotOpen] = useState(false);
   const [generation, setGeneration] = useState(0);
+  const [activityFeed] = useState(() => createFeed<TargetActivity>());
+  // My own batches to the current target, per kind: the answers count them among that school's attacks or assists.
+  const ownActions = useRef<{ universityId: number; attack: ReturnType<typeof createOtherClicksEstimator>; assist: ReturnType<typeof createOtherClicksEstimator> } | null>(null);
 
   useEffect(() => {
     if (userId === undefined) return;
@@ -107,7 +113,7 @@ export function useApiCampusAttacks(beginAction: ClickUpgradeGate['beginUpgrade'
         setSnapshot(next);
         if (next.pendingClicks === 0) unlock();
       },
-      async onAccepted(response) {
+      async onAccepted(response, _pendingScore, { request, sentAt }) {
         // Polling started before this attack must not overwrite the accepted score with an older response.
         const key = universityKeys.detail(response.targetUniversity.id, userId);
         await Promise.all([
@@ -124,11 +130,30 @@ export function useApiCampusAttacks(beginAction: ClickUpgradeGate['beginUpgrade'
             : { ...current, totalAttackScore: response.myAttackScore });
         setResult(response);
         setNotice(null);
+        const universityId = response.targetUniversity.id;
+        if (ownActions.current?.universityId !== universityId) {
+          ownActions.current = { universityId, attack: createOtherClicksEstimator(), assist: createOtherClicksEstimator() };
+        }
+        const own = ownActions.current;
+        // Only this batch's kind holds my own taps; its students' clicks and the other kind are all someone else's.
+        activityFeed.publish({
+          universityId,
+          activity: {
+            clicks: activityCount(response.schoolClicksLastSecond),
+            attacks: response.kind === 'attack'
+              ? own.attack.accept(activityCount(response.schoolAttacksLastSecond), request.clickCount, sentAt)
+              : activityCount(response.schoolAttacksLastSecond),
+            assists: response.kind === 'assist'
+              ? own.assist.accept(activityCount(response.schoolAssistsLastSecond), request.clickCount, sentAt)
+              : activityCount(response.schoolAssistsLastSecond),
+          },
+        });
       },
     });
     queue.current = controller;
-    // Rivals depend on the member's own school: never carry them over to another account.
+    // Rivals depend on the member's own school: never carry them over to another account. Nor own batches.
     rivals.current.clear();
+    ownActions.current = null;
     setSnapshot(EMPTY);
     setResult(null);
     setNotice(null);
@@ -153,7 +178,7 @@ export function useApiCampusAttacks(beginAction: ClickUpgradeGate['beginUpgrade'
       if (queue.current === controller) queue.current = null;
       unlock();
     };
-  }, [client, queryClient, userId, generation]);
+  }, [client, queryClient, userId, generation, activityFeed]);
 
   const pending = snapshot.pendingClicks > 0;
   useEffect(() => {
@@ -216,6 +241,7 @@ export function useApiCampusAttacks(beginAction: ClickUpgradeGate['beginUpgrade'
     notice: failure ? `${notice ? `${notice} ` : ''}${failure}` : notice,
     retryLimited: signedIn && snapshot.recoverable && isClickLimitError(snapshot.error) ? retryLimited : null,
     botCheck: needsBot ? { open: botOpen, onOpen: () => setBotOpen(true), onClose: () => setBotOpen(false), onVerified: verified } : null,
+    activityFeed,
   };
 }
 

@@ -16,6 +16,13 @@ export interface AssistResponse {
   /** Next attack/assist batch: crit positions and per-click damage rates (see ClickResponse). */
   criticalIndex: number[];
   damageRateIndex: number[];
+  /**
+   * The target school in the previous second (particles only; absent on older servers): clicks by its students, and
+   * the attacks and assists it received, the requester's own included.
+   */
+  schoolClicksLastSecond?: number;
+  schoolAttacksLastSecond?: number;
+  schoolAssistsLastSecond?: number;
 }
 
 export function submitAssist(client: ApiClient, body: AssistRequest, signal?: AbortSignal): Promise<AssistResponse> {

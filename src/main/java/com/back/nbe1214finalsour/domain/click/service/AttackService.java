@@ -63,10 +63,10 @@ public class AttackService {
                 RedisKey.DIRTY_UNIV.of(),
                 RedisKey.SCORE_USER_ATTACK.of(),
                 RedisKey.DIRTY_USER.of(),
-                RedisKey.ATTACKS_UNIV_SECOND.of(universityId, nowSec),
-                RedisKey.ATTACKS_UNIV_SECOND.of(universityId, nowSec - 1),
-                RedisKey.CLICKS_UNIV_SECOND.of(universityId, nowSec - 1),
-                RedisKey.ASSISTS_UNIV_SECOND.of(universityId, nowSec - 1)
+                RedisKey.ATTACKS_UNIV_SECOND.of(targetUniversityId, nowSec),
+                RedisKey.ATTACKS_UNIV_SECOND.of(targetUniversityId, nowSec - 1),
+                RedisKey.CLICKS_UNIV_SECOND.of(targetUniversityId, nowSec - 1),
+                RedisKey.ASSISTS_UNIV_SECOND.of(targetUniversityId, nowSec - 1)
         );
 
         List<String> r = stringRedisTemplate.execute(

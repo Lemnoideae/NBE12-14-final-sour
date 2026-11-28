@@ -4,6 +4,7 @@ import { useReducedMotion } from './CampusAmbience';
 import { useCampusTimePhase } from '../hooks/useCampusTimePhase';
 import { useOtherClicks, type OtherClickScheduler } from '../hooks/useMockOtherClicks';
 import { useOtherClicksFeed } from '../hooks/otherClicksFeedContext';
+import { OtherActivityParticles, activitySummary } from './OtherActivityParticles';
 import { MOCK_REALTIME_CONFIG, type MockRealtimeConfig, type OtherClicksSource } from '../data/mockRealtime';
 import { useMockGame } from '../hooks/useMockGame';
 import { useMySchool } from '../hooks/useSchoolViews';
@@ -71,14 +72,17 @@ export const CampusView: React.FC<CampusViewProps> = ({
   const getMyClicksSinceLastTick = useCallback(() => { const count = ownClicks.current; ownClicks.current = 0; return count; }, []);
   // API mode pushes estimates from click responses; without a feed (mock mode) the mock source is polled.
   const otherClicksFeed = useOtherClicksFeed();
-  const { particles: otherParticles, otherClicks } = useOtherClicks({ getMyClicksSinceLastTick, config: realtimeConfig, source: otherClicksSource, scheduler: realtimeScheduler, feed: otherClicksFeed });
+  const { particles: otherParticles, activity: otherActivity } = useOtherClicks({ getMyClicksSinceLastTick, config: realtimeConfig, source: otherClicksSource, scheduler: realtimeScheduler, feed: otherClicksFeed });
   const ambience = useCampusTimePhase();
   const reducedMotion = useReducedMotion();
   const [floatingNumbers, setFloatingNumbers] = useState<FloatingNumber[]>([]);
   const [sparkles, setSparkles] = useState<Sparkle[]>([]);
-  const mockBubble = otherClicks === null ? '동시 접속 표시는 목업용 샘플입니다.' : `[시연] ${activeStudents}명 접속 · ${ambience.phase === 'night' ? '밤샘 ' : ''}다른 사용자 ${otherClicks}회 클릭 · 점수 미반영`;
-  // The API count is a lower bound: own clicks that may be in the server's previous-second bucket are subtracted.
-  const apiBubble = otherClicks === null ? '클릭하면 같은 학교 학생들의 직전 1초 클릭이 함께 보입니다.' : `직전 1초 다른 학생 약 ${otherClicks}회 클릭`;
+  const mockBubble = otherActivity === null ? '동시 접속 표시는 목업용 샘플입니다.'
+    : `[시연] ${activeStudents}명 접속 · ${ambience.phase === 'night' ? '밤샘 ' : ''}${activitySummary(otherActivity, (n) => `다른 사용자 ${n}회 클릭`)} · 점수 미반영`;
+  // The API click count is a lower bound: own clicks that may be in the server's previous-second bucket are subtracted.
+  // Attacks and assists my school received come from other schools, so they are shown as they are.
+  const apiBubble = otherActivity === null ? '클릭하면 같은 학교 학생들의 직전 1초 클릭이 함께 보입니다.'
+    : `직전 1초 ${activitySummary(otherActivity, (n) => `다른 학생 약 ${n}회 클릭`)}`;
   const bubbleMessage = otherClicksFeed ? apiBubble : mockBubble;
   const [showDemoHand, setShowDemoHand] = useState<boolean>(true);
   const [studentWhisper, setStudentWhisper] = useState<{ text: string; x: number; y: number } | null>({
@@ -253,13 +257,8 @@ export const CampusView: React.FC<CampusViewProps> = ({
         },
       }}
     >
-        {otherParticles.map((particle) => (
-          <div key={particle.id} data-testid="other-click-particle" aria-hidden="true"
-            className={`absolute z-10 pointer-events-none other-click-particle ${reducedMotion ? '' : 'other-click-animate'}`}
-            style={{ left: `${particle.xPct}%`, top: `${particle.yPct}%`, color: ambience.particlePalette === 'sky' ? '#7dd3fc' : '#ffe49a', animationDuration: `${(realtimeConfig ?? MOCK_REALTIME_CONFIG).particleLifetimeMs}ms` }}>
-            <span className="other-click-orb" />{particle.weight > 1 && <span className="other-click-weight">+{particle.weight}</span>}
-          </div>
-        ))}
+        <OtherActivityParticles particles={otherParticles} lifetimeMs={(realtimeConfig ?? MOCK_REALTIME_CONFIG).particleLifetimeMs}
+          palette={ambience.particlePalette} reducedMotion={reducedMotion} />
 
         {clickNotice && (
           <p

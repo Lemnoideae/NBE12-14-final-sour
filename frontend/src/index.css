@@ -275,7 +275,13 @@
 
 /* 타 사용자 목업 클릭: 점수 효과와 다른 원형 빛. */
 .other-click-particle { display: flex; align-items: center; gap: 2px; }
-.other-click-orb { display: block; width: 9px; height: 9px; border-radius: 50%; background: currentColor; border: 1px solid white; box-shadow: 0 0 7px currentColor; }
+.other-click-mark { display: block; width: 9px; height: 9px; border-radius: 50%; background: currentColor; border: 1px solid white; box-shadow: 0 0 7px currentColor; }
+/* Attack received: a red-orange diamond burst with a dark rim. */
+.other-attack-mark { display: block; width: 9px; height: 9px; transform: rotate(45deg); background: radial-gradient(circle, #fde047 0 25%, #f97316 26% 60%, #dc2626 61%); border: 1px solid #450a0a; box-shadow: 0 0 6px #f97316; }
+/* Assist received: a green cross. */
+.other-assist-mark { display: block; width: 11px; height: 11px; background:
+  linear-gradient(#16a34a, #16a34a) center / 3px 100% no-repeat,
+  linear-gradient(#16a34a, #16a34a) center / 100% 3px no-repeat; filter: drop-shadow(0 0 1px white) drop-shadow(0 0 4px #4ade80); }
 .other-click-weight { color: white; background: #26334b; font-size: 9px; line-height: 1; padding: 1px 2px; border-radius: 3px; }
 @keyframes other-click-rise {
   0% { opacity: 0; transform: translateY(4px) scale(0.7); }
@@ -283,7 +289,24 @@
   100% { opacity: 0; transform: translateY(-16px) scale(0.8); }
 }
 .other-click-animate { animation-name: other-click-rise; animation-timing-function: ease-out; animation-fill-mode: forwards; }
-@media (prefers-reduced-motion: reduce) { .other-click-animate { animation: none; } }
+/* An attack pops in large, shakes left and right, and fades where it hit. */
+@keyframes other-attack-burst {
+  0% { opacity: 0; transform: scale(1.6); }
+  15% { opacity: 1; transform: scale(1) translateX(0); }
+  30% { transform: translateX(-2px); }
+  45% { transform: translateX(2px); }
+  60% { opacity: 1; transform: translateX(-1px); }
+  100% { opacity: 0; transform: translateX(0) scale(0.8); }
+}
+.other-attack-animate { animation-name: other-attack-burst; animation-timing-function: ease-out; animation-fill-mode: forwards; }
+/* An assist rises higher and slower than a click, like a heal. */
+@keyframes other-assist-rise {
+  0% { opacity: 0; transform: translateY(6px) scale(0.6); }
+  25% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-24px) scale(0.9); }
+}
+.other-assist-animate { animation-name: other-assist-rise; animation-timing-function: ease-out; animation-fill-mode: forwards; }
+@media (prefers-reduced-motion: reduce) { .other-click-animate, .other-attack-animate, .other-assist-animate { animation: none; } }
 
 /* Animations */
 @keyframes float-number {

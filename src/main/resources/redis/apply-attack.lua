@@ -2,10 +2,10 @@
 -- KEYS[2] dirty:univ
 -- KEYS[3] score:user:attack
 -- KEYS[4] dirty:user
--- KEYS[5] attacks:univ:{u}:{nowSec}        // 이번 초 학교 공격 수
--- KEYS[6] attacks:univ:{u}:{nowSec - 1}    // 직전 초 학교 공격 수
--- KEYS[7] clicks:univ:{u}:{nowSec - 1}     // 직전 초 학교 클릭 수
--- KEYS[8] assists:univ:{u}:{nowSec - 1}     // 직전 초 학교 지원 수
+-- KEYS[5] attacks:univ:{targetUniversityId}:{nowSec}        // 이번 초 학교 공격 수
+-- KEYS[6] attacks:univ:{targetUniversityId}:{nowSec - 1}    // 직전 초 학교 공격 수
+-- KEYS[7] clicks:univ:{targetUniversityId}:{nowSec - 1}     // 직전 초 학교 클릭 수
+-- KEYS[8] assists:univ:{targetUniversityId}:{nowSec - 1}     // 직전 초 학교 지원 수
 -- ARGV[1] targetUniversityId
 -- ARGV[2] requestedDamage
 -- ARGV[3] userId

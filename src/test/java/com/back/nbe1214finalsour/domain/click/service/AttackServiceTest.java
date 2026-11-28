@@ -269,16 +269,16 @@ class AttackServiceTest {
                 "score:user:attack",     // KEYS[3]
                 "dirty:user"            // KEYS[4]
         );
-        assertThat(keys.get(4)).containsPattern("attacks:univ:12:\\d+");
-        assertThat(keys.get(5)).containsPattern("attacks:univ:12:\\d+");
-        assertThat(keys.get(6)).containsPattern("clicks:univ:12:\\d+");
+        assertThat(keys.get(4)).containsPattern("attacks:univ:9:\\d+");
+        assertThat(keys.get(5)).containsPattern("attacks:univ:9:\\d+");
+        assertThat(keys.get(6)).containsPattern("clicks:univ:9:\\d+");
         // ARGV: targetUniversityId, requestedDamage, userId, clickCount
         assertThat(argsCaptor.getAllValues()).containsExactly("9", "36", "1", "4");
     }
 
     @Test
-    @DisplayName("공격 수 키는 이번 초에 올리고, 공격·클릭 수는 같은 직전 1초에서 읽는다 (모두 내 학교 기준)")
-    void attack_secondKeysUseCurrentAndPreviousSecondOfMyUniversity() {
+    @DisplayName("공격 수 키는 이번 초에 올리고, 공격·클릭·지원 수는 같은 직전 1초에서 읽는다 (모두 대상 학교 기준)")
+    void attack_secondKeysUseCurrentAndPreviousSecondOfTargetUniversity() {
         givenHappyPathBeforeScript(CLICKER_LV3, false);
 
         attackService.attack(USER_ID, UNIVERSITY_ID, request(TARGET_UNIVERSITY_ID, 4));
@@ -289,10 +289,10 @@ class AttackServiceTest {
 
         assertThat(keys).hasSize(8);
         // KEYS[5] 이번 초 공격, KEYS[6] 직전 초 공격, KEYS[7] 직전 초 클릭 (현재 시각이라 값은 고정할 수 없다)
-        assertThat(keys.get(4)).matches("attacks:univ:12:\\d+");
-        assertThat(keys.get(5)).matches("attacks:univ:12:\\d+");
-        assertThat(keys.get(6)).matches("clicks:univ:12:\\d+");
-        assertThat(keys.get(7)).matches("assists:univ:12:\\d+");
+        assertThat(keys.get(4)).matches("attacks:univ:9:\\d+");
+        assertThat(keys.get(5)).matches("attacks:univ:9:\\d+");
+        assertThat(keys.get(6)).matches("clicks:univ:9:\\d+");
+        assertThat(keys.get(7)).matches("assists:univ:9:\\d+");
         assertThat(epochSecond(keys.get(4)) - epochSecond(keys.get(5))).isEqualTo(1L);
         assertThat(epochSecond(keys.get(6))).isEqualTo(epochSecond(keys.get(5)));
         // KEYS[8] 직전 초 지원도 같은 직전 1초

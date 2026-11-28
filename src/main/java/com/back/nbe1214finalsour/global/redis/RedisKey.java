@@ -87,9 +87,9 @@ public enum RedisKey {
     // 클릭 (Click)
     /** 클릭 직전 1초 클릭 수. of(universityId, epochSec), INCR */
     CLICKS_UNIV_SECOND("clicks:univ:%s:%s", Structure.STRING, ValueFormat.PLAIN),
-    /** 공격 직전 1초 클릭 수. of(universityId, epochSec), INCR */
+    /** 공격 직전 1초 클릭 수. of(targetUniversityId, epochSec), INCR */
     ATTACKS_UNIV_SECOND("attacks:univ:%s:%s", Structure.STRING, ValueFormat.PLAIN),
-    /** 지원 직전 1초 클릭 수. of(universityId, epochSec), INCR */
+    /** 지원 직전 1초 클릭 수. of(targetUniversityId, epochSec), INCR */
     ASSISTS_UNIV_SECOND("assists:univ:%s:%s", Structure.STRING, ValueFormat.PLAIN),
     /** 중복 제출 방지. of(userId, submissionId), SET NX + TTL */
     SUBMIT_DEDUPE("submit:%s:%s", Structure.STRING, ValueFormat.PLAIN),

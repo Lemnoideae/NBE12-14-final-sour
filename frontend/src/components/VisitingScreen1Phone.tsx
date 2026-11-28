@@ -1,5 +1,5 @@
 import type { SchoolId } from '../data/schoolIds.ts';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Trophy } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { formatContribution } from '../utils/formatContribution';
@@ -17,6 +17,13 @@ import { VisitAttackBar } from './VisitAttackBar';
 import { TapFloatingNumbers, useTapFloatingNumbers } from './TapFloatingNumbers';
 import { useReducedMotion } from './CampusAmbience';
 import { wobbleBuildings, wobbleCampusAttack } from '../utils/campusWobble';
+import { useCampusTimePhase } from '../hooks/useCampusTimePhase';
+import { useOtherClicks } from '../hooks/useMockOtherClicks';
+import { MOCK_REALTIME_CONFIG } from '../data/mockRealtime';
+import { feedForUniversity } from '../utils/otherClicksFeed';
+import { OtherActivityParticles } from './OtherActivityParticles';
+
+const noOwnClicks = () => 0;
 
 interface VisitingScreen1PhoneProps {
   /** Visited school ID from the map (M2). Mock rows, or the server's school detail in API mode (SCRUM-163). */
@@ -72,7 +79,14 @@ export function VisitCampusScreen({
   const top = visit.extras?.topDepartments.find((row) => row.rank === 1) ?? visit.extras?.topDepartments[0];
   const visitSign = top ? { name: top.name, score: top.totalScore } : null;
   const reducedMotion = useReducedMotion();
+  const ambience = useCampusTimePhase();
   const { school, isMyUniversity } = visit;
+  // Clicks by this school's students and the attacks and assists it received, from my own attack or assist answers
+  // about this school (2026-11-28). Spectating, or a mock visit, has no answers and so no particles.
+  const activityFeed = attacks?.activityFeed;
+  const visitedId = school?.id ?? null;
+  const visitFeed = useMemo(() => (activityFeed && visitedId !== null ? feedForUniversity(activityFeed, visitedId) : null), [activityFeed, visitedId]);
+  const { particles: activityParticles } = useOtherClicks({ getMyClicksSinceLastTick: noOwnClicks, feed: visitFeed, mockPolling: false });
   const attackMode = !!attacks?.ready && !!school && !isMyUniversity && attacks.myUniversityId !== school.id;
   // The server decides who is an ally; an ally is assisted, never attacked.
   const actionKind: CampusActionKind = visit.isMyAlly ? 'assist' : 'attack';
@@ -201,6 +215,8 @@ export function VisitCampusScreen({
             className={`absolute inset-0 z-10 ${actionKind === 'assist' ? 'cursor-pointer' : 'cursor-crosshair'} touch-manipulation focus-visible:outline-4 focus-visible:outline-offset-[-8px] focus-visible:outline-[#facc15] disabled:cursor-not-allowed`}
             onClick={handleActionTap} />
         )}
+        <OtherActivityParticles particles={activityParticles} lifetimeMs={MOCK_REALTIME_CONFIG.particleLifetimeMs}
+          palette={ambience.particlePalette} reducedMotion={reducedMotion} />
         {attackMode && <TapFloatingNumbers items={tapNumbers.items} />}
         {!attackMode && clickNoticeToast && (
           <div className="absolute inset-0 bg-[#261608]/50 flex items-center justify-center p-3 animate-fadeIn z-30 pointer-events-none">

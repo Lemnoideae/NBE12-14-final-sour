@@ -130,8 +130,8 @@ class AssistServiceTest {
     }
 
     @Test
-    @DisplayName("지원 수 키는 이번 초에 올리고, 지원·클릭·공격 수는 같은 직전 1초에서 읽는다 (모두 내 학교 기준)")
-    void secondKeysUseCurrentAndPreviousSecondOfMyUniversity() {
+    @DisplayName("지원 수 키는 이번 초에 올리고, 지원·클릭·공격 수는 같은 직전 1초에서 읽는다 (모두 대상 학교 기준)")
+    void secondKeysUseCurrentAndPreviousSecondOfTargetUniversity() {
         givenAssistAllowed();
 
         assistService.assist(USER_ID, UNIVERSITY_ID, request(ALLY_ID, 7));
@@ -144,11 +144,11 @@ class AssistServiceTest {
 
         assertThat(keys).hasSize(12);
         // KEYS[9] 이번 초 지원, KEYS[10] 직전 초 지원, KEYS[11] 직전 초 클릭, KEYS[12] 직전 초 공격 (현재 시각이라 값은 고정할 수 없다)
-        String my = String.valueOf(UNIVERSITY_ID);
-        assertThat(keys.get(8)).matches("assists:univ:" + my + ":\\d+");
-        assertThat(keys.get(9)).matches("assists:univ:" + my + ":\\d+");
-        assertThat(keys.get(10)).matches("clicks:univ:" + my + ":\\d+");
-        assertThat(keys.get(11)).matches("attacks:univ:" + my + ":\\d+");
+        String target = String.valueOf(ALLY_ID);
+        assertThat(keys.get(8)).matches("assists:univ:" + target + ":\\d+");
+        assertThat(keys.get(9)).matches("assists:univ:" + target + ":\\d+");
+        assertThat(keys.get(10)).matches("clicks:univ:" + target + ":\\d+");
+        assertThat(keys.get(11)).matches("attacks:univ:" + target + ":\\d+");
         assertThat(epochSecond(keys.get(8)) - epochSecond(keys.get(9))).isEqualTo(1L);
         assertThat(epochSecond(keys.get(10))).isEqualTo(epochSecond(keys.get(9)));
         assertThat(epochSecond(keys.get(11))).isEqualTo(epochSecond(keys.get(9)));

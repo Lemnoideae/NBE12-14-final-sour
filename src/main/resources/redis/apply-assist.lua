@@ -5,10 +5,10 @@
 -- KEYS[5] alliance:{allianceId}:score    연합 점수
 -- KEYS[6] match:{matchId}:score       대결 점수
 -- KEYS[7] dirty:alliance   KEYS[8] dirty:match
--- KEYS[9] assists:univ:{u}:{nowSec}        이번 초 학교 지원 수
--- KEYS[10] assists:univ:{u}:{nowSec - 1}   직전 초 학교 지원 수
--- KEYS[11] clicks:univ:{u}:{nowSec - 1}    직전 초 학교 클릭 수
--- KEYS[12] attacks:univ:{u}:{nowSec - 1}   직전 초 학교 공격 수
+-- KEYS[9] assists:univ:{targetUniversityId}:{nowSec}        이번 초 학교 지원 수
+-- KEYS[10] assists:univ:{targetUniversityId}:{nowSec - 1}   직전 초 학교 지원 수
+-- KEYS[11] clicks:univ:{targetUniversityId}:{nowSec - 1}    직전 초 학교 클릭 수
+-- KEYS[12] attacks:univ:{targetUniversityId}:{nowSec - 1}   직전 초 학교 공격 수
 -- ARGV[1] targetUniversityId  ARGV[2] assistScore (정수)  ARGV[3] userId  ARGV[4] contribScore (정수)
 -- ARGV[5] allianceId
 -- ARGV[6] team(A|B)
