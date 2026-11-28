@@ -58,7 +58,7 @@ export function GameSchoolPanel({ tab, onTabChange, mySchool, ranking, visit, on
     if (!visit && !own.ready) return <p className="p-2">내 소속을 확인하면 이용할 수 있어요.</p>;
     if (value === 'guestbook') return <SchoolGuestbook key={visited?.id ?? own.id} school={visited} mySchool={mySchool} onGoToMap={onGoToMap} />;
     if (visited) return <VisitSchoolInfoSheet key={visited.id} school={visited} extras={visit?.extras} onOpenGuestbook={() => openAndFocus('guestbook')} />;
-    return <CampusStatsSheet onGoToShop={onGoToShop} />;
+    return <CampusStatsSheet desktop onGoToShop={onGoToShop} />;
   }
 }
 

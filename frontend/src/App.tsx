@@ -297,10 +297,10 @@ function AppContent() {
     [wideCampus, hasAllianceAlert, setViewMode, setCompetitionTab],
   );
 
-  const hasAffordableShopItem = (itemShop
+  const hasAffordableShopItem = itemShop
     ? itemShop.items.some((item) => item.payType === 'CONTRIBUTION' && item.type === 'MULTIPLIER' && myContribution >= item.price)
-    : shopItems.some((item) => !item.previewOnly && myContribution >= item.cost))
-    || (clicker.upgradeCost !== null && myContribution >= clicker.upgradeCost);
+    : shopItems.some((item) => !item.previewOnly && myContribution >= item.cost)
+      || (clicker.upgradeCost !== null && myContribution >= clicker.upgradeCost);
 
   // The launchers and settings mount only while the tool sheet is open.
   const viewMenus = MOCK_TOOLS && isMockMenuOpen && (

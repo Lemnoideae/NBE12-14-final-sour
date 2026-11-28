@@ -60,8 +60,8 @@ export function ApiItemShop({ shop, onConfirmationChange }: { shop: ItemShopView
   }, [selectedId, shop.items]);
   return (
     <section aria-label="서버 아이템 상점" className="flex flex-col gap-3">
-      <ActiveItemEffect shop={shop} />
-      <h2 className="font-pixel text-xs font-black text-[#fef3c7]">원목 선반 진열대</h2>
+      <ActiveItemEffect shop={shop} title="활성 효과 상세" />
+      <h2 className="font-pixel text-xs font-black text-[#fef3c7]">아이템 진열대</h2>
       {shop.catalogNotice && <div className="rpg-box p-2 text-xs font-pixel text-[#8b5327]">
         <p role="status">{shop.catalogNotice}</p>
         <button type="button" onClick={shop.reloadCatalog} className="pixel-plaque plaque-parchment min-h-12 px-3 mt-2 font-bold cursor-pointer">아이템 목록 다시 조회</button>
