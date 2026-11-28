@@ -131,7 +131,8 @@ class AttackIntegrationTest {
                 .boxed()
                 .flatMap(sec -> Stream.of(
                         RedisKey.CLICKS_UNIV_SECOND.of(universityId, sec),
-                        RedisKey.ATTACKS_UNIV_SECOND.of(universityId, sec)))
+                        RedisKey.ATTACKS_UNIV_SECOND.of(universityId, sec),
+                        RedisKey.ASSISTS_UNIV_SECOND.of(universityId, sec)))
                 .toList());
 
         if (allianceId != null) {
@@ -179,12 +180,14 @@ class AttackIntegrationTest {
         for (long sec : List.of(nowSec - 1, nowSec)) {
             redis.opsForValue().set(RedisKey.ATTACKS_UNIV_SECOND.of(universityId, sec), "7");
             redis.opsForValue().set(RedisKey.CLICKS_UNIV_SECOND.of(universityId, sec), "4");
+            redis.opsForValue().set(RedisKey.ASSISTS_UNIV_SECOND.of(universityId, sec), "9");
         }
 
         attack("sub-1", targetUniversityId, 10)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.schoolAttacksLastSecond").value(7))
-                .andExpect(jsonPath("$.data.schoolClicksLastSecond").value(4));
+                .andExpect(jsonPath("$.data.schoolClicksLastSecond").value(4))
+                .andExpect(jsonPath("$.data.schoolAssistsLastSecond").value(9));
     }
 
     @Test
@@ -205,16 +208,18 @@ class AttackIntegrationTest {
     }
 
     @Test
-    @DisplayName("클릭 응답에도 내 학교의 직전 1초 공격 수를 담는다")
+    @DisplayName("클릭 응답에도 내 학교의 직전 1초 공격 수와 지원 수를 담는다")
     void clickResponseCarriesPreviousSecondSchoolAttacks() throws Exception {
         long nowSec = Instant.now().getEpochSecond();
         for (long sec : List.of(nowSec - 1, nowSec)) {
             redis.opsForValue().set(RedisKey.ATTACKS_UNIV_SECOND.of(universityId, sec), "7");
+            redis.opsForValue().set(RedisKey.ASSISTS_UNIV_SECOND.of(universityId, sec), "9");
         }
 
         click("sub-1", 3)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.schoolAttacksLastSecond").value(7));
+                .andExpect(jsonPath("$.data.schoolAttacksLastSecond").value(7))
+                .andExpect(jsonPath("$.data.schoolAssistsLastSecond").value(9));
     }
 
     @Test

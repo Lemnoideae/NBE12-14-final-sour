@@ -65,9 +65,9 @@ class ClickServiceTest {
     private static final Double LNG = 126.937012;
 
     /**
-     * apply-click.lua 반환: univTotal, deptTotal, myContrib, univRank, 직전 1초 학교 클릭 수, 직전 1초 학교 공격 수
+     * apply-click.lua 반환: univTotal, deptTotal, myContrib, univRank, 직전 1초 학교 클릭·공격·지원 수
      */
-    private static final List<String> SCRIPT_RESULT = List.of("100", "50", "30", "4", "7", "2", "0");
+    private static final List<String> SCRIPT_RESULT = List.of("100", "50", "30", "4", "7", "2", "6");
 
     @Mock
     private StringRedisTemplate stringRedisTemplate;
@@ -617,6 +617,9 @@ class ClickServiceTest {
         // KEYS[13]은 공격 수를 읽는 직전 1초 (클릭 수 KEYS[8]과 같은 초)
         assertThat(keys.get(12)).matches("attacks:univ:12:\\d+");
         assertThat(keys.get(12).split(":")[3]).isEqualTo(keys.get(7).split(":")[3]);
+        // KEYS[14]는 지원 수를 읽는 직전 1초 (클릭 수 KEYS[8]과 같은 초)
+        assertThat(keys.get(13)).matches("assists:univ:12:\\d+");
+        assertThat(keys.get(13).split(":")[3]).isEqualTo(keys.get(7).split(":")[3]);
         assertThat(Long.parseLong(keys.get(6).split(":")[3]) - Long.parseLong(keys.get(7).split(":")[3]))
                 .isEqualTo(1L);
         // KEYS[9], KEYS[10]: 연합·대결이 없으면 0번 자리 키를 넘기고 Lua가 ARGV로 건너뛴다
@@ -638,8 +641,8 @@ class ClickServiceTest {
 
         assertThat(response)
                 .extracting("acceptedClicks", "earnedScore", "multiplier",
-                        "myContribScore", "schoolClicksLastSecond", "schoolAttacksLastSecond")
-                .containsExactly(3L, 135L, 1.5, 30L, 7L, 2L);
+                        "myContribScore", "schoolClicksLastSecond", "schoolAttacksLastSecond", "schoolAssistsLastSecond")
+                .containsExactly(3L, 135L, 1.5, 30L, 7L, 2L, 6L);
 
         assertThat(response)
                 .extracting("university.id", "university.totalScore", "university.rank", "university.logoUrl")

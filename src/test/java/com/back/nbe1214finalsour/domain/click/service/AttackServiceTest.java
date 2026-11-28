@@ -54,8 +54,8 @@ class AttackServiceTest {
 
     private static final Clicker CLICKER_LV3 = new Clicker(3L, 30, 2400L);
 
-    /** apply-attack.lua 반환: damage(실제 깎인 양), univTotal, univRank, myAttackScore, 직전 1초 학교 공격 수, 직전 1초 학교 클릭 수 */
-    private static final List<String> SCRIPT_RESULT = List.of("7", "93", "2", "150", "5", "8", "0");
+    /** apply-attack.lua 반환: damage(실제 깎인 양), univTotal, univRank, myAttackScore, 직전 1초 학교 공격·클릭·지원 수 */
+    private static final List<String> SCRIPT_RESULT = List.of("7", "93", "2", "150", "5", "8", "3");
 
     @Mock
     private StringRedisTemplate stringRedisTemplate;
@@ -139,7 +139,7 @@ class AttackServiceTest {
         verify(universityCache, never()).getName(anyLong());
         verifyNoInteractions(allianceAllyChecker);
         verify(userStatusCache, never()).find(anyLong());
-        verify(stringRedisTemplate, never()).execute(any(), anyList(), any(), any(), any());
+        verify(stringRedisTemplate, never()).execute(any(), anyList(), any(), any(), any(), any());
     }
 
     @Test
@@ -158,7 +158,7 @@ class AttackServiceTest {
         verify(userStatusCache, never()).find(anyLong());
         verify(valueOperations, never()).setIfAbsent(anyString(), anyString(), any(Duration.class));
         verify(actionRateLimiter, never()).check(anyLong());
-        verify(stringRedisTemplate, never()).execute(any(), anyList(), any(), any(), any());
+        verify(stringRedisTemplate, never()).execute(any(), anyList(), any(), any(), any(), any());
     }
 
     @Test
@@ -192,7 +192,7 @@ class AttackServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.CLICK_DUPLICATE_SUBMISSION);
 
-        verify(stringRedisTemplate, never()).execute(any(), anyList(), any(), any(), any());
+        verify(stringRedisTemplate, never()).execute(any(), anyList(), any(), any(), any(), any());
     }
 
     @Test
@@ -210,7 +210,7 @@ class AttackServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.CLICK_TOO_FREQUENT);
 
-        verify(stringRedisTemplate, never()).execute(any(), anyList(), any(), any(), any());
+        verify(stringRedisTemplate, never()).execute(any(), anyList(), any(), any(), any(), any());
     }
 
     // --- 2단계: 피해량 계산 ---
@@ -295,6 +295,8 @@ class AttackServiceTest {
         assertThat(keys.get(7)).matches("assists:univ:12:\\d+");
         assertThat(epochSecond(keys.get(4)) - epochSecond(keys.get(5))).isEqualTo(1L);
         assertThat(epochSecond(keys.get(6))).isEqualTo(epochSecond(keys.get(5)));
+        // KEYS[8] 직전 초 지원도 같은 직전 1초
+        assertThat(epochSecond(keys.get(7))).isEqualTo(epochSecond(keys.get(5)));
     }
 
     @Test
@@ -314,10 +316,10 @@ class AttackServiceTest {
                         "targetUniversity.totalScore", "targetUniversity.rank")
                 .containsExactly(TARGET_UNIVERSITY_ID, TARGET_NAME, 93L, 2L);
 
-        // 공격 파티클 연출용: 스크립트의 5번째(공격)·6번째(클릭) 값을 그대로 담는다
+        // 파티클 연출용: 스크립트의 5번째(공격)·6번째(클릭)·7번째(지원) 값을 그대로 담는다
         assertThat(response)
-                .extracting("schoolAttacksLastSecond", "schoolClicksLastSecond")
-                .containsExactly(5L, 8L);
+                .extracting("schoolAttacksLastSecond", "schoolClicksLastSecond", "schoolAssistsLastSecond")
+                .containsExactly(5L, 8L, 3L);
     }
 
     @Test

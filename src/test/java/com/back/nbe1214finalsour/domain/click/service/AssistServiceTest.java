@@ -96,7 +96,7 @@ class AssistServiceTest {
         assertThatThrownBy(() -> assistService.assist(USER_ID, UNIVERSITY_ID, request(ALLY_ID, 3)))
                 .extracting("errorCode").isEqualTo(ErrorCode.ASSIST_NOT_ALLY);
         verify(clickActionGuard, never()).verifyAndGetBaseScore(anyLong(), anyString(), anyInt(), any());
-        verify(stringRedisTemplate, never()).execute(any(), anyList(), any(), any(), any(), any(), any(), any());
+        verifyNoInteractions(stringRedisTemplate);
     }
 
     @Test
@@ -108,7 +108,7 @@ class AssistServiceTest {
         given(clickActionGuard.verifyAndGetBaseScore(USER_ID, "sub-1", 7, ClickActionGuard.ClickType.ASSIST)).willReturn(new ClickActionGuard.Score(21L, null, null));
         given(redisHandler.getHash(RedisKey.USER_EFFECT.of(USER_ID), "multiplier", Double.class)).willReturn(Optional.of(1.5));
         given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any(), any(), any(), any(), any()))
-                .willReturn(List.of("5402322", "41", "12928", "7", "0", "0"));
+                .willReturn(List.of("5402322", "41", "12928", "9", "4", "7"));
 
         AssistResponse response = assistService.assist(USER_ID, UNIVERSITY_ID, request(ALLY_ID, 7));
 
@@ -122,7 +122,42 @@ class AssistServiceTest {
         // floor(21 * 0.3) = 6, floor(21 * 1.5) = 31
         assertThat(args.getAllValues()).containsExactly("15", "6", "1", "31", "0", "", "0", "7");
         assertThat(response).isEqualTo(new AssistResponse(7L, 6L,
-                new AssistResponse.AssistUniversityResponse(ALLY_ID, "서울시립대학교", 5402322L, 41L), 12928L, null, null, 7L, 0L, 0L));
+                new AssistResponse.AssistUniversityResponse(ALLY_ID, "서울시립대학교", 5402322L, 41L), 12928L, null, null, 9L, 4L, 7L));
+        // 지원 파티클 연출용: 직전 1초 지원(4번째)·클릭(5번째)·공격(6번째) 수를 순서대로 담는다
+        assertThat(response)
+                .extracting("schoolAssistsLastSecond", "schoolClicksLastSecond", "schoolAttacksLastSecond")
+                .containsExactly(9L, 4L, 7L);
+    }
+
+    @Test
+    @DisplayName("지원 수 키는 이번 초에 올리고, 지원·클릭·공격 수는 같은 직전 1초에서 읽는다 (모두 내 학교 기준)")
+    void secondKeysUseCurrentAndPreviousSecondOfMyUniversity() {
+        givenAssistAllowed();
+
+        assistService.assist(USER_ID, UNIVERSITY_ID, request(ALLY_ID, 7));
+
+        ArgumentCaptor<List<String>> keysCaptor = ArgumentCaptor.captor();
+        ArgumentCaptor<Object> args = ArgumentCaptor.captor();
+        verify(stringRedisTemplate).execute(any(), keysCaptor.capture(), args.capture(), args.capture(), args.capture(),
+                args.capture(), args.capture(), args.capture(), args.capture(), args.capture());
+        List<String> keys = keysCaptor.getValue();
+
+        assertThat(keys).hasSize(12);
+        // KEYS[9] 이번 초 지원, KEYS[10] 직전 초 지원, KEYS[11] 직전 초 클릭, KEYS[12] 직전 초 공격 (현재 시각이라 값은 고정할 수 없다)
+        String my = String.valueOf(UNIVERSITY_ID);
+        assertThat(keys.get(8)).matches("assists:univ:" + my + ":\\d+");
+        assertThat(keys.get(9)).matches("assists:univ:" + my + ":\\d+");
+        assertThat(keys.get(10)).matches("clicks:univ:" + my + ":\\d+");
+        assertThat(keys.get(11)).matches("attacks:univ:" + my + ":\\d+");
+        assertThat(epochSecond(keys.get(8)) - epochSecond(keys.get(9))).isEqualTo(1L);
+        assertThat(epochSecond(keys.get(10))).isEqualTo(epochSecond(keys.get(9)));
+        assertThat(epochSecond(keys.get(11))).isEqualTo(epochSecond(keys.get(9)));
+        // ARGV[8]: 지원 수로 셀 clickCount
+        assertThat(args.getAllValues().get(7)).isEqualTo("7");
+    }
+
+    private static long epochSecond(String secondKey) {
+        return Long.parseLong(secondKey.substring(secondKey.lastIndexOf(':') + 1));
     }
 
     // --- 연합·대결 점수 ---

@@ -53,7 +53,8 @@ class ApplyAttackScriptTest {
                 .boxed()
                 .flatMap(sec -> Stream.of(
                         RedisKey.ATTACKS_UNIV_SECOND.of(UNIVERSITY_ID, sec),
-                        RedisKey.CLICKS_UNIV_SECOND.of(UNIVERSITY_ID, sec)))
+                        RedisKey.CLICKS_UNIV_SECOND.of(UNIVERSITY_ID, sec),
+                        RedisKey.ASSISTS_UNIV_SECOND.of(UNIVERSITY_ID, sec)))
                 .toList());
     }
 
@@ -123,6 +124,31 @@ class ApplyAttackScriptTest {
         assertThat(result.get(4)).isEqualTo("0");
         // 다음 초에 공격하면 이번 초 공격 수가 직전 1초로 보인다
         assertThat(apply(nowSec + 1, 30, 1).get(4)).isEqualTo("20");
+    }
+
+    @Test
+    @DisplayName("직전 1초 학교 지원 수를 7번째로 반환하고, 값이 없으면 0을 반환한다 (공격·클릭 수와 섞이지 않는다)")
+    void returnsPreviousSecondAssists() {
+        long nowSec = Instant.now().getEpochSecond();
+        givenTargetScore(1_000);
+
+        assertThat(apply(nowSec, 30, 10).get(6)).isEqualTo("0");
+
+        redis.opsForValue().set(RedisKey.ATTACKS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec - 1), "7");
+        redis.opsForValue().set(RedisKey.CLICKS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec - 1), "4");
+        redis.opsForValue().set(RedisKey.ASSISTS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec - 1), "9");
+        assertThat(apply(nowSec, 30, 10).subList(4, 7)).containsExactly("7", "4", "9");
+    }
+
+    @Test
+    @DisplayName("공격은 지원 수를 올리지 않는다")
+    void attackDoesNotCountAsAssist() {
+        long nowSec = Instant.now().getEpochSecond();
+        givenTargetScore(1_000);
+
+        apply(nowSec, 30, 10);
+
+        assertThat(redis.hasKey(RedisKey.ASSISTS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec))).isFalse();
     }
 
     private void givenTargetScore(double score) {

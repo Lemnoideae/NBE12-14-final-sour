@@ -57,7 +57,8 @@ class ApplyClickScriptTest {
                 .boxed()
                 .flatMap(sec -> Stream.of(
                         RedisKey.CLICKS_UNIV_SECOND.of(UNIVERSITY_ID, sec),
-                        RedisKey.ATTACKS_UNIV_SECOND.of(UNIVERSITY_ID, sec)))
+                        RedisKey.ATTACKS_UNIV_SECOND.of(UNIVERSITY_ID, sec),
+                        RedisKey.ASSISTS_UNIV_SECOND.of(UNIVERSITY_ID, sec)))
                 .toList();
         redis.delete(secondKeys);
     }
@@ -167,6 +168,29 @@ class ApplyClickScriptTest {
         List<String> result = apply(nowSec, 45, 3);
 
         assertThat(result.subList(4, 6)).containsExactly("7", "9");
+    }
+
+    @Test
+    @DisplayName("직전 1초 학교 지원 수를 7번째로 반환하고, 값이 없으면 0을 반환한다 (클릭·공격 수와 섞이지 않는다)")
+    void returnsPreviousSecondAssists() {
+        long nowSec = Instant.now().getEpochSecond();
+
+        assertThat(apply(nowSec, 45, 3).get(6)).isEqualTo("0");
+
+        redis.opsForValue().set(RedisKey.CLICKS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec - 1), "7");
+        redis.opsForValue().set(RedisKey.ATTACKS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec - 1), "9");
+        redis.opsForValue().set(RedisKey.ASSISTS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec - 1), "5");
+        assertThat(apply(nowSec, 45, 3).subList(4, 7)).containsExactly("7", "9", "5");
+    }
+
+    @Test
+    @DisplayName("클릭은 지원 수를 올리지 않는다")
+    void clickDoesNotCountAsAssist() {
+        long nowSec = Instant.now().getEpochSecond();
+
+        apply(nowSec, 45, 3);
+
+        assertThat(redis.hasKey(RedisKey.ASSISTS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec))).isFalse();
     }
 
     @Test
