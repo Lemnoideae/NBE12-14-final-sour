@@ -502,6 +502,7 @@
   background: #fdf5df;
   box-shadow: 3px 3px #49331d;
 }
+.game-top-bar :is(.game-brand, .game-profile-trigger, .game-workspace-action) { font-family: var(--pixel-font); font-size: 1.0625rem; font-weight: 700; line-height: 1.25; }
 .game-brand { display: flex; align-items: center; gap: .5rem; cursor: pointer; min-block-size: 44px; }
 .game-wordmark { display: grid; place-items: center; inline-size: 1.75rem; aspect-ratio: 1; background: #facc15; border: 2px solid #49331d; font-weight: 900; }
 /* SCRUM-321: use the wide campus profile typography in every service view. */
@@ -578,6 +579,13 @@
 .game-school-summary { overflow-wrap: anywhere; }
 .game-school-summary > p { color: #65401f; }
 .game-school-summary h2 { font-weight: 900; }
+.ranking-school-heading { display: flex; align-items: start; gap: .75rem; }
+.ranking-school-heading h1 { flex: 1; min-inline-size: 0; overflow-wrap: anywhere; font-size: var(--desktop-title, 1.125rem); font-weight: 900; line-height: 1.25; }
+.ranking-school-heading p { display: grid; flex: none; gap: .125rem; text-align: end; font-size: .75rem; }
+.ranking-school-heading strong { font-size: .875rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ranking-school-action { display: inline-flex; align-items: center; gap: .5rem; }
+.ranking-school-action svg { flex: none; inline-size: 1em; block-size: 1em; }
+.ranking-school-action:disabled { color: #444; border-color: #777; background: #e0e0e0; box-shadow: none; opacity: 1; cursor: not-allowed; }
 .game-school-summary dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .125rem .5rem; margin-block-start: .25rem; }
 .game-school-summary dd { text-align: end; font-weight: 700; }
 .game-panel-tabs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1.2fr); gap: .375rem; padding: .25rem; }
@@ -648,14 +656,15 @@
 }
 .game-compact-tab-panel { flex: 1; min-block-size: 0; min-inline-size: 0; overflow: auto; }
 .game-compact-tab-panel:focus-visible { outline: 2px solid #49331d; outline-offset: -2px; }
-.game-map-preview { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .375rem; padding: .5rem; background: #fff4d1; border-block-end: 1px solid #bd9e65; }
-.game-map-preview button { min-block-size: 2.75rem; }
-.game-map-preview button[aria-disabled='true'] { color: #5c4631; cursor: not-allowed; }
-.game-map-visit-notice { grid-column: 1 / -1; color: #672b14; }
-.game-map-preview-search-notice { grid-column: 1 / -1; min-block-size: 1.45em; color: #8b5327; line-height: 1.45; }
-.game-map-list { padding: .5rem; background: #fdf5df; }
-.game-map-row { display: flex; align-items: center; gap: .5rem; width: 100%; min-height: 2.75rem; }
-.game-map-row[aria-pressed='true'] { background: #fde9aa; border-color: #8b5327; }
+.game-map-search-notice { color: #672b14; line-height: 1.45; min-block-size: 1.45em; }
+.game-map-list { padding: .5rem; background: #fdf5df; max-block-size: 18rem; overflow-y: auto; overscroll-behavior: contain; flex-shrink: 0; }
+.game-map-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; width: 100%; border: 1px solid #8b5327; background: #faecc7; }
+.game-map-row.is-selected { background: #fde9aa; }
+.game-map-row-select { display: flex; align-items: center; gap: .5rem; min-inline-size: 0; min-block-size: 2.75rem; padding: .25rem .625rem; text-align: start; font-weight: 700; cursor: pointer; grid-column: 1 / -1; }
+.game-map-row-details { min-inline-size: 0; padding: 0 .625rem .5rem; }
+.game-map-row-details p { color: #672b14; }
+.game-map-row-visit { margin: 0 .5rem .5rem 0; }
+.game-map-row-visit[aria-disabled='true'] { color: #5c4631; cursor: not-allowed; }
 .game-workspace-action, .game-profile-trigger {
   min-block-size: 44px;
   padding: .25rem .625rem;
@@ -687,7 +696,7 @@
 }
 [data-desktop-game] :is(.font-press-start, .font-mono) { font-family: var(--pixel-font); font-variant-numeric: tabular-nums; }
 [data-desktop-game] :is(.game-workspace-side > h2, .game-school-summary h2, .game-campus-hud h1) { font-size: var(--desktop-title); line-height: 1.25; }
-[data-desktop-game] :is(.game-workspace-action, .game-school-summary, .game-map-list, .game-map-preview, .game-brand, .game-campus-score) { font-size: var(--desktop-text); }
+[data-desktop-game] :is(.game-workspace-action:not(.game-top-bar .game-workspace-action), .game-school-summary, .game-map-list, .game-map-preview, .game-campus-score) { font-size: var(--desktop-text); }
 [data-desktop-game] :is(.game-map-preview p, .game-brand-caption, .game-school-summary > p, .game-map-list small, [data-testid='map-search-box'] input, .game-campus-score-label) {
   font-size: var(--desktop-text-small);
   line-height: 1.45;

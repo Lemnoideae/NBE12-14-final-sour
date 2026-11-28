@@ -76,9 +76,17 @@ def verify(browser, url, width, height):
         expect(dialog).to_be_hidden()
         expect(opener).to_be_focused()
         activate(opener)
+        expect(dialog.get_by_text('1,000점', exact=True)).to_be_visible()
+        expect(dialog.locator('button svg[aria-hidden="true"]')).to_have_count(4)
+        if not phone:
+            title_size = dialog.locator('h1').evaluate('e => getComputedStyle(e).fontSize')
+            school_size = page.locator('.game-school-summary h2').evaluate('e => getComputedStyle(e).fontSize')
+            assert title_size == school_size, (title_size, school_size)
 
         label = '연합 가입 신청' if phone else '연합 초대'
         action = dialog.get_by_role('button', name=label, exact=True)
+        expect(action).to_be_enabled()
+        expect(dialog.get_by_role('button', name='연합 초대' if phone else '연합 가입 신청', exact=True)).to_be_disabled()
         activate(action)
         expect(dialog.get_by_role('button', name='취소')).to_be_focused()
         activate(dialog.get_by_role('button', name='취소'))
@@ -89,11 +97,16 @@ def verify(browser, url, width, height):
             with page.expect_response(lambda response: '/rankings/universities?' in response.url and 'page=0' in response.url):
                 reordered = True
             expect(dialog).to_be_visible()
+            expect(dialog.get_by_text('1,000점', exact=True)).to_be_visible()
         activate(dialog.get_by_role('button', name='가입 신청 보내기' if phone else '초대 보내기'))
         expect(dialog.get_by_role('status')).to_have_text('연합 가입 신청을 보냈어요.' if phone else '연합 초대를 보냈어요.')
         assert requests == [('/alliances/25/applications', None) if phone else ('/alliances/25/invitations', {'universityId': 5})]
         assert set(checks) == {'/universities/5/alliance', '/universities/8/alliance'}
         activate(dialog.get_by_role('button', name='닫기'))
+        if not phone:
+            activate(ranking.get_by_role('button', name='대상대학교 학교 메뉴', exact=True).first)
+            expect(dialog.get_by_text('997점', exact=True)).to_be_visible()
+            activate(dialog.get_by_role('button', name='닫기'))
         activate(ranking.get_by_role('button', name='방문대학교 학교 메뉴', exact=True))
         with page.expect_response(lambda response: urlsplit(response.url).path == '/api/v1/universities/3'):
             activate(page.get_by_role('dialog', name='방문대학교').get_by_role('button', name='캠퍼스로 이동'))
