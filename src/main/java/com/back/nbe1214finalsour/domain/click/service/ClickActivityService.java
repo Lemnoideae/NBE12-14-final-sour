@@ -25,16 +25,22 @@ public class ClickActivityService {
         List<String> keys = List.of(RedisKey.CLICKS_UNIV_SECOND.of(universityId, preSec),
                 RedisKey.ATTACKS_UNIV_SECOND.of(universityId, preSec),
                 RedisKey.ASSISTS_UNIV_SECOND.of(universityId, preSec));
-        List<Long> activity = stringRedisTemplate.opsForValue().multiGet(keys)
-                .stream().map(str -> {
-                    if (str != null && !str.isEmpty()) {
-                        return Long.parseLong(str);
-                    } else {
-                        return 0L;
-                    }
-                }).toList();
+        List<String> values = stringRedisTemplate.opsForValue().multiGet(keys);
 
+        long clicks = count(values, 0);
+        long attacks = count(values, 1);
+        long assists = count(values, 2);
 
-        return new UniversityActivityResponse(preSec, activity.get(0), activity.get(1), activity.get(2));
+        return new UniversityActivityResponse(preSec, clicks, attacks, assists);
+    }
+
+    private long count(List<String> values, int index) {
+        String value;
+        if (values == null || values.size() <= index) {
+            value = null;
+        } else {
+            value = values.get(index);
+        }
+        return value == null || value.isEmpty() ? 0L : Long.parseLong(value);
     }
 }
