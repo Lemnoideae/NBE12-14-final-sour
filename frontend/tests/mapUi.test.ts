@@ -29,6 +29,7 @@ dom.window.HTMLElement.prototype.scrollIntoView = function () {};
 const { render, screen, fireEvent, cleanup, within } = await import('@testing-library/react');
 const { MockGameProvider } = await import('../src/hooks/useMockGame');
 const { MapScreenPhone } = await import('../src/components/MapScreenPhone');
+const { MapSceneViewport } = await import('../src/components/MapSceneViewport');
 const { Screen1NationalMap } = await import('../src/components/Screen1NationalMap');
 const { Screen2RegionMap } = await import('../src/components/Screen2RegionMap');
 const { MAP_REGIONS } = await import('../src/data/schoolMapLayout');
@@ -50,6 +51,8 @@ const listIds = () => Array.from(screen.getByRole('list', { name: '학교 목록
 const markerIds = () => Array.from(mapArea().querySelectorAll('button[data-school-id]')).map((b) => Number(b.getAttribute('data-school-id')));
 
 const sceneCallbacks = { onSelectSchool: () => {}, onClusterSelect: () => {}, serviceLayout: false };
+const renderScene = (region: (typeof MAP_REGIONS)[number], scene: React.ReactNode) =>
+  render(React.createElement(MockGameProvider, null, React.createElement(MapSceneViewport, { region, animated: false, children: scene })));
 
 test('공동 상위 학교가 많아도 권역마다 PC·모바일 점수판은 세 개다', () => {
   const schools = getSchoolViews().map(school => ({ ...school, rank: 1, score: 0, isTop3: true }));
@@ -57,9 +60,9 @@ test('공동 상위 학교가 많아도 권역마다 PC·모바일 점수판은 
     const regionSchools = filterSchools(schools, region, '');
     for (const embedded of [true, false]) {
       const props = { ...sceneCallbacks, embedded };
-      const view = render(React.createElement(MockGameProvider, null, region === '충청'
+      const view = renderScene(region, region === '충청'
         ? React.createElement(Screen2RegionMap, { ...props, regionSchools })
-        : React.createElement(Screen1NationalMap, { ...props, schools, regionSchools, region })));
+        : React.createElement(Screen1NationalMap, { ...props, schools, regionSchools, region }));
       const area = mapArea();
       const ribbons = embedded ? '.game-map-pin-rank' : 'button[data-top-rank]';
       assert.equal(area.querySelectorAll('button[data-school-id]').length, regionSchools.length);
@@ -80,7 +83,7 @@ test('좌표 없는 상위 학교와 미집계 학교를 제외하고 후보 수
     ];
     for (const workspace of [true, false]) {
       const props = { ...sceneCallbacks, schools, region: '수도권' as const, regionSchools: filterSchools(schools, '수도권', ''), embedded: workspace };
-      const view = render(React.createElement(MockGameProvider, null, React.createElement(Screen1NationalMap, props)));
+      const view = renderScene(props.region, React.createElement(Screen1NationalMap, props));
       const markers = [...screen.getByTestId('map-area').querySelectorAll('button[data-top-rank]')];
       assert.deepEqual(markers.map(node => Number((node as HTMLElement).dataset.schoolId)), capital.slice(0, Math.min(count, 3)).map(school => school.id));
       assert.ok(markers.every(node => node.getAttribute('data-top-rank') === '2'));
@@ -95,7 +98,7 @@ test('전국 지도는 좌표 없는 후보를 제외한 뒤 최대 세 학교�
   const schools = [{ ...base[0], id: 999999, rank: 1, isTop3: true }, ...base.map(school => ({ ...school, rank: 1, isTop3: true }))];
   for (const workspace of [true, false]) {
     const props = { ...sceneCallbacks, schools, region: '전체' as const, regionSchools: schools, embedded: workspace };
-    const view = render(React.createElement(MockGameProvider, null, React.createElement(Screen1NationalMap, props)));
+    const view = renderScene(props.region, React.createElement(Screen1NationalMap, props));
     const markers = [...screen.getByTestId('map-area').querySelectorAll('button[data-top-rank]')];
     assert.deepEqual(markers.map(node => Number((node as HTMLElement).dataset.schoolId)), base.slice(0, 3).map(school => school.id));
     view.unmount();

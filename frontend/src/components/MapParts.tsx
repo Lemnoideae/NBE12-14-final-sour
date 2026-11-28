@@ -12,13 +12,6 @@ import { MAP_DESIGN_FRAME_PX, MAP_REGIONS, mapLayerFit, type MapRegion } from '.
 import type { SchoolView } from '../data/schoolDirectory.ts';
 
 /**
- * Map area height (T2, user decision 2026-11-10): fills the space the header and list sheet leave, kept between the
- * tallest and widest aspects in MAP_AREAS_PX (466/382 to 466/336), where the marker checks prove nothing is cropped.
- * `100cqw` is the width of MapScrollBody, the container.
- */
-export const MAP_AREA_HEIGHT = 'flex-1 min-h-[calc(100cqw*466/382)] max-h-[calc(100cqw*466/336)]';
-
-/**
  * Search header and map. On a phone too short for both (full-screen mode), this column scrolls instead of the map
  * cropping regions; the list sheet with the bottom nav stays below it.
  */

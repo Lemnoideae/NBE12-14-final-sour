@@ -9,6 +9,7 @@ import { LoadNotice } from './LoadNotice';
 import type { MapRegion } from '../data/schoolMapLayout.ts';
 import { filterSchools } from '../data/schoolDirectory';
 import { MapFrame, MapSearchHeader, SchoolListSheet, formatWorkspaceSearchStatus } from './MapParts';
+import { MapSceneViewport } from './MapSceneViewport';
 import { WorkspaceMapSchoolList } from './WorkspaceMapContents';
 
 /** What the map shows. Kept outside the map in the app so a visit can return to it (M2 A2). */
@@ -114,9 +115,11 @@ export const MapScreenPhone: React.FC<MapScreenPhoneProps> = ({
   // Keep the old scene-specific shell on comparisons; keep controls mounted in the service.
   const frameKey = serviceLayout ? 'service' : String(region === '충청');
   return <MapFrame key={frameKey} embedded={embedded} search={search} list={list}>
-    {region === '충청'
-      ? <Screen2RegionMap {...sceneProps} />
-      : <Screen1NationalMap {...sceneProps} schools={schools} region={region}
-          serviceLayout={serviceLayout} onClusterSelect={(next) => { changeRegion(next); toggleRef.current?.focus(); }} />}
+    <MapSceneViewport region={region} animated={serviceLayout}>
+      {region === '충청'
+        ? <Screen2RegionMap {...sceneProps} />
+        : <Screen1NationalMap {...sceneProps} schools={schools} region={region}
+            serviceLayout={serviceLayout} onClusterSelect={(next) => { changeRegion(next); toggleRef.current?.focus(); }} />}
+    </MapSceneViewport>
   </MapFrame>;
 };

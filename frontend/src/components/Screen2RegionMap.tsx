@@ -2,7 +2,7 @@ import React from 'react';
 import { MapArt } from './MapArt.tsx';
 import { WorkspaceMapPins } from './WorkspaceMapPins';
 import { mapFramePercent } from '../utils/workspaceMapPins';
-import { MAP_AREA_HEIGHT, MapLayer, SchoolMarker, type MapSceneProps } from './MapParts.tsx';
+import { MapLayer, SchoolMarker, type MapSceneProps } from './MapParts.tsx';
 import { CHUNGCHEONG_PLACEMENTS } from '../data/schoolMapLayout.ts';
 
 // Hand-placed city captions on the dedicated 충청 frame.
@@ -27,7 +27,7 @@ export const Screen2RegionMap: React.FC<MapSceneProps> = ({
   }) : [];
 
   return (
-      <div className={`${MAP_AREA_HEIGHT} relative overflow-hidden isolate bg-[#38bdf8] select-none`} data-testid="map-area" data-region="충청">
+      <>
         <MapLayer>
         <div
           className="absolute inset-0 w-full h-full pointer-events-none"
@@ -68,6 +68,6 @@ export const Screen2RegionMap: React.FC<MapSceneProps> = ({
         </div>
         </MapLayer>
         {workspace && <WorkspaceMapPins pins={pins} hint="학교를 눌러 선택하세요" selectedId={selectedSchoolId} onSelect={onSelectSchool} />}
-      </div>
+      </>
   );
 };

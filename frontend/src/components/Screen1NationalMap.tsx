@@ -4,7 +4,7 @@ import { soundManager } from '../utils/sound';
 import { MapArt } from './MapArt.tsx';
 import { WorkspaceMapPins } from './WorkspaceMapPins';
 import { mapFramePercent } from '../utils/workspaceMapPins';
-import { MAP_AREA_HEIGHT, MapLayer, SchoolMarker, SchoolBadge, RankRibbon, type MapSceneProps } from './MapParts.tsx';
+import { MapLayer, SchoolMarker, SchoolBadge, RankRibbon, type MapSceneProps } from './MapParts.tsx';
 import { countByRegion, getTopSchools, type SchoolView } from '../data/schoolDirectory.ts';
 import {
   MAP_CLUSTERS,
@@ -45,10 +45,10 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
   }) : [];
 
   return (
-      <div className={`${MAP_AREA_HEIGHT} relative overflow-hidden isolate bg-[#38bdf8] select-none`} data-testid="map-area" data-region={region}>
+      <>
         <MapLayer>
         <div
-          className="absolute inset-0 w-full h-full pointer-events-none transition-transform duration-300"
+          className={`absolute inset-0 w-full h-full pointer-events-none ${serviceLayout ? '' : 'transition-transform duration-300'}`}
           style={
             viewport
               ? { transform: `scale(${viewport.zoom}) translate(${50 - viewport.cx}%, ${50 - viewport.cy}%)`, transformOrigin: '50% 50%' }
@@ -166,6 +166,6 @@ export const Screen1NationalMap: React.FC<Screen1NationalMapProps> = ({
             </div>
           </div>
         )}
-      </div>
+      </>
   );
 };
