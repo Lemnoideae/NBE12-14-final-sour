@@ -578,6 +578,13 @@
 .game-school-summary { overflow-wrap: anywhere; }
 .game-school-summary > p { color: #65401f; }
 .game-school-summary h2 { font-weight: 900; }
+.ranking-school-heading { display: flex; align-items: start; gap: .75rem; }
+.ranking-school-heading h1 { flex: 1; min-inline-size: 0; overflow-wrap: anywhere; font-size: var(--desktop-title, 1.125rem); font-weight: 900; line-height: 1.25; }
+.ranking-school-heading p { display: grid; flex: none; gap: .125rem; text-align: end; font-size: .75rem; }
+.ranking-school-heading strong { font-size: .875rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ranking-school-action { display: inline-flex; align-items: center; gap: .5rem; }
+.ranking-school-action svg { flex: none; inline-size: 1em; block-size: 1em; }
+.ranking-school-action:disabled { color: #444; border-color: #777; background: #e0e0e0; box-shadow: none; opacity: 1; cursor: not-allowed; }
 .game-school-summary dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .125rem .5rem; margin-block-start: .25rem; }
 .game-school-summary dd { text-align: end; font-weight: 700; }
 .game-panel-tabs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1.2fr); gap: .375rem; padding: .25rem; }

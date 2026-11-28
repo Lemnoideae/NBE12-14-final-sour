@@ -1,11 +1,12 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { Building2, FilePlus2, LogIn, MailPlus, RefreshCw, Send, X } from 'lucide-react';
 import { useAuthSession } from '../api/ApiProvider';
 import { ALLIANCE_ERROR_CODES, useApplyToAlliance, useInviteUniversity, useUniversityAlliance, type UniversityAlliance } from '../api/alliances';
 import { errorMessage, isApiError } from '../api/errors';
 import { useMyInfo } from '../api/users';
 import type { RankingBoardRow } from '../hooks/useRankingBoard';
 
-export interface RankingSchool { id: number; name: string; isMine: boolean }
+export interface RankingSchool { id: number; name: string; score: number; isMine: boolean }
 export interface RankingSchoolNavigation {
   onVisitSchool?: (id: number) => void;
   onGoToLogin?: () => void;
@@ -13,7 +14,7 @@ export interface RankingSchoolNavigation {
   allianceActionsEnabled?: boolean;
 }
 
-const BUTTON = 'pixel-plaque plaque-wood min-h-11 min-w-11 px-3 py-2 text-xs font-bold disabled:opacity-50';
+const BUTTON = 'ranking-school-action pixel-plaque plaque-wood min-h-11 min-w-11 px-3 py-2 text-xs font-bold';
 
 export function RankingSchoolTrigger({ row, open, className, children }: {
   row: RankingBoardRow; open?: (school: RankingSchool) => void; className: string; children: ReactNode;
@@ -22,7 +23,7 @@ export function RankingSchoolTrigger({ row, open, className, children }: {
   if (schoolId === undefined || !open) return <span className={className}>{children}</span>;
   return <button type="button" aria-haspopup="dialog" aria-label={`${row.name} 학교 메뉴`}
     className={`${className} min-h-6 rounded-sm cursor-pointer hover:underline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-current`}
-    onClick={() => open({ id: schoolId, name: row.name, isMine: row.isMine })}>{children}</button>;
+    onClick={() => open({ id: schoolId, name: row.name, score: row.score, isMine: row.isMine })}>{children}</button>;
 }
 
 export function RankingSchoolMenu({ school, source, onVisitSchool, onGoToLogin, visitBlocked, allianceActionsEnabled, close }:
@@ -43,14 +44,17 @@ export function RankingSchoolMenu({ school, source, onVisitSchool, onGoToLogin, 
   return <dialog ref={ref} aria-labelledby={title} onClose={(event) => { if (!event.currentTarget.open) close(); }}
     onCancel={(event) => { if (lock) event.preventDefault(); }}
     className="item-purchase-dialog rpg-box bg-[#fffbeb] p-4 text-[#261608] font-pixel">
-    <h1 id={title} className="text-sm font-black break-words">{school.name}</h1>
+    <header className="ranking-school-heading">
+      <h1 id={title}>{school.name}</h1>
+      <p><span>현재 점수</span><strong>{school.score.toLocaleString('ko-KR')}점</strong></p>
+    </header>
     <div className="mt-3 flex flex-col items-start gap-2 text-xs">
-      {onVisitSchool && <button type="button" className={BUTTON} disabled={!!visitBlocked || lock}
-        onClick={() => { dismiss(); onVisitSchool(school.id); }}>캠퍼스로 이동</button>}
+      <button type="button" className={BUTTON} disabled={!onVisitSchool || !!visitBlocked || lock}
+        onClick={() => { dismiss(); onVisitSchool?.(school.id); }}><Building2 aria-hidden="true" />캠퍼스로 이동</button>
       {visitBlocked && <p>{visitBlocked}</p>}
-      {source === 'api' && !school.isMine && <ApiSchoolAlliance school={school} onGoToLogin={onGoToLogin}
-        enabled={!!allianceActionsEnabled} onBusy={setLock} />}
-      <button type="button" ref={closeButton} className={BUTTON} disabled={lock} onClick={dismiss}>닫기</button>
+      {source === 'api' && !school.isMine ? <ApiSchoolAlliance school={school} onGoToLogin={onGoToLogin}
+        enabled={!!allianceActionsEnabled} onBusy={setLock} /> : <AllianceUnavailable reason={school.isMine ? '내 학교에는 연합 요청을 보낼 수 없어요.' : '목업에서는 연합 요청을 보낼 수 없어요.'} />}
+      <button type="button" ref={closeButton} className={BUTTON} disabled={lock} onClick={dismiss}><X aria-hidden="true" />닫기</button>
     </div>
   </dialog>;
 }
@@ -61,16 +65,24 @@ function ApiSchoolAlliance({ school, enabled, onGoToLogin, onBusy }: {
   const session = useAuthSession();
   const me = useMyInfo();
   if (session.status !== 'signed-in') return <>
-    <p>연합 기능을 이용하려면 로그인해 주세요.</p>
-    {onGoToLogin && <button type="button" className={BUTTON} onClick={onGoToLogin}>로그인</button>}
+    <AllianceUnavailable reason="연합 기능을 이용하려면 로그인해 주세요." />
+    {onGoToLogin && <button type="button" className={BUTTON} onClick={onGoToLogin}><LogIn aria-hidden="true" />로그인</button>}
   </>;
-  if (!enabled) return null;
-  if (me.isError) return <><p role="alert">내 학교를 확인하지 못했어요.</p>
-    <button type="button" className={BUTTON} onClick={() => void me.refetch()}>다시 시도</button></>;
-  if (!me.data) return <p>내 학교를 확인하는 중이에요.</p>;
-  if (me.data.university.id === school.id) return null;
-  if (me.data.status !== 'ACTIVE') return <p>활동 중인 회원만 연합 기능을 이용할 수 있어요.</p>;
+  if (!enabled) return <AllianceUnavailable reason="연합 기능을 사용할 수 없어요." />;
+  if (me.isError) return <><AllianceUnavailable reason="내 학교를 확인하지 못했어요." />
+    <button type="button" className={BUTTON} onClick={() => void me.refetch()}><RefreshCw aria-hidden="true" />다시 시도</button></>;
+  if (!me.data) return <AllianceUnavailable reason="내 학교를 확인하는 중이에요." />;
+  if (me.data.university.id === school.id) return <AllianceUnavailable reason="내 학교에는 연합 요청을 보낼 수 없어요." />;
+  if (me.data.status !== 'ACTIVE') return <AllianceUnavailable reason="활동 중인 회원만 연합 기능을 이용할 수 있어요." />;
   return <SchoolAllianceActions key={me.data.id} userId={me.data.id} ownSchoolId={me.data.university.id} school={school} onBusy={onBusy} />;
+}
+
+function AllianceUnavailable({ reason, status = false }: { reason: string; status?: boolean }) {
+  return <>
+    <button type="button" className={BUTTON} disabled><FilePlus2 aria-hidden="true" />연합 가입 신청</button>
+    <button type="button" className={BUTTON} disabled><MailPlus aria-hidden="true" />연합 초대</button>
+    <p role={status ? 'status' : undefined}>{reason}</p>
+  </>;
 }
 
 type AllianceAction = { kind: 'invite' | 'apply'; alliance: UniversityAlliance };
@@ -112,7 +124,9 @@ function SchoolAllianceActions({ userId, ownSchoolId, school, onBusy }: {
   const [confirmation, setConfirmation] = useState<AllianceAction | null>(null);
   const sending = useRef(false);
   const cancelRef = useRef<HTMLButtonElement>(null);
-  const actionRef = useRef<HTMLButtonElement>(null);
+  const inviteRef = useRef<HTMLButtonElement>(null);
+  const applyRef = useRef<HTMLButtonElement>(null);
+  const previousAction = useRef<AllianceAction['kind'] | null>(null);
   const restoreActionFocus = useRef(false);
   const busy = applied.isPending || invited.isPending;
   const error = applied.error ?? invited.error;
@@ -127,7 +141,7 @@ function SchoolAllianceActions({ userId, ownSchoolId, school, onBusy }: {
     if (confirmation) cancelRef.current?.focus();
     else if (restoreActionFocus.current) {
       restoreActionFocus.current = false;
-      actionRef.current?.focus();
+      (previousAction.current === 'invite' ? inviteRef : applyRef).current?.focus();
     }
   }, [confirmation]);
 
@@ -146,20 +160,30 @@ function SchoolAllianceActions({ userId, ownSchoolId, school, onBusy }: {
     finally { sending.current = false; onBusy(false); }
   };
 
-  if (result) return <p role="status">{result}</p>;
-  if (busy) return <p role="status">연합 요청을 보내는 중이에요.</p>;
+  if (result) return <AllianceUnavailable reason={result} status />;
+  if (busy) return <AllianceUnavailable reason="연합 요청을 보내는 중이에요." />;
   if (own.isError || target.isError) return <>
+    <AllianceUnavailable reason="연합 정보를 확인하지 못했어요." />
     <p role="alert">{error ? requestError(error) : `연합 정보를 확인하지 못했어요. ${errorMessage(own.error ?? target.error)}`}</p>
-    {!fetching && <button type="button" className={BUTTON} onClick={retry}>연합 정보 다시 시도</button>}
+    {!fetching && <button type="button" className={BUTTON} onClick={retry}><RefreshCw aria-hidden="true" />연합 정보 다시 시도</button>}
   </>;
-  if (own.fetchStatus === 'paused' || target.fetchStatus === 'paused') return <p>연결이 복구되면 연합 정보를 확인해요.</p>;
-  if (own.isPending || target.isPending) return <p>연합 정보를 확인하는 중이에요.</p>;
+  if (own.fetchStatus === 'paused' || target.fetchStatus === 'paused') return <AllianceUnavailable reason="연결이 복구되면 연합 정보를 확인해요." />;
+  if (own.isPending || target.isPending) return <AllianceUnavailable reason="연합 정보를 확인하는 중이에요." />;
 
-  const label = action?.kind === 'invite' ? '연합 초대' : '연합 가입 신청';
+  const unavailableReason = !action ? (own.data && target.data ? '두 학교가 이미 연합에 소속되어 있어요.' : '두 학교 모두 연합에 소속되어 있지 않아요.') : blocked;
   const canConfirm = confirmation && fresh && !blocked && action?.kind === confirmation.kind && action.alliance.id === confirmation.alliance.id;
   return <>
+    <button type="button" ref={applyRef} className={BUTTON} disabled={!!confirmation || action?.kind !== 'apply' || !fresh || !!blocked || !!uncertain}
+      onClick={() => { if (action?.kind === 'apply') { applied.reset(); invited.reset(); previousAction.current = action.kind; setConfirmation(action); } }}><FilePlus2 aria-hidden="true" />연합 가입 신청</button>
+    <button type="button" ref={inviteRef} className={BUTTON} disabled={!!confirmation || action?.kind !== 'invite' || !fresh || !!blocked || !!uncertain}
+      onClick={() => { if (action?.kind === 'invite') { applied.reset(); invited.reset(); previousAction.current = action.kind; setConfirmation(action); } }}><MailPlus aria-hidden="true" />연합 초대</button>
+    {action && <p>{action.kind === 'invite' ? '우리 연합' : '선택한 학교의 연합'}: {action.alliance.name}</p>}
+    {unavailableReason && <p>{unavailableReason}</p>}
+    {action && !unavailableReason && <p>{action.kind === 'invite' ? '가입 신청은 상대 학교가 연합에 소속되어 있어야 해요.' : '초대는 우리 학교가 연합에 소속되어 있어야 해요.'}</p>}
+    {!fresh && <p>최신 연합 정보를 확인하는 중이에요.</p>}
+    {confirmation && <p>확인 중에는 다른 연합 요청을 선택할 수 없어요.</p>}
     {error && <p role="alert">{requestError(error)}</p>}
-    {confirmation ? <div className="flex flex-col gap-2 border-2 border-[#261608] p-2">
+    {confirmation && <div className="flex flex-col gap-2 border-2 border-[#261608] p-2">
       <p>{confirmation.kind === 'invite' ? `${confirmation.alliance.name}에서 ${school.name}에 초대를 보내요.`
         : `우리 학교가 ${school.name} 소속 연합 ‘${confirmation.alliance.name}’에 가입을 신청해요.`}</p>
       {!canConfirm && <p>최신 연합 정보를 확인한 뒤 다시 선택해 주세요.</p>}
@@ -167,15 +191,10 @@ function SchoolAllianceActions({ userId, ownSchoolId, school, onBusy }: {
         <button type="button" ref={cancelRef} className={BUTTON} onClick={() => {
           restoreActionFocus.current = true;
           setConfirmation(null);
-        }}>취소</button>
+        }}><X aria-hidden="true" />취소</button>
         <button type="button" className={`${BUTTON} plaque-yellow`} disabled={!canConfirm || !!uncertain}
-          onClick={() => void submit()}>{confirmation.kind === 'invite' ? '초대 보내기' : '가입 신청 보내기'}</button>
+          onClick={() => void submit()}><Send aria-hidden="true" />{confirmation.kind === 'invite' ? '초대 보내기' : '가입 신청 보내기'}</button>
       </div>
-    </div> : action && <>
-      <p>{action.kind === 'invite' ? '우리 연합' : '선택한 학교의 연합'}: {action.alliance.name}</p>
-      {blocked && <p>{blocked}</p>}
-      <button type="button" ref={actionRef} className={BUTTON} disabled={!fresh || !!blocked || !!uncertain}
-        onClick={() => { applied.reset(); invited.reset(); setConfirmation(action); }}>{label}</button>
-    </>}
+    </div>}
   </>;
 }
