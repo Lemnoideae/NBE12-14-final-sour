@@ -19,6 +19,9 @@ export interface ClickResponse {
   university: { id: number; totalScore: number; rank: number; logoUrl: string };
   department: { id: number; totalScore: number };
   schoolClicksLastSecond: number;
+  /** Attacks my school received and assists it got in the previous second (particles only; absent on older servers). */
+  schoolAttacksLastSecond?: number;
+  schoolAssistsLastSecond?: number;
   /** The click came from inside the school library: `multiplier` already includes its x1.2 (ClickService). */
   libraryBonus: boolean;
   /** Next batch only: 0-based click positions the server will double (ClickActionGuard). */

@@ -11,7 +11,7 @@ import type { OtherClicksSource } from '../src/data/mockRealtime';
 import type { OtherClickScheduler } from '../src/hooks/useMockOtherClicks';
 import { ApiError } from '../src/api/errors';
 import { createClickBatcher } from '../src/utils/clickBatcher';
-import { createOtherClicksEstimator, createOtherClicksFeed, OWN_CLICK_OVERLAP_MS } from '../src/utils/otherClicksFeed';
+import { activityCount, createFeed, createOtherClicksEstimator, createOtherClicksFeed, feedForUniversity, OWN_CLICK_OVERLAP_MS, type SchoolActivity, type TargetActivity } from '../src/utils/otherClicksFeed';
 import { installDialogStub } from './helpers/dialogStub';
 import { assertAbsent } from './helpers/domAssert';
 
@@ -38,6 +38,7 @@ const { useOtherClicks, OTHER_CLICKS_STALE_MS } = await import('../src/hooks/use
 const { OtherClicksFeedContext } = await import('../src/hooks/otherClicksFeedContext');
 const { ApiPlayerSync } = await import('../src/components/ApiPlayerSync');
 const { CampusView } = await import('../src/components/CampusView');
+const { OtherActivityParticles, activitySummary } = await import('../src/components/OtherActivityParticles');
 const queryClients: Array<ReturnType<typeof createQueryClient>> = [];
 afterEach(() => {
   cleanup();
@@ -151,7 +152,7 @@ test('feed가 있으면 목업 소스를 폴링하지 않고 응답마다 파티
   assert.equal(polled, 0);
   assert.equal(screen.getByRole('status').textContent, '0:null');
 
-  await act(async () => { feed.publish(4); });
+  await act(async () => { feed.publish({ clicks: 4, attacks: 0, assists: 0 }); });
   assert.equal(screen.getByRole('status').textContent, '0:4');
   await clock.advance(999);
   assert.equal(screen.getByRole('status').textContent, '4:4');
@@ -160,14 +161,72 @@ test('feed가 있으면 목업 소스를 폴링하지 않고 응답마다 파티
   assert.equal(polled, 0);
 
   // A new estimate restarts the stale timer instead of letting the earlier one clear it.
-  await act(async () => { feed.publish(0); });
+  await act(async () => { feed.publish({ clicks: 0, attacks: 0, assists: 0 }); });
   await clock.advance(OTHER_CLICKS_STALE_MS - 1);
-  await act(async () => { feed.publish(2); });
+  await act(async () => { feed.publish({ clicks: 2, attacks: 0, assists: 0 }); });
   await clock.advance(2);
   assert.equal(screen.getByRole('status').textContent.endsWith(':2'), true);
   view.unmount();
   assert.equal(clock.tasks.size, 0);
-  await act(async () => { feed.publish(5); });
+  await act(async () => { feed.publish({ clicks: 5, attacks: 0, assists: 0 }); });
+});
+
+test('서버 수는 0 이상의 정수로 읽고, 없거나 잘못된 값(이전 서버)은 0이다', () => {
+  assert.deepEqual([undefined, null, Number.NaN, -2, Number.POSITIVE_INFINITY, '3', 0, 4.8, 12].map(activityCount), [0, 0, 0, 0, 0, 0, 0, 4, 12]);
+});
+
+test('방문 화면 feed는 보고 있는 학교의 응답만 넘긴다', () => {
+  const source = createFeed<TargetActivity>();
+  const seen: SchoolActivity[] = [];
+  const stop = feedForUniversity(source, 21).subscribe((activity) => seen.push(activity));
+  source.publish({ universityId: 21, activity: { clicks: 1, attacks: 2, assists: 3 } });
+  source.publish({ universityId: 22, activity: { clicks: 9, attacks: 9, assists: 9 } });
+  stop();
+  source.publish({ universityId: 21, activity: { clicks: 4, attacks: 4, assists: 4 } });
+  assert.deepEqual(seen, [{ clicks: 1, attacks: 2, assists: 3 }]);
+});
+
+test('클릭·공격·지원 파티클은 종류별로 따로 만들고, 공격·지원은 1초에 10개까지, 넘는 수는 +N으로 합친다', async () => {
+  const clock = new Clock();
+  const feed = createOtherClicksFeed();
+  const noOwnClicks = () => 0;
+  let particles: Array<{ kind: string; weight: number }> = [];
+  function Probe() {
+    const result = useOtherClicks({ getMyClicksSinceLastTick: noOwnClicks, scheduler: clock, feed });
+    particles = result.particles;
+    return React.createElement('output', null, JSON.stringify(result.activity));
+  }
+  render(React.createElement(Probe));
+  await act(async () => { feed.publish({ clicks: 100, attacks: 25, assists: 3 }); });
+  assert.equal(screen.getByRole('status').textContent, JSON.stringify({ clicks: 100, attacks: 25, assists: 3 }));
+  await clock.advance(1000);
+  const byKind = (kind: string) => particles.filter((particle) => particle.kind === kind);
+  // A busy second of clicks does not crowd out the few attacks and assists.
+  assert.deepEqual([byKind('click').length, byKind('attack').length, byKind('assist').length], [20, 10, 3]);
+  assert.deepEqual([100, 25, 3], ['click', 'attack', 'assist'].map((kind) => byKind(kind).reduce((sum, p) => sum + p.weight, 0)));
+  await clock.advance(1200);
+  assert.equal(particles.length, 0);
+});
+
+test('파티클은 종류마다 다른 클래스로 그리고, 클릭만 시간대 색을 쓴다', () => {
+  const particle = (id: number, kind: 'click' | 'attack' | 'assist', weight = 1) => ({ id, kind, weight, delayMs: 0, xPct: 50, yPct: 50 });
+  render(React.createElement(OtherActivityParticles, {
+    particles: [particle(1, 'click'), particle(2, 'attack', 3), particle(3, 'assist')], lifetimeMs: 1200, palette: 'sky', reducedMotion: false,
+  }));
+  const [click, attack, assist] = screen.getAllByTestId('other-click-particle');
+  assert.deepEqual([click.dataset.kind, attack.dataset.kind, assist.dataset.kind], ['click', 'attack', 'assist']);
+  assert.ok(click.classList.contains('other-click-animate') && click.querySelector('.other-click-mark'));
+  assert.ok(attack.classList.contains('other-attack-animate') && attack.querySelector('.other-attack-mark'));
+  assert.ok(assist.classList.contains('other-assist-animate') && assist.querySelector('.other-assist-mark'));
+  assert.equal(click.style.color, 'rgb(125, 211, 252)');
+  assert.equal(attack.style.color, '');
+  assert.equal(attack.textContent, '+3');
+});
+
+test('말풍선 요약은 0인 공격·지원을 뺀다', () => {
+  const label = (n: number) => `클릭 ${n}회`;
+  assert.equal(activitySummary({ clicks: 4, attacks: 0, assists: 0 }, label), '클릭 4회');
+  assert.equal(activitySummary({ clicks: 0, attacks: 2, assists: 5 }, label), '클릭 0회 · 공격받음 2회 · 지원받음 5회');
 });
 
 const ME: MyInfo = {
@@ -177,9 +236,12 @@ const ME: MyInfo = {
 };
 const ok = (data: unknown) => new Response(JSON.stringify({ code: 'SUCCESS', message: '성공', data }), { status: 200 });
 
-test('API 모드 캠퍼스는 클릭 응답의 schoolClicksLastSecond로 파티클과 안내를 표시하고 목업 소스를 호출하지 않는다', async () => {
+test('API 모드 캠퍼스는 클릭 응답의 클릭·받은 공격·받은 지원 수로 파티클과 안내를 표시하고 목업 소스를 호출하지 않는다', async () => {
   const sent: ClickRequest[] = [];
   const lastSecond = [7, 12];
+  // My school received 3 attacks, then 2 assists: other schools' doing, so nothing of mine is taken out of them.
+  const attacked = [3, 0];
+  const assisted = [0, 2];
   const client = createApiClient({ fetch: (async (input, init) => {
     const path = String(input);
     if (path.endsWith('/users/me')) return ok(ME);
@@ -191,6 +253,7 @@ test('API 모드 캠퍼스는 클릭 응답의 schoolClicksLastSecond로 파티�
         acceptedClicks: body.clickCount, earnedScore: body.clickCount, multiplier: 1, myContribScore: total,
         university: { id: 1, totalScore: 100 + total, rank: 1, logoUrl: 'tempUrl' }, department: { id: 7, totalScore: 20 + total },
         schoolClicksLastSecond: lastSecond[sent.length - 1] ?? 0, libraryBonus: false, criticalIndex: [], damageRateIndex: [],
+        schoolAttacksLastSecond: attacked[sent.length - 1] ?? 0, schoolAssistsLastSecond: assisted[sent.length - 1] ?? 0,
       } satisfies ClickResponse);
     }
     if (path.endsWith('/auth/reissue')) return ok({ accessToken: 'member-a', expiresInSeconds: 3600 });
@@ -218,12 +281,13 @@ test('API 모드 캠퍼스는 클릭 응답의 schoolClicksLastSecond로 파티�
   fireEvent.click(area);
   fireEvent.click(area);
   assert.equal(screen.getByTestId('contribution').textContent, '12');
-  await waitFor(() => assert.ok(screen.getByText('직전 1초 다른 학생 약 7회 클릭')), { timeout: 2500 });
+  await waitFor(() => assert.ok(screen.getByText('직전 1초 다른 학생 약 7회 클릭 · 공격받음 3회')), { timeout: 2500 });
+  await waitFor(() => assert.ok(screen.getAllByTestId('other-click-particle').some((el) => el.dataset.kind === 'attack')), { timeout: 1500 });
   assert.deepEqual(sent.map((request) => request.clickCount), [2]);
   // The next batch goes about 1s after this click, so the first batch's 2 own clicks are subtracted from 12.
   fireEvent.click(area);
   await waitFor(() => assert.ok(screen.getAllByTestId('other-click-particle').length > 0), { timeout: 1500 });
-  await waitFor(() => assert.ok(screen.getByText('직전 1초 다른 학생 약 10회 클릭')), { timeout: 2500 });
+  await waitFor(() => assert.ok(screen.getByText('직전 1초 다른 학생 약 10회 클릭 · 지원받음 2회')), { timeout: 2500 });
   assert.deepEqual(sent.map((request) => request.clickCount), [2, 1]);
   assert.equal(polled, 0);
 });

@@ -1,4 +1,5 @@
-// SCRUM-159: drives the "other students' clicks" particles from click responses in API mode.
+// SCRUM-159: drives the "other students' clicks" particles from click responses in API mode. Attack and assist
+// counts (2026-11-28) come with every click, attack and assist answer and get their own particles.
 // Plan: .agents/01-PLAN/261118-2039-scrum159_other_click_particles.md
 
 /**
@@ -29,22 +30,53 @@ export function createOtherClicksEstimator(overlapMs = OWN_CLICK_OVERLAP_MS) {
   };
 }
 
-export type OtherClicksListener = (otherClicks: number) => void;
+/** What other people did at one school in the previous second: clicks by its students, attacks and assists it received. */
+export interface SchoolActivity {
+  clicks: number;
+  attacks: number;
+  assists: number;
+}
+export type ActivityKind = 'click' | 'attack' | 'assist';
 
-/** A push source: each accepted click response publishes one estimate. Unlike the mock source, nothing is polled. */
-export interface OtherClicksFeed {
-  subscribe(listener: OtherClicksListener): () => void;
+/** A count from the server as a whole non-negative number; a missing or broken value (older server) is 0. */
+export function activityCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 }
 
-export function createOtherClicksFeed(): OtherClicksFeed & { publish(otherClicks: number): void } {
-  const listeners = new Set<OtherClicksListener>();
+export type FeedListener<T> = (value: T) => void;
+export interface Feed<T> {
+  subscribe(listener: FeedListener<T>): () => void;
+}
+export function createFeed<T>(): Feed<T> & { publish(value: T): void } {
+  const listeners = new Set<FeedListener<T>>();
   return {
     subscribe(listener) {
       listeners.add(listener);
       return () => { listeners.delete(listener); };
     },
-    publish(otherClicks) {
-      for (const listener of [...listeners]) listener(otherClicks);
+    publish(value) {
+      for (const listener of [...listeners]) listener(value);
+    },
+  };
+}
+
+export type OtherClicksListener = FeedListener<SchoolActivity>;
+/** A push source: each accepted response publishes one estimate. Unlike the mock source, nothing is polled. */
+export type OtherClicksFeed = Feed<SchoolActivity>;
+export function createOtherClicksFeed() {
+  return createFeed<SchoolActivity>();
+}
+
+/** One attack or assist answer, for the school it was about. */
+export interface TargetActivity {
+  universityId: number;
+  activity: SchoolActivity;
+}
+/** The visit screen only shows answers about the school it shows; answers about an earlier target are dropped. */
+export function feedForUniversity(source: Feed<TargetActivity>, universityId: number): OtherClicksFeed {
+  return {
+    subscribe(listener) {
+      return source.subscribe((value) => { if (value.universityId === universityId) listener(value.activity); });
     },
   };
 }

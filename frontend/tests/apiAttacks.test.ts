@@ -333,6 +333,51 @@ test('연합 학교는 지원 버튼으로 바뀌어 /assists로 보내고, 서�
   assert.equal(f.locked(), false);
 });
 
+test('공격 응답의 대상 학교 활동으로 방문 화면에 클릭·공격·지원 파티클을 띄우고, 공격 수에서만 내 이전 공격을 뺀다', async () => {
+  // The target's students clicked 3 times, it received 6 attacks then 10 (my first 4 among them) and 2 assists.
+  const attacked = [6, 10];
+  const f = mount({ respond: (body, n) => ok({ ...ANSWER, acceptedClicks: body.clickCount,
+    schoolClicksLastSecond: 3, schoolAttacksLastSecond: attacked[n - 1], schoolAssistsLastSecond: 2 } satisfies AttackResponse) });
+  await waitFor(() => assert.ok(attackButton()));
+  const seen: Array<{ universityId: number; activity: { clicks: number; attacks: number; assists: number } }> = [];
+  const stop = attacks.activityFeed.subscribe((value) => seen.push(value));
+  for (let i = 0; i < 4; i++) fireEvent.click(attackButton());
+  await waitFor(() => assert.equal(seen.length, 1), { timeout: 2500 });
+  await waitFor(() => assert.deepEqual(new Set(screen.getAllByTestId('other-click-particle').map((el) => el.dataset.kind)), new Set(['click', 'attack', 'assist'])), { timeout: 1500 });
+  for (let i = 0; i < 2; i++) fireEvent.click(attackButton());
+  await waitFor(() => assert.equal(seen.length, 2), { timeout: 2500 });
+  stop();
+  assert.deepEqual(f.calls.map(({ body }) => body.clickCount), [4, 2]);
+  assert.deepEqual(seen, [
+    { universityId: SCHOOL_ID.pusan, activity: { clicks: 3, attacks: 6, assists: 2 } },
+    { universityId: SCHOOL_ID.pusan, activity: { clicks: 3, attacks: 6, assists: 2 } },
+  ]);
+});
+
+test('지원 응답은 지원 수에서만 내 이전 지원을 빼고, 다른 학교를 보는 화면에는 파티클을 띄우지 않는다', async () => {
+  const assisted = [5, 9];
+  const f = mount({ allies: [SCHOOL_ID.pusan], respond: (body, n) => ok({ ...ASSIST, acceptedClicks: body.clickCount,
+    schoolClicksLastSecond: 0, schoolAttacksLastSecond: 4, schoolAssistsLastSecond: assisted[n - 1] } satisfies AssistResponse) });
+  await waitFor(() => assert.ok(assistButton()));
+  const seen: Array<{ clicks: number; attacks: number; assists: number }> = [];
+  const stop = attacks.activityFeed.subscribe((value) => seen.push(value.activity));
+  for (let i = 0; i < 4; i++) fireEvent.click(assistButton());
+  await waitFor(() => assert.equal(seen.length, 1), { timeout: 2500 });
+  for (let i = 0; i < 3; i++) fireEvent.click(assistButton());
+  await waitFor(() => assert.equal(seen.length, 2), { timeout: 2500 });
+  stop();
+  assert.deepEqual(f.assistCalls.map(({ body }) => body.clickCount), [4, 3]);
+  // 9 assists include my first 4; the 4 attacks it received are someone else's.
+  assert.deepEqual(seen, [{ clicks: 0, attacks: 4, assists: 5 }, { clicks: 0, attacks: 4, assists: 5 }]);
+  // Another school's screen drops this school's particles and ignores answers about it.
+  f.navigate(SCHOOL_ID.snu);
+  await waitFor(() => assert.ok(screen.getByTestId('visit-score')));
+  act(() => { (attacks.activityFeed as typeof attacks.activityFeed & { publish(value: unknown): void })
+    .publish({ universityId: SCHOOL_ID.pusan, activity: { clicks: 9, attacks: 9, assists: 9 } }); });
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  assert.equal(screen.queryAllByTestId('other-click-particle').length, 0);
+});
+
 test('공격 점수 복구 중에는 자동 재전송과 미확정 횟수를 안내한다', async () => {
   mount({ respond: () => fail(503, 'RESTORE_SCORE_RESTORING') });
   await waitFor(() => assert.ok(attackButton()));

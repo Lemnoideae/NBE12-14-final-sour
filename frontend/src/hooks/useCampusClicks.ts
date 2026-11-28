@@ -9,7 +9,7 @@ import { rankingKeys } from '../api/rankings';
 import { userKeys, useMyInfo, type MyInfo } from '../api/users';
 import { createClickBatcher, type ClickBatchSnapshot } from '../utils/clickBatcher';
 import { createClickLocation, type ClickLocationSnapshot } from '../utils/clickLocation';
-import { createOtherClicksEstimator, createOtherClicksFeed, type OtherClicksFeed } from '../utils/otherClicksFeed';
+import { activityCount, createOtherClicksEstimator, createOtherClicksFeed, type OtherClicksFeed } from '../utils/otherClicksFeed';
 import { useMockGame } from './useMockGame';
 import type { TapOutcome } from '../types';
 
@@ -86,7 +86,12 @@ export function useApiCampusClicks(): CampusClicks {
         // A school ranking requested before this answer reads an older total; drop it so it cannot land after (SCRUM-188).
         void queryClient.cancelQueries({ queryKey: rankingKeys.mySchool(userId) });
         setLibraryResult({ libraryBonus: response.libraryBonus, multiplier: response.multiplier });
-        otherClicksFeed.publish(otherClicks.accept(response.schoolClicksLastSecond, request.clickCount, sentAt));
+        // Only clicks need my own share taken out: the attacks and assists my school received are other schools'.
+        otherClicksFeed.publish({
+          clicks: otherClicks.accept(response.schoolClicksLastSecond, request.clickCount, sentAt),
+          attacks: activityCount(response.schoolAttacksLastSecond),
+          assists: activityCount(response.schoolAssistsLastSecond),
+        });
         applyApiScores({
           contribution: response.myContribScore + pendingScore,
           schoolScore: response.university.totalScore + pendingScore,
