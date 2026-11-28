@@ -34,6 +34,8 @@ const { allianceKeys } = await import('../src/api/alliances');
 const { MockGameProvider } = await import('../src/hooks/useMockGame');
 const { useApiCampusAttacks } = await import('../src/hooks/useCampusAttacks');
 const { VisitingScreen1Phone } = await import('../src/components/VisitingScreen1Phone');
+const { UniversityActivityContext, useApiUniversityActivitySource } = await import('../src/hooks/useUniversityActivity');
+const { activityHubFor } = await import('../src/utils/universityActivity');
 const { AttackNotice } = await import('../src/components/VisitAttackBar');
 const { soundManager } = await import('../src/utils/sound');
 soundManager.enabled = false;
@@ -55,14 +57,17 @@ const ASSIST: AssistResponse = { acceptedClicks: 4, assistScore: 12, targetUnive
 const ok = (data: unknown) => new Response(JSON.stringify({ code: 'SUCCESS', message: '성공', data }), { status: 200 });
 const fail = (status: number, code: string) => new Response(JSON.stringify({ code, message: code, data: null }), { status });
 let attacks: ReturnType<typeof useApiCampusAttacks>;
-function mount({ signedIn = true, respond, busy = false, beforeRead, allies = [] }: {
+function mount({ signedIn = true, respond, busy = false, beforeRead, allies = [], activity }: {
   signedIn?: boolean; busy?: boolean; respond?: (body: AttackRequest, n: number) => Response | Promise<Response>;
+  /** The public activity poll; by default an answer without `second`, which the hub ignores. */
+  activity?: (universityId: number) => Response;
   beforeRead?: (path: string) => Response | Promise<Response> | undefined;
   /** Schools the server reports as the viewer's current alliance (SCRUM-187). */
   allies?: number[];
 } = {}) {
   const calls: Array<{ body: AttackRequest; auth: string | null }> = [];
   const assistCalls: Array<{ body: AttackRequest; auth: string | null }> = [];
+  const activityCalls: number[] = [];
   let locked = false;
   let unlocks = 0;
   const begin = () => {
@@ -82,6 +87,11 @@ function mount({ signedIn = true, respond, busy = false, beforeRead, allies = []
       assistCalls.push({ body, auth: new Headers(init?.headers).get('Authorization') });
       return respond ? respond(body, assistCalls.length) : ok(ASSIST);
     }
+    if (/\/universities\/\d+\/activity$/.test(path)) {
+      const id = Number(path.split('/').at(-2));
+      activityCalls.push(id);
+      return activity ? activity(id) : ok({});
+    }
     const custom = beforeRead?.(path);
     if (custom) return custom;
     if (path.endsWith('/users/me')) return ok(ME);
@@ -95,14 +105,15 @@ function mount({ signedIn = true, respond, busy = false, beforeRead, allies = []
   if (signedIn) { client.session.signIn('member-a'); queryClient.setQueryData(userKeys.me, ME); }
   function Root({ targetId, visible }: { targetId: SchoolId; visible: boolean }) {
     attacks = useApiCampusAttacks(begin);
-    return React.createElement(React.Fragment, null,
+    const activitySource = useApiUniversityActivitySource(attacks.myUniversityId);
+    return React.createElement(UniversityActivityContext.Provider, { value: activitySource },
       React.createElement(AttackNotice, { attacks }),
       visible ? React.createElement(VisitingScreen1Phone, { schoolId: targetId, attacks }) : null);
   }
   const tree = (targetId: SchoolId, visible: boolean) => React.createElement(MockGameProvider, null,
     React.createElement(ApiProvider, { client, queryClient, children: React.createElement(Root, { targetId, visible }) }));
   const view = render(tree(SCHOOL_ID.pusan, true));
-  return { calls, assistCalls, client, queryClient, locked: () => locked, unlocks: () => unlocks,
+  return { calls, assistCalls, activityCalls, client, queryClient, locked: () => locked, unlocks: () => unlocks,
     navigate: (id: SchoolId, visible = true) => view.rerender(tree(id, visible)), setBusy: (value: boolean) => { busy = value; } };
 }
 const attackButton = () => screen.getByRole('button', { name: /캠퍼스 공격/ });
@@ -337,10 +348,10 @@ test('공격 응답의 대상 학교 활동으로 방문 화면에 클릭·공�
   // The target's students clicked 3 times, it received 6 attacks then 10 (my first 4 among them) and 2 assists.
   const attacked = [6, 10];
   const f = mount({ respond: (body, n) => ok({ ...ANSWER, acceptedClicks: body.clickCount,
-    schoolClicksLastSecond: 3, schoolAttacksLastSecond: attacked[n - 1], schoolAssistsLastSecond: 2 } satisfies AttackResponse) });
+    second: 100 + n, schoolClicksLastSecond: 3, schoolAttacksLastSecond: attacked[n - 1], schoolAssistsLastSecond: 2 } satisfies AttackResponse) });
   await waitFor(() => assert.ok(attackButton()));
-  const seen: Array<{ universityId: number; activity: { clicks: number; attacks: number; assists: number } }> = [];
-  const stop = attacks.activityFeed.subscribe((value) => seen.push(value));
+  const seen: Array<{ clicks: number; attacks: number; assists: number }> = [];
+  const stop = activityHubFor(f.client).feed(SCHOOL_ID.pusan).subscribe((value) => seen.push(value));
   for (let i = 0; i < 4; i++) fireEvent.click(attackButton());
   await waitFor(() => assert.equal(seen.length, 1), { timeout: 2500 });
   await waitFor(() => assert.deepEqual(new Set(screen.getAllByTestId('other-click-particle').map((el) => el.dataset.kind)), new Set(['click', 'attack', 'assist'])), { timeout: 1500 });
@@ -348,19 +359,17 @@ test('공격 응답의 대상 학교 활동으로 방문 화면에 클릭·공�
   await waitFor(() => assert.equal(seen.length, 2), { timeout: 2500 });
   stop();
   assert.deepEqual(f.calls.map(({ body }) => body.clickCount), [4, 2]);
-  assert.deepEqual(seen, [
-    { universityId: SCHOOL_ID.pusan, activity: { clicks: 3, attacks: 6, assists: 2 } },
-    { universityId: SCHOOL_ID.pusan, activity: { clicks: 3, attacks: 6, assists: 2 } },
-  ]);
+  assert.deepEqual(seen, [{ clicks: 3, attacks: 6, assists: 2 }, { clicks: 3, attacks: 6, assists: 2 }]);
 });
 
 test('지원 응답은 지원 수에서만 내 이전 지원을 빼고, 다른 학교를 보는 화면에는 파티클을 띄우지 않는다', async () => {
   const assisted = [5, 9];
   const f = mount({ allies: [SCHOOL_ID.pusan], respond: (body, n) => ok({ ...ASSIST, acceptedClicks: body.clickCount,
-    schoolClicksLastSecond: 0, schoolAttacksLastSecond: 4, schoolAssistsLastSecond: assisted[n - 1] } satisfies AssistResponse) });
+    second: 100 + n, schoolClicksLastSecond: 0, schoolAttacksLastSecond: 4, schoolAssistsLastSecond: assisted[n - 1] } satisfies AssistResponse) });
   await waitFor(() => assert.ok(assistButton()));
+  const hub = activityHubFor(f.client);
   const seen: Array<{ clicks: number; attacks: number; assists: number }> = [];
-  const stop = attacks.activityFeed.subscribe((value) => seen.push(value.activity));
+  const stop = hub.feed(SCHOOL_ID.pusan).subscribe((value) => seen.push(value));
   for (let i = 0; i < 4; i++) fireEvent.click(assistButton());
   await waitFor(() => assert.equal(seen.length, 1), { timeout: 2500 });
   for (let i = 0; i < 3; i++) fireEvent.click(assistButton());
@@ -369,13 +378,22 @@ test('지원 응답은 지원 수에서만 내 이전 지원을 빼고, 다른 �
   assert.deepEqual(f.assistCalls.map(({ body }) => body.clickCount), [4, 3]);
   // 9 assists include my first 4; the 4 attacks it received are someone else's.
   assert.deepEqual(seen, [{ clicks: 0, attacks: 4, assists: 5 }, { clicks: 0, attacks: 4, assists: 5 }]);
-  // Another school's screen drops this school's particles and ignores answers about it.
+  // Another school's screen drops this school's particles and ignores reports about it.
   f.navigate(SCHOOL_ID.snu);
   await waitFor(() => assert.ok(screen.getByTestId('visit-score')));
-  act(() => { (attacks.activityFeed as typeof attacks.activityFeed & { publish(value: unknown): void })
-    .publish({ universityId: SCHOOL_ID.pusan, activity: { clicks: 9, attacks: 9, assists: 9 } }); });
+  act(() => { hub.report(SCHOOL_ID.pusan, { second: 999, clicks: 9, attacks: 9, assists: 9 }); });
   await new Promise((resolve) => setTimeout(resolve, 1100));
   assert.equal(screen.queryAllByTestId('other-click-particle').length, 0);
+});
+
+test('로그인하지 않고 구경만 해도 방문 학교의 활동을 1초마다 물어 파티클을 띄운다', async () => {
+  let second = 0;
+  const f = mount({ signedIn: false, activity: () => { second += 1; return ok({ second, clicks: 4, attacks: 1, assists: 0 }); } });
+  await waitFor(() => assert.ok(screen.getByTestId('visit-score')));
+  assertAbsent(screen.queryByRole('button', { name: /캠퍼스 공격/ }), '구경 중에는 공격 버튼이 없다');
+  await waitFor(() => assert.deepEqual(new Set(screen.getAllByTestId('other-click-particle').map((el) => el.dataset.kind)), new Set(['click', 'attack'])), { timeout: 2500 });
+  assert.ok(f.activityCalls.length >= 1);
+  assert.ok(f.activityCalls.every((id) => id === SCHOOL_ID.pusan));
 });
 
 test('공격 점수 복구 중에는 자동 재전송과 미확정 횟수를 안내한다', async () => {

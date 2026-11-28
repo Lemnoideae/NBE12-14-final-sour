@@ -9,7 +9,7 @@ import { rankingKeys } from '../api/rankings';
 import { userKeys, useMyInfo, type MyInfo } from '../api/users';
 import { createClickBatcher, type ClickBatchSnapshot } from '../utils/clickBatcher';
 import { createClickLocation, type ClickLocationSnapshot } from '../utils/clickLocation';
-import { activityCount, createOtherClicksEstimator, createOtherClicksFeed, type OtherClicksFeed } from '../utils/otherClicksFeed';
+import { activityHubFor } from '../utils/universityActivity';
 import { useMockGame } from './useMockGame';
 import type { TapOutcome } from '../types';
 
@@ -35,7 +35,6 @@ interface CampusClicks extends ClickUpgradeGate {
   retryLimited: (() => void) | null;
   botCheck: { open: boolean; onOpen: () => void; onClose: () => void; onVerified: () => void } | null;
   /** API mode: other students' click estimates from click responses (SCRUM-159). Null keeps the mock polling. */
-  otherClicksFeed: OtherClicksFeed | null;
 }
 const noPendingScore = () => 0;
 const notSending = () => false;
@@ -47,7 +46,7 @@ function useMockCampusClicks(): CampusClicks {
     const points = mockTap(isCrit);
     return points === null ? null : { points, isCrit };
   }, [mockTap]);
-  return { tap, notice: null, getPendingScore: noPendingScore, isSending: notSending, retryLimited: null, botCheck: null, upgradeBlocked: false, beginUpgrade: () => null, otherClicksFeed: null, library: null };
+  return { tap, notice: null, getPendingScore: noPendingScore, isSending: notSending, retryLimited: null, botCheck: null, upgradeBlocked: false, beginUpgrade: () => null, library: null };
 }
 
 /** Mounted at the app root, not on the campus screen: changing tabs must not cancel a collected batch. */
@@ -63,7 +62,6 @@ export function useApiCampusClicks(): CampusClicks {
   const [queueGeneration, setQueueGeneration] = useState(0);
   const [botCheckOpen, setBotCheckOpen] = useState(false);
   const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
-  const [otherClicksFeed] = useState(createOtherClicksFeed);
   const userId = signedIn ? me?.id : undefined;
   const location = useMemo(() => createClickLocation(), [client, userId]);
   const locationSnapshot = useSyncExternalStore(location.subscribe, location.getSnapshot, location.getSnapshot);
@@ -73,8 +71,9 @@ export function useApiCampusClicks(): CampusClicks {
   useEffect(() => {
     setLibraryResult(null);
     if (userId === undefined) return;
-    // One per queue: own batches of a previous member or session must not be subtracted from this one's counts.
-    const otherClicks = createOtherClicksEstimator();
+    // Own batches of a previous member or session must not be subtracted from this one's counts.
+    const activity = activityHubFor(client);
+    activity.clearOwn();
     const controller = createClickBatcher({
       send: (body) => submitClicks(client, body),
       // A server without the fields (older deploy) leaves every tap at base power instead of failing.
@@ -86,12 +85,13 @@ export function useApiCampusClicks(): CampusClicks {
         // A school ranking requested before this answer reads an older total; drop it so it cannot land after (SCRUM-188).
         void queryClient.cancelQueries({ queryKey: rankingKeys.mySchool(userId) });
         setLibraryResult({ libraryBonus: response.libraryBonus, multiplier: response.multiplier });
-        // Only clicks need my own share taken out: the attacks and assists my school received are other schools'.
-        otherClicksFeed.publish({
-          clicks: otherClicks.accept(response.schoolClicksLastSecond, request.clickCount, sentAt),
-          attacks: activityCount(response.schoolAttacksLastSecond),
-          assists: activityCount(response.schoolAssistsLastSecond),
+        // My school's previous second comes with the answer, so the campus poll skips its own request for now.
+        // This batch is in the current second on the server: record it only after reporting the previous one.
+        activity.report(response.university.id, {
+          second: response.second, clicks: response.schoolClicksLastSecond,
+          attacks: response.schoolAttacksLastSecond, assists: response.schoolAssistsLastSecond,
         });
+        activity.recordOwn(response.university.id, 'click', request.clickCount, sentAt);
         applyApiScores({
           contribution: response.myContribScore + pendingScore,
           schoolScore: response.university.totalScore + pendingScore,
@@ -124,7 +124,7 @@ export function useApiCampusClicks(): CampusClicks {
       controller.dispose();
       if (batcher.current === controller) batcher.current = null;
     };
-  }, [client, queryClient, userId, applyApiScores, queueGeneration, otherClicksFeed, location]);
+  }, [client, queryClient, userId, applyApiScores, queueGeneration, location]);
 
   useEffect(() => {
     if (signedIn && requiresClickVerification(snapshot.error)) setBotCheckOpen(true);
@@ -196,7 +196,6 @@ export function useApiCampusClicks(): CampusClicks {
     beginUpgrade,
     retryLimited: canRetryLimited ? retryLimited : null,
     botCheck: needsVerification ? { open: botCheckOpen, onOpen: openBotCheck, onClose: closeBotCheck, onVerified: completeBotCheck } : null,
-    otherClicksFeed,
   };
 }
 

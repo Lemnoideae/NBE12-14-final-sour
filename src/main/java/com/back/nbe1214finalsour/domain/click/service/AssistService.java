@@ -91,6 +91,6 @@ public class AssistService {
                 new AssistResponse.AssistUniversityResponse(targetUniversityId, targetName,
                         Long.valueOf(r.get(0)), Long.valueOf(r.get(1))),
                 Long.valueOf(r.get(2)), scoreVo.criticalIndex(), scoreVo.damageRateIndex(),
-                Long.valueOf(r.get(3)), Long.valueOf(r.get(4)), Long.valueOf(r.get(5)));
+                Long.valueOf(r.get(3)), Long.valueOf(r.get(4)), Long.valueOf(r.get(5)), nowSec - 1);
     }
 }

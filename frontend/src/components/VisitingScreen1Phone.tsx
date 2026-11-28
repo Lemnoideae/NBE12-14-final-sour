@@ -1,5 +1,5 @@
 import type { SchoolId } from '../data/schoolIds.ts';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Trophy } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { formatContribution } from '../utils/formatContribution';
@@ -20,7 +20,7 @@ import { wobbleBuildings, wobbleCampusAttack } from '../utils/campusWobble';
 import { useCampusTimePhase } from '../hooks/useCampusTimePhase';
 import { useOtherClicks } from '../hooks/useMockOtherClicks';
 import { MOCK_REALTIME_CONFIG } from '../data/mockRealtime';
-import { feedForUniversity } from '../utils/otherClicksFeed';
+import { useUniversityActivityFeed, useUniversityActivitySource } from '../hooks/useUniversityActivity';
 import { OtherActivityParticles } from './OtherActivityParticles';
 
 const noOwnClicks = () => 0;
@@ -81,11 +81,10 @@ export function VisitCampusScreen({
   const reducedMotion = useReducedMotion();
   const ambience = useCampusTimePhase();
   const { school, isMyUniversity } = visit;
-  // Clicks by this school's students and the attacks and assists it received, from my own attack or assist answers
-  // about this school (2026-11-28). Spectating, or a mock visit, has no answers and so no particles.
-  const activityFeed = attacks?.activityFeed;
-  const visitedId = school?.id ?? null;
-  const visitFeed = useMemo(() => (activityFeed && visitedId !== null ? feedForUniversity(activityFeed, visitedId) : null), [activityFeed, visitedId]);
+  // Clicks by this school's students and the attacks and assists it received (2026-11-28): polled while this screen
+  // shows it, guests and spectators included; my own attack or assist answers stand in for the poll while I tap.
+  // A mock visit has no source and so no particles.
+  const visitFeed = useUniversityActivityFeed(useUniversityActivitySource(), school?.id ?? null);
   const { particles: activityParticles } = useOtherClicks({ getMyClicksSinceLastTick: noOwnClicks, feed: visitFeed, mockPolling: false });
   const attackMode = !!attacks?.ready && !!school && !isMyUniversity && attacks.myUniversityId !== school.id;
   // The server decides who is an ally; an ally is assisted, never attacked.

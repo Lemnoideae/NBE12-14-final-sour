@@ -88,6 +88,6 @@ public class AttackService {
 
         return AttackResponse.from(
                 attackApplyResponse, clickCount, isRival, targetUniversityId,
-                targetName, scoreVo.criticalIndex(), scoreVo.damageRateIndex());
+                targetName, scoreVo.criticalIndex(), scoreVo.damageRateIndex(), nowSec - 1);
     }
 }

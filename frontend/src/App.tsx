@@ -59,7 +59,7 @@ import { useCampusAttacks } from './hooks/useCampusAttacks';
 import { AttackNotice } from './components/VisitAttackBar';
 import { ClickerProvider, useClickerController } from './hooks/useClicker';
 import { ItemShopProvider, useItemShopController } from './hooks/useItemShop';
-import { OtherClicksFeedContext } from './hooks/otherClicksFeedContext';
+import { UniversityActivityContext, useApiUniversityActivitySource, type UniversityActivitySource } from './hooks/useUniversityActivity';
 import { useMockRequest } from './hooks/useMockRequest';
 import { MOCK_REQUEST_MODES, type MockRequestMode } from './utils/mockRequest';
 import { MockLoadGate } from './components/MockLoadGate';
@@ -81,6 +81,11 @@ type OtherView = AllianceScreen | 'ranking_screens' | 'our_guestbook_screens' | 
 type GameView = ({ mode: 'visiting'; schoolId: SchoolId }
   | { mode: 'shop'; schoolId: SchoolId | null } // Retain the campus under the shop, irrespective of viewport.
   | { mode: OtherView; schoolId: null }) & { focusCenter?: boolean };
+
+const useActivitySource = selectByMode<(myUniversityId: number | null) => UniversityActivitySource | null>({
+  api: useApiUniversityActivitySource,
+  mock: () => null,
+});
 
 function AppContent() {
   const [view, setView] = useState<GameView>({ mode: 'gameplay', schoolId: null, focusCenter: API_MODE === 'api' });
@@ -112,6 +117,8 @@ function AppContent() {
   const game = useMockGame();
   const campusClicks = useCampusClicks();
   const campusAttacks = useCampusAttacks(campusClicks.beginUpgrade);
+  // API mode: campus and visit screens poll their school's previous-second activity (mock mode polls the mock source).
+  const activitySource = useActivitySource(campusAttacks?.myUniversityId ?? null);
   const clicker = useClickerController(campusClicks);
   const itemShop = useItemShopController(campusClicks);
   const request = useMockRequest();
@@ -575,7 +582,7 @@ function AppContent() {
   return (
     <ClickerProvider value={clicker}>
     <ItemShopProvider value={itemShop}>
-    <OtherClicksFeedContext.Provider value={campusClicks.otherClicksFeed}>
+    <UniversityActivityContext.Provider value={activitySource}>
     <AllianceNavProvider value={allianceNav}>
       <div data-desktop-game={wideCampus ? '' : undefined} className={`w-full flex flex-col items-center justify-start select-none text-[#261608] ${backdrop}`}>
         <GameProfileBar mode={API_MODE} nickname={playerInfo.nickname} onCampus={goToMySchool} onNavigate={setViewMode}
@@ -973,7 +980,7 @@ function AppContent() {
         {campusAttacks?.botCheck?.open && <ApiBotCheckDialog onVerified={campusAttacks.botCheck.onVerified} onClose={campusAttacks.botCheck.onClose} />}
       </div>
     </AllianceNavProvider>
-    </OtherClicksFeedContext.Provider>
+    </UniversityActivityContext.Provider>
     </ItemShopProvider>
     </ClickerProvider>
   );
