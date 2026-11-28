@@ -66,7 +66,7 @@ class ApplyClickScriptTest {
         List<String> result = apply(nowSec, 45, 3);
 
         // 순위는 공유 키(rank:univ)의 다른 학교에 좌우되므로 여기서는 보지 않는다 (universityRankStartsAtOne에서 검증)
-        assertThat(result).hasSize(5);
+        assertThat(result).hasSize(6);
         assertThat(result.subList(0, 3)).containsExactly("45", "45", "45");
         assertThat(result.get(4)).isEqualTo("0");
         assertThat(univScore()).isEqualTo(45.0);
@@ -164,7 +164,10 @@ class ApplyClickScriptTest {
                         RedisKey.CLICKS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec - 1),
                         // 연합·대결 점수는 ClickIntegrationTest에서 본다. 여기서는 없음(0, "")으로 건너뛴다
                         RedisKey.ALLIANCE_SCORE.of(0),
-                        RedisKey.MATCH_SCORE.of(0)),
+                        RedisKey.MATCH_SCORE.of(0),
+                        RedisKey.DIRTY_ALLIANCE.of(),
+                        RedisKey.DIRTY_MATCH.of(),
+                        RedisKey.ATTACKS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec - 1)),
                 String.valueOf(UNIVERSITY_ID),
                 String.valueOf(DEPARTMENT_ID),
                 String.valueOf(USER_ID),

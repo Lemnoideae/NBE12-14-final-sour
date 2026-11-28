@@ -5,6 +5,7 @@ public record ClickApplyResponse(
         Long deptTotal,
         Long myContrib,
         Long univRank,
-        Long lastSecond
+        Long clickLastSecond,
+        Long attackLastSecond
 ) {
 }

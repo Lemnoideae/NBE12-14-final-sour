@@ -55,7 +55,7 @@ class AttackServiceTest {
     private static final Clicker CLICKER_LV3 = new Clicker(3L, 30, 2400L);
 
     /** apply-attack.lua 반환: damage(실제 깎인 양), univTotal, univRank, myAttackScore */
-    private static final List<String> SCRIPT_RESULT = List.of("7", "93", "2", "150");
+    private static final List<String> SCRIPT_RESULT = List.of("7", "93", "2", "150", "0", "0");
 
     @Mock
     private StringRedisTemplate stringRedisTemplate;
@@ -114,7 +114,7 @@ class AttackServiceTest {
         given(userClickerLevelCache.loadIfAbsent(USER_ID)).willReturn(clicker.getId());
         given(clickerService.getClickerById(clicker.getId())).willReturn(clicker);
         given(rivalChecker.isRival(UNIVERSITY_ID, TARGET_UNIVERSITY_ID)).willReturn(isRival);
-        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any()))
+        given(stringRedisTemplate.<List>execute(any(), anyList(), any(), any(), any(), any()))
                 .willReturn(SCRIPT_RESULT);
     }
 
@@ -122,7 +122,7 @@ class AttackServiceTest {
     private List<Object> capturedScriptArgs() {
         ArgumentCaptor<Object> argsCaptor = ArgumentCaptor.captor();
         verify(stringRedisTemplate).execute(any(), anyList(),
-                argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture());
+                argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture());
         return argsCaptor.getAllValues();
     }
 
@@ -260,16 +260,20 @@ class AttackServiceTest {
         ArgumentCaptor<List<String>> keysCaptor = ArgumentCaptor.captor();
         ArgumentCaptor<Object> argsCaptor = ArgumentCaptor.captor();
         verify(stringRedisTemplate).execute(any(), keysCaptor.capture(),
-                argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture());
+                argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture(), argsCaptor.capture());
 
-        assertThat(keysCaptor.getValue()).containsExactly(
+        List<String> keys = keysCaptor.getValue();
+        assertThat(keys.subList(0, 4)).containsExactly(
                 "rank:univ",            // KEYS[1]
                 "dirty:univ",           // KEYS[2]
                 "score:user:attack",     // KEYS[3]
                 "dirty:user"            // KEYS[4]
         );
+        assertThat(keys.get(4)).containsPattern("attacks:univ:12:\\d+");
+        assertThat(keys.get(5)).containsPattern("attacks:univ:12:\\d+");
+        assertThat(keys.get(6)).containsPattern("clicks:univ:12:\\d+");
         // ARGV: targetUniversityId, requestedDamage, userId
-        assertThat(argsCaptor.getAllValues()).containsExactly("9", "36", "1");
+        assertThat(argsCaptor.getAllValues()).containsExactly("9", "36", "1", "4");
     }
 
     @Test

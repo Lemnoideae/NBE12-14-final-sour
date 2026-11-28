@@ -4,6 +4,8 @@ public record AttackApplyResponse(
         Long damage,
         Long univTotal,
         Long univRank,
-        Long myAttackScore
+        Long myAttackScore,
+        Long attackLastSecond,
+        Long clickLastSecond
 ) {
 }
