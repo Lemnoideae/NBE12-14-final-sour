@@ -20,6 +20,8 @@ export interface AssistResponse {
    * The target school in the previous second (particles only; absent on older servers): clicks by its students, and
    * the attacks and assists it received, the requester's own included.
    */
+  /** The previous second these counts are for (epoch seconds); without it they are not used (older server). */
+  second?: number;
   schoolClicksLastSecond?: number;
   schoolAttacksLastSecond?: number;
   schoolAssistsLastSecond?: number;

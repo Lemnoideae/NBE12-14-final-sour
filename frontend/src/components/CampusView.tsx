@@ -3,7 +3,7 @@ import { CampusStage, CampusSignButton, GuestbookBoardButton } from './CampusSta
 import { useReducedMotion } from './CampusAmbience';
 import { useCampusTimePhase } from '../hooks/useCampusTimePhase';
 import { useOtherClicks, type OtherClickScheduler } from '../hooks/useMockOtherClicks';
-import { useOtherClicksFeed } from '../hooks/otherClicksFeedContext';
+import { useUniversityActivityFeed, useUniversityActivitySource } from '../hooks/useUniversityActivity';
 import { OtherActivityParticles, activitySummary } from './OtherActivityParticles';
 import { MOCK_REALTIME_CONFIG, type MockRealtimeConfig, type OtherClicksSource } from '../data/mockRealtime';
 import { useMockGame } from '../hooks/useMockGame';
@@ -71,8 +71,11 @@ export const CampusView: React.FC<CampusViewProps> = ({
   const ownClicks = useRef(0);
   const getMyClicksSinceLastTick = useCallback(() => { const count = ownClicks.current; ownClicks.current = 0; return count; }, []);
   // API mode pushes estimates from click responses; without a feed (mock mode) the mock source is polled.
-  const otherClicksFeed = useOtherClicksFeed();
-  const { particles: otherParticles, activity: otherActivity } = useOtherClicks({ getMyClicksSinceLastTick, config: realtimeConfig, source: otherClicksSource, scheduler: realtimeScheduler, feed: otherClicksFeed });
+  // API mode polls my school's activity (my own click answers stand in for the poll while I tap); mock mode polls the
+  // mock source.
+  const activitySource = useUniversityActivitySource();
+  const otherClicksFeed = useUniversityActivityFeed(activitySource, activitySource?.myUniversityId ?? null);
+  const { particles: otherParticles, activity: otherActivity } = useOtherClicks({ getMyClicksSinceLastTick, config: realtimeConfig, source: otherClicksSource, scheduler: realtimeScheduler, feed: otherClicksFeed, mockPolling: !activitySource });
   const ambience = useCampusTimePhase();
   const reducedMotion = useReducedMotion();
   const [floatingNumbers, setFloatingNumbers] = useState<FloatingNumber[]>([]);
@@ -81,9 +84,9 @@ export const CampusView: React.FC<CampusViewProps> = ({
     : `[시연] ${activeStudents}명 접속 · ${ambience.phase === 'night' ? '밤샘 ' : ''}${activitySummary(otherActivity, (n) => `다른 사용자 ${n}회 클릭`)} · 점수 미반영`;
   // The API click count is a lower bound: own clicks that may be in the server's previous-second bucket are subtracted.
   // Attacks and assists my school received come from other schools, so they are shown as they are.
-  const apiBubble = otherActivity === null ? '클릭하면 같은 학교 학생들의 직전 1초 클릭이 함께 보입니다.'
+  const apiBubble = otherActivity === null ? '같은 학교의 직전 1초 클릭·공격·지원이 함께 보입니다.'
     : `직전 1초 ${activitySummary(otherActivity, (n) => `다른 학생 약 ${n}회 클릭`)}`;
-  const bubbleMessage = otherClicksFeed ? apiBubble : mockBubble;
+  const bubbleMessage = activitySource ? apiBubble : mockBubble;
   const [showDemoHand, setShowDemoHand] = useState<boolean>(true);
   const [studentWhisper, setStudentWhisper] = useState<{ text: string; x: number; y: number } | null>({
     text: cheer,
