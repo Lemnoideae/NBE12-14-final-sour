@@ -1,34 +1,14 @@
-// SCRUM-159: drives the "other students' clicks" particles from click responses in API mode. Attack and assist
-// counts (2026-11-28) come with every click, attack and assist answer and get their own particles.
+// SCRUM-159: the "other people's activity" particles. In API mode a school's previous-second clicks, attacks and
+// assists (2026-11-28) come from my own click/attack/assist answers or the 1s activity poll (universityActivity.ts).
 // Plan: .agents/01-PLAN/261118-2039-scrum159_other_click_particles.md
 
 /**
- * How far back an earlier own batch can still be inside the server's "previous second" bucket. The server reads
- * `clicks:univ:{u}:{nowSec-1}` when it applies a batch, so an own batch that reached it less than 2s earlier may be
- * counted there. Batches are sent serially, so their send order matches the server's arrival order. The extra 500ms
- * covers latency jitter between send times and server arrival times: missing an own batch would show own clicks as
- * someone else's, while an extra one only lowers the estimate.
+ * How long one of my batches may still sit in a reported "previous second". The server counts a batch in the second
+ * it arrives, and a report covers the second before the one it is made in, so a batch up to 2s old may be in it. The
+ * extra 500ms covers latency between send and arrival times: missing an own batch would show my taps as someone
+ * else's, while an extra one only lowers the count.
  */
 export const OWN_CLICK_OVERLAP_MS = 2500;
-
-/**
- * Turns `schoolClicksLastSecond` (the whole school, the requester's own earlier clicks included) into a lower bound
- * on other students' clicks. Every own batch that could be in that bucket is subtracted, so the player's own clicks
- * never show up as someone else's. Others' clicks can be under-counted; an exact number needs the server to exclude
- * the requester.
- */
-export function createOtherClicksEstimator(overlapMs = OWN_CLICK_OVERLAP_MS) {
-  let ownBatches: Array<{ sentAt: number; clicks: number }> = [];
-  return {
-    accept(schoolClicksLastSecond: number, ownClicks: number, sentAt: number): number {
-      ownBatches = ownBatches.filter((batch) => batch.sentAt <= sentAt && sentAt - batch.sentAt < overlapMs);
-      const recentOwn = ownBatches.reduce((sum, batch) => sum + batch.clicks, 0);
-      ownBatches.push({ sentAt, clicks: Math.max(0, Math.floor(ownClicks) || 0) });
-      if (!Number.isFinite(schoolClicksLastSecond) || schoolClicksLastSecond <= 0) return 0;
-      return Math.max(0, Math.floor(schoolClicksLastSecond) - recentOwn);
-    },
-  };
-}
 
 /** What other people did at one school in the previous second: clicks by its students, attacks and assists it received. */
 export interface SchoolActivity {
@@ -61,22 +41,5 @@ export function createFeed<T>(): Feed<T> & { publish(value: T): void } {
 }
 
 export type OtherClicksListener = FeedListener<SchoolActivity>;
-/** A push source: each accepted response publishes one estimate. Unlike the mock source, nothing is polled. */
+/** A push source of one school's activity. Unlike the mock source, the screen does not poll it. */
 export type OtherClicksFeed = Feed<SchoolActivity>;
-export function createOtherClicksFeed() {
-  return createFeed<SchoolActivity>();
-}
-
-/** One attack or assist answer, for the school it was about. */
-export interface TargetActivity {
-  universityId: number;
-  activity: SchoolActivity;
-}
-/** The visit screen only shows answers about the school it shows; answers about an earlier target are dropped. */
-export function feedForUniversity(source: Feed<TargetActivity>, universityId: number): OtherClicksFeed {
-  return {
-    subscribe(listener) {
-      return source.subscribe((value) => { if (value.universityId === universityId) listener(value.activity); });
-    },
-  };
-}

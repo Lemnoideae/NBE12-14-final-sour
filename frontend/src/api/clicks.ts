@@ -18,6 +18,8 @@ export interface ClickResponse {
   myContribScore: number;
   university: { id: number; totalScore: number; rank: number; logoUrl: string };
   department: { id: number; totalScore: number };
+  /** The previous second these counts are for (epoch seconds); without it they are not used (older server). */
+  second?: number;
   schoolClicksLastSecond: number;
   /** Attacks my school received and assists it got in the previous second (particles only; absent on older servers). */
   schoolAttacksLastSecond?: number;
