@@ -1,7 +1,10 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type SubmitEvent } from 'react';
+import { LockKeyhole, Package } from 'lucide-react';
 import type { ShopItem } from '../api/items';
+import { drinkArt } from '../data/campusItemArt.ts';
 import type { ItemShopView } from '../hooks/useItemShop';
 import { ActiveItemEffect } from './ActiveItemEffect';
+import { CampusItemSprite } from './CampusItemArt.tsx';
 
 function PurchaseDialog({ item, shop, onClose }: { item: ShopItem; shop: ItemShopView; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -69,11 +72,15 @@ export function ApiItemShop({ shop, onConfirmationChange }: { shop: ItemShopView
       <div className="grid grid-cols-2 gap-2">
         {shop.items.map((item) => {
           const unavailable = item.payType !== 'CONTRIBUTION' || item.type !== 'MULTIPLIER';
+          const art = drinkArt(item);
+          const Fallback = unavailable ? LockKeyhole : Package;
           return <button key={item.id} type="button" disabled={unavailable} onClick={() => setSelectedId(item.id)}
             aria-label={`${item.name} ${unavailable ? '구매 준비 중' : '구매 선택'}`}
             className="game-shelf-card text-left bg-[#fdf5df] border-3 border-[#261608] shadow-[2px_2px_0px_#261608] p-2 font-pixel cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed min-h-24">
             <span className="contents game-shelf-card-body">
-              <span aria-hidden="true" className="game-shelf-api-icon text-xl">{unavailable ? '🔒' : '☕'}</span>
+              <span className="game-shelf-api-icon inline-grid place-items-center">
+                {art ? <CampusItemSprite src={art} size={24} /> : <Fallback size={24} aria-hidden="true" className="text-[#8b5327]" />}
+              </span>
               <span className="contents game-shelf-card-copy">
                 <span className="game-shelf-card-name block text-xs font-black break-words">{item.name}</span>
                 <span className="game-shelf-card-description block text-[10px] text-[#8b5327] my-1 break-words">{item.content}</span>

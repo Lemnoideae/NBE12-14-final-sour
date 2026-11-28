@@ -4,6 +4,7 @@ import { useMockGame } from '../hooks/useMockGame';
 import { useClicker } from '../hooks/useClicker';
 import { useItemShop } from '../hooks/useItemShop';
 import { ActiveItemEffect } from './ActiveItemEffect';
+import { ClickerArt } from './CampusItemArt.tsx';
 
 interface DialogPanelProps {
   myContribution: number;
@@ -38,7 +39,9 @@ export const DialogPanel: React.FC<DialogPanelProps> = ({ myContribution, clicke
       </div>
       <div className="rpg-box p-2 flex flex-col gap-1.5 shadow-[2px_2px_0px_#261608]">
         <div className="flex items-center justify-between font-pixel text-xs font-bold">
-          <span>🖋️ 클리커 Lv.{clickerLevel ?? '—'}</span>
+          <span className={clicker.api ? 'flex items-center gap-1' : undefined}>
+            {clicker.api ? <ClickerArt level={clickerLevel} /> : '🖋️ '}클리커 Lv.{clickerLevel ?? '—'}
+          </span>
           <span className="bg-[#fef08a] px-1 border border-[#261608]">클릭당 {normalPower}점</span>
         </div>
         <div className="game-clicker-details font-pixel text-[10px] text-[#8b5327]">

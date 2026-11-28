@@ -7,6 +7,7 @@ import { useMockGame } from '../hooks/useMockGame';
 import { useClicker } from '../hooks/useClicker';
 import { useItemShop } from '../hooks/useItemShop';
 import { ApiItemShop } from './ApiItemShop';
+import { ClickerArt } from './CampusItemArt.tsx';
 import { useMockRequest } from '../hooks/useMockRequest.tsx';
 import { ImageChangeShop } from './ImageChangeShop.tsx';
 import { PhoneShell } from './PhoneShell';
@@ -318,8 +319,8 @@ export const ShopScreenPhone: React.FC<ShopScreenPhoneProps> = ({
                   </span>
                 </div>
 
-                {/* Large 16-bit Original Pixel Clicker Tool Icon (부엉이 만년필 / 터치 촉) */}
                 <div className="relative z-10 flex flex-col items-center">
+                  {api ? <ClickerArt level={clicker.level} size={48} /> : <>
                   <svg
                     viewBox="0 0 24 24"
                     className="w-13 h-13 drop-shadow-[2px_2px_0px_#261608]"
@@ -344,6 +345,7 @@ export const ShopScreenPhone: React.FC<ShopScreenPhoneProps> = ({
                   <span className="absolute -top-1 -right-1 text-[10px] animate-pulse">
                     ✨
                   </span>
+                  </>}
                 </div>
               </div>
 
