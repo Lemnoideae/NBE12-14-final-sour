@@ -431,6 +431,11 @@
   padding-block-start: env(safe-area-inset-top);
   padding-inline: max(.5rem, env(safe-area-inset-left)) max(.5rem, env(safe-area-inset-right));
 }
+/* The service header can wrap. Size the main view from the space it actually leaves instead of the fixed offset. */
+.device-full-with-profile--service { block-size: 100dvh; }
+.device-full-with-profile--service > .game-top-bar { flex: none; }
+.device-full-with-profile--service .game-compact-view { flex: 1 0 480px; }
+.device-full-with-profile--service .game-compact-view > .phone-shell-full { flex: 1; block-size: auto; }
 
 /* SCRUM-206: shared service chrome and the campus workspace. Panels scroll independently. */
 .game-backdrop {
@@ -505,6 +510,14 @@
 .game-top-bar :is(.game-brand, .game-profile-trigger, .game-workspace-action) { font-family: var(--pixel-font); font-size: 1.0625rem; font-weight: 700; line-height: 1.25; }
 .game-brand { display: flex; align-items: center; gap: .5rem; cursor: pointer; min-block-size: 44px; }
 .game-wordmark { display: grid; place-items: center; inline-size: 1.75rem; aspect-ratio: 1; background: #facc15; border: 2px solid #49331d; font-weight: 900; }
+.game-top-bar--service .game-brand { min-inline-size: 0; text-align: start; }
+.game-brand-copy { min-inline-size: 0; overflow-wrap: anywhere; }
+.game-top-bar--service .game-top-bar-actions { max-inline-size: 100%; }
+.game-top-bar--service .game-workspace-action { display: flex; align-items: center; gap: .25rem; white-space: nowrap; }
+@media (max-width: 36rem) {
+  .game-top-bar--service { flex-wrap: wrap; row-gap: .25rem; padding-block-end: .25rem; }
+  .game-top-bar--service .game-brand { flex-basis: 100%; }
+}
 /* SCRUM-321: use the wide campus profile typography in every service view. */
 .game-profile {
   position: relative;

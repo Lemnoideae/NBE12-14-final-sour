@@ -69,7 +69,7 @@ import { CampusAmbienceProvider, useAmbienceControl } from './hooks/useCampusTim
 import type { AmbienceOverride } from './data/campusAmbience';
 import { soundManager } from './utils/sound';
 import { MOCK_TOOLS } from './utils/mockTools';
-import { Smartphone, Gamepad2, Layers, Trophy, ShoppingBag, MapPin, Image as ImageIcon, Compass, MessageSquare, BookOpen, Sparkles } from 'lucide-react';
+import { Smartphone, Gamepad2, Layers, Trophy, ShoppingBag, MapPin, Image as ImageIcon, Compass, MessageSquare, BookOpen, Sparkles, Wrench } from 'lucide-react';
 
 /** Service flow screens (M5-D). Demo tools and design comparisons are left out of the 44px touch areas. */
 const SERVICE_VIEW_MODES = new Set<string>(['gameplay', 'signup', 'login', 'single_map', 'visiting', 'ranking', 'shop', 'alliance_apply', 'current_alliance', 'battle_apply', 'battle_status', 'support_guest', 'my_info', 'purchase_history', 'member_support', 'admin']);
@@ -110,10 +110,13 @@ function AppContent() {
   const isServiceView = SERVICE_VIEW_MODES.has(viewMode);
   const compact = isPhone || gameLayout === 'compact';
   const wideCampus = gameLayout === 'wide' && (viewMode === 'gameplay' || viewMode === 'visiting' || viewMode === 'shop');
-  const backdrop = compact && isServiceView ? 'device-full-with-profile min-h-dvh bg-[#f1f5f9]' : 'game-backdrop';
-  const visit = useVisitSchool(visitSchoolId);
+  const serviceChrome = API_MODE === 'api' && isServiceView;
   const shellVariant = compact && isServiceView ? 'full' : 'framed';
-  const viewWrap = shellVariant === 'full' ? 'w-full flex flex-col' : 'w-full flex flex-col items-center py-2 animate-fadeIn';
+  const backdrop = shellVariant === 'full'
+    ? `device-full-with-profile min-h-dvh bg-[#f1f5f9]${serviceChrome ? ' device-full-with-profile--service' : ''}`
+    : 'game-backdrop';
+  const visit = useVisitSchool(visitSchoolId);
+  const viewWrap = shellVariant === 'full' ? 'game-compact-view w-full flex flex-col' : 'w-full flex flex-col items-center py-2 animate-fadeIn';
   const game = useMockGame();
   const campusClicks = useCampusClicks();
   const campusAttacks = useCampusAttacks(campusClicks.beginUpgrade);
@@ -585,9 +588,12 @@ function AppContent() {
     <UniversityActivityContext.Provider value={activitySource}>
     <AllianceNavProvider value={allianceNav}>
       <div data-desktop-game={wideCampus ? '' : undefined} className={`w-full flex flex-col items-center justify-start select-none text-[#261608] ${backdrop}`}>
-        <GameProfileBar mode={API_MODE} nickname={playerInfo.nickname} onCampus={goToMySchool} onNavigate={setViewMode}
+        <GameProfileBar mode={API_MODE} serviceChrome={serviceChrome} nickname={playerInfo.nickname} onCampus={goToMySchool} onNavigate={setViewMode}
           tools={MOCK_TOOLS && <button type="button" aria-haspopup="dialog" className="game-workspace-action shrink-0"
-            onClick={(event) => { event.currentTarget.focus(); setIsMockMenuOpen(true); soundManager.playTabSound(); }}>테스트 도구</button>} />
+            onClick={(event) => { event.currentTarget.focus(); setIsMockMenuOpen(true); soundManager.playTabSound(); }}>
+            {serviceChrome && <Wrench className="size-4 shrink-0" aria-hidden="true" />}
+            테스트 도구
+          </button>} />
         {API_MODE === 'api' && <ApiPlayerSync getPendingScore={campusClicks.getPendingScore} />}
         {API_MODE === 'api' && <ApiSchoolScoreSync getPendingScore={campusClicks.getPendingScore} isSending={campusClicks.isSending} />}
         {API_MODE === 'api' && <ApiTestToolsNotice schoolName={schoolNameTest} />}
@@ -788,7 +794,7 @@ function AppContent() {
           </div>
         ) : viewMode === 'my_info' ? (
           <div className={viewWrap}>
-            <MyInfoScreenPhone onBack={() => setViewMode('login')} onGoToLogin={() => setViewMode('login')}
+            <MyInfoScreenPhone onBack={goToMySchool} onGoToLogin={() => setViewMode('login')}
               onOpenPurchaseHistory={() => setViewMode('purchase_history')} onOpenSupports={() => setViewMode('member_support')}
               onOpenAdmin={() => setViewMode('admin')} />
           </div>
