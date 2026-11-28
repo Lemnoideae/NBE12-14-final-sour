@@ -502,6 +502,7 @@
   background: #fdf5df;
   box-shadow: 3px 3px #49331d;
 }
+.game-top-bar :is(.game-brand, .game-profile-trigger, .game-workspace-action) { font-family: var(--pixel-font); font-size: 1.0625rem; font-weight: 700; line-height: 1.25; }
 .game-brand { display: flex; align-items: center; gap: .5rem; cursor: pointer; min-block-size: 44px; }
 .game-wordmark { display: grid; place-items: center; inline-size: 1.75rem; aspect-ratio: 1; background: #facc15; border: 2px solid #49331d; font-weight: 900; }
 /* SCRUM-321: use the wide campus profile typography in every service view. */
@@ -695,7 +696,7 @@
 }
 [data-desktop-game] :is(.font-press-start, .font-mono) { font-family: var(--pixel-font); font-variant-numeric: tabular-nums; }
 [data-desktop-game] :is(.game-workspace-side > h2, .game-school-summary h2, .game-campus-hud h1) { font-size: var(--desktop-title); line-height: 1.25; }
-[data-desktop-game] :is(.game-workspace-action, .game-school-summary, .game-map-list, .game-map-preview, .game-brand, .game-campus-score) { font-size: var(--desktop-text); }
+[data-desktop-game] :is(.game-workspace-action:not(.game-top-bar .game-workspace-action), .game-school-summary, .game-map-list, .game-map-preview, .game-campus-score) { font-size: var(--desktop-text); }
 [data-desktop-game] :is(.game-map-preview p, .game-brand-caption, .game-school-summary > p, .game-map-list small, [data-testid='map-search-box'] input, .game-campus-score-label) {
   font-size: var(--desktop-text-small);
   line-height: 1.45;

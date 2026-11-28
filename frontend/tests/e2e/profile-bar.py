@@ -9,7 +9,7 @@ NICKNAME = '아주긴닉네임' * 7
 ITEMS = [('👤', '내 정보'), ('💬', '문의'), ('🚪', '로그아웃')]
 
 
-def verify(browser, url, width, height, touch=False):
+def verify(browser, url, width, height, touch=False, tools=False):
     page = browser.new_page(viewport={'width': width, 'height': height}, has_touch=touch, reduced_motion='reduce')
     profile = {'id': 501, 'nickname': NICKNAME, 'email': 'student@example.test', 'role': 'USER', 'status': 'ACTIVE',
                'profileImageUrl': None, 'university': {'id': 8, 'name': '한양대학교', 'logoUrl': None},
@@ -61,6 +61,33 @@ def verify(browser, url, width, height, touch=False):
                         ellipsis: getComputedStyle(name).textOverflow};
             }''')
 
+        def header_styles():
+            return header.evaluate('''header => {
+                const elements = [header.querySelector('.game-brand'), header.querySelector('.game-profile-trigger'),
+                    header.querySelector('.game-workspace-action')].filter(Boolean);
+                return elements.map(el => {
+                    const s = getComputedStyle(el), r = el.getBoundingClientRect();
+                    return {fontFamily: s.fontFamily, fontSize: s.fontSize, fontWeight: s.fontWeight, lineHeight: s.lineHeight,
+                            visible: r.width >= 44 && r.height >= 44 && r.left >= 0 && r.right <= innerWidth};
+                });
+            }''')
+
+        def assert_shell():
+            shell = page.locator('[data-phone-shell]')
+            expect(shell).to_have_count(1)
+            expect(shell.locator('[data-phone-status-bar]')).to_have_count(0)
+            if shell.get_attribute('data-phone-shell') == 'framed':
+                expect(shell.locator('[data-phone-home-bar]')).to_have_count(1)
+                gap = shell.evaluate('''shell => shell.firstElementChild.getBoundingClientRect().top
+                    - shell.getBoundingClientRect().top - parseFloat(getComputedStyle(shell).borderTopWidth)''')
+                assert abs(gap) <= 1, gap
+            else:
+                expect(shell.locator('[data-phone-home-bar]')).to_have_count(0)
+
+        styles = header_styles()
+        assert len(styles) == (3 if tools else 2), styles
+        assert all(style == styles[0] for style in styles), styles
+        assert all(style['visible'] for style in styles), styles
         before = typography()
         assert before['inBounds'] and before['centered'] and before['fitsLabel'], before
         assert before['fontSize'] == '17px' and before['fontWeight'] == '700' and before['lineHeight'] == '21.25px', before
@@ -97,6 +124,8 @@ def verify(browser, url, width, height, touch=False):
             activate(trigger)
         activate(menu.get_by_role('button', name='내 정보', exact=True))
         expect(page.get_by_role('heading', name='내 정보', exact=True)).to_be_visible()
+        assert_shell()
+        assert header_styles() == styles
         expect(menu).to_be_hidden()
         after = typography()
         for key in ('fontFamily', 'fontSize', 'fontWeight', 'lineHeight'):
@@ -106,6 +135,8 @@ def verify(browser, url, width, height, touch=False):
         activate(trigger)
         activate(menu.get_by_role('button', name='문의', exact=True))
         expect(page.get_by_role('heading', name='내 문의', exact=True)).to_be_visible()
+        assert_shell()
+        assert header_styles() == styles
         expect(menu).to_be_hidden()
         activate(trigger)
         activate(menu.get_by_role('button', name='로그아웃', exact=True))
@@ -119,11 +150,42 @@ def verify(browser, url, width, height, touch=False):
         page.close()
 
 
+def verify_guest(browser, url, width, height):
+    page = browser.new_page(viewport={'width': width, 'height': height}, has_touch=width < 500)
+    def fixture(route):
+        path = urlsplit(route.request.url).path
+        if path.endswith('/auth/reissue'):
+            route.fulfill(status=401, json={'code': 'AUTH_INVALID_REFRESH_TOKEN', 'message': 'signed out'})
+        else:
+            route.fulfill(status=200, json={'code': 'SUCCESS', 'message': '', 'data': {'items': [], 'hasNext': False, 'page': 0, 'size': 20, 'totalCount': 0}})
+    try:
+        page.route('**/api/v1/**', fixture)
+        page.goto(url, wait_until='networkidle')
+        page.get_by_role('button', name='비회원 문의').click()
+        expect(page.get_by_role('heading', name='비회원 문의')).to_be_visible()
+        shell = page.locator('[data-phone-shell]')
+        expect(shell).to_have_attribute('data-phone-shell', 'full')
+        expect(shell.locator('[data-phone-status-bar], [data-phone-home-bar]')).to_have_count(0)
+        gap = shell.evaluate('''shell => shell.firstElementChild.getBoundingClientRect().top
+            - shell.getBoundingClientRect().top - parseFloat(getComputedStyle(shell).borderTopWidth)''')
+        assert abs(gap) <= 1, gap
+        page.get_by_label('받을 이메일').fill('guest@example.com')
+        page.get_by_label('제목').fill('문의 제목')
+        page.get_by_label('본문').fill('문의 내용')
+        assert page.get_by_label('제목').input_value() == '문의 제목'
+        print(f'PASS guest {width}×{height}: shell and form')
+    finally:
+        page.close()
+
+
 if __name__ == '__main__':
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(executable_path=sys.argv[2] if len(sys.argv) > 2 else None)
         try:
-            fonts = {verify(browser, sys.argv[1], *viewport) for viewport in [(1440, 900), (320, 740, True), (667, 375, True)]}
+            tools = len(sys.argv) > 3 and sys.argv[3] == 'dev'
+            fonts = {verify(browser, sys.argv[1], *viewport, tools=tools) for viewport in [(1440, 900), (320, 740, True), (667, 375, True)]}
             assert len(fonts) == 1, fonts
+            for width, height in [(1440, 900), (320, 740)]:
+                verify_guest(browser, sys.argv[1], width, height)
         finally:
             browser.close()
