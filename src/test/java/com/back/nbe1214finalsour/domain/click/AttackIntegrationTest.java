@@ -183,7 +183,7 @@ class AttackIntegrationTest {
 
         attack("sub-1", targetUniversityId, 10)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.schoolAttackLastSecond").value(7))
+                .andExpect(jsonPath("$.data.schoolAttacksLastSecond").value(7))
                 .andExpect(jsonPath("$.data.schoolClicksLastSecond").value(4));
     }
 
@@ -195,7 +195,7 @@ class AttackIntegrationTest {
         attack("sub-1", targetUniversityId, 10)
                 .andExpect(status().isOk())
                 // 다른 공격이 없으면 직전 1초 값은 0이다
-                .andExpect(jsonPath("$.data.schoolAttackLastSecond").value(0))
+                .andExpect(jsonPath("$.data.schoolAttacksLastSecond").value(0))
                 .andExpect(jsonPath("$.data.schoolClicksLastSecond").value(0));
 
         // 요청 처리 중 초가 바뀔 수 있으므로 앞뒤 초를 합쳐 본다
@@ -214,7 +214,7 @@ class AttackIntegrationTest {
 
         click("sub-1", 3)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.schoolAttackLastSecond").value(7));
+                .andExpect(jsonPath("$.data.schoolAttacksLastSecond").value(7));
     }
 
     @Test

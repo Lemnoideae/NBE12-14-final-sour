@@ -67,7 +67,7 @@ class ClickServiceTest {
     /**
      * apply-click.lua 반환: univTotal, deptTotal, myContrib, univRank, 직전 1초 학교 클릭 수, 직전 1초 학교 공격 수
      */
-    private static final List<String> SCRIPT_RESULT = List.of("100", "50", "30", "4", "7", "2");
+    private static final List<String> SCRIPT_RESULT = List.of("100", "50", "30", "4", "7", "2", "0");
 
     @Mock
     private StringRedisTemplate stringRedisTemplate;
@@ -602,7 +602,7 @@ class ClickServiceTest {
                 argsCaptor.capture(), argsCaptor.capture());
 
         List<String> keys = keysCaptor.getValue();
-        assertThat(keys).hasSize(13);
+        assertThat(keys).hasSize(14);
         assertThat(keys.subList(0, 6)).containsExactly(
                 "rank:univ",            // KEYS[1]
                 "rank:univ:12:dept",    // KEYS[2]
@@ -638,7 +638,7 @@ class ClickServiceTest {
 
         assertThat(response)
                 .extracting("acceptedClicks", "earnedScore", "multiplier",
-                        "myContribScore", "schoolClicksLastSecond", "schoolAttackLastSecond")
+                        "myContribScore", "schoolClicksLastSecond", "schoolAttacksLastSecond")
                 .containsExactly(3L, 135L, 1.5, 30L, 7L, 2L);
 
         assertThat(response)

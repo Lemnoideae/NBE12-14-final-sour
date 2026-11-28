@@ -22,9 +22,11 @@ public record AttackResponse(
         @Schema(description = "데미지 비율 인덱스", example = "[89, 90, 110, 130, 50, ... 20개]")
         List<Integer> damageRateIndex,
         @Schema(description = "직전 1초 동안 내 학교 전체 공격 수 (연출용)", example = "42")
-        Long schoolAttackLastSecond,
+        Long schoolAttacksLastSecond,
         @Schema(description = "직전 1초 동안 내 학교 전체 클릭 수 (연출용)", example = "42")
-        Long schoolClicksLastSecond
+        Long schoolClicksLastSecond,
+        @Schema(description = "직전 1초 동안 내 학교 전체 지원 수 (연출용)", example = "42")
+        Long schoolAssistsLastSecond
 ) {
     public static AttackResponse from(AttackApplyResponse attackApplyResponse, int clickCount,
                                       boolean isRival, Long targetUniversityId, String targetName,
@@ -39,7 +41,8 @@ public record AttackResponse(
                 criticalIndex,
                 damageRateIndex,
                 attackApplyResponse.attackLastSecond(),
-                attackApplyResponse.clickLastSecond()
+                attackApplyResponse.clickLastSecond(),
+                attackApplyResponse.assistLastSecond()
         );
     }
     record AttackUniversityResponse(Long id, String name, Long totalScore, Long rank) {}

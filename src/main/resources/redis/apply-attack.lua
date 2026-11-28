@@ -5,6 +5,7 @@
 -- KEYS[5] attacks:univ:{u}:{nowSec}        // 이번 초 학교 공격 수
 -- KEYS[6] attacks:univ:{u}:{nowSec - 1}    // 직전 초 학교 공격 수
 -- KEYS[7] clicks:univ:{u}:{nowSec - 1}     // 직전 초 학교 클릭 수
+-- KEYS[8] assists:univ:{u}:{nowSec - 1}     // 직전 초 학교 지원 수
 -- ARGV[1] targetUniversityId
 -- ARGV[2] requestedDamage
 -- ARGV[3] userId
@@ -29,5 +30,7 @@ local myAttack = redis.call('HINCRBY', KEYS[3], ARGV[3], damage)
 local univRank = redis.call('ZREVRANK', KEYS[1], ARGV[1])   -- 0부터 시작
 local attackLastSecond = redis.call('GET', KEYS[6]) or '0'
 local clickLastSecond = redis.call('GET', KEYS[7]) or '0'
+local assistLastSecond = redis.call('GET', KEYS[8]) or '0'
 
-return { tostring(damage), univTotal, tostring(univRank + 1), tostring(myAttack), attackLastSecond, clickLastSecond }
+return { tostring(damage), univTotal, tostring(univRank + 1), tostring(myAttack),
+ attackLastSecond, clickLastSecond, assistLastSecond }

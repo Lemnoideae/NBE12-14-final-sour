@@ -55,7 +55,7 @@ class AttackServiceTest {
     private static final Clicker CLICKER_LV3 = new Clicker(3L, 30, 2400L);
 
     /** apply-attack.lua 반환: damage(실제 깎인 양), univTotal, univRank, myAttackScore, 직전 1초 학교 공격 수, 직전 1초 학교 클릭 수 */
-    private static final List<String> SCRIPT_RESULT = List.of("7", "93", "2", "150", "5", "8");
+    private static final List<String> SCRIPT_RESULT = List.of("7", "93", "2", "150", "5", "8", "0");
 
     @Mock
     private StringRedisTemplate stringRedisTemplate;
@@ -287,11 +287,12 @@ class AttackServiceTest {
         verify(stringRedisTemplate).execute(any(), keysCaptor.capture(), any(), any(), any(), any());
         List<String> keys = keysCaptor.getValue();
 
-        assertThat(keys).hasSize(7);
+        assertThat(keys).hasSize(8);
         // KEYS[5] 이번 초 공격, KEYS[6] 직전 초 공격, KEYS[7] 직전 초 클릭 (현재 시각이라 값은 고정할 수 없다)
         assertThat(keys.get(4)).matches("attacks:univ:12:\\d+");
         assertThat(keys.get(5)).matches("attacks:univ:12:\\d+");
         assertThat(keys.get(6)).matches("clicks:univ:12:\\d+");
+        assertThat(keys.get(7)).matches("assists:univ:12:\\d+");
         assertThat(epochSecond(keys.get(4)) - epochSecond(keys.get(5))).isEqualTo(1L);
         assertThat(epochSecond(keys.get(6))).isEqualTo(epochSecond(keys.get(5)));
     }
@@ -315,7 +316,7 @@ class AttackServiceTest {
 
         // 공격 파티클 연출용: 스크립트의 5번째(공격)·6번째(클릭) 값을 그대로 담는다
         assertThat(response)
-                .extracting("schoolAttackLastSecond", "schoolClicksLastSecond")
+                .extracting("schoolAttacksLastSecond", "schoolClicksLastSecond")
                 .containsExactly(5L, 8L);
     }
 

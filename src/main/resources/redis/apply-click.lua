@@ -8,6 +8,7 @@
 -- KEYS[10] match:{m}:score               대결 점수 HASH A, B
 -- KEYS[11] dirty:alliance  KEYS[12] dirty:match
 -- KEYS[13] attacks:univ:{u}:{nowSec-1}     직전 1초 학교 공격 수
+-- KEYS[14] assists:univ:{u}:{nowSec-1}     직전 1초 학교 지원 수
 -- ARGV[1] universityId  ARGV[2] departmentId  ARGV[3] userId
 -- ARGV[4] earnedScore (정수)  ARGV[5] clickCount
 -- ARGV[6] allianceId    ARGV[7] team(A|B)
@@ -41,5 +42,6 @@ redis.call('EXPIRE', KEYS[7], 5)
 local univRank = redis.call('ZREVRANK', KEYS[1], ARGV[1])   -- 0부터 시작
 local clickLastSecond = redis.call('GET', KEYS[8]) or '0'
 local attackLastSecond = redis.call('GET', KEYS[13]) or '0'
+local assistLastSecond = redis.call('GET', KEYS[14]) or '0'
 
-return { univTotal, deptTotal, myContrib, tostring(univRank + 1), clickLastSecond, attackLastSecond }
+return { univTotal, deptTotal, myContrib, tostring(univRank + 1), clickLastSecond, attackLastSecond, assistLastSecond }

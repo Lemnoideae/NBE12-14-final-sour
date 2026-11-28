@@ -6,6 +6,7 @@ public record AttackApplyResponse(
         Long univRank,
         Long myAttackScore,
         Long attackLastSecond,
-        Long clickLastSecond
+        Long clickLastSecond,
+        Long assistLastSecond
 ) {
 }

@@ -6,6 +6,7 @@ public record ClickApplyResponse(
         Long myContrib,
         Long univRank,
         Long clickLastSecond,
-        Long attackLastSecond
+        Long attackLastSecond,
+        Long assistLastSecond
 ) {
 }

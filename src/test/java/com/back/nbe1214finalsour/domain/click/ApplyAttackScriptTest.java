@@ -102,7 +102,7 @@ class ApplyAttackScriptTest {
 
         // 직전 초에 기록이 없을 때
         List<String> empty = apply(nowSec, 30, 10);
-        assertThat(empty).hasSize(6);
+        assertThat(empty).hasSize(7);
         assertThat(empty.subList(4, 6)).containsExactly("0", "0");
 
         // 직전 초에 공격 7회, 클릭 4회가 기록되어 있을 때
@@ -140,7 +140,8 @@ class ApplyAttackScriptTest {
                         RedisKey.DIRTY_USER.of(),
                         RedisKey.ATTACKS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec),
                         RedisKey.ATTACKS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec - 1),
-                        RedisKey.CLICKS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec - 1)),
+                        RedisKey.CLICKS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec - 1),
+                        RedisKey.ASSISTS_UNIV_SECOND.of(UNIVERSITY_ID, nowSec - 1)),
                 String.valueOf(TARGET_UNIVERSITY_ID),
                 String.valueOf(requestedDamage),
                 String.valueOf(USER_ID),
