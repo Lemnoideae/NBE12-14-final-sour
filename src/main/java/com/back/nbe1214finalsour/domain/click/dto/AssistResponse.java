@@ -26,7 +26,9 @@ public record AssistResponse(
         @Schema(description = "직전 1초 동안 지원 중인 학교의 전체 클릭 수 (연출용)", example = "42")
         Long schoolClicksLastSecond,
         @Schema(description = "직전 1초 동안 지원 중인 학교의 전체 공격 수 (연출용)", example = "42")
-        Long schoolAttacksLastSecond
+        Long schoolAttacksLastSecond,
+        @Schema(description = "직전 1초의 시간", example = "1795852440")
+        Long second
 ) {
     public record AssistUniversityResponse(
             @Schema(description = "학교 ID", example = "2")

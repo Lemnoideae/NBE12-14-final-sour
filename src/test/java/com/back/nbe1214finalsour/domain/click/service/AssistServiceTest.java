@@ -18,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -124,7 +125,7 @@ class AssistServiceTest {
         // floor(21 * 0.3) = 6, floor(21 * 1.5) = 31
         assertThat(args.getAllValues()).containsExactly("15", "6", "1", "31", "0", "", "0", "7");
         assertThat(response).isEqualTo(new AssistResponse(7L, 6L,
-                new AssistResponse.AssistUniversityResponse(ALLY_ID, "서울시립대학교", 5402322L, 41L), 12928L, null, null, 9L, 4L, 7L));
+                new AssistResponse.AssistUniversityResponse(ALLY_ID, "서울시립대학교", 5402322L, 41L), 12928L, null, null, 9L, 4L, 7L, Instant.now().getEpochSecond() - 1));
         // 지원 파티클 연출용: 직전 1초 지원(4번째)·클릭(5번째)·공격(6번째) 수를 순서대로 담는다
         assertThat(response)
                 .extracting("schoolAssistsLastSecond", "schoolClicksLastSecond", "schoolAttacksLastSecond")

@@ -114,6 +114,6 @@ public class ClickService {
         return ClickResponse.from(
                 clickApplyResponse, clickCount, score,
                 multiplierBigDecimal.doubleValue(), universityId, departmentId,
-                isInLibrary, scoreVo.criticalIndex(), scoreVo.damageRateIndex());
+                isInLibrary, scoreVo.criticalIndex(), scoreVo.damageRateIndex(), nowSec - 1);
     }
 }
