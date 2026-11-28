@@ -17,24 +17,16 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.BDDMockito.*;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * 지원 검증 순서와 점수 계산 (SCRUM-187). Lua와 동맹 쿼리는 {@code AssistIntegrationTest}에서 실제로 확인한다.
@@ -47,12 +39,18 @@ class AssistServiceTest {
     private static final Long UNIVERSITY_ID = 12L;
     private static final Long ALLY_ID = 15L;
 
-    @Mock private ClickActionGuard clickActionGuard;
-    @Mock private StringRedisTemplate stringRedisTemplate;
-    @Mock private RedisHandler redisHandler;
-    @Mock private UniversityCache universityCache;
-    @Mock private AllianceAllyChecker allianceAllyChecker;
-    @Mock private AllianceStandingResolver allianceStandingResolver;
+    @Mock
+    private ClickActionGuard clickActionGuard;
+    @Mock
+    private StringRedisTemplate stringRedisTemplate;
+    @Mock
+    private RedisHandler redisHandler;
+    @Mock
+    private UniversityCache universityCache;
+    @Mock
+    private AllianceAllyChecker allianceAllyChecker;
+    @Mock
+    private AllianceStandingResolver allianceStandingResolver;
 
     private AssistService assistService;
 
@@ -74,7 +72,10 @@ class AssistServiceTest {
         assertThatThrownBy(() -> assistService.assist(USER_ID, UNIVERSITY_ID, request(UNIVERSITY_ID, 3)))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.ASSIST_NOT_ALLY);
-        verifyNoInteractions(universityCache, allianceAllyChecker, clickActionGuard, stringRedisTemplate);
+        then(universityCache).shouldHaveNoInteractions();
+        then(allianceAllyChecker).shouldHaveNoInteractions();
+        then(clickActionGuard).shouldHaveNoInteractions();
+        then(stringRedisTemplate).shouldHaveNoInteractions();
     }
 
     @Test
@@ -84,7 +85,8 @@ class AssistServiceTest {
 
         assertThatThrownBy(() -> assistService.assist(USER_ID, UNIVERSITY_ID, request(ALLY_ID, 3)))
                 .extracting("errorCode").isEqualTo(ErrorCode.UNIV_NOT_FOUND);
-        verifyNoInteractions(allianceAllyChecker, clickActionGuard);
+        then(allianceAllyChecker).shouldHaveNoInteractions();
+        then(clickActionGuard).shouldHaveNoInteractions();
     }
 
     @Test
@@ -95,8 +97,8 @@ class AssistServiceTest {
 
         assertThatThrownBy(() -> assistService.assist(USER_ID, UNIVERSITY_ID, request(ALLY_ID, 3)))
                 .extracting("errorCode").isEqualTo(ErrorCode.ASSIST_NOT_ALLY);
-        verify(clickActionGuard, never()).verifyAndGetBaseScore(anyLong(), anyString(), anyInt(), any());
-        verifyNoInteractions(stringRedisTemplate);
+        then(clickActionGuard).should(never()).verifyAndGetBaseScore(anyLong(), anyString(), anyInt(), any());
+        then(stringRedisTemplate).shouldHaveNoInteractions();
     }
 
     @Test
@@ -114,7 +116,7 @@ class AssistServiceTest {
 
         ArgumentCaptor<List<String>> keys = ArgumentCaptor.captor();
         ArgumentCaptor<Object> args = ArgumentCaptor.captor();
-        verify(stringRedisTemplate).execute(any(), keys.capture(), args.capture(), args.capture(), args.capture(), args.capture(), args.capture(), args.capture(), args.capture(), args.capture());
+        then(stringRedisTemplate).should().execute(any(), keys.capture(), args.capture(), args.capture(), args.capture(), args.capture(), args.capture(), args.capture(), args.capture(), args.capture());
         assertThat(keys.getValue().subList(0, 8)).containsExactly(RedisKey.RANK_UNIV.of(), RedisKey.RANK_USER.of(UNIVERSITY_ID),
                 RedisKey.DIRTY_UNIV.of(), RedisKey.DIRTY_USER.of(),
                 RedisKey.ALLIANCE_SCORE.of(0), RedisKey.MATCH_SCORE.of(0),
@@ -138,7 +140,7 @@ class AssistServiceTest {
 
         ArgumentCaptor<List<String>> keysCaptor = ArgumentCaptor.captor();
         ArgumentCaptor<Object> args = ArgumentCaptor.captor();
-        verify(stringRedisTemplate).execute(any(), keysCaptor.capture(), args.capture(), args.capture(), args.capture(),
+        then(stringRedisTemplate).should().execute(any(), keysCaptor.capture(), args.capture(), args.capture(), args.capture(),
                 args.capture(), args.capture(), args.capture(), args.capture(), args.capture());
         List<String> keys = keysCaptor.getValue();
 
@@ -172,11 +174,13 @@ class AssistServiceTest {
                 .willReturn(List.of("100", "3", "21", "7", "0", "0"));
     }
 
-    /** 스크립트에 넘긴 KEYS[5], KEYS[6]과 ARGV[5], ARGV[6] */
+    /**
+     * 스크립트에 넘긴 KEYS[5], KEYS[6]과 ARGV[5], ARGV[6]
+     */
     private List<String> allianceKeysAndArgs() {
         ArgumentCaptor<List<String>> keys = ArgumentCaptor.captor();
         ArgumentCaptor<Object> args = ArgumentCaptor.captor();
-        verify(stringRedisTemplate).execute(any(), keys.capture(), args.capture(), args.capture(), args.capture(),
+        then(stringRedisTemplate).should().execute(any(), keys.capture(), args.capture(), args.capture(), args.capture(),
                 args.capture(), args.capture(), args.capture(), args.capture(), args.capture());
         return List.of(keys.getValue().get(4), keys.getValue().get(5),
                 (String) args.getAllValues().get(4), (String) args.getAllValues().get(5));
@@ -191,8 +195,8 @@ class AssistServiceTest {
 
         assistService.assist(USER_ID, UNIVERSITY_ID, request(ALLY_ID, 7));
 
-        verify(allianceStandingResolver).resolve(ALLY_ID);
-        verify(allianceStandingResolver, never()).resolve(UNIVERSITY_ID);
+        then(allianceStandingResolver).should().resolve(ALLY_ID);
+        then(allianceStandingResolver).should(never()).resolve(UNIVERSITY_ID);
         assertThat(allianceKeysAndArgs()).containsExactly("alliance:7:score", "match:42:score", "7", "B");
     }
 
