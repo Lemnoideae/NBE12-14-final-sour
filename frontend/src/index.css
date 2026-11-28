@@ -900,6 +900,43 @@
 [data-desktop-game] .game-ranking-self-badge { font-size: .625rem; white-space: nowrap; }
 [data-desktop-game] .game-ranking-self-score { margin-inline-start: auto; }
 
+.game-hall { flex: none; min-inline-size: 0; margin: .25rem .25rem .5rem 0; padding: .625rem; }
+.game-hall-title { margin-block-end: .5rem; font-size: .9375rem; font-weight: 900; }
+.game-hall-ranks { display: grid; gap: .5rem; }
+.game-hall-rank { min-inline-size: 0; border: 2px solid #261608; background: #faecc7; color: #261608; }
+.game-hall-rank[data-hall-rank='1'] { border-color: #facc15; background: #fff3c4; }
+.game-hall-rank-label { display: flex; align-items: center; gap: .25rem; padding: .25rem .375rem 0; font-size: .75rem; }
+.game-hall-rank-label h3 { font-weight: 900; }
+.game-hall-rank-label svg { color: #8a4c00; fill: #facc15; }
+.game-hall-plaque { position: relative; isolation: isolate; }
+.game-hall-entry { display: block; inline-size: 100%; }
+.game-hall-content {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: .375rem;
+  min-block-size: 2.75rem;
+  padding: .25rem .375rem;
+  color: #261608;
+}
+.game-hall-image { display: grid; place-items: center; inline-size: 2rem; block-size: 2rem; border: 2px solid #261608; color: #fff; }
+.game-hall-name { text-align: start; overflow-wrap: anywhere; font-size: .8125rem; font-weight: 800; }
+.game-hall-score { text-align: end; white-space: nowrap; font: 700 .75rem/1.2 var(--font-mono); }
+.game-hall-score[data-wide-score] { grid-column: 2 / -1; white-space: normal; overflow-wrap: anywhere; }
+.game-hall-controls { display: flex; flex-wrap: wrap; gap: .375rem; padding: 0 .375rem .5rem; }
+.game-hall-control { display: inline-flex; align-items: center; gap: .125rem; min-block-size: 2.75rem; padding-inline: .25rem; font-size: .6875rem; font-weight: 800; }
+.game-hall-control svg { inline-size: .875rem; block-size: .875rem; flex: none; }
+.game-hall button:focus-visible { outline: 2px solid #1d4ed8; outline-offset: -2px; }
+.game-hall-feedback { margin-block-start: .5rem; font-size: .75rem; }
+.game-hall-feedback p { margin-block-end: .25rem; }
+.game-hall-outgoing { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .game-hall-content[data-fading] { animation: game-hall-fade-in .22s ease both; }
+  .game-hall-outgoing { display: grid; position: absolute; inset: 0; pointer-events: none; animation: game-hall-fade-out .22s ease both; }
+}
+@keyframes game-hall-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes game-hall-fade-out { from { opacity: 1; } to { opacity: 0; } }
+
 /* The map itself keeps its sea background; only the workspace shell behind short lists changes. */
 [data-desktop-game] .game-map-frame[data-phone-shell='embedded'] { background: #fdf5df; }
 [data-desktop-game] .game-map-regions {

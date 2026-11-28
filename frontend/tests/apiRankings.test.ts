@@ -33,6 +33,7 @@ const { MockGameProvider } = await import('../src/hooks/useMockGame');
 const { useApiRankingBoard, toApiRows, toApiMine } = await import('../src/hooks/useRankingBoard');
 const { RANK_TREND_TONE, RankingStatusNotice, SIGNED_OUT_RANKING_NOTICE, rankTrend, rankingCaption } = await import('../src/components/RankingParts');
 const { RankingScreenPhone } = await import('../src/components/RankingScreenPhone');
+const { RankingHall } = await import('../src/components/RankingHall');
 const { RankingsView } = await import('../src/components/RankingsView');
 const { RankingSchoolMenu, RankingSchoolTrigger } = await import('../src/components/RankingSchoolMenu');
 const { RankingScreen1Phone } = await import('../src/components/RankingScreen1Phone');
@@ -279,6 +280,28 @@ test('목업 PC·모바일 순위에서 시상대·일반 목록·내 학교만 
     assertAbsent(screen.queryByRole('button', { name: /학교 메뉴$/ }));
     cleanup();
   }
+});
+
+test('명예의 전당은 실제 순위로 그룹화하고 현재 명패의 ID를 갱신 후에도 유지한다', () => {
+  const [first, second, third, fourth] = toApiRows('school', SCHOOL_PAGES, ME);
+  const rows = [{ ...first, rank: 1 }, { ...second, rank: 1 }, { ...third, rank: 3 }, fourth];
+  const opened: number[] = [];
+  const hall = (items: typeof rows) => React.createElement(RankingHall, {
+    hall: { scope: 'school', rows: items, loading: false, incomplete: false, retry: () => {} },
+    tab: 'school', menuOpen: false, openSchool: ({ id }) => opened.push(id),
+  });
+  const view = render(hall(rows));
+  assert.deepEqual(screen.getAllByRole('heading', { level: 3 }).map(node => node.textContent), ['공동 1위', '3위']);
+  assertAbsent(screen.queryByRole('button', { name: '3위 다음' }));
+  fireEvent.click(screen.getByRole('button', { name: '1위 다음' }));
+  assertAbsent(screen.queryByRole('button', { name: `${first.name} 학교 메뉴` }));
+  fireEvent.click(screen.getByRole('button', { name: `${second.name} 학교 메뉴` }));
+  assert.deepEqual(opened, [second.schoolId]);
+  view.rerender(hall([rows[1], rows[0], rows[2]]));
+  assert.ok(screen.getByRole('button', { name: `${second.name} 학교 메뉴` }));
+  view.rerender(hall([rows[0], rows[2]]));
+  assert.ok(screen.getByRole('button', { name: `${first.name} 학교 메뉴` }));
+  assertAbsent(screen.queryByRole('button', { name: '1위 다음' }));
 });
 
 const HALL_PAGES = [
